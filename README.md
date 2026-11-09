@@ -35,9 +35,9 @@ Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou ab
 | **seguro** | Só o que não tem contrapartida: telemetria, anúncios, lixo, apps de propaganda, tarefas inúteis. Para PC de trabalho ou de outra pessoa. |
 | **equilibrado** | O seguro mais o que quase ninguém usa: serviços de empresa e telefone, Xbox (se não joga), IA do Windows, widgets, efeitos, caches. Recomendado. |
 | **extremo** | Tudo o que pode ajudar neste PC: sensores, área de trabalho remota, scanner, localização, hibernação no SSD, ajustes de jogos e de rede. Cada item diz o que se perde. |
-| *só se marcar* | Itens que nunca vêm marcados (esvaziar a Lixeira, trocar DNS, MPO, HAGS, remover o Office, preferências). |
+| *opcional* | Itens que nenhum modo marca: só entram se você marcar (esvaziar a Lixeira, trocar DNS, MPO, HAGS, remover o Office, preferências). |
 
-Na tela de escolha cada item ocupa uma linha, com o modo dele à direita (`!` = tem um aviso). A tela mostra só três teclas: Enter continua, um número marca ou desmarca (`3 5 8-10`) e `?` abre a ajuda com o resto (`? 3` explica o item 3, `t` todos, `n` nenhum, `s` `e` `x` remarca pelo modo, `c` explicação de todos, `v 3` o código do item, `0` volta). `config explicacao completa` volta a mostrar tudo sempre.
+Na tela de escolha os itens vêm em grupos que dizem o que são: **seguro** (não tira nada de você), **equilibrado** (tira o que quase ninguém usa), **extremo** (tira algum recurso) e **opcional** (só entra se você marcar). O modo marca o grupo dele e os de cima. Item com aviso ou sem volta diz isso ao lado do nome. A tela mostra só três teclas: Enter continua, um número marca ou desmarca (`3 5 8-10`) e `? 3` explica o item 3; `?` abre a ajuda com o resto (`t` todos, `n` nenhum, `s` `e` `x` remarca pelo modo, `c` explicação de todos, `v 3` o código do item, `0` volta). `config explicacao completa` volta a mostrar tudo sempre.
 
 ## Inteligente
 
@@ -59,9 +59,9 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | Tudo | `turbo` | Modo → etapas → (opcional) item por item → ponto de restauração → mede → aplica → reinicia → continua sozinho → mede de novo. Salva o plano em JSON: `turbo --plano arquivo.json` repete as mesmas escolhas em outro PC sem perguntar |
 | Partes | `limpar` | Temporários, Windows Update, Otimização de Entrega, relatórios de erro e dumps, miniaturas, logs, navegadores fechados, shaders, instaladores guardados, caches de dev, Limpeza de Disco do Windows, Windows.old, componentes (DISM), armazenamento reservado, Lixeira |
 | | `programas` | Bloatware de Dell, HP, Lenovo, Acer, ASUS, McAfee, Norton, CyberLink, OneDrive, Teams antigo: tenta em silêncio e, se não sair, abre o desinstalador |
-| | `apps` | Apps da Loja conhecidos (com explicação) e qualquer outro removível ("risco desconhecido", só se marcar) |
+| | `apps` | Apps da Loja conhecidos (com explicação) e qualquer outro removível ("risco desconhecido", opcional) |
 | | `ia` | Copilot, Recall, Clique para Fazer, IA no Paint, Bloco de Notas, Edge e Office, coleta de digitação, serviço e tarefas de IA, só por políticas oficiais |
-| | `inicializacao` | Registro, pasta Inicializar, apps da Loja e tarefas de logon, pelo mesmo mecanismo do Gerenciador de Tarefas. Antivírus nunca sai; anti-cheat, touchpad e caneta só se marcar |
+| | `inicializacao` | Registro, pasta Inicializar, apps da Loja e tarefas de logon, pelo mesmo mecanismo do Gerenciador de Tarefas. Antivírus nunca sai; anti-cheat, touchpad e caneta são opcionais |
 | | `servicos` | Desativa (nunca apaga) serviços sem uso, de fabricante (SupportAssist, Killer, Nahimic...), atualizadores em manual, restos de programas desinstalados |
 | | `privacidade` | Telemetria do Windows, Office, VS e Firefox, autologgers, anúncios, sugestões, busca na web, widgets, segundo plano, relatório de erros, localização, SMBv1, execução automática de pendrive |
 | | `visual` | Efeitos, animações, transparência, barra enxuta, extensões visíveis, menu clássico, desligar mais rápido, atalhos sem busca demorada |
@@ -70,7 +70,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | | `cs2` | Vídeo do CS2 no preset de FPS (MSAA, oclusão, partículas e shader no baixo; sombras ficam), CS2 na placa dedicada, otimizações para jogos em janela, tela inteira sem otimizações (opcional) e um `katharos.cfg` com comandos do próprio jogo. Cópia do arquivo de vídeo antes; `desfazer cs2` volta tudo |
 | | `energia` | Plano "desempenho" ou "fresco" (notebook que esquenta: CPU mínima 5%, turbo eficiente, ASPM em todos os planos), disco, USB, PCIe, throttling, placa de rede, inicialização rápida em HD, hibernação em SSD |
 | | `disco` | Defender mais leve, sem P2P do Update, tarefas inúteis, NTFS, Sensor de Armazenamento, SysMain em HD, início atrasado de terceiros, boot no HD, otimizar unidade (TRIM ou desfragmentar), memória virtual e compressão |
-| | `reparar` | DISM, SFC, chkdsk, WMI, DNS; e, só se marcar: rede, Windows Update, Loja, ícones, menu Iniciar |
+| | `reparar` | DISM, SFC, chkdsk, WMI, DNS; e, opcionais: rede, Windows Update, Loja, ícones, menu Iniciar |
 | | `atualizar` | Defender, Windows Update, drivers, winget, apps da Loja |
 | | `navegador` | Brave, Chrome e Edge enxutos (sem segundo plano, sem métricas, economia de memória) |
 | | `rede` | Mede o ping (roteador e DNS públicos) e troca o DNS (Cloudflare, Google, Quad9, AdGuard) |

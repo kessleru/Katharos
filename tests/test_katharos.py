@@ -250,6 +250,7 @@ class TestMenuEnxuto(unittest.TestCase):
         import io, contextlib
         t = k.Terminal(True, True)
         buf = io.StringIO()
+        t.largura = 76
         with contextlib.redirect_stdout(buf):
             t.dicas(k.DICAS_ESCOLHA)
         linha = buf.getvalue().strip()
@@ -340,7 +341,33 @@ class TestEscolhaDeItens(unittest.TestCase):
         it.marcado, it.alerta = True, 'cuidado'
         linha = k._linha_item(_Grava(), it, 1)
         self.assertIn('sem volta', linha)
-        self.assertIn('!', linha)
+        self.assertIn('tem aviso', linha)
+
+    def test_grupos_dizem_o_que_sao_e_o_nome_do_modo_nao_fica_solto(self):
+        t, _ = self.roda([''])
+        for nv in (1, 3, 0):
+            self.assertIn(k.NOME_NIVEL[nv] + '  ' + k.EXPLICA_NIVEL[nv], t.texto)
+        self.assertNotIn('só se marcar', t.texto)
+        linhas_de_item = [l for l in t.linhas if 'item A' in l or 'item B' in l or 'item C' in l]
+        for l in linhas_de_item:
+            for nome in ('seguro', 'equilibrado', 'extremo', 'opcional'):
+                self.assertNotIn(nome, l, 'o grupo diz o modo; a linha do item não repete')
+
+    def test_tela_agrupa_mas_devolve_na_ordem_original(self):
+        its = [k.Item('x', 'extremo primeiro', 'e', nivel=3), k.Item('o', 'opcional', 'e', nivel=0),
+               k.Item('s', 'seguro por ultimo', 'e', nivel=1), k.Item('q', 'equilibrado', 'e', nivel=2)]
+        self.assertEqual([i.id for i in k.ordem_de_tela(its)], ['s', 'q', 'x', 'o'])
+        self.assertEqual([i.id for i in k.ordem_de_tela(its, agrupar=False)], ['x', 'o', 's', 'q'])
+        t = _Grava(['t', ''])
+        ctx = type('C', (), {'t': t})()
+        with mock.patch.object(k, 'config', lambda c: k.PADROES[c]):
+            r = k.escolhe_itens(ctx, its, 'seguro', type('A', (), {'sim': False})())
+        self.assertEqual([i.id for i in r], ['x', 'o', 's', 'q'], 'aplica na ordem do pacote, não na da tela')
+        t = _Grava(['1', ''])   # o número é o da tela: o 1 é o seguro
+        ctx = type('C', (), {'t': t})()
+        with mock.patch.object(k, 'config', lambda c: k.PADROES[c]):
+            r = k.escolhe_itens(ctx, its, 'seguro', type('A', (), {'sim': False})())
+        self.assertEqual(r, [])
 
 
 class TestJogosECS2(unittest.TestCase):

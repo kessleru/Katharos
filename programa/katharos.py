@@ -1034,7 +1034,12 @@ APP = 'katharos'
 CASA = Path.home() / '.katharos'
 MODOS = ('seguro', 'equilibrado', 'extremo')
 NIVEL_MODO = {'seguro': 1, 'equilibrado': 2, 'extremo': 3}
-NOME_NIVEL = {0: 'só se marcar', 1: 'seguro', 2: 'equilibrado', 3: 'extremo'}
+NOME_NIVEL = {0: 'opcional', 1: 'seguro', 2: 'equilibrado', 3: 'extremo'}
+# O que cada grupo da tela de escolha quer dizer, em poucas palavras: é o que a pessoa lê ao lado do nome.
+# Um modo marca o grupo dele e os de cima; "opcional" nenhum modo marca.
+ORDEM_NIVEL = (1, 2, 3, 0)
+EXPLICA_NIVEL = {1: 'não tira nada de você', 2: 'tira o que quase ninguém usa', 3: 'tira algum recurso (cada item diz qual)',
+                 0: 'depende do seu caso: só entra se você marcar'}
 COR_NIVEL = {0: 'apagado', 1: 'verde', 2: 'azul', 3: 'pessego'}
 
 EXPLICA_MODOS = [
@@ -2896,34 +2901,48 @@ def _detalhe_item(t, it):
 
 
 def _linha_item(t, it, i):
-    """Uma linha por item: marca, número, nome e, à direita, o modo em que ele entra. "!" = tem um aviso (? número mostra)."""
+    """Uma linha por item: marca, número e nome. Depois do nome, em palavras, o que pede atenção: "tem aviso" e "sem volta"."""
     marca = t.p('✓', 'verde', True) if it.marcado else t.p('○', 'apagado')
-    etiqueta = NOME_NIVEL.get(it.nivel, '') + ('' if it.reverte else ' · sem volta')
-    nivel = t.p(etiqueta, COR_NIVEL.get(it.nivel, 'apagado'))
-    alerta = t.p(' !', 'amarelo', True) if it.alerta else ''
-    nome = corta(it.titulo, max(10, t.largura - 12 - len(etiqueta) - (2 if it.alerta else 0)))
-    esq = f'  {marca} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if it.marcado else "sub")}{alerta}'
-    if vlen(esq) + vlen(nivel) + 2 <= t.largura:
-        esq += ' ' * (t.largura - vlen(esq) - vlen(nivel)) + nivel
-    return esq
+    extras = [x for x in (('tem aviso' if it.alerta else ''), ('' if it.reverte else 'sem volta')) if x]
+    cauda = ''.join(' · ' + x for x in extras)
+    nome = corta(it.titulo, max(10, t.largura - 9 - len(cauda)))
+    return f'  {marca} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if it.marcado else "sub")}{t.p(cauda, "amarelo")}'
 
 
-def desenha_itens(t, itens, completa=False, zero=''):
+def ordem_de_tela(itens, agrupar=True):
+    """Os itens na ordem em que aparecem (e são numerados) na tela: agrupados por seguro, equilibrado, extremo e
+    opcional, sem mudar a ordem dentro de cada grupo. A lista original não muda: é nela que a aplicação se baseia."""
+    if not agrupar:
+        return list(itens)
+    return [i for nv in ORDEM_NIVEL for i in itens if (i.nivel if i.nivel in ORDEM_NIVEL else 2) == nv]
+
+
+def desenha_itens(t, itens, completa=False, zero='', agrupar=True):
+    """Desenha os itens já na ordem de tela. Com agrupar, cada grupo ganha um título que diz o que ele é."""
+    atual = None
     for i, it in enumerate(itens, 1):
+        nv = it.nivel if it.nivel in ORDEM_NIVEL else 2
+        if agrupar and nv != atual:
+            atual = nv
+            t.escreve()
+            t.escreve('  ' + t.p(NOME_NIVEL[nv], COR_NIVEL.get(nv, 'apagado'), True) + t.p('  ' + EXPLICA_NIVEL[nv], 'apagado'))
         t.escreve(_linha_item(t, it, i))
         if completa:
             _detalhe_item(t, it)
             t.escreve()
     if zero:   # a saída aparece como uma linha da lista, igual ao menu
+        if agrupar:
+            t.escreve()
         t.escreve(f'  {t.p("   0", "apagado", True)}  {t.p(zero, "apagado")}')
 
 
 # As três teclas que aparecem na tela de escolha; as outras ficam na ajuda ("?").
-DICAS_ESCOLHA = [('Enter', 'continuar'), ('número', 'marcar ou desmarcar'), ('?', 'ajuda')]
+DICAS_ESCOLHA = [('Enter', 'continuar'), ('número', 'marcar ou desmarcar'), ('? 3', 'explica o item 3')]
 AJUDA_ESCOLHA = [
     ('Enter', 'continuar com os itens marcados'),
     ('3', 'marcar ou desmarcar o item 3 (vários de uma vez: 3 5 8-10)'),
-    ('? 3', 'explicar o item 3: o que faz, o ganho e o custo'),
+    ('? 3', 'explicar o item 3: o que faz, o ganho, o custo e o aviso'),
+    ('?', 'esta ajuda'),
     ('t', 'marcar todos'),
     ('n', 'desmarcar todos'),
     ('s  e  x', 'marcar o que o modo seguro, equilibrado ou extremo marca'),
@@ -2946,25 +2965,28 @@ def mostra_codigo(t, itens):
             t.paragrafo('sem código', 4, 'apagado')
 
 
-def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=False):
-    """A tela de escolha: uma linha por item, marcado conforme o modo; a pessoa ajusta. Devolve os marcados,
-    ou None se voltou. A explicação de cada item aparece com "? número" (ou de todos, com "c")."""
+def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=False, agrupar=True):
+    """A tela de escolha: uma linha por item, em grupos (seguro, equilibrado, extremo, opcional) que dizem o que cada
+    um é; o modo marca o grupo dele e os de cima, e a pessoa ajusta. Devolve os marcados na ordem original (a de aplicar),
+    ou None se voltou. A explicação de um item aparece com "? número" (ou de todos, com "c").
+    agrupar=False para listas que não são itens de um pacote (as etapas do turbo)."""
     t = ctx.t
     if not manter_marcas:
         marca_por_modo(itens, modo)
     completa = config('explicacao') == 'completa'
-    t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}')
+    originais, itens = itens, ordem_de_tela(itens, agrupar)   # a tela numera pelos grupos; a aplicação segue a ordem original
+    t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}' + (f' · o modo {modo} marcou {sum(i.marcado for i in itens)}' if not manter_marcas else ''))
     interativo = t.interativo and not getattr(args, 'sim', False)
-    desenha_itens(t, itens, completa, zero='voltar' if interativo else '')
+    desenha_itens(t, itens, completa, zero='voltar' if interativo else '', agrupar=agrupar)
     if not interativo:
-        return [i for i in itens if i.marcado]
+        return [i for i in originais if i.marcado]
     while True:
         marcados = sum(i.marcado for i in itens)
         t.escreve()
         t.dicas(DICAS_ESCOLHA)
         r = t.pergunta(f'{marcados} de {len(itens)} marcados').strip().lower()
         if r in ('', 'ok', 'seguir', 'aplicar'):
-            return [i for i in itens if i.marcado]
+            return [i for i in originais if i.marcado]
         if r in ('0', 'v', 'voltar', 'q', 'sair'):
             return None
         mudou = True
@@ -2984,7 +3006,8 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
             for tecla, faz in AJUDA_ESCOLHA:
                 t.escreve(f'    {t.p(f"{tecla:<8}", "destaque", True)}  {t.p(faz, "sub")}')
             t.escreve()
-            t.paragrafo('À direita de cada item está o modo em que ele vem marcado. "!" é um aviso: veja com ? e o número.', 4, 'apagado')
+            t.paragrafo('Os itens estão em grupos. Cada modo marca o grupo dele e os de cima; os opcionais nenhum modo marca. '
+                        '"tem aviso" quer dizer que vale ler a explicação antes (? e o número).', 4, 'apagado')
         elif r in ('t', 'todos'):
             for i in itens:
                 i.marcado = True
@@ -3020,7 +3043,7 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
                 _alterna(itens, n - 1)
         if mudou:
             t.escreve()
-            desenha_itens(t, itens, completa, zero='voltar')
+            desenha_itens(t, itens, completa, zero='voltar', agrupar=agrupar)
 
 
 # ─────────────── executar ───────────────
@@ -3201,7 +3224,7 @@ def resumo_antes(t, pac, itens, titulo=True, recuo=2):
     if titulo:
         t.titulo(f'antes de aplicar: {pac.titulo}')
     for it in itens:
-        t.item('◆', 'destaque', corta(tela(it.titulo), 56), t.p(NOME_NIVEL.get(it.nivel, ''), COR_NIVEL.get(it.nivel, 'apagado')), recuo=recuo)
+        t.item('◆', 'destaque', corta(tela(it.titulo), 70), recuo=recuo)
         if getattr(it, 'ganho', ''):
             t.paragrafo('ganha: ' + it.ganho, recuo + 4, 'sub')
         if getattr(it, 'custo', '') and it.custo != 'nenhum':
@@ -4592,7 +4615,7 @@ def _pos_wmi(ctx, cod, txt):
 
 @pacote('reparar', 'reparar', 'arquivos do sistema, disco, WMI, rede e Windows Update',
         'Ferramentas oficiais de reparo. DISM conserta a imagem do Windows, SFC confere os arquivos do sistema, chkdsk lê o disco. '
-        'DISM e SFC feitos nas últimas 24 h não são refeitos. Os itens "só se marcar" são para quando algo está quebrado.')
+        'DISM e SFC feitos nas últimas 24 h não são refeitos. Os itens opcionais são para quando algo está quebrado.')
 def itens_reparar(ctx):
     return [
         Item('dism', 'reparar a imagem do Windows (DISM)', 'Baixa do Windows Update e troca componentes corrompidos.',
@@ -7683,7 +7706,7 @@ def ferramenta_turbo(ctx, args):
                       'reaplica o que atualizações desfazem e avisa de problemas de disco.', 'o PC continua leve', 'nenhum', 1))
     itens.append(Item('reinicio', 'reiniciar e medir de novo', 'Reinicia no fim, continua sozinho depois do logon e mede '
                       'o antes e depois com o PC parado.', 'mudanças valem por completo; números reais', 'o PC reinicia', 1))
-    escolhidos = escolhe_itens(ctx, itens, modo, args, 'etapas')
+    escolhidos = escolhe_itens(ctx, itens, modo, args, 'etapas', agrupar=False)
     if not escolhidos:
         t.nota('nada escolhido.')
         return 0
