@@ -12,3 +12,5 @@ tests export-ignore
 .github export-ignore
 CHANGELOG.md export-ignore
 CONTRIBUTING.md export-ignore
+*.py text eol=lf
+*.txt text eol=lf

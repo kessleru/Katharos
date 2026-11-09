@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Katharos · otimizador de Windows</title>
-<meta name="description" content="Otimizador de Windows que lista cada mudança antes de fazer e guarda o valor antigo para desfazer. Grátis e de código aberto.">
+<meta name="description" content="Otimiza o Windows, mostra cada mudança antes e desfaz quando você quiser. Grátis e de código aberto.">
 <meta property="og:title" content="Katharos · otimizador de Windows">
-<meta property="og:description" content="Otimizador de Windows que lista cada mudança antes de fazer e guarda o valor antigo para desfazer.">
+<meta property="og:description" content="Otimiza o Windows, mostra cada mudança antes e desfaz quando você quiser.">
 <meta property="og:image" content="https://kessleru.github.io/Katharos/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0c0c0d">
@@ -94,14 +94,14 @@
   .cena img { width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
   .cena canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-  .dados .celulas { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dados .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dados .celulas > div { padding: 18px 20px; }
   .dados dt { font-size: 12px; color: var(--apagado); }
   .dados dd { color: var(--osso); font-size: 14px; margin-top: 2px; }
 
   /* ── cabeçalho de seção: as duas células ocupam a altura toda, então a divisória vai de borda a borda ── */
   .cab { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: stretch; }
-  .cab > * { padding: 34px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; }
+  .cab > * { padding: 24px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; }
   .cab h2 { font: 800 clamp(28px, 3vw, 40px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
   .cab h2 span { color: var(--ambar); }
   .cab p { font: 400 16px/1.55 var(--sans); max-width: 52ch; text-wrap: pretty; }
@@ -110,7 +110,9 @@
   .cab a:hover { text-decoration-color: var(--ambar); }
 
   /* ── a janela do programa ── */
-  .janela-bloco { padding: 8px 0 64px; }
+  .janela-bloco { padding: 8px 0 28px; }
+  .legenda-janela { position: relative; z-index: 32; margin-top: 22px; font-size: 13px; color: var(--apagado); text-align: center; }
+  .legenda-janela code { color: var(--osso); }
   .janela { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: #09090a; overflow: hidden;
     box-shadow: 0 50px 120px -50px #000, 0 0 0 8px var(--fundo); position: relative; z-index: 32; }
   .abas { display: flex; align-items: center; padding: 10px 14px; background: #141416; border-bottom: 1px solid var(--linha); font-size: 12px; color: var(--apagado); gap: 10px; }
@@ -135,54 +137,22 @@
   .lendo .trilho i { display: block; height: 100%; width: 0; background: var(--ambar); }
   .lendo .passo { color: var(--texto); }
 
-  /* ── grupos do menu (gerados do próprio programa) ── */
-  .comandos .celulas { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .comandos .celulas > :nth-child(4n+1) { border-left: 0; }
-  .comandos .celulas > :nth-child(n+5) { border-top: 1px solid var(--linha); }
-  .grupo { padding: 26px 22px 30px; }
-  .grupo h3 { font: 700 14px/1.3 var(--mono); color: var(--osso); margin-bottom: 4px; display: flex; gap: 8px; align-items: baseline; }
-  .grupo h3 small { font: 400 12px var(--mono); color: var(--apagado); }
-  .grupo > p { font: 400 14px/1.45 var(--sans); color: var(--apagado); margin-bottom: 16px; }
-  .grupo ul { list-style: none; display: grid; gap: 5px; }
-  .grupo ul { gap: 9px; }
-  .grupo li { font: 400 13px/1.4 var(--mono); display: grid; grid-template-columns: 3.2ch 1fr; }
-  .grupo li span { grid-column: 2; font: 400 13px/1.4 var(--sans); color: var(--apagado); }
-  .grupo li i { font-style: normal; color: var(--apagado); }
-  .grupo li code { color: var(--ambar); }
-  .grupo.dica { grid-column: span 2; display: flex; flex-direction: column; justify-content: center; gap: 10px; background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); }
-  .grupo.dica p { font: 400 15px/1.5 var(--sans); color: var(--texto); max-width: 46ch; margin: 0; background: var(--fundo); padding: 14px 16px; border: 1px solid var(--linha); }
-  .grupo.dica code { font: 500 13px var(--mono); color: var(--osso); }
-
   /* ── perfis ── */
   .perfis .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .perfis .celulas > :nth-child(3n+1) { border-left: 0; }
   .perfis .celulas > :nth-child(n+4) { border-top: 1px solid var(--linha); }
-  .perfil { padding: 26px 24px 30px; display: grid; gap: 14px; align-content: start; }
+  .perfil { padding: 22px 22px 24px; display: grid; gap: 12px; align-content: start; }
+  .perfil header code { display: block; font-size: 12px; color: var(--ambar); margin-top: 2px; }
   .perfil header { display: flex; gap: 14px; align-items: center; }
   .perfil svg.ico { width: 40px; height: 40px; flex: none; color: var(--ambar); overflow: visible; }
   .perfil h3 { font: 700 16px/1.25 var(--mono); color: var(--osso); }
   .perfil .para { font: 400 14px/1.45 var(--sans); color: var(--apagado); }
-  .eixos { list-style: none; display: grid; gap: 6px; }
-  .eixos li { display: grid; grid-template-columns: 12ch 1fr; align-items: center; gap: 10px; font-size: 12px; color: var(--apagado); }
-  .eixos li.zero { color: #4d4b47; }
-  .medidor { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
-  .medidor i { height: 8px; background: var(--linha); border-radius: 1px; }
-  .medidor i.on { background: var(--texto); }
-  .medidor i.on.forte { background: var(--ambar); }
-  .js .perfis:not(.vis) .medidor i.on { background: var(--linha); }
-  .perfis.vis .medidor i { transition: background-color .25s calc(var(--d, 0) * 1ms); }
   .perfil .perde { font: 400 14px/1.45 var(--sans); color: #a9a49b; }
   .perfil .perde b { font-weight: 500; color: var(--texto); }
-  .perfil .rodape-p { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 12px; color: var(--apagado); border-top: 1px dashed var(--linha); padding-top: 12px; }
-  .perfil .rodape-p code { color: var(--osso); }
-  .risco-baixo { color: var(--verde); } .risco-medio { color: var(--ambar); }
 
   /* versão */
   .versao { font: 500 11px var(--mono); color: var(--apagado); border: 1px solid var(--linha-forte); border-radius: 2px; padding: 2px 5px; margin-left: 6px; vertical-align: middle; }
   .dados a { color: inherit; text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
-  .todos { margin: 0; }
-  .todos > .celulas { border-top: 1px solid var(--linha); }
-  .dica-teste { padding: 14px 16px; border-top: 1px solid var(--linha); color: var(--apagado); font-size: 13px; }
   /* modo e lista de itens de cada perfil */
   .nv { font: 500 11px/1 var(--mono); padding: 3px 6px; border-radius: 2px; border: 1px solid; white-space: nowrap; flex: none; }
   .nv1 { color: var(--verde); border-color: #3c5336; }
@@ -207,7 +177,6 @@
   .lista-it li .nv { margin-top: 2px; min-width: 7.6ch; text-align: center; }
   .lista-it li b { display: block; font: 500 13px/1.35 var(--sans); color: var(--texto); }
   .lista-it li small { display: block; font: 400 12px/1.4 var(--sans); color: var(--apagado); margin-top: 2px; }
-  .modo .uso { font: 400 12px/1.5 var(--mono); color: var(--apagado); margin-top: 14px; max-width: 34ch; }
 
   /* ícones animados dos perfis (só rodam quando a seção está na tela) */
   .ico * { vector-effect: non-scaling-stroke; }
@@ -229,45 +198,8 @@
   .escudo-ok { stroke-dasharray: 30; animation: escudo 3s infinite; }
   @keyframes escudo { 0%, 15% { stroke-dashoffset: 30; } 45%, 100% { stroke-dashoffset: 0; } }
 
-  /* ── jogos ── */
-  .jogos .celulas { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
-  .jogos .celulas > div { padding: 30px clamp(20px, 3vw, 40px) 36px; }
-  .jogos h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 8px; display: flex; gap: 10px; align-items: center; }
-  .etiqueta { font: 500 11px/1 var(--mono); color: var(--fundo); background: var(--ambar); padding: 4px 6px; border-radius: 2px; }
-  .etiqueta.agora { background: var(--verde); }
-  .jogos p, .jogos li { font: 400 15px/1.55 var(--sans); color: #a9a49b; }
-  .jogos ul { list-style: none; display: grid; gap: 8px; margin-top: 14px; }
-  .jogos li { padding-left: 18px; position: relative; }
-  .jogos li::before { content: '—'; position: absolute; left: 0; color: var(--linha-forte); }
-  .jogos li code { font: 500 13px var(--mono); color: var(--ambar); }
-  .grafico { margin-top: 22px; border: 1px solid var(--linha); border-radius: 6px; padding: 14px 16px 10px; background: #0a0a0b; }
-  .grafico svg { display: block; width: 100%; height: 96px; }
-  .grafico .legenda { display: flex; justify-content: space-between; font-size: 11px; color: var(--apagado); margin-top: 6px; }
-  .grafico .antes { stroke: var(--vermelho); opacity: .55; }
-  .grafico .depois { stroke: var(--ambar); }
-  .js .jogos:not(.vis) .grafico path { stroke-dashoffset: 1000; }
-  .grafico path { stroke-dasharray: 1000; stroke-dashoffset: 0; transition: stroke-dashoffset 2.2s cubic-bezier(.4,0,.2,1); }
-  .grafico .depois { transition-delay: 1.4s; }
-  .proximo { background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); }
-  .proximo .cartao { background: var(--fundo); border: 1px solid var(--linha-forte); border-radius: 6px; padding: 20px; }
-  .proximo .cartao + .cartao { margin-top: 12px; }
-  .proximo .cartao p + p { margin-top: 10px; }
-  .proximo .cartao + .cartao h3 { color: var(--apagado); }
-
-  /* ── modos ── */
-  .modos .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .modo { padding: 30px 24px 36px; }
-  .modo h3 { font: 800 clamp(28px, 2.8vw, 38px)/1 var(--mono); letter-spacing: -.045em; margin-bottom: 10px; }
-  .modo .barra { font-size: 13px; letter-spacing: .1em; margin-bottom: 16px; width: max-content; }
-  .js .modos:not(.vis) .barra { clip-path: inset(0 100% 0 0); }
-  .modos .barra { clip-path: inset(0 0 0 0); transition: clip-path 1.1s steps(9); }
-  .modos .m2 .barra { transition-delay: .25s; } .modos .m3 .barra { transition-delay: .5s; }
-  .m1 h3, .m1 .barra { color: var(--verde); } .m2 h3, .m2 .barra { color: var(--osso); } .m3 h3, .m3 .barra { color: var(--ambar); }
-  .modo .barra i { font-style: normal; color: var(--linha-forte); }
-  .modo p { font: 400 16px/1.5 var(--sans); max-width: 30ch; }
-
   /* ── limites: cada item é riscado na hora que a seção aparece ── */
-  .nunca-bloco { padding: 8px 0 56px; }
+  .nunca-bloco { padding: 40px 0; }
   .nunca { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--painel); display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); overflow: hidden; position: relative; z-index: 32; box-shadow: 0 0 0 8px var(--fundo); }
   .nunca-lado { padding: 32px; border-right: 1px solid var(--linha); background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; }
   .nunca-lado strong { font: 800 64px/1 var(--mono); color: var(--osso); letter-spacing: -.05em; }
@@ -286,17 +218,10 @@
   .limites .nunca li span { transition: opacity .3s calc(var(--i) * 380ms + 650ms), translate .3s calc(var(--i) * 380ms + 650ms); }
   .limites.vis .nunca li s { color: #8e8a82; }
 
-  .garantias .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .garantias .celulas > div { padding: 28px 22px 32px; }
-  .garantias h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; }
-  .garantias h3::before { content: '✓ '; color: var(--verde); }
-  .garantias p { font: 400 15px/1.5 var(--sans); color: #a9a49b; max-width: 34ch; }
-  .garantias code { font: 500 13px var(--mono); color: var(--osso); }
-
   /* ── passos ── */
   .passos .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; counter-reset: p; }
-  .passos li { counter-increment: p; padding: 28px 22px 34px; }
-  .passos li::before { content: counter(p); display: block; font: 800 44px/1 var(--mono); color: var(--ambar); margin-bottom: 16px; }
+  .passos li { counter-increment: p; padding: 24px 22px 28px; }
+  .passos li::before { content: counter(p); display: block; font: 800 30px/1 var(--mono); color: var(--ambar); margin-bottom: 12px; }
   .passos h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; }
   .passos p { font: 400 15px/1.5 var(--sans); color: #a9a49b; }
   .passos kbd { display: inline-block; font: 700 13px/1 var(--mono); color: var(--osso); background: var(--painel); border: 1px solid var(--linha-forte); border-bottom-width: 3px; padding: 4px 7px 3px; border-radius: 4px; }
@@ -305,7 +230,7 @@
 
   .faq details { border-top: 1px solid var(--linha); }
   .faq details:first-child { border-top: 0; }
-  .faq summary { cursor: pointer; list-style: none; padding: 20px clamp(20px, 3vw, 40px); display: flex; justify-content: space-between; align-items: center; gap: 16px; font: 700 15px/1.3 var(--mono); color: var(--osso); }
+  .faq summary { cursor: pointer; list-style: none; padding: 16px clamp(20px, 3vw, 40px); display: flex; justify-content: space-between; align-items: center; gap: 16px; font: 700 15px/1.3 var(--mono); color: var(--osso); }
   .faq summary::-webkit-details-marker { display: none; }
   .faq summary::after { content: '+'; color: var(--ambar); font-size: 18px; transition: transform .2s; flex: none; }
   .faq details[open] summary::after { transform: rotate(45deg); }
@@ -313,23 +238,17 @@
   .faq details p { padding: 0 clamp(20px, 3vw, 40px) 24px; font: 400 15px/1.55 var(--sans); color: #a9a49b; max-width: 70ch; }
   .faq details[open] p { animation: abre .25s ease-out; }
   .faq code { font: 500 13px var(--mono); color: var(--osso); }
-  .perguntas .celulas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .perguntas .celulas > div { padding: 26px 22px 30px; }
-  .perguntas .celulas > :nth-child(odd) { border-left: 0; }
-  .perguntas .celulas > :nth-child(n+3) { border-top: 1px solid var(--linha); }
-  .perguntas h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; }
-  .perguntas p { font: 400 15px/1.5 var(--sans); color: #a9a49b; max-width: 46ch; }
-  .perguntas code { font: 500 13px var(--mono); color: var(--osso); }
-  .personaliza .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .personaliza .celulas > * { border-left: 1px solid var(--linha); border-top: 0 !important; }
-  .personaliza .celulas > :first-child { border-left: 0; }
+  .contribui .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .contribui .celulas > div { padding: 22px 22px 26px; }
+  .contribui h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; }
+  .contribui p { font: 400 15px/1.5 var(--sans); color: #a9a49b; max-width: 46ch; }
+  .contribui code { font: 500 13px var(--mono); color: var(--osso); }
+  .contribui a, .credito a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+  .contribui a:hover, .credito a:hover { text-decoration-color: var(--ambar); }
+  .credito { border-top: 1px solid var(--linha); padding: 18px clamp(20px, 3vw, 40px) 22px; }
+  .credito p { font: 400 15px/1.55 var(--sans); color: #a9a49b; max-width: 78ch; }
+  .credito b { color: var(--osso); font-weight: 500; }
 
-  .final .celulas { grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
-  .final .celulas > * { display: flex; align-items: center; }
-  .final .celulas > * { padding: 40px clamp(20px, 3vw, 40px); }
-  .final h2 { font: 800 clamp(30px, 3.6vw, 46px)/1 var(--mono); color: var(--osso); letter-spacing: -.05em; }
-  .faixa > .quadro.gigante::before, .faixa > .quadro.gigante::after { display: none; }
-  .gigante { font: 800 clamp(64px, 15.5vw, 196px)/.8 var(--mono); letter-spacing: -.06em; color: #161618; text-align: center; white-space: nowrap; overflow: hidden; padding-top: 28px; user-select: none; }
   .rodape .celulas { grid-template-columns: minmax(0, 1fr) auto; }
   .rodape .celulas > * { padding: 20px; font-size: 12px; color: var(--apagado); }
   .rodape a { color: var(--texto); } .rodape a:hover { color: var(--osso); }
@@ -337,50 +256,55 @@
   .rodape .celulas > * { min-width: 0; }
   @media (max-width: 760px) { .rodape .celulas { grid-template-columns: 1fr; } .rodape .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); } }
 
+  /* ── jogo ── */
+  .jogo .celulas { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+  .arte-jogo svg { display: block; width: 100%; height: 100%; min-height: 220px; object-fit: cover; }
+  .arte-jogo .varre { animation: gira 7s linear infinite; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+  .texto-jogo { padding: 32px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+  .texto-jogo h2 { font: 800 clamp(28px, 3vw, 40px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .etiqueta { font: 500 11px/1 var(--mono); letter-spacing: 0; color: var(--fundo); background: var(--verde); padding: 5px 7px; border-radius: 2px; }
+  .texto-jogo p { font: 400 16px/1.55 var(--sans); max-width: 52ch; text-wrap: pretty; }
+  .texto-jogo code { font: 500 13px var(--mono); color: var(--osso); }
+  .texto-jogo .mais { color: #a9a49b; padding-top: 14px; border-top: 1px dashed var(--linha-forte); }
+  .texto-jogo .mais b { color: var(--osso); font-weight: 500; }
+  .texto-jogo a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+  .texto-jogo a:hover { text-decoration-color: var(--ambar); }
+
   /* ── telas menores ── */
   @media (max-width: 1000px) {
     .menu { display: none !important; }
     .topo .celulas { grid-template-columns: 1fr auto; }
     .cena { margin-top: -24px; }
     .cena img { width: 190%; max-width: none; margin-left: -88%; }
-    .dados .celulas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .dados .celulas > :nth-child(3) { border-left: 0; }
-    .dados .celulas > :nth-child(n+3) { border-top: 1px solid var(--linha); }
-    .comandos .celulas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .comandos .celulas > * { border-left: 1px solid var(--linha); }
-    .comandos .celulas > :nth-child(odd) { border-left: 0; }
-    .comandos .celulas > :nth-child(n+3) { border-top: 1px solid var(--linha); }
     .perfis .celulas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .perfis .celulas > * { border-left: 1px solid var(--linha); }
     .perfis .celulas > :nth-child(odd) { border-left: 0; }
     .perfis .celulas > :nth-child(n+3) { border-top: 1px solid var(--linha); }
     .cab { grid-template-columns: 1fr; }
     .cab > * + * { border-left: 0; padding-top: 0; }
-    .cab > :first-child { padding-bottom: 16px; }
+    .cab > :first-child { padding-bottom: 10px; }
     .paineis { grid-template-columns: 1fr; }
     .painel + .painel { border-left: 0; border-top: 1px solid var(--linha); }
-    .nunca, .jogos .celulas { grid-template-columns: 1fr; }
-    .jogos .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
+    .jogo .celulas { grid-template-columns: 1fr; }
+    .jogo .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
+    .nunca { grid-template-columns: 1fr; }
     .nunca-lado { border-right: 0; border-bottom: 1px solid var(--linha); }
-    .personaliza .celulas { grid-template-columns: 1fr; }
-    .personaliza .celulas > * { border-left: 0; border-top: 1px solid var(--linha) !important; }
-    .personaliza .celulas > :first-child { border-top: 0 !important; }
-    .modos .celulas, .passos .celulas, .garantias .celulas { grid-template-columns: 1fr; }
-    .modos .celulas > * + *, .passos .celulas > * + *, .garantias .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
+    .contribui .celulas, .passos .celulas { grid-template-columns: 1fr; }
+    .contribui .celulas > * + *, .passos .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
   }
   @media (max-width: 620px) {
     .acoes .vazio { display: none; }
-    .dados .celulas, .comandos .celulas, .perguntas .celulas, .perfis .celulas { grid-template-columns: 1fr; }
-    .dados .celulas > * + *, .comandos .celulas > * + *, .perguntas .celulas > * + *, .perfis .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
-    .grupo.dica { grid-column: auto; }
+    .dados .celulas, .perfis .celulas { grid-template-columns: 1fr; }
+    .dados .celulas > * + *, .perfis .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
     .painel { font-size: 11px; padding: 16px; }
     .lendo { left: 16px; right: 16px; top: 56px; }
     .ctas .botao { flex: 1 1 100%; justify-content: center; }
     .nunca ul { grid-template-columns: 1fr; }
     .nunca li:nth-child(odd) { border-right: 0; }
     .nunca li:nth-last-child(2) { border-bottom: 1px solid var(--linha); }
-    .final .celulas, .rodape .celulas { grid-template-columns: 1fr; }
-    .final .celulas > * + *, .rodape .celulas > * + * { border-left: 0; padding-top: 0; }
+    .rodape .celulas { grid-template-columns: 1fr; }
+    .rodape .celulas > * + * { border-left: 0; padding-top: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -398,7 +322,7 @@
       <a href="#perfis">perfis</a>
       <a href="#jogos">jogos</a>
       <a href="#limites">limites</a>
-      <a href="#perguntas">perguntas</a>
+      <a href="#contribuir">contribuir</a>
     </nav>
     <div class="acoes">
       <a class="botao vazio" href="https://github.com/kessleru/Katharos">
@@ -415,7 +339,7 @@
     <div class="quadro">
       <div class="hero-texto">
         <h1 id="titulo" class="titulo">katharos<span class="bloco" aria-hidden="true"></span></h1>
-        <p class="lead">Otimizador de Windows que <strong>lista cada mudança antes de fazer</strong> e guarda o valor antigo, para você desfazer depois.</p>
+        <p class="lead">Otimiza o Windows. <strong>Mostra cada mudança antes</strong> e desfaz quando você quiser.</p>
         <div class="ctas">
           <a class="botao cheio grande" href="https://github.com/kessleru/Katharos/archive/refs/heads/main.zip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>
@@ -438,19 +362,9 @@
   <section class="faixa dados" aria-label="Resumo">
     <dl class="quadro celulas">
       <div><dt>funciona em</dt><dd>Windows 10 e 11</dd></div>
-      <div><dt>ajustes</dt><dd>mais de 170, cada um com o que ganha e perde</dd></div>
+      <div><dt>ajustes</dt><dd>mais de 170, cada um com ganho e perda</dd></div>
       <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">1.3.0</a> · 9 nov 2026</dd></div>
-      <div><dt>preço</dt><dd>grátis, código aberto</dd></div>
     </dl>
-  </section>
-
-  <div class="listras" aria-hidden="true"></div>
-
-  <section class="faixa" id="comandos" aria-labelledby="comandos-t">
-    <div class="quadro cab celulas">
-      <div><h2 id="comandos-t">O menu<span>.</span></h2></div>
-      <div><p>Você digita o número ou o nome. Cada tela lista o que vai mudar e espera a sua confirmação.</p></div>
-    </div>
   </section>
 
   <section class="faixa" aria-label="O Katharos rodando">
@@ -497,123 +411,100 @@
 <div class="lendo" aria-hidden="true"><span class="passo">medindo o disco</span><div class="trilho"><i></i></div></div></div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <section class="faixa comandos" aria-label="Todos os comandos">
-    <div class="quadro">
-      <details class="itens todos">
-        <summary>Ver os 40 comandos, em 10 grupos</summary>
-        <div class="celulas">
-      <div class="grupo"><h3>Comece por aqui</h3><p>O raio-x diz o que vale a pena; o turbo faz tudo de uma vez.</p><ul><li><i>1</i><code>raiox</code><span>diagnóstico completo, nota e o que fazer</span></li><li><i>2</i><code>turbo</code><span>otimiza tudo em sequência, com reinício</span></li><li><i>3</i><code>perfil</code><span>perfis (jogo, bateria...), atalhos e exportar</span></li></ul></div>
-      <div class="grupo"><h3>Conhecer o PC</h3><p>Só olha, não muda nada.</p><ul><li><i>4</i><code>medir</code><span>CPU, RAM, disco e temperatura agora</span></li><li><i>5</i><code>benchmark</code><span>velocidade de disco, CPU e RAM, antes e depois</span></li><li><i>6</i><code>memoria</code><span>quem usa a RAM e o que liberar</span></li><li><i>7</i><code>seguranca</code><span>auditoria: o que está fraco na segurança</span></li><li><i>8</i><code>portas</code><span>quem escuta em cada porta, e para quem</span></li><li><i>9</i><code>segredos</code><span>chaves esquecidas nos seus projetos</span></li></ul></div>
-      <div class="grupo"><h3>Liberar espaço e arrumar</h3><p>Apaga lixo e organiza; arquivos seus vão para a Lixeira ou voltam com desfazer.</p><ul><li><i>10</i><code>limpar</code><span>temporários, caches e restos</span></li><li><i>11</i><code>grandes</code><span>arquivos grandes e duplicados</span></li><li><i>12</i><code>organizar</code><span>área de trabalho em pastas, com desfazer</span></li></ul></div>
-      <div class="grupo"><h3>Deixar mais leve</h3><p>Menos coisa rodando em segundo plano.</p><ul><li><i>13</i><code>inicializacao</code><span>o que abre junto com o Windows</span></li><li><i>14</i><code>programas</code><span>bloatware e antivírus de fábrica</span></li><li><i>15</i><code>apps</code><span>apps pré-instalados da Loja</span></li><li><i>16</i><code>servicos</code><span>serviços que este PC não usa</span></li><li><i>17</i><code>visual</code><span>efeitos, animações e transparência</span></li></ul></div>
-      <div class="grupo"><h3>Privacidade e IA</h3><p>Menos coleta de dados, anúncios e IA.</p><ul><li><i>18</i><code>privacidade</code><span>telemetria, anúncios e sugestões</span></li><li><i>19</i><code>ia</code><span>Copilot, Recall e IA do Windows</span></li><li><i>20</i><code>navegador</code><span>Chrome, Edge e Brave mais leves</span></li></ul></div>
-      <div class="grupo"><h3>Desempenho</h3><p>Jogos, Steam, energia, disco e internet.</p><ul><li><i>21</i><code>jogos</code><span>Modo de Jogo, prioridades, latência</span></li><li><i>22</i><code>energia</code><span>plano de energia, turbo e USB</span></li><li><i>23</i><code>disco</code><span>menos escrita, boot mais rápido</span></li><li><i>24</i><code>rede</code><span>DNS mais rápido e medição de ping</span></li><li><i>25</i><code>steam</code><span>Steam: disco, tela e o que atrapalha (só lê)</span></li><li><i>26</i><code>cs2</code><span>CS2: vídeo para FPS, placa certa e .cfg</span></li></ul></div>
-      <div class="grupo"><h3>Consertar e manter em dia</h3><p>Quando algo quebra ou envelhece.</p><ul><li><i>27</i><code>reparar</code><span>DISM, SFC, chkdsk, rede e Update</span></li><li><i>28</i><code>atualizar</code><span>Windows, drivers e programas</span></li><li><i>29</i><code>agendar</code><span>manutenção semanal automática</span></li></ul></div>
-      <div class="grupo"><h3>Gosto pessoal</h3><p>Aparência e atalhos; nada aqui vem marcado.</p><ul><li><i>30</i><code>ajustes</code><span>barra, relógio, Num Lock, atualizações</span></li><li><i>31</i><code>interface</code><span>área de trabalho e atalhos do Edge</span></li></ul></div>
-      <div class="grupo"><h3>Voltar atrás e conferir</h3><p>Ver o que mudou e voltar.</p><ul><li><i>32</i><code>desfazer</code><span>volta qualquer mudança, valor por valor</span></li><li><i>33</i><code>socorro</code><span>o PC ficou estranho: volta tudo de uma vez</span></li><li><i>34</i><code>restaurar</code><span>pontos de restauração do Windows</span></li><li><i>35</i><code>verificar</code><span>confere se o que foi aplicado continua valendo</span></li><li><i>36</i><code>estado</code><span>o que já foi aplicado neste PC</span></li></ul></div>
-      <div class="grupo"><h3>Resultado e preferências</h3><p>Mostrar e configurar.</p><ul><li><i>37</i><code>cartao</code><span>antes e depois, num cartão para mostrar</span></li><li><i>38</i><code>relatorio</code><span>o relatório único: copiar para a IA ou salvar</span></li><li><i>39</i><code>config</code><span>modo padrão e preferências</span></li><li><i>40</i><code>ajuda</code><span>os passos mais comuns, em poucas linhas</span></li></ul></div>
-        </div>
-        <p class="dica-teste">Quer só ver? <code>katharos limpar --teste</code> mostra tudo que seria feito e não muda nada.</p>
-      </details>
+      <p class="legenda-janela">40 comandos. <code>katharos ajuda</code> lista todos.</p>
     </div>
   </section>
 
   <section class="faixa" id="usar" aria-labelledby="usar-t">
     <div class="quadro cab celulas">
       <div><h2 id="usar-t">Como usar<span>.</span></h2></div>
-      <div><p>Windows 10 ou 11. O primeiro raio-x leva cerca de um minuto.</p></div>
+      <div><p>Leva cerca de um minuto.</p></div>
     </div>
   </section>
   <section class="faixa passos" aria-label="Passos">
     <ol class="quadro celulas">
-      <li><h3>Baixe o ZIP e extraia</h3><p>Vêm o KATHAROS.bat e a pasta programa. Os relatórios de cada uso, com data e hora, ficam numa pasta relatorios ao lado.</p></li>
-      <li><h3>Clique em KATHAROS.bat</h3><p>Ele pede permissão de administrador. Se o Windows avisar que protegeu o PC, clique em "Mais informações" e "Executar assim mesmo". Na primeira vez, ele pergunta para que você usa o PC.</p></li>
-      <li><h3>Digite <kbd>1</kbd></h3><p>O raio-x mede o PC, dá uma nota de 0 a 100 e indica o que rodar primeiro. Ele não muda nada.</p></li>
+      <li><h3>Baixe e extraia o ZIP</h3><p>Vêm o KATHAROS.bat e a pasta programa.</p></li>
+      <li><h3>Abra o KATHAROS.bat</h3><p>Aceite o pedido de administrador. Se o Windows avisar, clique em Mais informações e Executar assim mesmo.</p></li>
+      <li><h3>Digite <kbd>1</kbd></h3><p>O raio-x dá uma nota e diz o que fazer primeiro. Não muda nada.</p></li>
     </ol>
   </section>
 
   <section class="faixa" id="perfis" aria-labelledby="perfis-t">
     <div class="quadro cab celulas">
       <div><h2 id="perfis-t">Perfis<span>.</span></h2></div>
-      <div><p>Escolha pelo uso do PC. Antes de aplicar, você vê a lista de itens, tira ou põe o que quiser e confirma. Dá para montar o seu do zero, sem perfil, e salvar. Cada item tem uma etiqueta de modo (seguro, equilibrado ou extremo), que aparece na lista.</p></div>
+      <div><p>Escolha pelo uso do PC e ajuste a lista antes de aplicar.</p></div>
     </div>
   </section>
   <section class="faixa perfis" aria-label="Perfis">
     <div class="quadro celulas">
       <article class="perfil">
-        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><circle class="mira-anel" cx="20" cy="20" r="12" stroke="currentColor" stroke-width="1.6" fill="none" stroke-dasharray="14 4.8"/><path d="M20 2v8M20 30v8M2 20h8M30 20h8" stroke="currentColor" stroke-width="1.6"/><circle class="mira-ponto" cx="20" cy="20" r="2.4" fill="currentColor"/></svg><div><h3>Jogos</h3><p class="para">para quem joga no PC ligado na tomada</p></div></header>
-        <ul class="eixos"><li><span>desempenho</span><span class="medidor" role="img" aria-label="desempenho: 5 de 5"><i class="on forte" style="--d:0"></i><i class="on forte" style="--d:60"></i><i class="on forte" style="--d:120"></i><i class="on forte" style="--d:180"></i><i class="on forte" style="--d:240"></i></span></li><li><span>leveza</span><span class="medidor" role="img" aria-label="leveza: 2 de 5"><i class="on" style="--d:90"></i><i class="on" style="--d:150"></i><i></i><i></i><i></i></span></li><li class="zero"><span>espaço</span><span class="medidor" role="img" aria-label="espaço: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>bateria</span><span class="medidor" role="img" aria-label="bateria: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>privacidade</span><span class="medidor" role="img" aria-label="privacidade: 1 de 5"><i class="on" style="--d:360"></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>conforto</span><span class="medidor" role="img" aria-label="conforto: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li></ul>
+        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><circle class="mira-anel" cx="20" cy="20" r="12" stroke="currentColor" stroke-width="1.6" fill="none" stroke-dasharray="14 4.8"/><path d="M20 2v8M20 30v8M2 20h8M30 20h8" stroke="currentColor" stroke-width="1.6"/><circle class="mira-ponto" cx="20" cy="20" r="2.4" fill="currentColor"/></svg><div><h3>Jogos</h3><p class="para">para quem joga no PC ligado na tomada</p><code>perfil jogo</code></div></header>
         <p class="perde"><b>Você perde:</b> apps em segundo plano deixam de atualizar; o CS2 fica com gráficos mais simples.</p>
         <details class="itens"><summary>Ver os 17 itens</summary><div class="lista-it"><p class="modo-itens"><span>modo dos itens</span><span class="nv nv1">1 seguro</span><span class="nv nv2">12 equilibrado</span><span class="nv nv3">3 extremo</span><span class="nv nv0">1 só se marcar</span></p><h4>jogos <i>9</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Modo de Jogo ligado</b><small>ganha: menos engasgos causados pelo sistema · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Game DVR e captura em segundo plano</b><small>ganha: mais FPS e menos disco durante o jogo · perde: Win+Alt+G e gravação pela Game Bar param</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>prioridade alta para jogos conhecidos</b><small>ganha: o jogo passa na frente de programas em segundo plano · perde: em PC fraco, música e Discord podem engasgar durante o jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>agendador multimídia favorecendo jogos</b><small>ganha: pequeno; ajuda jogos que usam o MMCSS · perde: tarefas de fundo ficam com menos CPU enquanto joga</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>prioridade do primeiro plano</b><small>ganha: pequeno; resposta um pouco melhor · perde: tarefas de fundo um pouco mais lentas</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>sem aceleração do mouse</b><small>ganha: mira mais consistente · perde: em telas grandes o mouse parece mais lento até se acostumar</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>teclado mais rápido</b><small>ganha: movimentos e digitação respondem antes · perde: quem digita devagar pode repetir letras sem querer</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>sem atalho das Teclas de Aderência</b><small>ganha: sem janela surgindo no jogo · perde: quem usa esses atalhos de acessibilidade perde</small></div></li><li><span class="nv nv3">extremo</span><div><b>rede: sem atraso de pacotes (Nagle) e sem limite multimídia</b><small>ganha: quase sempre zero ou mínimo (a maioria dos jogos usa UDP) · perde: um pouco mais de pacotes na rede</small></div></li></ul><h4>energia <i>3</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>plano desempenho máximo</b><small>ganha: mais rápido para responder e em jogos · perde: mais calor e consumo; em notebook, a bateria dura menos</small></div></li><li><span class="nv nv3">extremo</span><div><b>sem suspensão seletiva de USB na tomada</b><small>ganha: evita mouse, teclado e headset desconectando ou com atraso · perde: gasto mínimo de energia</small></div></li><li><span class="nv nv0">só se marcar</span><div><b>sem limitação de energia dos processos</b><small>ganha: programas de fundo mais rápidos · perde: mais consumo; em notebook, menos bateria</small></div></li></ul><h4>CS2 <i>4</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>CS2 na placa de vídeo dedicada</b><small>ganha: muito mais FPS se ele estava na integrada · perde: mais consumo de bateria durante o jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>otimizações para jogos em janela</b><small>ganha: menos atraso no modo janela sem bordas · perde: nenhum conhecido; alguns jogos antigos ignoram</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>vídeo do CS2 no preset de FPS</b><small>ganha: é onde mais se ganha FPS no CS2 · perde: o jogo fica menos bonito (fumaça e reflexos mais simples)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>katharos.cfg com comandos do próprio jogo</b><small>ganha: placa mais fria nos menus; tela mais limpa · perde: nada; o arquivo só vale se você mandar o jogo carregar</small></div></li></ul><h4>privacidade e propaganda <i>1</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>apps da Loja em segundo plano</b><small>ganha: pouco de RAM e CPU · perde: apps da Loja fechados (WhatsApp, Teams novo) podem não notificar</small></div></li></ul></div></details>
-        <div class="rodape-p"><code>perfil jogo</code><span>risco <span class="risco-medio">médio</span></span></div>
       </article>
       <article class="perfil">
-        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="12" width="28" height="16" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M35 17v6" stroke="currentColor" stroke-width="2.4"/><rect class="carga" x="8" y="15" width="22" height="10" fill="currentColor"/></svg><div><h3>Notebook na bateria</h3><p class="para">para notebook longe da tomada</p></div></header>
-        <ul class="eixos"><li class="zero"><span>desempenho</span><span class="medidor" role="img" aria-label="desempenho: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>leveza</span><span class="medidor" role="img" aria-label="leveza: 2 de 5"><i class="on" style="--d:90"></i><i class="on" style="--d:150"></i><i></i><i></i><i></i></span></li><li class="zero"><span>espaço</span><span class="medidor" role="img" aria-label="espaço: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>bateria</span><span class="medidor" role="img" aria-label="bateria: 5 de 5"><i class="on forte" style="--d:270"></i><i class="on forte" style="--d:330"></i><i class="on forte" style="--d:390"></i><i class="on forte" style="--d:450"></i><i class="on forte" style="--d:510"></i></span></li><li><span>privacidade</span><span class="medidor" role="img" aria-label="privacidade: 1 de 5"><i class="on" style="--d:360"></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>conforto</span><span class="medidor" role="img" aria-label="conforto: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li></ul>
+        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="12" width="28" height="16" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M35 17v6" stroke="currentColor" stroke-width="2.4"/><rect class="carga" x="8" y="15" width="22" height="10" fill="currentColor"/></svg><div><h3>Notebook na bateria</h3><p class="para">para notebook longe da tomada</p><code>perfil bateria</code></div></header>
         <p class="perde"><b>Você perde:</b> desempenho máximo; animações e transparência.</p>
         <details class="itens"><summary>Ver os 6 itens</summary><div class="lista-it"><p class="modo-itens"><span>modo dos itens</span><span class="nv nv1">1 seguro</span><span class="nv nv2">5 equilibrado</span></p><h4>energia <i>1</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>plano fresco (notebook que esquenta)</b><small>ganha: mais frio, silencioso e mais bateria · perde: picos de desempenho um pouco menores</small></div></li></ul><h4>visual e barra de tarefas <i>3</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>efeitos visuais em desempenho</b><small>ganha: janelas e menus mais rápidos em PC fraco · perde: visual mais seco</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>animações</b><small>ganha: resposta imediata · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>transparência</b><small>ganha: menos uso da placa de vídeo · perde: visual mais opaco</small></div></li></ul><h4>privacidade e propaganda <i>2</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>widgets e notícias</b><small>ganha: menos um processo do Edge em segundo plano · perde: perde o painel de widgets</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>apps da Loja em segundo plano</b><small>ganha: pouco de RAM e CPU · perde: apps da Loja fechados (WhatsApp, Teams novo) podem não notificar</small></div></li></ul></div></details>
-        <div class="rodape-p"><code>perfil bateria</code><span>risco <span class="risco-baixo">baixo</span></span></div>
       </article>
       <article class="perfil">
-        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="11" width="34" height="16" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 27v4M14 27v4M20 27v4M26 27v4M32 27v4" stroke="currentColor" stroke-width="1.4"/><rect class="chip" x="7" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/><rect class="chip" x="14.5" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/><rect class="chip" x="22" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/><rect class="chip" x="29" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/></svg><div><h3>PC fraco</h3><p class="para">para PC com pouca RAM ou HD lento</p></div></header>
-        <ul class="eixos"><li><span>desempenho</span><span class="medidor" role="img" aria-label="desempenho: 3 de 5"><i class="on" style="--d:0"></i><i class="on" style="--d:60"></i><i class="on" style="--d:120"></i><i></i><i></i></span></li><li><span>leveza</span><span class="medidor" role="img" aria-label="leveza: 5 de 5"><i class="on forte" style="--d:90"></i><i class="on forte" style="--d:150"></i><i class="on forte" style="--d:210"></i><i class="on forte" style="--d:270"></i><i class="on forte" style="--d:330"></i></span></li><li><span>espaço</span><span class="medidor" role="img" aria-label="espaço: 4 de 5"><i class="on forte" style="--d:180"></i><i class="on forte" style="--d:240"></i><i class="on forte" style="--d:300"></i><i class="on forte" style="--d:360"></i><i></i></span></li><li><span>bateria</span><span class="medidor" role="img" aria-label="bateria: 1 de 5"><i class="on" style="--d:270"></i><i></i><i></i><i></i><i></i></span></li><li><span>privacidade</span><span class="medidor" role="img" aria-label="privacidade: 2 de 5"><i class="on" style="--d:360"></i><i class="on" style="--d:420"></i><i></i><i></i><i></i></span></li><li class="zero"><span>conforto</span><span class="medidor" role="img" aria-label="conforto: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li></ul>
+        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="11" width="34" height="16" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 27v4M14 27v4M20 27v4M26 27v4M32 27v4" stroke="currentColor" stroke-width="1.4"/><rect class="chip" x="7" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/><rect class="chip" x="14.5" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/><rect class="chip" x="22" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/><rect class="chip" x="29" y="15" width="5" height="8" stroke="currentColor" stroke-width="1.2"/></svg><div><h3>PC fraco</h3><p class="para">para PC com pouca RAM ou HD lento</p><code>perfil fraco</code></div></header>
         <p class="perde"><b>Você perde:</b> animações, widgets e Copilot; o Windows fica mais &quot;seco&quot;.</p>
         <details class="itens"><summary>Ver os 25 itens</summary><div class="lista-it"><p class="modo-itens"><span>modo dos itens</span><span class="nv nv1">12 seguro</span><span class="nv nv2">9 equilibrado</span><span class="nv nv3">4 extremo</span></p><h4>visual e barra de tarefas <i>6</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>efeitos visuais em desempenho</b><small>ganha: janelas e menus mais rápidos em PC fraco · perde: visual mais seco</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>animações</b><small>ganha: resposta imediata · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>menus sem espera</b><small>ganha: sensação de rapidez · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>transparência</b><small>ganha: menos uso da placa de vídeo · perde: visual mais opaco</small></div></li><li><span class="nv nv3">extremo</span><div><b>arrastar janela sem conteúdo</b><small>ganha: menos trabalho de vídeo em PC fraco · perde: visual estranho para quem não está acostumado</small></div></li><li><span class="nv nv3">extremo</span><div><b>ícones no lugar de miniaturas</b><small>ganha: pastas de mídia abrem mais rápido em HD · perde: não vê a prévia das fotos</small></div></li></ul><h4>privacidade e propaganda <i>5</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>telemetria no mínimo</b><small>ganha: menos uso de rede e disco · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>serviços de telemetria</b><small>ganha: menos um serviço que grava e envia o tempo todo · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>anúncios e apps instalados sozinhos</b><small>ganha: menos propaganda e instalações surpresa · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>widgets e notícias</b><small>ganha: menos um processo do Edge em segundo plano · perde: perde o painel de widgets</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>apps da Loja em segundo plano</b><small>ganha: pouco de RAM e CPU · perde: apps da Loja fechados (WhatsApp, Teams novo) podem não notificar</small></div></li></ul><h4>serviços <i>3</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>atualizadores em manual</b><small>ganha: menos serviços parados gastando RAM · perde: atualizações desses programas podem chegar um pouco depois</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>serviços e tarefas de fabricante</b><small>ganha: menos CPU e WMI parados · perde: diagnóstico do fabricante só quando você abrir</small></div></li><li><span class="nv nv3">extremo</span><div><b>serviços que podem subir só quando precisar</b><small>ganha: menos serviços rodando desde o boot · perde: aparelhos de rede (TVs, impressoras na rede) podem demorar a aparecer</small></div></li></ul><h4>IA do Windows <i>3</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Copilot desligado</b><small>ganha: menos um app em segundo plano · perde: perde o Copilot do Windows</small></div></li><li><span class="nv nv1">seguro</span><div><b>Recall e análise de IA desligados</b><small>ganha: privacidade; menos processamento em segundo plano · perde: perde esses recursos de IA</small></div></li><li><span class="nv nv3">extremo</span><div><b>serviço e tarefas de IA</b><small>ganha: menos processos parados gastando · perde: nenhum para quem não usa IA do Windows</small></div></li></ul><h4>disco e memória <i>3</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Windows Update sem compartilhar com outros PCs</b><small>ganha: menos upload e escrita em disco · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>tarefas de manutenção inúteis</b><small>ganha: menos leitura de disco ociosa · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>Sensor de Armazenamento mensal</b><small>ganha: disco não enche sozinho · perde: nenhum</small></div></li></ul><h4>limpeza <i>5</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>temporários</b><small>ganha: espaço; às vezes centenas de MB · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>downloads do Windows Update</b><small>ganha: espaço (pode passar de 1 GB) · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>relatórios de erro e dumps</b><small>ganha: espaço (dumps podem ter GBs) · perde: quem investiga uma tela azul antiga perde o arquivo</small></div></li><li><span class="nv nv1">seguro</span><div><b>cache de miniaturas</b><small>ganha: espaço; conserta miniaturas erradas · perde: pastas de fotos demoram um pouco na primeira abertura</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>logs antigos do Windows</b><small>ganha: espaço · perde: nenhum no uso normal</small></div></li></ul></div></details>
-        <div class="rodape-p"><code>perfil fraco</code><span>risco <span class="risco-medio">médio</span></span></div>
       </article>
       <article class="perfil">
-        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><g class="palpebra"><path d="M3 20c4.5-7 10-10 17-10s12.5 3 17 10c-4.5 7-10 10-17 10S7.5 27 3 20z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="20" cy="20" r="5" fill="currentColor"/></g><path class="risco-olho" d="M7 34L33 6" stroke="currentColor" stroke-width="1.8"/></svg><div><h3>Privacidade máxima</h3><p class="para">para quem não quer ser medido pelo Windows</p></div></header>
-        <ul class="eixos"><li class="zero"><span>desempenho</span><span class="medidor" role="img" aria-label="desempenho: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>leveza</span><span class="medidor" role="img" aria-label="leveza: 1 de 5"><i class="on" style="--d:90"></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>espaço</span><span class="medidor" role="img" aria-label="espaço: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>bateria</span><span class="medidor" role="img" aria-label="bateria: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>privacidade</span><span class="medidor" role="img" aria-label="privacidade: 5 de 5"><i class="on forte" style="--d:360"></i><i class="on forte" style="--d:420"></i><i class="on forte" style="--d:480"></i><i class="on forte" style="--d:540"></i><i class="on forte" style="--d:600"></i></span></li><li class="zero"><span>conforto</span><span class="medidor" role="img" aria-label="conforto: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li></ul>
+        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><g class="palpebra"><path d="M3 20c4.5-7 10-10 17-10s12.5 3 17 10c-4.5 7-10 10-17 10S7.5 27 3 20z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="20" cy="20" r="5" fill="currentColor"/></g><path class="risco-olho" d="M7 34L33 6" stroke="currentColor" stroke-width="1.8"/></svg><div><h3>Privacidade máxima</h3><p class="para">para quem não quer ser medido pelo Windows</p><code>perfil privacidade</code></div></header>
         <p class="perde"><b>Você perde:</b> Copilot, Recall, histórico de atividades e busca na web do menu Iniciar.</p>
         <details class="itens"><summary>Ver os 24 itens</summary><div class="lista-it"><p class="modo-itens"><span>modo dos itens</span><span class="nv nv1">10 seguro</span><span class="nv nv2">11 equilibrado</span><span class="nv nv3">3 extremo</span></p><h4>privacidade e propaganda <i>15</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>telemetria no mínimo</b><small>ganha: menos uso de rede e disco · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>serviços de telemetria</b><small>ganha: menos um serviço que grava e envia o tempo todo · perde: nenhum</small></div></li><li><span class="nv nv3">extremo</span><div><b>registros contínuos de diagnóstico</b><small>ganha: menos escrita contínua em disco · perde: diagnósticos avançados da Microsoft ficam com menos dados</small></div></li><li><span class="nv nv1">seguro</span><div><b>tarefas de telemetria</b><small>ganha: menos picos de disco e CPU · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>anúncios e apps instalados sozinhos</b><small>ganha: menos propaganda e instalações surpresa · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>histórico de atividades</b><small>ganha: menos escrita em disco · perde: a Linha do Tempo antiga fica vazia</small></div></li><li><span class="nv nv1">seguro</span><div><b>Cortana</b><small>ganha: nenhum processo da Cortana · perde: nenhum (foi descontinuada)</small></div></li><li><span class="nv nv1">seguro</span><div><b>propaganda do Microsoft 365 nas Configurações</b><small>ganha: menos propaganda · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>telemetria do Office</b><small>ganha: menos processos e uploads do Office · perde: nenhum</small></div></li><li><span class="nv nv3">extremo</span><div><b>área de transferência na nuvem</b><small>ganha: privacidade · perde: perde o colar entre aparelhos</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>busca do menu sem resultados da web</b><small>ganha: busca mais rápida e privada · perde: pesquisas na web vão para o navegador</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>widgets e notícias</b><small>ganha: menos um processo do Edge em segundo plano · perde: perde o painel de widgets</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>apps da Loja em segundo plano</b><small>ganha: pouco de RAM e CPU · perde: apps da Loja fechados (WhatsApp, Teams novo) podem não notificar</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>relatório de erros</b><small>ganha: menos disco depois de travamentos · perde: a Microsoft não recebe seus relatórios; soluções automáticas não aparecem</small></div></li><li><span class="nv nv1">seguro</span><div><b>Edge sem rodar escondido</b><small>ganha: menos RAM no boot · perde: o Edge demora um pouco mais para abrir</small></div></li></ul><h4>IA do Windows <i>9</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Copilot desligado</b><small>ganha: menos um app em segundo plano · perde: perde o Copilot do Windows</small></div></li><li><span class="nv nv1">seguro</span><div><b>Recall e análise de IA desligados</b><small>ganha: privacidade; menos processamento em segundo plano · perde: perde esses recursos de IA</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>recurso opcional Recall desativado</b><small>ganha: tira o componente do sistema · perde: nenhum para quem não usa</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>IA no Paint</b><small>ganha: menos chamadas à nuvem · perde: perde esses recursos do Paint</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>IA no Bloco de Notas</b><small>ganha: Bloco de Notas mais simples · perde: perde a reescrita com IA</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>IA no Edge</b><small>ganha: Edge mais leve e privado · perde: perde o Copilot no Edge; aparece o aviso de gerenciado</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Microsoft 365 Copilot e IA do Office</b><small>ganha: menos processos do Office em segundo plano · perde: perde o Copilot do Office</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>coleta de digitação e tinta</b><small>ganha: privacidade · perde: sugestões de digitação ficam menos personalizadas</small></div></li><li><span class="nv nv3">extremo</span><div><b>serviço e tarefas de IA</b><small>ganha: menos processos parados gastando · perde: nenhum para quem não usa IA do Windows</small></div></li></ul></div></details>
-        <div class="rodape-p"><code>perfil privacidade</code><span>risco <span class="risco-medio">médio</span></span></div>
       </article>
       <article class="perfil">
-        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><path d="M13 11l-9 9 9 9M27 11l9 9-9 9" stroke="currentColor" stroke-width="1.8" fill="none"/><rect class="cursor-ico" x="16" y="26" width="8" height="2.4" fill="currentColor"/></svg><div><h3>Programador</h3><p class="para">para quem programa</p></div></header>
-        <ul class="eixos"><li><span>desempenho</span><span class="medidor" role="img" aria-label="desempenho: 1 de 5"><i class="on" style="--d:0"></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>leveza</span><span class="medidor" role="img" aria-label="leveza: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>espaço</span><span class="medidor" role="img" aria-label="espaço: 1 de 5"><i class="on" style="--d:180"></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>bateria</span><span class="medidor" role="img" aria-label="bateria: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>privacidade</span><span class="medidor" role="img" aria-label="privacidade: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>conforto</span><span class="medidor" role="img" aria-label="conforto: 5 de 5"><i class="on forte" style="--d:450"></i><i class="on forte" style="--d:510"></i><i class="on forte" style="--d:570"></i><i class="on forte" style="--d:630"></i><i class="on forte" style="--d:690"></i></span></li></ul>
+        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><path d="M13 11l-9 9 9 9M27 11l9 9-9 9" stroke="currentColor" stroke-width="1.8" fill="none"/><rect class="cursor-ico" x="16" y="26" width="8" height="2.4" fill="currentColor"/></svg><div><h3>Programador</h3><p class="para">para quem programa</p><code>perfil dev</code></div></header>
         <p class="perde"><b>Você perde:</b> nada que pese: só muda o que atrapalha o trabalho.</p>
         <details class="itens"><summary>Ver os 7 itens</summary><div class="lista-it"><p class="modo-itens"><span>modo dos itens</span><span class="nv nv1">1 seguro</span><span class="nv nv2">4 equilibrado</span><span class="nv nv3">2 extremo</span></p><h4>ajustes do Windows <i>2</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>&quot;Finalizar tarefa&quot; no botão direito da barra</b><small>ganha: menos passos para matar travados · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>caminhos longos (mais de 260 letras)</b><small>ganha: menos erros &quot;caminho muito longo&quot; · perde: programas antigos podem não entender esses caminhos</small></div></li></ul><h4>visual e barra de tarefas <i>2</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>mostrar extensões dos arquivos</b><small>ganha: segurança · perde: nomes um pouco mais longos</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>menu do botão direito completo</b><small>ganha: menos cliques · perde: visual do Windows 10 no menu</small></div></li></ul><h4>disco e memória <i>2</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>NTFS sem gravar &quot;último acesso&quot;</b><small>ganha: menos escrita em disco · perde: programas de backup que dependem dessa data (raros) se confundem</small></div></li><li><span class="nv nv3">extremo</span><div><b>NTFS sem nomes 8.3 e com mais cache</b><small>ganha: pastas grandes mais rápidas · perde: programas de DOS muito antigos podem não achar arquivos novos</small></div></li></ul><h4>energia <i>1</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>plano desempenho máximo</b><small>ganha: mais rápido para responder e em jogos · perde: mais calor e consumo; em notebook, a bateria dura menos</small></div></li></ul></div></details>
-        <div class="rodape-p"><code>perfil dev</code><span>risco <span class="risco-baixo">baixo</span></span></div>
       </article>
       <article class="perfil">
-        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3l14 5v10c0 9-6 15-14 19C12 33 6 27 6 18V8z" stroke="currentColor" stroke-width="1.6" fill="none"/><path class="escudo-ok" d="M13 20l5 5 9-10" stroke="currentColor" stroke-width="2" fill="none"/></svg><div><h3>PC de trabalho</h3><p class="para">para PC de trabalho, de empresa ou escola</p></div></header>
-        <ul class="eixos"><li class="zero"><span>desempenho</span><span class="medidor" role="img" aria-label="desempenho: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li class="zero"><span>leveza</span><span class="medidor" role="img" aria-label="leveza: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>espaço</span><span class="medidor" role="img" aria-label="espaço: 2 de 5"><i class="on" style="--d:180"></i><i class="on" style="--d:240"></i><i></i><i></i><i></i></span></li><li class="zero"><span>bateria</span><span class="medidor" role="img" aria-label="bateria: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li><li><span>privacidade</span><span class="medidor" role="img" aria-label="privacidade: 3 de 5"><i class="on" style="--d:360"></i><i class="on" style="--d:420"></i><i class="on" style="--d:480"></i><i></i><i></i></span></li><li class="zero"><span>conforto</span><span class="medidor" role="img" aria-label="conforto: 0 de 5"><i></i><i></i><i></i><i></i><i></i></span></li></ul>
+        <header><svg class="ico" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3l14 5v10c0 9-6 15-14 19C12 33 6 27 6 18V8z" stroke="currentColor" stroke-width="1.6" fill="none"/><path class="escudo-ok" d="M13 20l5 5 9-10" stroke="currentColor" stroke-width="2" fill="none"/></svg><div><h3>PC de trabalho</h3><p class="para">para PC de trabalho, de empresa ou escola</p><code>perfil trabalho</code></div></header>
         <p class="perde"><b>Você perde:</b> quase nada: só o que não tem contrapartida.</p>
         <details class="itens"><summary>Ver os 16 itens</summary><div class="lista-it"><p class="modo-itens"><span>modo dos itens</span><span class="nv nv1">16 seguro</span></p><h4>privacidade e propaganda <i>9</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>telemetria no mínimo</b><small>ganha: menos uso de rede e disco · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>serviços de telemetria</b><small>ganha: menos um serviço que grava e envia o tempo todo · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>tarefas de telemetria</b><small>ganha: menos picos de disco e CPU · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>anúncios e apps instalados sozinhos</b><small>ganha: menos propaganda e instalações surpresa · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>histórico de atividades</b><small>ganha: menos escrita em disco · perde: a Linha do Tempo antiga fica vazia</small></div></li><li><span class="nv nv1">seguro</span><div><b>Cortana</b><small>ganha: nenhum processo da Cortana · perde: nenhum (foi descontinuada)</small></div></li><li><span class="nv nv1">seguro</span><div><b>propaganda do Microsoft 365 nas Configurações</b><small>ganha: menos propaganda · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>portas de entrada antigas fechadas</b><small>ganha: mais segurança · perde: aparelhos de rede muito antigos (antes de 2010) podem não abrir pastas</small></div></li><li><span class="nv nv1">seguro</span><div><b>Edge sem rodar escondido</b><small>ganha: menos RAM no boot · perde: o Edge demora um pouco mais para abrir</small></div></li></ul><h4>limpeza <i>5</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>temporários</b><small>ganha: espaço; às vezes centenas de MB · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>downloads do Windows Update</b><small>ganha: espaço (pode passar de 1 GB) · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>cache da Otimização de Entrega</b><small>ganha: espaço · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>relatórios de erro e dumps</b><small>ganha: espaço (dumps podem ter GBs) · perde: quem investiga uma tela azul antiga perde o arquivo</small></div></li><li><span class="nv nv1">seguro</span><div><b>cache de miniaturas</b><small>ganha: espaço; conserta miniaturas erradas · perde: pastas de fotos demoram um pouco na primeira abertura</small></div></li></ul><h4>IA do Windows <i>2</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Copilot desligado</b><small>ganha: menos um app em segundo plano · perde: perde o Copilot do Windows</small></div></li><li><span class="nv nv1">seguro</span><div><b>Recall e análise de IA desligados</b><small>ganha: privacidade; menos processamento em segundo plano · perde: perde esses recursos de IA</small></div></li></ul></div></details>
-        <div class="rodape-p"><code>perfil trabalho</code><span>risco <span class="risco-baixo">mínimo</span></span></div>
       </article>
     </div>
   </section>
 
-  <section class="faixa" id="jogos" aria-labelledby="jogos-t">
-    <div class="quadro cab celulas">
-      <div><h2 id="jogos-t">Jogos<span>.</span></h2></div>
-      <div><p>O Katharos muda configurações do Windows e arquivos de configuração do seu usuário. Arquivos e memória do jogo ficam fora, e nada roda junto com a partida.</p></div>
-    </div>
-  </section>
-  <section class="faixa jogos" aria-label="Otimização de jogos">
+  <section class="faixa jogo" id="jogos" aria-label="Otimização por jogo">
     <div class="quadro celulas">
-      <div>
-        <h3>Windows e Steam</h3>
-        <p><code>steam</code> lê as bibliotecas e avisa se o CS2 está num HD ou se o notebook abre o jogo na placa integrada. <code>jogos</code> liga o Modo de Jogo, desliga a gravação em segundo plano e dá prioridade de CPU a jogos sem anti-cheat de terceiros. Valorant, Fortnite, LoL e Rainbow Six não recebem nenhuma mudança.</p>
+      <div class="arte-jogo">
+        <svg viewBox="0 0 480 300" role="img" aria-label="Ilustração de um radar de mapa tático e uma mira, no estilo do próprio site">
+          <defs>
+            <pattern id="grade" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#1a1a1d" stroke-width="1"/></pattern>
+            <linearGradient id="varre" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e2a85c" stop-opacity="0"/><stop offset="1" stop-color="#e2a85c" stop-opacity=".32"/></linearGradient>
+          </defs>
+          <rect width="480" height="300" fill="#09090a"/><rect width="480" height="300" fill="url(#grade)"/>
+          <g transform="translate(150 150)">
+            <g fill="none" stroke="#38383e" stroke-width="1.4">
+              <circle r="46"/><circle r="92"/><circle r="130" stroke-dasharray="3 5"/>
+              <path d="M-84 -70H-30V-30H-84zM30 -96H78V-52H30zM-96 18H-52V70H-96zM8 40H64V86H8z"/>
+              <path d="M-130 0H130M0 -130V130" stroke="#242428"/>
+            </g>
+            <g class="varre"><path d="M0 0L130 0A130 130 0 0 0 112.6 -65z" fill="url(#varre)"/><path d="M0 0H130" stroke="#e2a85c" stroke-width="1.6"/></g>
+            <circle r="4.5" fill="#e2a85c"/>
+            <g fill="#e5737a"><circle cx="62" cy="-36" r="3.4"/><circle cx="-58" cy="52" r="3.4"/><circle cx="24" cy="70" r="3.4" opacity=".55"/></g>
+          </g>
+          <g transform="translate(372 150)" stroke="#efe9de" stroke-width="2" fill="none" stroke-linecap="square">
+            <circle r="64" stroke="#38383e" stroke-width="1.2" stroke-dasharray="2 6"/>
+            <path d="M-34 0H-10M10 0H34M0 -34V-10M0 10V34"/><circle r="1.6" fill="#efe9de" stroke="none"/>
+          </g>
+          <text x="18" y="282" font-family="JetBrains Mono, monospace" font-size="13" fill="#86837c">katharos cs2</text>
+        </svg>
       </div>
-      <div>
-        <h3>CS2</h3>
-        <p><code>cs2</code> ajusta o vídeo para FPS, põe o jogo na placa dedicada e cria um <code>katharos.cfg</code> com comandos do próprio jogo. O arquivo de vídeo ganha uma cópia antes. Ficam de fora textura trocada, arquivo modificado e o que exige sv_cheats, como o céu preto.</p>
+      <div class="texto-jogo">
+        <h2 id="jogos-t">CS2 <span class="etiqueta">disponível</span></h2>
+        <p>O <code>katharos cs2</code> ajusta o vídeo para FPS, põe o jogo na placa dedicada e cria um <code>katharos.cfg</code> com comandos do próprio jogo. Antes de mudar, guarda uma cópia do arquivo de vídeo.</p>
+        <p class="mais"><b>Cada jogo terá a sua.</b> A otimização dedicada de outros jogos vem nas próximas versões. Quer um primeiro? <a href="https://github.com/kessleru/Katharos/issues/new/choose">Peça numa issue</a>.</p>
       </div>
     </div>
   </section>
 
-  <section class="faixa" id="limites" aria-labelledby="seg-t">
-    <div class="quadro cab celulas">
-      <div><h2 id="seg-t">Limites<span>.</span></h2></div>
-      <div><p>Estas seis mudanças não existem no código, em nenhum modo.</p></div>
-    </div>
-  </section>
-  <section class="faixa limites" aria-label="O que ele nunca faz">
+  <section class="faixa limites" id="limites" aria-label="O que ele nunca faz">
     <div class="quadro nunca-bloco">
       <div class="nunca">
         <div class="nunca-lado"><strong>0</strong><span>proteções do Windows que o Katharos desliga.</span></div>
@@ -628,55 +519,44 @@
       </div>
     </div>
   </section>
-  <div class="listras" aria-hidden="true"></div>
 
   <section class="faixa" id="perguntas" aria-labelledby="perg-t">
     <div class="quadro cab celulas">
       <div><h2 id="perg-t">Perguntas<span>.</span></h2></div>
-      <div><p>Mais dúvidas: <a href="https://github.com/kessleru/Katharos/issues">abra uma issue no GitHub</a>.</p></div>
+      <div><p>Outra dúvida? <a href="https://github.com/kessleru/Katharos/issues">Abra uma issue</a>.</p></div>
     </div>
   </section>
-  <section class="faixa perguntas faq" aria-label="Perguntas e respostas">
+  <section class="faixa faq" aria-label="Perguntas e respostas">
     <div class="quadro">
-      <details><summary>É seguro?</summary><p>Antes de mudar algo, cria um ponto de restauração (um por dia) e anota cada valor antigo; <code>desfazer</code> põe de volta. Depois de mudar serviços, energia ou disco, pergunta se quer manter e desfaz sozinho se você não responder. Antivírus, firewall e Windows Update ficam ligados.</p></details>
-      <details><summary>Pode dar ban em jogo?</summary><p>Ele não altera arquivo nem memória de jogo. No CS2, só mexe nos arquivos de configuração do seu usuário, os mesmos que o menu do jogo grava. Jogos com anti-cheat de terceiros não recebem nenhuma mudança.</p></details>
-      <details><summary>Preciso instalar algo?</summary><p>Só o Python. Se o PC não tiver, ele instala o oficial pelo winget. O Katharos usa só ferramentas do Windows (PowerShell, DISM, SFC, powercfg).</p></details>
-      <details><summary>Manda meus dados para algum lugar?</summary><p>Não. O histórico fica em <code>.katharos</code> e os relatórios na pasta <code>relatorios</code>, ao lado do KATHAROS.bat. Um relatório só sai do PC se você copiar.</p></details>
+      <details><summary>É seguro?</summary><p>Cria um ponto de restauração e anota cada valor antigo; <code>desfazer</code> põe tudo de volta. Defender, firewall e Windows Update ficam ligados.</p></details>
+      <details><summary>Pode dar ban em jogo?</summary><p>Não mexe em arquivo nem em memória de jogo. Jogos com anti-cheat de terceiros (Valorant, Fortnite, LoL, Rainbow Six) não recebem nenhuma mudança.</p></details>
+      <details><summary>Preciso instalar algo?</summary><p>Só o Python; se faltar, ele instala pelo winget.</p></details>
+      <details><summary>Manda meus dados para algum lugar?</summary><p>Não. Histórico e relatórios ficam no seu PC, ao lado do KATHAROS.bat.</p></details>
     </div>
   </section>
 
   <section class="faixa" id="contribuir" aria-labelledby="contr-t">
     <div class="quadro cab celulas">
       <div><h2 id="contr-t">Contribuir<span>.</span></h2></div>
-      <div><p>O código é aberto e o projeto é pequeno. Achou um erro, tem um ajuste a propor ou quer revisar o que ele faz? Qualquer uma das três ajuda.</p></div>
+      <div><p>Quem ajudar é creditado pelo nome.</p></div>
     </div>
   </section>
-  <section class="faixa perguntas personaliza" aria-label="Como contribuir">
+  <section class="faixa contribui" aria-label="Como contribuir">
     <div class="quadro celulas">
-      <div><h3>Contar um problema</h3><p>Abra uma <a href="https://github.com/kessleru/Katharos/issues/new/choose">issue</a> com a versão do Windows e o que aconteceu. O <code>relatorios/ultimo.md</code> ajuda, mas tem o nome do PC: confira antes de colar.</p></div>
-      <div><h3>Propor um ajuste</h3><p>Todo item precisa dizer o que ganha, o que perde e como volta. Faça um <a href="https://github.com/kessleru/Katharos/pulls">pull request</a>; os testes automáticos recusam o que mexe em Defender, firewall ou Windows Update.</p></div>
-      <div><h3>Revisar o código</h3><p>É um arquivo só, <code>programa/katharos.py</code>. <code>katharos limpar --codigo</code> mostra o PowerShell de cada item. Achou algo estranho, <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">conte em privado</a>.</p></div>
+      <div><h3>Contar um problema</h3><p>Abra uma <a href="https://github.com/kessleru/Katharos/issues/new/choose">issue</a> com o que aconteceu.</p></div>
+      <div><h3>Propor um ajuste</h3><p>Faça um <a href="https://github.com/kessleru/Katharos/pulls">pull request</a>. Todo item diz o que ganha e o que perde.</p></div>
+      <div><h3>Revisar o código</h3><p>É um arquivo só, <code>programa/katharos.py</code>. Achou algo perigoso? <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">Conte em privado</a>.</p></div>
     </div>
-  </section>
-
-  <section class="faixa final" aria-labelledby="final-t">
-    <div class="quadro celulas">
-      <div><h2 id="final-t">Baixar<span style="color:var(--ambar)">.</span></h2></div>
-      <div class="ctas">
-        <a class="botao cheio grande" href="https://github.com/kessleru/Katharos/archive/refs/heads/main.zip">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>
-          Baixar a v1.3.0
-        </a>
-        <a class="botao vazio grande" href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">O que mudou</a>
-      </div>
+    <div class="quadro credito">
+      <p><b>Crédito.</b> Seu commit entra com a sua autoria, o GitHub lista você em Contributors e o <a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">CHANGELOG</a> agradece pelo nome. Prefere não aparecer? Avise no pull request.</p>
     </div>
   </section>
 </main>
 
 <footer class="faixa rodape">
   <div class="quadro celulas">
-    <span>Feito por <a href="https://github.com/kessleru">Otávio Kessler Ustra</a>. Grátis e de código aberto.</span>
-    <nav aria-label="Links"><a href="https://github.com/kessleru/Katharos#readme">manual</a><a href="https://github.com/kessleru/Katharos/blob/main/CONTRIBUTING.md">contribuir</a><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">versões</a><a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">segurança</a><a href="https://github.com/kessleru/Katharos/issues">reportar um problema</a></nav>
+    <span>Feito por <a href="https://github.com/kessleru">Otávio Kessler Ustra</a>. Grátis e de código aberto. <a href="https://github.com/kessleru/Katharos/archive/refs/heads/main.zip">Baixar a v1.3.0</a></span>
+    <nav aria-label="Links"><a href="https://github.com/kessleru/Katharos#readme">manual</a><a href="https://github.com/kessleru/Katharos/blob/main/CONTRIBUTING.md">contribuir</a><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">versões</a><a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">segurança</a></nav>
   </div>
 </footer>
 
@@ -689,8 +569,8 @@
   const io = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) { e.target.classList.add('vis'); if (!e.target.dataset.sempre) io.unobserve(e.target); }
   }), { threshold: .3 });
-  document.querySelectorAll('.perfis, .jogos, .modos, .limites, .passos').forEach(el => io.observe(el));
-  if (calmo) document.querySelectorAll('.perfis, .jogos, .modos, .limites, .passos').forEach(el => el.classList.add('vis'));
+  document.querySelectorAll('.perfis, .limites, .passos').forEach(el => io.observe(el));
+  if (calmo) document.querySelectorAll('.perfis, .limites, .passos').forEach(el => el.classList.add('vis'));
 
   // ── a janela: o menu aparece, alguém digita 1, o raio-x mede e mostra a nota ──
   const jan = document.getElementById('janela');

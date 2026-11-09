@@ -51,3 +51,11 @@ e, se mexeu em itens, perfis ou comandos, atualize o `CHANGELOG.md`.
 ## Versões
 
 O número tem três partes, MAIOR.MENOR.CORREÇÃO, explicadas no [CHANGELOG.md](CHANGELOG.md). Cada versão tem uma tag (`v1.2.0`).
+
+## Crédito
+
+Quem ajuda aparece pelo nome:
+
+- o seu commit entra no histórico com a sua autoria (o pull request é aceito sem apagar o seu nome) e o GitHub lista você em *Contributors*;
+- quem corrigir um erro ou propor um item é agradecido pelo nome na nota da versão, no [CHANGELOG.md](CHANGELOG.md);
+- prefere não aparecer? Diga no pull request e o seu nome fica de fora.
