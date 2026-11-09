@@ -10,7 +10,10 @@ Site: **[kessleru.github.io/Katharos](https://kessleru.github.io/Katharos)**
 
 ## Rodando
 
-[Baixe o ZIP](https://github.com/kessleru/Katharos/archive/refs/heads/main.zip), extraia e clique duas vezes no **`KATHAROS.bat`**. Ele pede administrador e, se o PC não tiver Python, instala o oficial pelo winget.
+[Baixe o ZIP](https://github.com/kessleru/Katharos/archive/refs/heads/main.zip), extraia e clique duas vezes no **`KATHAROS.bat`**. Ele:
+
+1. acha o Python que você já tem (Python Launcher, PATH, registro, pastas comuns e até o da Microsoft Store) e só instala o oficial pelo winget se não houver nenhum;
+2. abre o Katharos como administrador no melhor terminal do PC: **Windows Terminal**, senão PowerShell 7, senão Windows PowerShell.
 
 ```bat
 KATHAROS.bat                       :: menu
@@ -19,7 +22,7 @@ KATHAROS.bat turbo                 :: tudo em sequência, com reinício e retoma
 KATHAROS.bat privacidade --teste   :: mostra o que faria, sem alterar nada
 ```
 
-Ou direto: `python katharos.py [comando] [opções]` num terminal aberto como administrador.
+Ou direto, num PowerShell aberto como administrador: `python katharos.py [comando] [opções]`.
 
 ## Modos
 
@@ -111,6 +114,7 @@ katharos.py
   PARTE 3         os pacotes (limpar … interface, rede, ajustes)
   PARTE 4         turbo, manutenção, restaurar, desfazer, estado, grandes, memória
   PARTE 5         menu e linha de comando
-KATHAROS.bat      pede administrador, acha ou instala o Python e abre o menu
+KATHAROS.bat      chama o katharos.ps1
+katharos.ps1      acha o Python, escolhe o terminal e abre como administrador
 docs/             o site (GitHub Pages)
 ```

@@ -886,23 +886,33 @@ class Terminal:
         except EOFError:
             raise KeyboardInterrupt  # sem entrada (fim do pipe): sai do laço em vez de repetir para sempre
 
-    def menu_itens(self, grupos, quando=None):
+    def menu_itens(self, grupos, quando=None, destaque=None):
         """Desenha um menu numerado em grupos e devolve {número: comando}.
-        grupos: [(título, [(comando, descrição), ...]), ...]. quando: {comando: 'há 2 dias'} opcional."""
+        grupos: [(título, explicação, [(comando, descrição), ...]), ...] (a explicação pode faltar).
+        quando: {comando: 'há 2 dias'}; destaque: {comando: 'etiqueta'} aparece à direita, em destaque."""
         num, por_numero = 0, {}
-        larg_cmd = max([_larg(c) for _, itens in grupos for c, _ in itens] + [6])
-        for titulo, itens in grupos:
-            self.titulo(titulo)
+        larg_cmd = max([_larg(c) for g in grupos for c, _ in g[-1]] + [6])
+        for g in grupos:
+            titulo, itens = g[0], g[-1]
+            expl = g[1] if len(g) == 3 else ''
+            self.escreve()
+            linha = ' ' + self.p('◇', 'destaque') + '  ' + self.p(titulo, 'texto', True)
+            if expl and _larg(titulo) + _larg(expl) + 8 <= self.largura:
+                linha += self.p('  ' + expl, 'apagado')
+            self.escreve(linha, guia=False)
             for cmd, desc in itens:
                 num += 1
                 por_numero[str(num)] = cmd
-                esq = (f'  {self.p(f"{num:>2}", "destaque", True)}  {self.p(cmd + " " * (larg_cmd - _larg(cmd)), "texto")}  '
+                esq = (f'  {self.p(f"{num:>2}", "destaque", True)}  {self.p(cmd + " " * (larg_cmd - _larg(cmd)), "texto", True)}  '
                        f'{self.p(corta(desc, self.largura - larg_cmd - 8), "sub")}')
-                q = (quando or {}).get(cmd, '')
+                q = (destaque or {}).get(cmd)
+                cor_q = 'destaque'
+                if not q:
+                    q, cor_q = (quando or {}).get(cmd, ''), 'apagado'
                 if q and vlen(esq) + _larg(q) + 2 <= self.largura:
-                    esq += ' ' * (self.largura - vlen(esq) - _larg(q)) + self.p(q, 'apagado')
+                    esq += ' ' * (self.largura - vlen(esq) - _larg(q)) + self.p(q, cor_q)
                 self.escreve(esq)
-            self.escreve()
+        self.escreve()
         self.escreve(f'  {self.p(" 0", "apagado", True)}  {self.p("sair", "apagado")}')
         self.escreve()
         return por_numero
@@ -1390,7 +1400,7 @@ function Set-Valor([string]$Path, [string]$Name, $Value, [string]$Type = 'DWord'
     }
     $v = $a.valor
     if ($a.tipo -eq 'Binary' -and $null -ne $a.valor) { $v = [Convert]::ToBase64String([byte[]]$a.valor) }
-    _BkGuarda ("reg|" + $Path + "|" + $Name) @{ t = 'reg'; p = $Path; n = $Name; existe = $a.existe; tipo = $a.tipo; v = $v }
+    _BkGuarda ("reg|" + $Path + "|" + $Name) @{ t = 'reg'; p = $Path; n = $Name; existe = $a.existe; tipo = $a.tipo; v = $v; chave = [bool](Test-Path -LiteralPath $Path) }
     try {
         if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force -ErrorAction Stop | Out-Null }
         if ($Name -eq '(default)') { Set-ItemProperty -LiteralPath $Path -Name '(default)' -Value $Value -ErrorAction Stop }
@@ -1512,8 +1522,20 @@ function TamanhoPasta([string]$P) {
     $s = (Get-ChildItem -LiteralPath $P -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
     if ($s) { return [double]$s } else { return 0 }
 }
+function CaminhoSeguro([string]$P) {
+    # Recusa caminho vazio, relativo, raiz de disco ou pastas grandes do sistema e do usuario
+    # (protege contra variavel de ambiente vazia virando "\Temp" ou "C:\").
+    if (-not $P -or $P -notmatch '^[A-Za-z]:\\[^\\]') { return $false }
+    $c = $P.TrimEnd('\')
+    $prot = @($env:SystemDrive, $env:WINDIR, "$env:WINDIR\System32", $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramData,
+              "$env:SystemDrive\Users", $env:USERPROFILE, [Environment]::GetFolderPath('MyDocuments'), [Environment]::GetFolderPath('Desktop')) |
+            Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') }
+    if ($prot -contains $c) { return $false }
+    return (($c -split '\\').Count -ge 3)
+}
 function LimpaAntigos([string]$P, [double]$Dias = 0) {
     # Apaga arquivos mais velhos que N dias (arquivo em uso fica). Devolve os bytes liberados.
+    if (-not (CaminhoSeguro $P)) { if ($P) { Aviso ("pulei {0}: caminho fora do esperado" -f $P) }; return 0 }
     if (-not (Test-Path -LiteralPath $P)) { return 0 }
     $limite = (Get-Date).AddDays(-$Dias); $livre = 0
     foreach ($f in @(Get-ChildItem -LiteralPath $P -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt $limite })) {
@@ -1553,7 +1575,9 @@ foreach ($l in $linhas) {
                     else { New-ItemProperty -LiteralPath $o.p -Name $o.n -Value $v -PropertyType $o.tipo -Force | Out-Null }
                 } else {
                     $nn = $o.n; if ($nn -eq '(default)') { $nn = '' }
-                    if ($nn -eq '') { Remove-Item -LiteralPath $o.p -Recurse -Force -ErrorAction SilentlyContinue }
+                    # a chave só é apagada se foi o Katharos que a criou; senão some só o valor
+                    if ($nn -eq '' -and $o.chave -eq $false) { Remove-Item -LiteralPath $o.p -Recurse -Force -ErrorAction SilentlyContinue }
+                    elseif ($nn -eq '') { Remove-ItemProperty -LiteralPath $o.p -Name '(default)' -Force -ErrorAction SilentlyContinue }
                     else { Remove-ItemProperty -LiteralPath $o.p -Name $nn -Force -ErrorAction SilentlyContinue }
                 }
             }
@@ -2859,7 +2883,7 @@ def precisa_admin(ctx, args):
         else:
             t.erro('Não consegui abrir como administrador.')
     else:
-        t.paragrafo('Feche e abra o terminal com o botão direito > Executar como administrador, ou use o KATHAROS.bat.', 2, 'apagado')
+        t.paragrafo('Feche e abra o terminal com o botão direito > Executar como administrador, ou use o KATHAROS.bat (ele já abre como administrador).', 2, 'apagado')
     return False
 
 
@@ -5201,43 +5225,53 @@ def ferramenta_config(ctx, args):
 
 
 GRUPOS = [
-    ('conhecer o PC', [
+    ('comece por aqui', 'o raio-x diz o que vale a pena; o turbo faz tudo de uma vez', [
         ('raiox', 'diagnóstico completo, nota e o que fazer', 'ferramenta_raiox'),
+        ('turbo', 'otimiza tudo em sequência, com reinício', 'ferramenta_turbo'),
+    ]),
+    ('conhecer o PC', 'só olha, não muda nada', [
         ('medir', 'CPU, RAM, disco e temperatura agora', 'ferramenta_medir'),
         ('memoria', 'quem usa a RAM e o que liberar', 'ferramenta_memoria'),
     ]),
-    ('otimizar tudo', [
-        ('turbo', 'tudo em sequência, com reinício', 'ferramenta_turbo'),
-    ]),
-    ('otimizar por partes', [
+    ('liberar espaço', 'apaga lixo; arquivos seus vão para a Lixeira', [
         ('limpar', 'temporários, caches e restos', 'pacote'),
-        ('programas', 'bloatware e antivírus de fábrica', 'pacote'),
-        ('apps', 'apps pré-instalados da Loja', 'pacote'),
-        ('ia', 'Copilot, Recall e IA do Windows', 'pacote'),
-        ('inicializacao', 'o que abre com o Windows', 'pacote'),
-        ('servicos', 'serviços sem uso neste PC', 'pacote'),
-        ('privacidade', 'telemetria, anúncios e sugestões', 'pacote'),
-        ('visual', 'efeitos, animações e barra', 'pacote'),
-        ('jogos', 'Modo de Jogo, prioridades, latência', 'pacote'),
-        ('energia', 'plano, turbo, USB e hibernação', 'pacote'),
-        ('disco', 'menos escrita, boot e memória', 'pacote'),
-        ('reparar', 'DISM, SFC, chkdsk, rede, Update', 'pacote'),
-        ('atualizar', 'Windows, drivers, programas', 'pacote'),
-        ('navegador', 'navegadores mais leves', 'pacote'),
-        ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
-        ('ajustes', 'preferências: barra, tema, relógio', 'pacote'),
-        ('interface', 'área de trabalho e Edge', 'pacote'),
         ('grandes', 'arquivos grandes e duplicados', 'ferramenta_grandes'),
     ]),
-    ('manutenção e segurança', [
+    ('deixar mais leve', 'menos coisa rodando em segundo plano', [
+        ('inicializacao', 'o que abre junto com o Windows', 'pacote'),
+        ('programas', 'bloatware e antivírus de fábrica', 'pacote'),
+        ('apps', 'apps pré-instalados da Loja', 'pacote'),
+        ('servicos', 'serviços que este PC não usa', 'pacote'),
+        ('visual', 'efeitos, animações e transparência', 'pacote'),
+    ]),
+    ('privacidade e IA', 'menos coleta de dados, anúncios e IA', [
+        ('privacidade', 'telemetria, anúncios e sugestões', 'pacote'),
+        ('ia', 'Copilot, Recall e IA do Windows', 'pacote'),
+        ('navegador', 'Chrome, Edge e Brave mais leves', 'pacote'),
+    ]),
+    ('desempenho', 'jogos, energia, disco e internet', [
+        ('jogos', 'Modo de Jogo, prioridades, latência', 'pacote'),
+        ('energia', 'plano de energia, turbo e USB', 'pacote'),
+        ('disco', 'menos escrita, boot mais rápido', 'pacote'),
+        ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
+    ]),
+    ('consertar e atualizar', 'quando algo está quebrado ou velho', [
+        ('reparar', 'DISM, SFC, chkdsk, rede e Update', 'pacote'),
+        ('atualizar', 'Windows, drivers e programas', 'pacote'),
+    ]),
+    ('gosto pessoal', 'aparência; nada aqui vem marcado', [
+        ('ajustes', 'barra, tema, relógio, Num Lock', 'pacote'),
+        ('interface', 'área de trabalho e atalhos do Edge', 'pacote'),
+    ]),
+    ('segurança e manutenção', 'voltar atrás e manter o PC em dia', [
+        ('desfazer', 'volta qualquer mudança, valor por valor', 'ferramenta_desfazer'),
+        ('restaurar', 'pontos de restauração do Windows', 'ferramenta_restaurar'),
         ('agendar', 'manutenção semanal automática', 'ferramenta_agendar'),
-        ('restaurar', 'pontos de restauração', 'ferramenta_restaurar'),
-        ('desfazer', 'volta qualquer pacote', 'ferramenta_desfazer'),
-        ('estado', 'o que já foi aplicado', 'ferramenta_estado'),
+        ('estado', 'o que já foi aplicado neste PC', 'ferramenta_estado'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
     ]),
 ]
-COMANDOS = {cmd: (desc, f) for _, itens in GRUPOS for cmd, desc, f in itens}
+COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 SEM_ESTADO = {'config', 'estado', 'desfazer', 'restaurar'}
 
@@ -5287,7 +5321,7 @@ def monta_parser():
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
     tb.add_argument('--continuar', action='store_true', help='continua um turbo pela metade (a tarefa agendada usa)')
     tb.add_argument('--plano', metavar='ARQUIVO', help='usa as escolhas salvas de outro turbo (para repetir em outros PCs, sem perguntas)')
-    for cmd, desc, f in GRUPOS[2][1]:
+    for cmd, desc, f in (x for _, _, itens in GRUPOS for x in itens):
         if f == 'pacote':
             sub.add_parser(cmd, parents=[depois], help=desc)
     g = sub.add_parser('grandes', parents=[depois], help='arquivos grandes, duplicados e instaladores velhos (vão para a Lixeira)')
@@ -5323,19 +5357,22 @@ def menu(ctx, parser, args):
     while True:
         t.limpa()
         t.logo('KATHAROS')
-        extra = f'{len(COMANDOS) - 1} comandos · modo {config("modo")}' + (' · sem administrador' if WINDOWS and not eh_admin() else '')
+        extra = f'modo {config("modo")}' + (' · sem administrador' if WINDOWS and not eh_admin() else '')
         t.cabecalho('início', extra, app=APP)
         if not WINDOWS:
             t.aviso('Este computador não é Windows: dá para ver o menu, mas os comandos só funcionam no Windows.')
         quando = {c: ha_quanto_iso(q) for c, q in usados.items()}
-        por_numero = t.menu_itens([(g, [(c, d) for c, d, _ in itens]) for g, itens in GRUPOS], quando)
+        por_numero = t.menu_itens([(g, e, [(c, d) for c, d, _ in itens]) for g, e, itens in GRUPOS], quando,
+                                  destaque={'raiox': 'comece aqui'} if not usados.get('raiox') else None)
         if aviso:
             t.aviso(aviso)
             aviso = ''
         if ctx.proximos:
             t.info('sugeridos pelo raio-x: ' + ' · '.join(ctx.proximos))
             t.escreve()
-        escolha = t.pergunta('número ou nome').strip().lower()
+        t.nota('digite o número ou o nome · 0 sai · Ctrl+C cancela qualquer tela', 2)
+        t.escreve()
+        escolha = t.pergunta('o que fazer').strip().lower()
         if escolha in ('', '0', 'q', 'sair'):
             t.fim('até mais', 'nada')
             return 0
