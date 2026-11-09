@@ -355,7 +355,7 @@ class TestEntrega(unittest.TestCase):
         """O site é gerado do programa: a contagem de comandos e a versão têm de bater."""
         site = (RAIZ / 'docs' / 'index.html').read_text(encoding='utf-8')
         n = sum(len(itens) for _, _, itens in k.GRUPOS)
-        self.assertIn(f'{n} comandos', site, 'rode arte/gera_site.py')
+        self.assertIn(f'até o {n}', site, 'rode arte/gera_site.py')
         self.assertIn(k.VERSAO, site, 'rode arte/gera_site.py')
         self.assertNotIn('{{', site)
 

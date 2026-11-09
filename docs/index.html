@@ -55,7 +55,7 @@
   .guias { position: fixed; inset: 0 var(--borda); border-left: 1px solid var(--linha); border-right: 1px solid var(--linha); pointer-events: none; z-index: 0; }
   .faixa { position: relative; z-index: 1; border-top: 1px solid var(--linha); }
   .quadro { position: relative; margin: 0 var(--borda); }
-  .faixa > .quadro::before, .faixa > .quadro::after { content: '+'; position: absolute; top: -1px; z-index: 31;
+  .faixa > .quadro::before, .faixa > .quadro::after { display: none; content: '+'; position: absolute; top: -1px; z-index: 31;
     font: 400 15px/1 var(--mono); color: var(--apagado); translate: -50% -50%; background: var(--fundo); padding: 0 1px; }
   .faixa > .quadro::before { left: 0; }
   .faixa > .quadro::after { left: 100%; }
@@ -107,9 +107,9 @@
   .dados dd { color: var(--osso); font-size: 14px; margin-top: 2px; }
 
   /* ── cabeçalho de seção: as duas células ocupam a altura toda, então a divisória vai de borda a borda ── */
-  .cab { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: stretch; }
-  .cab > * { padding: 24px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; }
-  .cab h2 { font: 800 clamp(28px, 3vw, 40px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
+  .cab { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .cab > * { padding: 22px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; }
+  .cab h2 { font: 800 clamp(26px, 2.6vw, 34px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
   .cab h2 span { color: var(--ambar); }
   .cab p { font: 400 16px/1.55 var(--sans); max-width: 52ch; text-wrap: pretty; }
   .cab code, .texto-mono { font: 500 14px var(--mono); color: var(--osso); white-space: nowrap; }
@@ -117,9 +117,7 @@
   .cab a:hover { text-decoration-color: var(--ambar); }
 
   /* ── a janela do programa ── */
-  .janela-bloco { padding: 8px 0 28px; }
-  .legenda-janela { position: relative; z-index: 32; margin-top: 22px; font-size: 13px; color: var(--apagado); text-align: center; }
-  .legenda-janela code { color: var(--osso); }
+  .janela-bloco { padding: 8px 0 48px; }
   .janela { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: #09090a; overflow: hidden;
     box-shadow: 0 50px 120px -50px #000, 0 0 0 8px var(--fundo); position: relative; z-index: 32; }
   .abas { display: flex; align-items: center; padding: 10px 14px; background: #141416; border-bottom: 1px solid var(--linha); font-size: 12px; color: var(--apagado); gap: 10px; }
@@ -173,6 +171,10 @@
   .itens summary::after { content: '+'; color: var(--ambar); font-size: 16px; transition: transform .2s; }
   .itens[open] summary::after { transform: rotate(45deg); }
   .itens summary:hover { background: #151517; }
+  .perfil .itens { border: 0; border-top: 1px dashed var(--linha-forte); border-radius: 0; }
+  .perfil .itens summary { padding: 12px 0 0; color: var(--texto); font-weight: 400; }
+  .perfil .itens summary:hover { background: none; color: var(--osso); }
+  .perfil .lista-it { border-top: 0; padding: 0 0 4px; }
   .lista-it { max-height: 320px; overflow: auto; padding: 4px 12px 12px; border-top: 1px solid var(--linha); scrollbar-width: thin; }
   .itens[open] .lista-it { animation: abre .28s ease-out; }
   @keyframes abre { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
@@ -244,10 +246,10 @@
   @media (max-width: 760px) { .rodape .celulas { grid-template-columns: 1fr; } .rodape .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); } }
 
   /* divisores em imagem: fundo transparente, sem moldura */
-  .divisor .quadro { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 10px 0; }
+  .divisor .quadro { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 6px 0; }
   .divisor .quadro::before, .divisor .quadro::after { display: none; }
   .divisor img { height: auto; flex: none; }
-  .divisor.espada img { width: min(56%, 560px); }
+  .divisor.espada img { width: min(44%, 440px); }
   .divisor .fio { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--linha-forte)); }
   .divisor .fio:last-child { background: linear-gradient(270deg, transparent, var(--linha-forte)); }
   .divisor.florao img { width: min(88%, 620px); opacity: .85; }
@@ -259,7 +261,7 @@
   .horizonte::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, var(--fundo) 0%, transparent 55%); }
 
   /* ── jogo: faixa baixa sobre a gravura ── */
-  .jogo-cena { position: relative; height: clamp(220px, 24vw, 300px); overflow: hidden; background: #060607; }
+  .jogo-cena { position: relative; height: clamp(190px, 18vw, 240px); overflow: hidden; background: #060607; }
   .jogo-cena img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% 12%; opacity: .9; }
   .jogo-cena::after { content: ''; position: absolute; inset: 0; z-index: 1;
     background: linear-gradient(90deg, transparent 18%, rgba(12,12,13,.86) 58%, var(--fundo) 100%), linear-gradient(0deg, var(--fundo), transparent 28%); }
@@ -415,14 +417,12 @@
 <div class="lendo" aria-hidden="true"><span class="passo">medindo o disco</span><div class="trilho"><i></i></div></div></div>
         </div>
       </div>
-      <p class="legenda-janela">40 comandos. <code>katharos ajuda</code> lista todos.</p>
     </div>
   </section>
 
   <section class="faixa" id="usar" aria-labelledby="usar-t">
     <div class="quadro cab celulas">
       <div><h2 id="usar-t">Como usar<span>.</span></h2></div>
-      <div><p>Leva cerca de um minuto.</p></div>
     </div>
   </section>
   <section class="faixa passos" aria-label="Passos">
@@ -436,7 +436,6 @@
   <section class="faixa" id="perfis" aria-labelledby="perfis-t">
     <div class="quadro cab celulas">
       <div><h2 id="perfis-t">Perfis<span>.</span></h2></div>
-      <div><p>Escolha pelo uso do PC e ajuste a lista antes de aplicar.</p></div>
     </div>
   </section>
   <section class="faixa perfis" aria-label="Perfis">
@@ -506,7 +505,6 @@
   <section class="faixa" id="perguntas" aria-labelledby="perg-t">
     <div class="quadro cab celulas">
       <div><h2 id="perg-t">Perguntas<span>.</span></h2></div>
-      <div><p>Outra dúvida? <a href="https://github.com/kessleru/Katharos/issues">Abra uma issue</a>.</p></div>
     </div>
   </section>
   <section class="faixa faq" aria-label="Perguntas e respostas">
@@ -521,7 +519,6 @@
   <section class="faixa" id="contribuir" aria-labelledby="contr-t">
     <div class="quadro cab celulas">
       <div><h2 id="contr-t">Contribuir<span>.</span></h2></div>
-      <div><p>Quem ajudar é creditado pelo nome.</p></div>
     </div>
   </section>
   <section class="faixa contribui" aria-label="Como contribuir">
