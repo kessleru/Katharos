@@ -72,6 +72,13 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | | `ajustes` | Preferências: Finalizar tarefa na barra, caminhos longos, barra à esquerda, segundos, tema escuro, ocultos, Num Lock... |
 | | `interface` | Atalhos do Edge, Windows Destaque, Este Computador, área de trabalho só com a Lixeira |
 | | `grandes` | Arquivos grandes, duplicados (por hash) e instaladores velhos. Vão para a **Lixeira** (nunca de vez); arquivos do OneDrive só aparecem |
+| Segurança | `seguranca` | Auditoria que **só lê**: antivírus, firewall, UAC, BitLocker, TPM, Secure Boot, SMBv1, Área de Trabalho Remota, conta sem senha, atualizações atrasadas e portas abertas para a rede. Nota e onde corrigir; nunca desliga nada |
+| | `portas` | Quem escuta em cada porta (programa, pasta, "só este PC" ou "toda a rede") e, se você pedir, encerra o processo (nunca os do sistema) |
+| | `segredos` | Chaves, tokens, senhas e endereços de banco esquecidos nos arquivos dos seus projetos. Valor mascarado, nada sai do PC |
+| | `verificar` | Refaz a conta em modo teste dos pacotes aplicados: o que o Windows ou uma política desfez; oferece reaplicar |
+| Atalhos | `perfil` | Perfis prontos (jogo, notebook na bateria, PC fraco, privacidade, programador, PC de trabalho), com prévia e confirmação. `perfil atalhos` cria a pasta **Katharos** na área de trabalho, com o ícone, um atalho por perfil à sua escolha. `perfil exportar` e `perfil importar` repetem a configuração em outro PC |
+| | `organizar` | Separa os arquivos soltos da área de trabalho em pastas por tipo (prévia, confirmação e `--desfazer`). Pastas, atalhos, ocultos e o que você mexeu hoje ficam |
+| Resultado | `cartao` · `relatorio` | O antes e depois num cartão · o **relatório único** (copiar para a IA, salvar numa pasta ou apagar) |
 | Manutenção | `agendar` | Tarefa semanal: só ocioso e na tomada, prioridade baixa, limpa, reaplica o que atualizações desfazem, Defender, SMART, avisos por notificação; uma vez por mês, ponto de restauração e limpeza de componentes |
 | | `restaurar` | Pontos de restauração: lista, cria, abre a Restauração do Sistema |
 | | `desfazer` | `desfazer servicos privacidade` ou `desfazer tudo`: volta cada valor ao que era antes |
@@ -84,6 +91,8 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | `--teste` | Mostra exatamente o que mudaria (cada valor), sem alterar nada |
 | `--sim` | Não pergunta: aplica o que o modo marca |
 | `--modo seguro\|equilibrado\|extremo` | Modo desta execução |
+| `--copiar` · `--salvar PASTA` | No fim de qualquer comando: copia o relatório único para a área de transferência · salva uma cópia dele numa pasta (ex.: o cofre) |
+| `--codigo` | Mostra o PowerShell de cada item escolhido e não aplica nada (na tela de escolha, `v 3` mostra o do item 3) |
 | `--ascii` · `--sem-cor` | Para terminais que mostram quadradinhos · sem cores (`NO_COLOR` também vale) |
 
 ## Segurança
@@ -95,7 +104,16 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 - Nada de lançador `.vbs` escondido, nada de exceção no antivírus: as tarefas agendadas chamam o PowerShell numa janela normal, minimizada.
 - **Não faz, de propósito:** desligar Defender, firewall, UAC, SmartScreen, VBS/Integridade de Memória, Windows Update, BitLocker, Proteção do Sistema ou checagem de TPM; desligar a memória virtual; mexer na BIOS ou em partições; limpar registro; "liberar RAM" milagroso; desligar SysMain/Prefetch em HD. Quando algo exige isso (atualizar a BIOS com BitLocker), ele diz o comando e você executa.
 
-Relatórios, medidas, backups, logs e preferências ficam em `%USERPROFILE%\.katharos`.
+- **"Manter alterações?"** Depois de mudar serviços, jogos, energia, disco ou visual, o Katharos pergunta se está tudo bem (como a troca de resolução do Windows). Sem resposta em 90 s, desfaz sozinho: se a tela ficar preta, não precisa fazer nada. `config confirmar nunca` desliga.
+- **Conferência.** Depois de aplicar, ele refaz a conta em modo teste e diz se algum ajuste não ficou. `verificar` faz o mesmo mais tarde, depois de uma atualização grande do Windows.
+- **PC de empresa ou escola** (domínio, Intune ou conta de trabalho) é detectado: o modo da tela cai para "seguro" e ele avisa que a organização pode desfazer as mudanças.
+- **Itens protegidos.** `config protegidos rdp,servicos:xbox` e o Katharos nunca mexe neles (nem no turbo, nem na manutenção).
+- **Código à vista.** `--codigo` e `v N` mostram o PowerShell exato antes de aplicar. Itens de jogo que podem conflitar com anti-cheat têm um aviso em amarelo.
+- **Relatório único.** Em vez de um arquivo por ferramenta, tudo vai para `katharos-relatorio.md` (com um bloco JSON): PC, raio-x, segurança, o que foi aplicado, avisos e erros com dica, e o que o Katharos não reconheceu. É feito para mandar a uma IA melhorar a base de dados. Tudo que vem do PC (nomes de programa, de arquivo, mensagens) é limpo antes de entrar (sem controle, sem Markdown, sem frases que pareçam ordens) e o arquivo avisa que é dado, não instrução. Confira antes de compartilhar: tem o nome do PC, os programas instalados e caminhos de pastas.
+- **Perfil importado nunca é executado.** `perfil importar` só escolhe, entre os itens que o Katharos já conhece, quais aplicar, depois da prévia e da confirmação.
+- **Verifique o download.** `katharos.py --sha256` deve bater com o `SHA256SUMS.txt` do repositório. Veja o [SECURITY.md](SECURITY.md).
+
+Relatório, medidas, backups, logs e preferências ficam em `%USERPROFILE%\.katharos`.
 
 ## De onde veio
 
