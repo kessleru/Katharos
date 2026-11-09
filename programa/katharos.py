@@ -4126,6 +4126,7 @@ EXE_COM_ANTICHEAT = ['VALORANT-Win64-Shipping.exe', 'LeagueClient.exe', 'League 
                      'helldivers2.exe', 'DeadByDaylight-Win64-Shipping.exe', 'FallGuys_client_game.exe', 'ModernWarfare.exe',
                      'cod.exe', 'BF2042.exe', 'bf1.exe', 'FIFA23.exe', 'FC25.exe', 'Overwatch.exe', 'Marvel-Win64-Shipping.exe']
 JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Destiny 2, Call of Duty, Rust, Roblox, Genshin, Elden Ring, Rocket League, Helldivers 2, EA FC e outros'
+ANTICHEAT_NOMES = [x.strip() for x in JOGOS_ANTICHEAT.replace(' e outros', '').split(',')]
 
 
 @pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, prioridades e ajustes de latência',
@@ -6622,6 +6623,86 @@ def ferramenta_organizar(ctx, args):
     t.nota('  para voltar tudo: katharos organizar --desfazer')
     return 0
 
+# ═══════════════ Minecraft: Java Edition ═══════════════
+# O arquivo options.txt é o que o menu Configurações de Vídeo grava: uma linha "chave:valor" por opção.
+# Regra deste pacote (e de qualquer pacote de jogo que entrar depois): só mexe em chave que o próprio menu do jogo grava,
+# com valor que o menu aceita, só em linha que já existe no arquivo, e só para BAIXAR custo (nunca sobe nada).
+# Fonte das chaves e dos limites: https://minecraft.wiki/w/Options.txt
+MC_OPCOES = {
+    # chave: (como mexe, valor)   'max' = no máximo; 'min' = no mínimo; 'set' = este valor
+    'renderDistance': ('max', 10),        # 2 a 32, padrão 12
+    'simulationDistance': ('max', 8),     # 5 a 32, padrão 12 (desde a 1.18)
+    'biomeBlendRadius': ('max', 1),       # 0 a 7, padrão 2
+    'particles': ('min', 1),              # 0 todas, 1 reduzidas, 2 mínimas
+    'entityShadows': ('set', 'false'),
+    'graphicsMode': ('max', 1),           # 0 rápido, 1 elaborado, 2 deslumbrante
+}
+MC_OPCOES_FRACO = {
+    'renderDistance': ('max', 6),
+    'simulationDistance': ('max', 5),
+    'graphicsMode': ('max', 0),
+    'renderClouds': ('set', 'false'),
+}
+MC_CHAVES_CONFIRMADAS = {'maxFps', 'renderDistance', 'simulationDistance', 'graphicsMode', 'particles', 'entityShadows', 'biomeBlendRadius',
+                         'enableVsync', 'mipmapLevels', 'renderClouds', 'ao', 'entityDistanceScaling'}
+
+
+def opcoes_txt_ps(nome, id_desfazer, caminho_ps, aberto_ps, regras):
+    """PowerShell que ajusta um arquivo de opções 'chave:valor' sem BOM, só em linhas que existem, só para baixo, com cópia antes."""
+    alvo = '@{ ' + '; '.join(f"'{k}' = @('{m}', '{v}')" for k, (m, v) in regras.items()) + ' }'
+    return r"""
+«aberto»
+$__a = «caminho»
+if (-not (Test-Path -LiteralPath $__a)) { Aviso '«nome»: arquivo de opcoes nao encontrado (abra o jogo uma vez e feche)'; return }
+$__r = «alvo»
+$__t = [IO.File]::ReadAllText($__a)
+$__fim = if ($__t -match "`r`n") { "`r`n" } else { "`n" }
+$__mudou = $false
+$__novo = foreach ($__l in ($__t -split "`r?`n")) {
+  if ($__l -match '^([^:]+):(.*)$' -and $__r.ContainsKey($Matches[1])) {
+    $__k = $Matches[1]; $__v = $Matches[2]; $__m = $__r[$__k][0]; $__x = $__r[$__k][1]
+    if ($__m -eq 'set') { if ($__v -ne $__x) { $__l = $__k + ':' + $__x; $__mudou = $true } }
+    else {
+      $__n = 0.0
+      if ([double]::TryParse($__v, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$__n)) {
+        $__lim = [double]::Parse($__x, [Globalization.CultureInfo]::InvariantCulture)
+        if (($__m -eq 'max' -and $__n -gt $__lim) -or ($__m -eq 'min' -and $__n -lt $__lim)) { $__l = $__k + ':' + $__x; $__mudou = $true }
+      }
+    }
+  }
+  $__l
+}
+if (-not $__mudou) { Ok '«nome»: as opcoes ja estavam leves'; return }
+if ($TESTE) { Plano ('ajustar ' + $__a); return }
+$__b = $__a + '.katharos.bak'
+if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a -Destination $__b }
+[IO.File]::WriteAllText($__a, ($__novo -join $__fim), (New-Object Text.UTF8Encoding $false))
+Guarda-Desfazer ('«id»|' + $__a) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a -replace "'", "''") + "' -Force")
+Feito '«nome»: opcoes ajustadas (copia em options.txt.katharos.bak)'""".replace('«aberto»', aberto_ps).replace('«caminho»', caminho_ps).replace(
+        '«alvo»', alvo).replace('«nome»', nome).replace('«id»', id_desfazer)
+
+
+@pacote('minecraft', 'Minecraft', 'Minecraft Java: distância de renderização e partículas no options.txt',
+        'Edita o options.txt do Minecraft Java Edition (pasta .minecraft padrão), o mesmo arquivo que o menu Configurações de Vídeo grava. '
+        'Só muda opções que o menu oferece, com valores que o menu aceita, só em linhas que já existem, e só para baixo: o que já estava '
+        'mais leve fica como está. O jogo precisa estar fechado e o arquivo ganha uma cópia (.katharos.bak). Launchers com pasta própria '
+        '(Prism, CurseForge, modpacks) não são tocados. Bedrock não entra: as chaves dele não foram confirmadas.')
+def itens_minecraft(ctx):
+    aberto = r"""if (@(Get-Process javaw, java -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match 'Minecraft' }).Count) { Aviso 'feche o Minecraft antes: ele regrava as opcoes ao sair'; return }"""
+    caminho = r"(Join-Path $env:APPDATA '.minecraft\options.txt')"
+    leve = '& {\n' + opcoes_txt_ps('Minecraft', 'minecraft-opcoes', caminho, aberto, MC_OPCOES) + '\n}'
+    fraco = '& {\n' + opcoes_txt_ps('Minecraft', 'minecraft-opcoes', caminho, aberto, {**MC_OPCOES, **MC_OPCOES_FRACO}) + '\n}'
+    return [
+        Item('mc-fps', 'Minecraft: opções de vídeo mais leves', 'Distância de renderização no máximo 10 e de simulação 8, mistura de bioma 1, '
+             'partículas reduzidas, sombras de entidades desligadas e gráficos "Deslumbrante" passando para "Elaborado". '
+             'Só baixa: o que já era menor fica. Resolução, FOV e controles ficam como estão.',
+             'a distância de renderização é o que mais pesa; o ganho varia com o PC e com mods',
+             'o mundo ao longe aparece mais perto; partículas menores', 2, leve),
+        Item('mc-fps-fraco', 'Minecraft: opções para PC fraco (a mais)', 'Tudo do item anterior, e também distância de renderização no máximo 6, '
+             'simulação 5, gráficos "Rápido" (folhas simples) e nuvens desligadas.',
+             'mais FPS em PC fraco ou com placa integrada', 'o jogo fica bem mais simples e o horizonte, curto', 3, fraco, conflita=('mc-fps',)),
+    ]
+
 # ███████████████████████████████████████████████████████████████████████████
 #   STEAM E CS2: SÓ LÊ E ORIENTA
 #   Regra: nada aqui toca em arquivo de jogo, na memória do jogo ou na Steam.
@@ -6883,14 +6964,14 @@ $__arqs = @(Get-ChildItem -Path (Join-Path ($__sp -replace '/', '\') 'userdata\*
 if (-not $__arqs.Count) { Aviso 'cs2_video.txt nao encontrado: abra o CS2 uma vez e feche'; return }
 $__alvo = «alvo»
 foreach ($__a in $__arqs) {
-  $__t = Get-Content -LiteralPath $__a.FullName -Raw
+  $__t = [IO.File]::ReadAllText($__a.FullName)
   $__n = $__t
   foreach ($__k in $__alvo.Keys) { $__n = [regex]::Replace($__n, '("' + [regex]::Escape($__k) + '"\s+")[^"]*(")', ('${1}' + $__alvo[$__k] + '${2}')) }
   if ($__n -eq $__t) { Ok ('video do CS2 ja estava assim: ' + $__a.Directory.Parent.Parent.Parent.Name); continue }
   if ($TESTE) { Plano ('ajustar ' + $__a.FullName); continue }
   $__b = $__a.FullName + '.katharos.bak'
   if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a.FullName -Destination $__b }
-  Set-Content -LiteralPath $__a.FullName -Value $__n -NoNewline -Encoding UTF8
+  [IO.File]::WriteAllText($__a.FullName, $__n, (New-Object Text.UTF8Encoding $false))
   Guarda-Desfazer ('cs2-video|' + $__a.FullName) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a.FullName -replace "'", "''") + "' -Force")
   Feito ('video do CS2 ajustado: ' + $__a.Directory.Parent.Parent.Parent.Name)
 }""".replace('«alvo»', '@{ ' + '; '.join(f"'{k}' = '{v}'" for k, v in alvo.items()) + ' }')
@@ -6921,7 +7002,7 @@ if ($__a -notmatch 'SwapEffectUpgradeEnable=1') { $__n = (($__a -replace 'SwapEf
 $__f = Join-Path $CS2CFG 'katharos.cfg'
 if (Test-Path -LiteralPath $__f) { Ok 'katharos.cfg ja existe'; return }
 if ($TESTE) { Plano ('criar ' + $__f); return }
-Set-Content -LiteralPath $__f -Value «cfg» -Encoding UTF8
+[IO.File]::WriteAllText($__f, «cfg», (New-Object Text.UTF8Encoding $false))
 Guarda-Desfazer 'cs2-cfg' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "' -ErrorAction SilentlyContinue")
 Feito 'katharos.cfg criado; ponha +exec katharos nas opcoes de inicializacao do CS2' '''.replace('«cfg»', psq(CFG_CS2))
     video = video_cs2_ps(VIDEO_CS2)
@@ -6931,8 +7012,8 @@ Feito 'katharos.cfg criado; ponha +exec katharos nas opcoes de inicializacao do 
 $__f = Join-Path $CS2CFG 'katharos-medir.cfg'; $__g = Join-Path $CS2CFG 'katharos-medir-off.cfg'
 if ((Test-Path -LiteralPath $__f) -and (Test-Path -LiteralPath $__g)) { Ok 'katharos-medir ja existe'; return }
 if ($TESTE) { Plano ('criar ' + $__f + ' e ' + $__g); return }
-Set-Content -LiteralPath $__f -Value «ligar» -Encoding UTF8
-Set-Content -LiteralPath $__g -Value «desligar» -Encoding UTF8
+[IO.File]::WriteAllText($__f, «ligar», (New-Object Text.UTF8Encoding $false))
+[IO.File]::WriteAllText($__g, «desligar», (New-Object Text.UTF8Encoding $false))
 Guarda-Desfazer 'cs2-medir' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "','" + ($__g -replace "'", "''") + "' -ErrorAction SilentlyContinue")
 Feito 'criados katharos-medir.cfg e katharos-medir-off.cfg; no console do CS2 digite: exec katharos-medir' '''.replace('«ligar»', psq(CFG_CS2_MEDIR)).replace('«desligar»', psq(CFG_CS2_MEDIR_OFF))
     # cada item roda num bloco próprio: o "return" do ACHA_CS2 sai só do item, não do script inteiro
@@ -8299,6 +8380,7 @@ GRUPOS = [
         ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
         ('steam', 'Steam: disco, tela e o que atrapalha (só lê)', 'ferramenta_steam'),
         ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
+        ('minecraft', 'Minecraft Java: distância e partículas', 'pacote'),
     ]),
     ('consertar e manter em dia', 'quando algo quebra ou envelhece', [
         ('reparar', 'DISM, SFC, chkdsk, rede e Update', 'pacote'),

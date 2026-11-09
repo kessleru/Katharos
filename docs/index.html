@@ -277,39 +277,28 @@
 
   .horizonte::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, var(--fundo) 0%, transparent 55%); }
 
-  /* ── jogo: faixa baixa sobre a gravura ── */
-  .jogo-cena { position: relative; height: clamp(190px, 18vw, 240px); overflow: hidden; background: #060607; }
-  .jogo-cena img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% 12%; opacity: .9; }
-  .jogo-cena::after { content: ''; position: absolute; inset: 0; z-index: 1;
-    background: linear-gradient(90deg, transparent 18%, rgba(12,12,13,.86) 58%, var(--fundo) 100%), linear-gradient(0deg, var(--fundo), transparent 28%); }
-  .texto-jogo { position: absolute; z-index: 2; right: 0; top: 0; bottom: 0; width: min(46%, 520px); padding: 0 clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; gap: 12px; }
-  .texto-jogo h2 { font: 800 clamp(28px, 3vw, 40px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
-  .texto-jogo h2 span { color: var(--ambar); }
-  .etiqueta { font: 500 11px/1 var(--mono); letter-spacing: 0; color: var(--fundo); background: var(--verde); padding: 5px 7px; border-radius: 2px; }
-  .texto-jogo p { font: 400 16px/1.55 var(--sans); text-wrap: pretty; }
-  .texto-jogo code { font: 500 13px var(--mono); color: var(--osso); }
-  .texto-jogo a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
-  .texto-jogo a:hover { text-decoration-color: var(--ambar); }
-
-  /* ── catálogo de jogos: uma categoria por vez ── */
-  .cat-abas { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-bottom: 1px solid var(--linha); }
-  .cat-abas button { all: unset; box-sizing: border-box; cursor: pointer; display: grid; justify-items: center; gap: 8px; padding: 20px 8px 16px; text-align: center;
-    font: 500 12px/1.3 var(--mono); color: var(--apagado); border-left: 1px solid var(--linha); transition: color .2s, background-color .2s; }
-  .cat-abas button:first-child { border-left: 0; }
-  .cat-abas button:hover { color: var(--osso); background: #101012; }
-  .cat-abas button:focus-visible { outline: 2px solid var(--ambar); outline-offset: -2px; }
-  .cat-abas img { width: 44px; height: 44px; opacity: .55; transition: opacity .2s; }
-  .cat-abas button[aria-selected="true"] { color: var(--osso); box-shadow: inset 0 -2px 0 var(--ambar); }
-  .cat-abas button[aria-selected="true"] img, .cat-abas button:hover img { opacity: 1; }
-  .cat-abas small { font-size: 11px; color: var(--apagado); }
-  .cat-lista { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 26px; padding: 24px clamp(20px, 3vw, 40px); min-height: 116px; align-content: flex-start; }
-  .cat-lista li i { font: 500 11px/1 var(--mono); font-style: normal; color: var(--fundo); background: var(--ambar); padding: 4px 6px; border-radius: 2px; margin-left: 8px; vertical-align: 1px; }
-  .cat-lista li { font: 400 14px/1.4 var(--sans); color: var(--texto); }
-  .js .cat-lista:not(.on) { display: none; }
-  .js .cat-lista.on { animation: abre .25s ease-out; }
-  .cat-nota { padding: 14px clamp(20px, 3vw, 40px) 18px; border-top: 1px solid var(--linha); font: 400 13px/1.5 var(--sans); color: var(--apagado); max-width: none; }
-  .cat-nota a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
-  .cat-nota a:hover { text-decoration-color: var(--ambar); }
+  /* ── jogos: abertura com a gravura e uma placa por categoria ── */
+  .jogos-home { overflow: hidden; }
+  .jh-arte { position: absolute; inset: 0 0 auto 0; height: 420px; }
+  .jh-arte img { width: 100%; height: 100%; object-fit: cover; object-position: 64% 50%; opacity: .9; }
+  .jh-arte::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, #060607 0%, rgba(6,6,7,.9) 26%, rgba(6,6,7,.3) 62%, transparent 85%), linear-gradient(0deg, var(--fundo) 0%, transparent 38%); }
+  .jh-texto { position: relative; z-index: 2; padding: clamp(48px, 6vw, 84px) clamp(20px, 3vw, 40px) clamp(40px, 5vw, 64px); max-width: 560px; display: grid; gap: 16px; justify-items: start; }
+  .jh-texto h2 { font: 800 clamp(34px, 4vw, 52px)/1 var(--mono); color: var(--osso); letter-spacing: -.05em; }
+  .jh-texto h2 span { color: var(--ambar); }
+  .jh-texto p { font: 400 16px/1.55 var(--sans); max-width: 44ch; text-wrap: pretty; }
+  .placas { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--linha); background: var(--fundo); }
+  .placa { position: relative; min-height: 210px; display: flex; align-items: flex-end; overflow: hidden; background: #060607; border-left: 1px solid var(--linha); }
+  .placa:nth-child(3n+1) { border-left: 0; }
+  .placa:nth-child(n+4) { border-top: 1px solid var(--linha); }
+  .placa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .62; transition: opacity .35s, transform 1.2s ease-out; }
+  .placa::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(12,12,13,.96) 0%, rgba(12,12,13,.55) 42%, transparent 78%); }
+  .placa:hover img, .placa:focus-visible img { opacity: .95; transform: scale(1.04); }
+  .placa-txt { position: relative; z-index: 2; padding: 18px clamp(18px, 2vw, 26px) 20px; display: grid; gap: 3px; }
+  .placa-txt b { font: 700 16px/1.25 var(--mono); color: var(--osso); letter-spacing: -.02em; }
+  .placa-txt small { font: 500 11px var(--mono); color: var(--ambar); }
+  .placa-txt em { font: 400 13px/1.4 var(--sans); font-style: normal; color: #b5b0a6; }
+  .placa-etq { position: absolute; z-index: 2; top: 14px; right: 14px; font: 500 10px/1 var(--mono); font-style: normal; color: var(--fundo); background: var(--ambar); padding: 4px 6px; border-radius: 2px; }
 
   /* ── telas menores ── */
   @media (max-width: 1000px) {
@@ -322,23 +311,26 @@
     .perfis .celulas > :nth-child(odd) { border-left: 0; }
     .perfis .celulas > :nth-child(n+3) { border-top: 1px solid var(--linha); }
     .cab { grid-template-columns: 1fr; }
-    .cat-abas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .cat-abas button:nth-child(4) { border-left: 0; }
-    .cat-abas button:nth-child(n+4) { border-top: 1px solid var(--linha); }
     .cab > * + * { border-left: 0; padding-top: 0; }
     .cab > :first-child { padding-bottom: 10px; }
     .paineis { grid-template-columns: 1fr; }
     .painel + .painel { border-left: 0; border-top: 1px solid var(--linha); }
-    .jogo-cena { height: auto; display: grid; }
-    .jogo-cena img { position: relative; height: 200px; }
-    .jogo-cena::after { background: linear-gradient(0deg, var(--fundo) 0%, transparent 60%); }
-    .texto-jogo { position: relative; width: auto; padding: 20px 20px 28px; }
+    .placas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .placa:nth-child(3n+1) { border-left: 1px solid var(--linha); }
+    .placa:nth-child(odd) { border-left: 0; }
+    .placa:nth-child(n+3) { border-top: 1px solid var(--linha); }
+    .jh-arte { height: 360px; }
+    .jh-arte::after { background: linear-gradient(90deg, rgba(6,6,7,.9) 0%, rgba(6,6,7,.5) 100%), linear-gradient(0deg, var(--fundo) 0%, transparent 38%); }
     .nunca { grid-template-columns: 1fr; }
     .nunca-lado { border-right: 0; border-bottom: 1px solid var(--linha); }
     .contribui .celulas, .passos .celulas { grid-template-columns: 1fr; }
     .contribui .celulas > * + *, .passos .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); }
   }
   @media (max-width: 620px) {
+    .placas { grid-template-columns: 1fr; }
+    .placa, .placa:nth-child(odd), .placa:nth-child(3n+1) { border-left: 0; }
+    .placa:nth-child(n+2) { border-top: 1px solid var(--linha); }
+    .placa { min-height: 170px; }
     .novidades .nov { grid-template-columns: 1fr; }
     .nov-v { flex-direction: row; align-items: baseline; gap: 10px; padding-bottom: 4px; }
     .novidades ul { padding: 8px 20px 20px; }
@@ -442,7 +434,7 @@
     <span class="t-a">10</span>  <span class="t-o">limpar        </span> <span class="t-s">temporários, caches e restos</span>
     <span class="t-a">11</span>  <span class="t-o">grandes       </span> <span class="t-s">arquivos grandes e duplicados</span>
     <span class="t-a">12</span>  <span class="t-o">organizar     </span> <span class="t-s">área de trabalho em pastas, com desfazer</span>
-<span class="t-m">    ... mais 7 grupos, até o 40</span>
+<span class="t-m">    ... mais 7 grupos, até o 41</span>
 
 <span class="t-s">o que fazer</span> <span class="t-a">›</span> <span class="digitado">1</span><span class="cursor"></span></div>
 <div class="painel" id="p-raiox"><span class="t-o">katharos</span> <span class="t-a">›</span> <span class="t-o">raiox</span>  <span class="t-m">Ryzen 5 5600 · 16 GB · SSD</span>
@@ -523,28 +515,46 @@
     </div>
   </section>
 
-  <section class="faixa jogo" id="jogos" aria-label="Otimização por jogo">
+  <section class="faixa jogos-home" id="jogos" aria-labelledby="jogos-t">
+    <div class="jh-arte" aria-hidden="true"><img src="jg-hero.webp" alt="" width="1792" height="768" loading="lazy"></div>
     <div class="quadro">
-      <div class="jogo-cena">
-        <img src="cs2.webp" alt="Gravura de um atirador encapuzado atrás de um muro em ruínas, mirando com um rifle, com um castelo ao fundo" width="1280" height="720" loading="lazy">
-        <div class="texto-jogo">
-          <h2 id="jogos-t">Jogos<span>.</span></h2>
-          <p>61 jogos conhecidos recebem prioridade de CPU. O CS2 tem pacote próprio: <code>katharos cs2</code> ajusta o vídeo para FPS, liga o Reflex e usa a placa dedicada, sempre com cópia do arquivo antes.</p>
-        </div>
+      <div class="jh-texto">
+        <h2 id="jogos-t">Jogos<span>.</span></h2>
+        <p>61 jogos conhecidos recebem prioridade de CPU. O CS2 e o Minecraft Java têm pacote próprio, com ajustes no arquivo de configuração do jogo, sempre com cópia antes.</p>
+        <a class="botao vazio" href="jogos.html">Ver o catálogo completo</a>
       </div>
-    </div>
-  </section>
-
-  <section class="faixa catalogo" aria-label="Jogos conhecidos">
-    <div class="quadro">
-      <div class="cat-abas" role="tablist"><button type="button" role="tab" aria-selected="true" aria-controls="cat-0" id="aba-0"><img src="gen-valve.webp" alt="" width="44" height="44" loading="lazy"><span>Valve e competitivos</span><small>7</small></button><button type="button" role="tab" aria-selected="false" aria-controls="cat-1" id="aba-1"><img src="gen-rpg.webp" alt="" width="44" height="44" loading="lazy"><span>RPG e mundo aberto</span><small>20</small></button><button type="button" role="tab" aria-selected="false" aria-controls="cat-2" id="aba-2"><img src="gen-corrida.webp" alt="" width="44" height="44" loading="lazy"><span>Corrida e simulação</span><small>8</small></button><button type="button" role="tab" aria-selected="false" aria-controls="cat-3" id="aba-3"><img src="gen-estrategia.webp" alt="" width="44" height="44" loading="lazy"><span>Estratégia e construção</span><small>9</small></button><button type="button" role="tab" aria-selected="false" aria-controls="cat-4" id="aba-4"><img src="gen-sobrevivencia.webp" alt="" width="44" height="44" loading="lazy"><span>Sobrevivência e cooperativo</span><small>10</small></button><button type="button" role="tab" aria-selected="false" aria-controls="cat-5" id="aba-5"><img src="gen-acao.webp" alt="" width="44" height="44" loading="lazy"><span>Ação e independentes</span><small>7</small></button></div>
-      <ul class="cat-lista" id="cat-0" role="tabpanel" aria-labelledby="aba-0"><li>Counter-Strike 2 <i>pacote próprio</i></li><li>Dota 2</li><li>Deadlock</li><li>Team Fortress 2</li><li>Left 4 Dead 2</li><li>Portal 2 e jogos Source</li><li>Garry&#x27;s Mod</li></ul>
-      <ul class="cat-lista" id="cat-1" role="tabpanel" aria-labelledby="aba-1"><li>Cyberpunk 2077</li><li>Red Dead Redemption 2</li><li>Hogwarts Legacy</li><li>Starfield</li><li>Baldur&#x27;s Gate 3</li><li>The Witcher 3</li><li>Skyrim Special Edition</li><li>Fallout 4</li><li>Sekiro</li><li>God of War</li><li>Horizon Zero Dawn</li><li>Resident Evil 4</li><li>Resident Evil Village</li><li>Control</li><li>Divinity: Original Sin 2</li><li>Stray</li><li>Diablo IV</li><li>Monster Hunter Wilds</li><li>Monster Hunter World</li><li>Path of Exile</li></ul>
-      <ul class="cat-lista" id="cat-2" role="tabpanel" aria-labelledby="aba-2"><li>Forza Horizon 5</li><li>Forza Horizon 4</li><li>Euro Truck Simulator 2</li><li>American Truck Simulator</li><li>Assetto Corsa</li><li>Assetto Corsa Competizione</li><li>BeamNG.drive</li><li>Microsoft Flight Simulator</li></ul>
-      <ul class="cat-lista" id="cat-3" role="tabpanel" aria-labelledby="aba-3"><li>Civilization VI</li><li>Cities: Skylines</li><li>Hearts of Iron IV</li><li>Crusader Kings III</li><li>Stellaris</li><li>Total War: Warhammer III</li><li>Factorio</li><li>Satisfactory</li><li>Hearthstone</li></ul>
-      <ul class="cat-lista" id="cat-4" role="tabpanel" aria-labelledby="aba-4"><li>Minecraft (Bedrock)</li><li>Palworld</li><li>Valheim</li><li>Subnautica</li><li>Terraria</li><li>Stardew Valley</li><li>Phasmophobia</li><li>Lethal Company</li><li>Among Us</li><li>Risk of Rain 2</li></ul>
-      <ul class="cat-lista" id="cat-5" role="tabpanel" aria-labelledby="aba-5"><li>Warframe</li><li>Hades</li><li>Hades II</li><li>Hollow Knight</li><li>Celeste</li><li>Cuphead</li><li>Vampire Survivors</li></ul>
-      <p class="cat-nota">Todos sem anti-cheat de terceiros. Um pacote próprio só existe quando as configurações do jogo são confirmadas em fonte; hoje, só o CS2. <a href="https://github.com/kessleru/Katharos/issues/new/choose">Sugira um jogo</a>.</p>
+      <div class="placas">
+      <a class="placa" href="jogos.html#c-valve">
+        <img src="cs2.webp" alt="" width="1280" height="720" loading="lazy">
+        <span class="placa-txt"><b>Valve e competitivos</b><small>7 jogos</small><em>Counter-Strike 2, Dota 2, Deadlock e mais 4</em></span>
+        <i class="placa-etq">pacote próprio: CS2</i>
+      </a>
+      <a class="placa" href="jogos.html#c-rpg">
+        <img src="jg-rpg.webp" alt="" width="1280" height="720" loading="lazy">
+        <span class="placa-txt"><b>RPG e mundo aberto</b><small>20 jogos</small><em>Cyberpunk 2077, Red Dead Redemption 2, Hogwarts Legacy e mais 17</em></span>
+        
+      </a>
+      <a class="placa" href="jogos.html#c-corrida">
+        <img src="jg-corrida.webp" alt="" width="1280" height="720" loading="lazy">
+        <span class="placa-txt"><b>Corrida e simulação</b><small>8 jogos</small><em>Forza Horizon 5, Forza Horizon 4, Euro Truck Simulator 2 e mais 5</em></span>
+        
+      </a>
+      <a class="placa" href="jogos.html#c-estrategia">
+        <img src="jg-estrategia.webp" alt="" width="1280" height="720" loading="lazy">
+        <span class="placa-txt"><b>Estratégia e construção</b><small>9 jogos</small><em>Civilization VI, Cities: Skylines, Hearts of Iron IV e mais 6</em></span>
+        
+      </a>
+      <a class="placa" href="jogos.html#c-sobrevivencia">
+        <img src="jg-sobrevivencia.webp" alt="" width="1280" height="720" loading="lazy">
+        <span class="placa-txt"><b>Sobrevivência e cooperativo</b><small>10 jogos</small><em>Minecraft (Bedrock), Palworld, Valheim e mais 7</em></span>
+        
+      </a>
+      <a class="placa" href="jogos.html#c-acao">
+        <img src="jg-acao.webp" alt="" width="1280" height="720" loading="lazy">
+        <span class="placa-txt"><b>Ação e independentes</b><small>7 jogos</small><em>Warframe, Hades, Hades II e mais 4</em></span>
+        
+      </a>
+      </div>
     </div>
   </section>
 
@@ -586,7 +596,7 @@
   </section>
   <section class="faixa novidades" aria-label="Últimas versões">
     <div class="quadro">
-<div class="nov"><div class="nov-v"><b>v1.4.0</b><small>9 nov 2026</small></div><ul><li><b>CS2:</b> o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (.katharos.bak) e o jogo fechado.</li><li><b>cs2 e steam leem o vídeo atual</b> (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.</li><li><b>Catálogo com 61 jogos em 6 categorias</b>, todos sem anti-cheat de terceiros, que recebem prioridade de CPU.</li><li><b>Prioridade para jogos com anti-cheat</b> virou item à parte, desligado por padrão (prioridade-jogos-ac), com aviso.</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v1.4.0</b><small>9 nov 2026</small></div><ul><li><b>CS2:</b> o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (.katharos.bak) e o jogo fechado.</li><li><b>Minecraft Java</b> ganha pacote próprio (minecraft): edita o options.txt da pasta padrão, só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes.</li><li><b>cs2 e steam leem o vídeo atual</b> (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.</li><li><b>Catálogo com 61 jogos em 6 categorias</b>, todos sem anti-cheat de terceiros, que recebem prioridade de CPU.</li></ul></div>
 <div class="nov"><div class="nov-v"><b>v1.3.0</b><small>9 nov 2026</small></div><ul><li><b>Perfil sugerido para o seu PC</b>, com o motivo (por exemplo: &quot;tem só 4 GB de RAM&quot; ou &quot;tem jogos instalados e placa dedicada&quot;).</li><li><b>Windows que o programa não reconhece</b> (versão que não é 10 nem 11): só vão marcados os itens do modo seguro, e o programa avisa.</li><li><b>Comando digitado errado</b> sugere o mais parecido (&quot;quis dizer limpar?&quot;).</li><li><b>Estimativa de tempo:</b> o programa lembra quanto cada comando levou neste PC e mostra &quot;da última vez levou cerca de X&quot;.</li></ul></div>
 <div class="nov"><div class="nov-v"><b>v1.2.0</b><small>9 nov 2026</small></div><ul><li><b>Jogos sem risco de ban:</b> comandos steam e cs2.</li><li><b>Perfis com barras</b> que mostram o que cada um ataca, o que você perde e o risco.</li><li><b>Confirmação explicada</b> antes de aplicar: o que muda, o que ganha, o que perde e se volta com desfazer.</li><li><b>ZIP de download limpo:</b> só o KATHAROS.bat e a pasta programa; atalho com ícone oferecido na primeira vez.</li></ul></div>
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
@@ -627,12 +637,6 @@
   document.querySelectorAll('.perfis, .limites, .passos').forEach(el => io.observe(el));
   if (calmo) document.querySelectorAll('.perfis, .limites, .passos').forEach(el => el.classList.add('vis'));
 
-
-  // ── catálogo: troca de categoria ──
-  const abas = [...document.querySelectorAll('.cat-abas button')], listas = [...document.querySelectorAll('.cat-lista')];
-  const ir = i => { abas.forEach((b, j) => b.setAttribute('aria-selected', j === i)); listas.forEach((l, j) => l.classList.toggle('on', j === i)); };
-  abas.forEach((b, i) => b.addEventListener('click', () => ir(i)));
-  if (abas.length) ir(0);
 
   // ── a janela: o menu aparece, alguém digita 1, o raio-x mede e mostra a nota ──
   const jan = document.getElementById('janela');

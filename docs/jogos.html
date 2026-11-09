@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jogos · Katharos</title>
+<meta name="description" content="61 jogos conhecidos pelo Katharos, o que muda para cada um, o que fica de fora por causa do anti-cheat e como conferir se ajudou.">
+<meta property="og:title" content="Jogos · Katharos">
+<meta property="og:description" content="61 jogos conhecidos, o que o Katharos muda neles e como conferir se ajudou.">
+<meta property="og:image" content="https://kessleru.github.io/Katharos/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0c0c0d">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="jg-hero.webp">
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root {
+    --fundo: #0c0c0d;
+    --painel: #121214;
+    --linha: #242428;
+    --linha-forte: #38383e;
+    --apagado: #86837c;
+    --texto: #cdc8be;
+    --osso: #efe9de;
+    --ambar: #e2a85c;
+    --verde: #9ccf8c;
+    --vermelho: #e5737a;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --largura: 1200px;
+    --borda: max(16px, calc((100vw - var(--largura)) / 2));
+    --fora: clamp(0px, calc((100vw - var(--largura)) / 2 - 24px), 72px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--fundo); color: var(--texto); -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  /* barra de rolagem: fina, quadrada, na cor do site */
+  html { scrollbar-width: thin; scrollbar-color: var(--linha-forte) var(--fundo); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--fundo); border-left: 1px solid var(--linha); }
+  ::-webkit-scrollbar-thumb { background: var(--linha-forte); border: 2px solid var(--fundo); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ambar); }
+  ::-webkit-scrollbar-corner { background: var(--fundo); }
+  body { font: 400 15px/1.65 var(--mono); background: var(--fundo); overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  img { display: block; max-width: 100%; }
+  ::selection { background: var(--ambar); color: var(--fundo); }
+  :focus-visible { outline: 2px solid var(--ambar); outline-offset: 3px; }
+
+  /* ── a grade: duas guias verticais atrás de tudo; blocos opacos as interrompem ── */
+  .guias { position: fixed; inset: 0 var(--borda); border-left: 1px solid var(--linha); border-right: 1px solid var(--linha); pointer-events: none; z-index: 0; }
+  .faixa { position: relative; z-index: 1; border-top: 1px solid var(--linha); }
+  .quadro { position: relative; margin: 0 var(--borda); }
+  .faixa > .quadro::before, .faixa > .quadro::after { display: none; content: '+'; position: absolute; top: -1px; z-index: 31;
+    font: 400 15px/1 var(--mono); color: var(--apagado); translate: -50% -50%; background: var(--fundo); padding: 0 1px; }
+  .faixa > .quadro::before { left: 0; }
+  .faixa > .quadro::after { left: 100%; }
+  .listras { height: 40px; border-top: 1px solid var(--linha); position: relative; z-index: 1;
+    background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); }
+  .celulas { display: grid; }
+  .celulas > * + * { border-left: 1px solid var(--linha); }
+
+  /* ── topo ── */
+  .topo { position: sticky; top: 0; z-index: 40; background: color-mix(in oklab, var(--fundo) 90%, transparent); backdrop-filter: blur(8px); border-top: 0; border-bottom: 1px solid var(--linha); }
+  .topo .quadro::before, .topo .quadro::after { display: none; }
+  .topo .celulas { grid-template-columns: auto 1fr auto; height: 60px; }
+  .topo .celulas > * { display: flex; align-items: center; padding: 0 20px; }
+  .marca { gap: 12px; font: 800 16px/1 var(--mono); color: var(--osso); letter-spacing: -.02em; }
+  .marca img { width: 30px; height: 30px; border-radius: 4px; }
+  .menu { gap: 28px; font-size: 13px; color: var(--apagado); }
+  .menu a { transition: color .2s; }
+  .menu a:hover { color: var(--osso); }
+  .acoes { gap: 8px; }
+  .botao { display: inline-flex; align-items: center; gap: 10px; font: 500 13px/1 var(--mono); padding: 12px 16px; border: 1px solid var(--linha-forte);
+    border-radius: 3px; transition: background-color .2s, border-color .2s; white-space: nowrap; }
+  .botao svg { width: 15px; height: 15px; flex: none; }
+  .botao:active { translate: 0 1px; }
+  .botao.cheio { background: var(--ambar); border-color: var(--ambar); color: #16110a; font-weight: 700; }
+  .botao.cheio:hover { background: #ecb876; }
+  .botao.vazio { color: var(--osso); }
+  .botao.vazio:hover { border-color: var(--apagado); background: var(--painel); }
+  .botao.grande { padding: 16px 22px; font-size: 14px; }
+
+  .cab { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .cab > * { padding: 22px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; }
+  .cab h2 { font: 800 clamp(26px, 2.6vw, 34px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
+  .cab h2 span { color: var(--ambar); }
+  .cab p { font: 400 16px/1.55 var(--sans); max-width: 52ch; text-wrap: pretty; }
+  .cab code, .texto-mono { font: 500 14px var(--mono); color: var(--osso); white-space: nowrap; }
+  .cab a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+  .cab a:hover { text-decoration-color: var(--ambar); }
+
+
+  .menu a[aria-current="page"] { color: var(--osso); }
+
+  /* ── abertura ── */
+  .jhero { border-top: 0; overflow: hidden; background: #060607; }
+  .jhero .quadro::before, .jhero .quadro::after { display: none; }
+  .jhero-arte { position: absolute; inset: 0; }
+  .jhero-arte img { width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; opacity: .95; }
+  .jhero-arte::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, #060607 0%, rgba(6,6,7,.92) 24%, rgba(6,6,7,.35) 58%, transparent 80%), linear-gradient(0deg, var(--fundo) 0%, transparent 34%); }
+  .jhero-texto { position: relative; z-index: 2; padding: clamp(64px, 10vw, 132px) clamp(20px, 3vw, 40px) clamp(48px, 7vw, 88px); max-width: 600px; display: grid; gap: 18px; }
+  .jhero h1 { font: 800 clamp(48px, 7vw, 92px)/.9 var(--mono); color: var(--osso); letter-spacing: -.055em; }
+  .jhero h1 span { color: var(--ambar); }
+  .jhero p { font: 400 17px/1.55 var(--sans); max-width: 46ch; text-wrap: pretty; }
+  .jhero p b { color: var(--osso); font-weight: 500; }
+  .jhero code { font: 500 14px var(--mono); color: var(--osso); }
+
+  /* ── catálogo ── */
+  .filtro { position: sticky; top: 60px; z-index: 35; border-bottom: 1px solid var(--linha); background: color-mix(in oklab, var(--fundo) 94%, transparent); backdrop-filter: blur(8px); }
+  .filtro .quadro { display: grid; grid-template-columns: minmax(0, 1fr) 260px; }
+  .chips { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips button { all: unset; box-sizing: border-box; cursor: pointer; flex: none; display: flex; align-items: center; gap: 9px; padding: 0 18px; height: 54px; font: 500 12px/1 var(--mono); color: var(--apagado);
+    border-left: 1px solid var(--linha); white-space: nowrap; transition: color .2s, background-color .2s; }
+  .chips button:first-child { border-left: 0; padding-left: clamp(20px, 3vw, 40px); }
+  .chips button:hover { color: var(--osso); background: #101012; }
+  .chips button:focus-visible { outline: 2px solid var(--ambar); outline-offset: -2px; }
+  .chips button[aria-pressed="true"] { color: var(--osso); box-shadow: inset 0 -2px 0 var(--ambar); }
+  .chips img { width: 24px; height: 24px; opacity: .6; }
+  .chips button[aria-pressed="true"] img, .chips button:hover img { opacity: 1; }
+  .chips small { font-size: 11px; color: var(--apagado); }
+  .busca { border-left: 1px solid var(--linha); display: flex; align-items: center; }
+  .busca input { all: unset; box-sizing: border-box; width: 100%; height: 54px; padding: 0 20px; font: 400 13px var(--mono); color: var(--osso); }
+  .busca input::placeholder { color: var(--apagado); }
+  .busca input:focus-visible { outline: 2px solid var(--ambar); outline-offset: -2px; }
+
+  .legenda { padding: 12px clamp(20px, 3vw, 40px); border-bottom: 1px solid var(--linha); font: 400 13px/1.5 var(--sans); color: var(--apagado); }
+  .legenda i { font: 500 10px/1 var(--mono); font-style: normal; color: var(--fundo); background: var(--ambar); padding: 3px 5px; border-radius: 2px; margin: 0 2px; }
+  .pac-tit { padding: 16px clamp(20px, 3vw, 40px); border-top: 1px solid var(--linha); display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+  .pac-tit h3 { font: 800 20px/1.2 var(--mono); color: var(--osso); letter-spacing: -.03em; }
+  .pac-tit code { font: 500 13px var(--mono); color: var(--ambar); }
+  .cat { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); border-top: 1px solid var(--linha); scroll-margin-top: 118px; }
+  .cat:first-of-type { border-top: 0; }
+  .cat-arte { position: relative; min-height: 320px; overflow: hidden; background: #060607; }
+  .cat-arte img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .92; transition: opacity .4s, transform 1.2s ease-out; }
+  .cat:hover .cat-arte img { opacity: 1; transform: scale(1.025); }
+  .cat-arte::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 55%, var(--fundo) 100%), linear-gradient(0deg, rgba(12,12,13,.55) 0%, transparent 40%); }
+  .cat:nth-of-type(even) { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+  .cat:nth-of-type(even) .cat-arte { order: 2; }
+  .cat:nth-of-type(even) .cat-arte::after { background: linear-gradient(270deg, transparent 55%, var(--fundo) 100%), linear-gradient(0deg, rgba(12,12,13,.55) 0%, transparent 40%); }
+  .cat-corpo { padding: 30px clamp(20px, 3vw, 40px) 34px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+  .cat-corpo h2 { font: 800 clamp(22px, 2.4vw, 30px)/1.1 var(--mono); color: var(--osso); letter-spacing: -.045em; display: flex; align-items: baseline; gap: 12px; }
+  .cat-corpo h2 img { width: 34px; height: 34px; align-self: center; opacity: .85; }
+  .cat-corpo h2 span { font: 500 12px var(--mono); letter-spacing: 0; color: var(--apagado); }
+  .cat-corpo > p { font: 400 15px/1.55 var(--sans); max-width: 52ch; color: #a9a49b; text-wrap: pretty; }
+  .plates { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 8px; margin-top: 16px; }
+  .plate { border: 1px solid var(--linha); background: rgba(18,18,20,.6); padding: 11px 13px 10px; display: flex; flex-direction: column; gap: 3px; min-height: 58px; transition: border-color .2s, background-color .2s; }
+  .plate:hover { border-color: var(--linha-forte); background: var(--painel); }
+  .plate b { font: 500 14px/1.3 var(--sans); color: var(--osso); }
+  .plate code { font: 400 11px/1.3 var(--mono); color: var(--apagado); overflow-wrap: anywhere; }
+  .plate.ded { border-color: #5a4423; box-shadow: inset 2px 0 0 var(--ambar); }
+  .plate i { font: 500 10px/1 var(--mono); font-style: normal; color: var(--fundo); background: var(--ambar); padding: 3px 5px; border-radius: 2px; align-self: flex-start; margin-top: 3px; }
+  .js .cat[hidden], .js .plate[hidden] { display: none; }
+  .vazio-busca { padding: 56px clamp(20px, 3vw, 40px); font: 400 15px/1.5 var(--sans); color: var(--apagado); border-top: 1px solid var(--linha); }
+  .vazio-busca a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+
+  /* ── blocos de texto ── */
+  .tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tres > div { padding: 24px clamp(20px, 2.4vw, 32px) 28px; }
+  .tres > div + div { border-left: 1px solid var(--linha); }
+  .tres h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 8px; }
+  .tres p { font: 400 15px/1.55 var(--sans); color: #a9a49b; max-width: 44ch; text-wrap: pretty; }
+  .tres code, .corpo code { font: 500 13px var(--mono); color: var(--osso); }
+  .tres a, .corpo a, .fontes a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+  .tres a:hover, .corpo a:hover, .fontes a:hover { text-decoration-color: var(--ambar); }
+  .fontes { padding: 14px clamp(20px, 3vw, 40px); border-top: 1px solid var(--linha); font: 400 13px/1.5 var(--sans); color: var(--apagado); }
+
+  .duas { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+  .duas > div { padding: 28px clamp(20px, 3vw, 40px) 32px; }
+  .duas > div + div { border-left: 1px solid var(--linha); }
+  .duas h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 8px; }
+  .corpo p { font: 400 15px/1.6 var(--sans); color: #a9a49b; max-width: 56ch; text-wrap: pretty; }
+  .corpo p + p { margin-top: 12px; }
+  .fora { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fora span { font: 500 12px/1 var(--mono); color: var(--apagado); border: 1px dashed var(--linha-forte); padding: 8px 10px; border-radius: 2px; }
+
+  .nv { font: 600 10px/1 var(--mono); padding: 4px 0; width: 84px; text-align: center; border-radius: 2px; white-space: nowrap; flex: none; align-self: flex-start; margin-top: 2px; }
+  .nv1 { color: #0f1a0c; background: var(--verde); }
+  .nv2 { color: #1b1306; background: var(--ambar); }
+  .nv3 { color: #1e0a0c; background: var(--vermelho); }
+  .nv0 { color: var(--osso); background: transparent; border: 1px solid var(--linha-forte); }
+  .pacote { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+  .pacote-arte { position: relative; min-height: 280px; overflow: hidden; background: #060607; }
+  .pacote-arte img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 25% 15%; opacity: .92; }
+  .pacote-arte::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 60%, var(--fundo) 100%); }
+  .itens-cs2 { list-style: none; }
+  .itens-cs2 li { display: flex; gap: 12px; padding: 13px clamp(20px, 3vw, 40px); border-top: 1px solid var(--linha); align-items: flex-start; }
+  .itens-cs2 li:first-child { border-top: 0; }
+  .itens-cs2 b { font: 500 14px/1.35 var(--sans); color: var(--osso); display: block; }
+  .itens-cs2 small { font: 400 13px/1.45 var(--sans); color: var(--apagado); display: block; margin-top: 2px; }
+  .pacote-lado { display: flex; flex-direction: column; }
+  .pacote-lado > p { padding: 24px clamp(20px, 3vw, 40px) 18px; font: 400 15px/1.55 var(--sans); color: #a9a49b; max-width: 56ch; }
+
+  .passos4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .passos4 > div { padding: 24px clamp(18px, 2vw, 28px) 28px; }
+  .passos4 > div + div { border-left: 1px solid var(--linha); }
+  .passos4 .n { font: 800 28px/1 var(--mono); color: var(--ambar); display: block; margin-bottom: 14px; }
+  .passos4 h3 { font: 700 14px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; }
+  .passos4 p { font: 400 14px/1.55 var(--sans); color: #a9a49b; text-wrap: pretty; }
+  .passos4 code { font: 500 12px var(--mono); color: var(--osso); }
+
+  .convite { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; padding: 30px clamp(20px, 3vw, 40px); }
+  .convite h2 { font: 800 clamp(22px, 2.4vw, 30px)/1.1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
+  .convite h2 span { color: var(--ambar); }
+  .convite p { font: 400 15px/1.5 var(--sans); color: #a9a49b; margin-top: 6px; max-width: 54ch; }
+  .convite .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .rodape .celulas { grid-template-columns: minmax(0, 1fr) auto; }
+  .rodape .celulas > * { padding: 20px; font-size: 12px; color: var(--apagado); min-width: 0; }
+  .rodape a { color: var(--texto); } .rodape a:hover { color: var(--osso); }
+  .rodape nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+
+  @media (max-width: 1000px) {
+    .menu { display: none !important; }
+    .topo .celulas { grid-template-columns: 1fr auto; }
+    .filtro .quadro { grid-template-columns: 1fr; }
+    .busca { border-left: 0; border-top: 1px solid var(--linha); }
+    .cat, .cat:nth-of-type(even) { grid-template-columns: 1fr; }
+    .cat:nth-of-type(even) .cat-arte { order: 0; }
+    .cat-arte { min-height: 0; height: 200px; }
+    .cat-arte::after, .cat:nth-of-type(even) .cat-arte::after { background: linear-gradient(0deg, var(--fundo) 0%, transparent 70%); }
+    .tres, .passos4 { grid-template-columns: 1fr; }
+    .tres > div + div, .passos4 > div + div { border-left: 0; border-top: 1px solid var(--linha); }
+    .duas, .pacote { grid-template-columns: 1fr; }
+    .duas > div + div { border-left: 0; border-top: 1px solid var(--linha); }
+    .pacote-arte { min-height: 0; height: 200px; }
+    .pacote-arte::after { background: linear-gradient(0deg, var(--fundo) 0%, transparent 70%); }
+    .jhero-arte::after { background: linear-gradient(90deg, rgba(6,6,7,.9) 0%, rgba(6,6,7,.55) 100%), linear-gradient(0deg, var(--fundo) 0%, transparent 34%); }
+  }
+  @media (max-width: 620px) {
+    .acoes .vazio { display: none; }
+    .rodape .celulas { grid-template-columns: 1fr; }
+    .rodape .celulas > * + * { border-left: 0; padding-top: 0; }
+    .plates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<div class="guias" aria-hidden="true"></div>
+
+<header class="faixa topo">
+  <div class="quadro celulas">
+    <a class="marca" href="index.html" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v1.4.0</small></a>
+    <nav class="menu" aria-label="Seções">
+      <a href="index.html">início</a>
+      <a href="#catalogo" aria-current="page">catálogo</a>
+      <a href="#prioridade">prioridade</a>
+      <a href="#anticheat">anti-cheat</a>
+      <a href="#pacotes">pacotes</a>
+      <a href="#medir">medir</a>
+    </nav>
+    <div class="acoes">
+      <a class="botao vazio" href="https://github.com/kessleru/Katharos">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.6 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+        GitHub
+      </a>
+      <a class="botao cheio" href="https://github.com/kessleru/Katharos/archive/refs/heads/main.zip">Baixar</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="faixa jhero" aria-labelledby="titulo">
+    <div class="jhero-arte" aria-hidden="true"><img src="jg-hero.webp" alt="" width="1792" height="768"></div>
+    <div class="quadro">
+      <div class="jhero-texto">
+        <h1 id="titulo">Jogos<span>.</span></h1>
+        <p><b>61 jogos conhecidos</b> em 6 categorias. Os que não usam anti-cheat de terceiros abrem com prioridade de CPU. Dois deles têm pacote próprio: <b>CS2</b> (vídeo, Reflex e medição de quadros) e <b>Minecraft Java</b> (opções de vídeo).</p>
+        <p>Aqui está o que muda em cada um, o que fica de fora e como conferir se ajudou.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="faixa" id="catalogo" aria-label="Catálogo de jogos">
+    <div class="filtro">
+      <div class="quadro">
+        <div class="chips" role="group" aria-label="Categorias"><button type="button" data-cat="todos" aria-pressed="true">Todos <small>61</small></button><button type="button" data-cat="proprio" aria-pressed="false">Pacote próprio <small>1</small></button><button type="button" data-cat="c-valve" aria-pressed="false">Valve <small>7</small></button><button type="button" data-cat="c-rpg" aria-pressed="false">RPG <small>20</small></button><button type="button" data-cat="c-corrida" aria-pressed="false">Corrida <small>8</small></button><button type="button" data-cat="c-estrategia" aria-pressed="false">Estratégia <small>9</small></button><button type="button" data-cat="c-sobrevivencia" aria-pressed="false">Sobrevivência <small>10</small></button><button type="button" data-cat="c-acao" aria-pressed="false">Ação <small>7</small></button></div>
+        <label class="busca"><span class="so-leitor" style="position:absolute;left:-9999px">Buscar jogo</span><input id="busca" type="search" placeholder="buscar jogo" autocomplete="off" spellcheck="false"></label>
+      </div>
+    </div>
+    <div class="quadro"><p class="legenda">Todos os jogos da lista recebem prioridade de CPU. <i>pacote próprio</i> marca o que tem ajustes de configuração além disso.</p></div>
+    <div class="quadro" id="lista">
+      <article class="cat" id="c-valve">
+        <div class="cat-arte" aria-hidden="true"><img src="cs2.webp" alt="" width="1280" height="720" loading="lazy"></div>
+        <div class="cat-corpo"><h2><img src="gen-valve.webp" alt="" width="34" height="34" loading="lazy">Valve e competitivos<span>7 jogos</span></h2><p>Jogos da Valve, quase todos leves. O CS2 tem pacote próprio.</p><ul class="plates"><li class="plate ded"><b>Counter-Strike 2</b><code>cs2.exe</code><i>pacote próprio</i></li><li class="plate"><b>Dota 2</b><code>dota2.exe</code></li><li class="plate"><b>Deadlock</b><code>deadlock.exe</code></li><li class="plate"><b>Team Fortress 2</b><code>tf_win64.exe</code></li><li class="plate"><b>Left 4 Dead 2</b><code>left4dead2.exe</code></li><li class="plate"><b>Portal 2 e jogos Source</b><code>portal2.exe +1</code></li><li class="plate"><b>Garry&#x27;s Mod</b><code>gmod.exe</code></li></ul></div>
+      </article>
+      <article class="cat" id="c-rpg">
+        <div class="cat-arte" aria-hidden="true"><img src="jg-rpg.webp" alt="" width="1280" height="720" loading="lazy"></div>
+        <div class="cat-corpo"><h2><img src="gen-rpg.webp" alt="" width="34" height="34" loading="lazy">RPG e mundo aberto<span>20 jogos</span></h2><p>Mundos grandes e longos, que passam horas com a CPU ocupada.</p><ul class="plates"><li class="plate"><b>Cyberpunk 2077</b><code>Cyberpunk2077.exe</code></li><li class="plate"><b>Red Dead Redemption 2</b><code>RDR2.exe</code></li><li class="plate"><b>Hogwarts Legacy</b><code>HogwartsLegacy.exe</code></li><li class="plate"><b>Starfield</b><code>Starfield.exe</code></li><li class="plate"><b>Baldur&#x27;s Gate 3</b><code>bg3.exe +1</code></li><li class="plate"><b>The Witcher 3</b><code>witcher3.exe</code></li><li class="plate"><b>Skyrim Special Edition</b><code>SkyrimSE.exe</code></li><li class="plate"><b>Fallout 4</b><code>Fallout4.exe</code></li><li class="plate"><b>Sekiro</b><code>sekiro.exe</code></li><li class="plate"><b>God of War</b><code>GoW.exe</code></li><li class="plate"><b>Horizon Zero Dawn</b><code>HorizonZeroDawn.exe</code></li><li class="plate"><b>Resident Evil 4</b><code>re4.exe</code></li><li class="plate"><b>Resident Evil Village</b><code>re8.exe</code></li><li class="plate"><b>Control</b><code>Control_DX12.exe +1</code></li><li class="plate"><b>Divinity: Original Sin 2</b><code>EoCApp.exe</code></li><li class="plate"><b>Stray</b><code>Stray-Win64-Shipping.exe</code></li><li class="plate"><b>Diablo IV</b><code>Diablo IV.exe</code></li><li class="plate"><b>Monster Hunter Wilds</b><code>MonsterHunterWilds.exe</code></li><li class="plate"><b>Monster Hunter World</b><code>MonsterHunterWorld.exe</code></li><li class="plate"><b>Path of Exile</b><code>PathOfExile_x64.exe +1</code></li></ul></div>
+      </article>
+      <article class="cat" id="c-corrida">
+        <div class="cat-arte" aria-hidden="true"><img src="jg-corrida.webp" alt="" width="1280" height="720" loading="lazy"></div>
+        <div class="cat-corpo"><h2><img src="gen-corrida.webp" alt="" width="34" height="34" loading="lazy">Corrida e simulação<span>8 jogos</span></h2><p>Corridas e simuladores, em que uma queda de quadros se sente na hora.</p><ul class="plates"><li class="plate"><b>Forza Horizon 5</b><code>ForzaHorizon5.exe</code></li><li class="plate"><b>Forza Horizon 4</b><code>ForzaHorizon4.exe</code></li><li class="plate"><b>Euro Truck Simulator 2</b><code>eurotrucks2.exe</code></li><li class="plate"><b>American Truck Simulator</b><code>amtrucks.exe</code></li><li class="plate"><b>Assetto Corsa</b><code>acs.exe</code></li><li class="plate"><b>Assetto Corsa Competizione</b><code>AC2-Win64-Shipping.exe</code></li><li class="plate"><b>BeamNG.drive</b><code>BeamNG.drive.x64.exe</code></li><li class="plate"><b>Microsoft Flight Simulator</b><code>FlightSimulator.exe +1</code></li></ul></div>
+      </article>
+      <article class="cat" id="c-estrategia">
+        <div class="cat-arte" aria-hidden="true"><img src="jg-estrategia.webp" alt="" width="1280" height="720" loading="lazy"></div>
+        <div class="cat-corpo"><h2><img src="gen-estrategia.webp" alt="" width="34" height="34" loading="lazy">Estratégia e construção<span>9 jogos</span></h2><p>Cidades, exércitos e mapas cheios: a CPU trabalha mesmo com a tela parada.</p><ul class="plates"><li class="plate"><b>Civilization VI</b><code>CivilizationVI.exe +1</code></li><li class="plate"><b>Cities: Skylines</b><code>Cities.exe</code></li><li class="plate"><b>Hearts of Iron IV</b><code>hoi4.exe</code></li><li class="plate"><b>Crusader Kings III</b><code>ck3.exe</code></li><li class="plate"><b>Stellaris</b><code>stellaris.exe</code></li><li class="plate"><b>Total War: Warhammer III</b><code>Warhammer3.exe</code></li><li class="plate"><b>Factorio</b><code>factorio.exe</code></li><li class="plate"><b>Satisfactory</b><code>FactoryGame-Win64-Shipping.exe</code></li><li class="plate"><b>Hearthstone</b><code>Hearthstone.exe</code></li></ul></div>
+      </article>
+      <article class="cat" id="c-sobrevivencia">
+        <div class="cat-arte" aria-hidden="true"><img src="jg-sobrevivencia.webp" alt="" width="1280" height="720" loading="lazy"></div>
+        <div class="cat-corpo"><h2><img src="gen-sobrevivencia.webp" alt="" width="34" height="34" loading="lazy">Sobrevivência e cooperativo<span>10 jogos</span></h2><p>Mundos para sobreviver e construir, sozinho ou em grupo.</p><ul class="plates"><li class="plate"><b>Minecraft (Bedrock)</b><code>Minecraft.Windows.exe</code></li><li class="plate"><b>Palworld</b><code>Palworld-Win64-Shipping.exe</code></li><li class="plate"><b>Valheim</b><code>valheim.exe</code></li><li class="plate"><b>Subnautica</b><code>Subnautica.exe +1</code></li><li class="plate"><b>Terraria</b><code>Terraria.exe</code></li><li class="plate"><b>Stardew Valley</b><code>Stardew Valley.exe</code></li><li class="plate"><b>Phasmophobia</b><code>Phasmophobia.exe</code></li><li class="plate"><b>Lethal Company</b><code>Lethal Company.exe</code></li><li class="plate"><b>Among Us</b><code>Among Us.exe</code></li><li class="plate"><b>Risk of Rain 2</b><code>Risk of Rain 2.exe</code></li></ul></div>
+      </article>
+      <article class="cat" id="c-acao">
+        <div class="cat-arte" aria-hidden="true"><img src="jg-acao.webp" alt="" width="1280" height="720" loading="lazy"></div>
+        <div class="cat-corpo"><h2><img src="gen-acao.webp" alt="" width="34" height="34" loading="lazy">Ação e independentes<span>7 jogos</span></h2><p>Ação, aventura e independentes, de tela cheia a pixel art.</p><ul class="plates"><li class="plate"><b>Warframe</b><code>Warframe.x64.exe</code></li><li class="plate"><b>Hades</b><code>Hades.exe</code></li><li class="plate"><b>Hades II</b><code>Hades2.exe</code></li><li class="plate"><b>Hollow Knight</b><code>hollow_knight.exe</code></li><li class="plate"><b>Celeste</b><code>Celeste.exe</code></li><li class="plate"><b>Cuphead</b><code>Cuphead.exe</code></li><li class="plate"><b>Vampire Survivors</b><code>VampireSurvivors.exe</code></li></ul></div>
+      </article>
+      <p class="vazio-busca" id="vazio" hidden>Nenhum jogo com esse nome. <a href="https://github.com/kessleru/Katharos/issues/new/choose">Sugira este jogo</a>.</p>
+    </div>
+  </section>
+
+  <section class="faixa" id="prioridade" aria-labelledby="prio-t">
+    <div class="quadro cab celulas"><div><h2 id="prio-t">Prioridade de CPU<span>.</span></h2></div></div>
+  </section>
+  <section class="faixa" aria-label="Como funciona a prioridade">
+    <div class="quadro tres">
+      <div><h3>O que muda</h3><p>O Windows abre o jogo com prioridade de CPU alta, por uma opção oficial gravada no registro (<code>PerfOptions</code>). O Katharos não abre, não injeta e não toca no jogo.</p></div>
+      <div><h3>O que não promete</h3><p>FPS. A prioridade só pesa quando algo disputa a CPU com o jogo. A Bitsum, do Process Lasso, diz que baixar a prioridade do fundo costuma render mais que subir a do jogo. O ganho é pequeno.</p></div>
+      <div><h3>Como voltar</h3><p>O valor anterior fica guardado. <code>katharos desfazer</code> restaura, e o <code>socorro</code> desfaz tudo o que o Katharos mudou. Vale ao abrir o jogo de novo.</p></div>
+    </div>
+    <div class="quadro"><p class="fontes">Fonte: <a href="https://bitsum.com/apps/process-lasso/docs/rules/priorities/">Bitsum, prioridades de processo</a>.</p></div>
+  </section>
+
+  <section class="faixa" id="anticheat" aria-labelledby="ac-t">
+    <div class="quadro cab celulas"><div><h2 id="ac-t">Anti-cheat<span>.</span></h2></div></div>
+  </section>
+  <section class="faixa" aria-label="Jogos com anti-cheat">
+    <div class="quadro duas corpo">
+      <div>
+        <h3>Ficam de fora por padrão</h3>
+        <p>Anti-cheat de terceiros (Vanguard, EasyAntiCheat, BattlEye, FACEIT) pode reclamar de qualquer mudança no sistema. Por isso estes jogos não recebem nada do Katharos sem você pedir.</p>
+        <p>Existe um item opcional, <code>prioridade-jogos-ac</code>, que usa a mesma opção oficial do Windows e nunca vem marcado. Nenhum anti-cheat publica que aceita ou que proíbe isso: o risco não é zero, e quem marca assume a decisão.</p>
+      </div>
+      <div>
+        <h3>Jogos fora da prioridade</h3>
+        <div class="fora"><span>Valorant</span><span>LoL</span><span>Fortnite</span><span>Apex</span><span>Rainbow Six</span><span>PUBG</span><span>Tarkov</span><span>Destiny 2</span><span>Call of Duty</span><span>Rust</span><span>Roblox</span><span>Genshin</span><span>Elden Ring</span><span>Rocket League</span><span>Helldivers 2</span><span>EA FC</span><span>e outros</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="faixa" id="pacotes" aria-labelledby="pac-t">
+    <div class="quadro cab celulas"><div><h2 id="pac-t">Pacotes próprios<span>.</span></h2></div></div>
+  </section>
+  <section class="faixa" aria-label="Quando um jogo ganha pacote próprio">
+    <div class="quadro tres">
+      <div><h3>O arquivo é o do próprio jogo</h3><p>O pacote só edita o arquivo de configuração que o jogo grava sozinho no seu usuário (o mesmo do menu de vídeo). Nunca arquivo do jogo, textura nem memória.</p></div>
+      <div><h3>Só o que o menu já faz</h3><p>Chaves confirmadas em fonte pública, valores que o menu aceita, só em linhas que existem e só para baixar custo. Com o jogo fechado e cópia antes.</p></div>
+      <div><h3>Competitivo, com cautela</h3><p>A Epic e a EA tratam ajuste de desempenho no arquivo do jogo como aceitável, mas não publicam uma lista do que pode, e proíbem o que tira informação da tela. Por isso, em jogo com anti-cheat, só entra como item opcional.</p></div>
+    </div>
+    <div class="quadro"><p class="fontes">Fontes: resposta de equipe da EA citada <a href="https://forums.ea.com/discussions/apex-legends-general-discussion-en/are-outside-configurations-allowed-in-apex-legends/5772102">neste tópico do fórum do Apex</a>; declaração de um programador da Epic sobre o <code>GameUserSettings.ini</code>, citada <a href="https://www.esportstales.com/fortnite/how-to-increase-fps-video-options-gameusersettings">aqui</a>. Nenhum dos dois é uma garantia.</p></div>
+  </section>
+  <section class="faixa" id="cs2" aria-label="Pacote do Counter-Strike 2">
+    <div class="quadro pac-tit"><h3>Counter-Strike 2</h3><code>katharos cs2</code></div>
+    <div class="quadro pacote">
+      <div class="pacote-arte"><img src="cs2.webp" alt="" width="1280" height="720" loading="lazy" style="object-position: 25% 15%"></div>
+      <div class="pacote-lado">
+        <p>Mexe em configuração do Windows e no arquivo de vídeo do seu usuário, só nas chaves confirmadas em fonte pública, sempre com cópia antes e com o jogo fechado. Resolução e textura ficam como estão.</p>
+        <ul class="itens-cs2"><li><span class="nv nv2">equilibrado</span><div><b>CS2 na placa de vídeo dedicada</b><small>ganha: muito mais FPS se ele estava na integrada · perde: mais consumo de bateria durante o jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>otimizações para jogos em janela</b><small>ganha: menos atraso no modo janela sem bordas · perde: nenhum conhecido; alguns jogos antigos ignoram</small></div></li><li><span class="nv nv0">só se marcar</span><div><b>CS2 sem otimizações de tela inteira</b><small>ganha: às vezes menos atraso · perde: às vezes Alt+Tab mais lento ou tela piscando</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>vídeo do CS2 no preset de FPS</b><small>ganha: o MSAA 4x sozinho pode custar 10 a 20% do FPS; o resto varia com o PC · perde: o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)</small></div></li><li><span class="nv nv3">extremo</span><div><b>vídeo do CS2 para PC fraco (a mais)</b><small>ganha: menos uso de memória de vídeo e mais FPS em placa antiga · perde: texturas mais borradas de perto</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>NVIDIA Reflex ligado no CS2</b><small>ganha: menos atraso quando a placa é o gargalo; com FPS muito alto, pouca diferença · perde: um pouco mais de consumo da placa</small></div></li><li><span class="nv nv0">só se marcar</span><div><b>tempo entre quadros e ping na tela do CS2</b><small>ganha: dá para ver se uma mudança ajudou, com número · perde: nada; só vale se você digitar o comando no jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>katharos.cfg com comandos do próprio jogo</b><small>ganha: placa mais fria nos menus; tela mais limpa · perde: nada; o arquivo só vale se você mandar o jogo carregar</small></div></li></ul>
+      </div>
+    </div>
+    <div class="quadro"><p class="fontes">Fontes: <a href="https://github.com/gucu112/cs2-config">gucu112/cs2-config</a> (chaves do arquivo de vídeo), <a href="https://csdb.gg/guides/fps-optimization-guide/">csdb.gg</a> (custo do MSAA).</p></div>
+  </section>
+  <section class="faixa" id="minecraft" aria-label="Pacote do Minecraft: Java Edition">
+    <div class="quadro pac-tit"><h3>Minecraft: Java Edition</h3><code>katharos minecraft</code></div>
+    <div class="quadro pacote">
+      <div class="pacote-arte"><img src="jg-sobrevivencia.webp" alt="" width="1280" height="720" loading="lazy" style="object-position: 30% 40%"></div>
+      <div class="pacote-lado">
+        <p>Edita o options.txt da pasta .minecraft padrão: só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes. Bedrock e launchers com pasta própria não são tocados.</p>
+        <ul class="itens-cs2"><li><span class="nv nv2">equilibrado</span><div><b>Minecraft: opções de vídeo mais leves</b><small>ganha: a distância de renderização é o que mais pesa; o ganho varia com o PC e com mods · perde: o mundo ao longe aparece mais perto; partículas menores</small></div></li><li><span class="nv nv3">extremo</span><div><b>Minecraft: opções para PC fraco (a mais)</b><small>ganha: mais FPS em PC fraco ou com placa integrada · perde: o jogo fica bem mais simples e o horizonte, curto</small></div></li></ul>
+      </div>
+    </div>
+    <div class="quadro"><p class="fontes">Fontes: <a href="https://minecraft.wiki/w/Options.txt">Minecraft Wiki, options.txt</a> (chaves e limites).</p></div>
+  </section>
+
+  <section class="faixa" id="medir" aria-labelledby="med-t">
+    <div class="quadro cab celulas"><div><h2 id="med-t">Conferir se ajudou<span>.</span></h2></div></div>
+  </section>
+  <section class="faixa" aria-label="Como medir">
+    <div class="quadro passos4">
+      <div><span class="n">1</span><h3>Escolha um trajeto</h3><p>Sempre o mesmo mapa e o mesmo caminho. Fumaça e combate mudam o número.</p></div>
+      <div><span class="n">2</span><h3>Meça antes</h3><p>No CS2, marque <code>medir-cs2</code> e digite <code>exec katharos-medir</code>. Nos outros, use o contador do próprio jogo (F3 no Minecraft). Anote o FPS em três passadas.</p></div>
+      <div><span class="n">3</span><h3>Aplique e meça de novo</h3><p>Aplique os itens, repita o mesmo trajeto três vezes e compare com a primeira medida.</p></div>
+      <div><span class="n">4</span><h3>Só conta o que passa do ruído</h3><p>Se a diferença é menor que a variação entre as passadas, o ajuste não ajudou. Desfaça: <code>katharos desfazer</code>.</p></div>
+    </div>
+    <div class="quadro"><p class="fontes">O <code>katharos benchmark</code> mede o PC inteiro (disco, CPU e RAM) com repetição e só diz "melhorou" quando a diferença passa da variação.</p></div>
+  </section>
+
+  <section class="faixa" aria-label="Sugerir um jogo">
+    <div class="quadro convite">
+      <div>
+        <h2>Falta um jogo<span>.</span></h2>
+        <p>Para entrar, o jogo não pode usar anti-cheat de terceiros, e o nome do <code>.exe</code> precisa estar certo.</p>
+      </div>
+      <div class="acoes">
+        <a class="botao cheio" href="https://github.com/kessleru/Katharos/issues/new/choose">Sugerir um jogo</a>
+        <a class="botao vazio" href="https://github.com/kessleru/Katharos/blob/main/CONTRIBUTING.md#adicionar-um-jogo-ao-catálogo">Adicionar eu mesmo</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="faixa rodape">
+  <div class="quadro celulas">
+    <span>Feito por <a href="https://github.com/kessleru">Otávio Kessler Ustra</a>. Grátis e de código aberto. <a href="https://github.com/kessleru/Katharos/archive/refs/heads/main.zip">Baixar a v1.4.0</a></span>
+    <nav aria-label="Links"><a href="index.html">início</a><a href="https://github.com/kessleru/Katharos#readme">manual</a><a href="https://github.com/kessleru/Katharos/blob/main/CONTRIBUTING.md">contribuir</a><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">versões</a></nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  const chips = [...document.querySelectorAll('.chips button')], cats = [...document.querySelectorAll('.cat')];
+  const campo = document.getElementById('busca'), vazio = document.getElementById('vazio');
+  let filtro = 'todos';
+  const norm = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  function aplica() {
+    const q = norm(campo.value.trim());
+    let total = 0;
+    cats.forEach(c => {
+      let vis = 0;
+      c.querySelectorAll('.plate').forEach(p => {
+        const ok = (!q || norm(p.textContent).includes(q)) && (filtro !== 'proprio' || p.classList.contains('ded'));
+        p.hidden = !ok;
+        if (ok) vis++;
+      });
+      const mostra = vis > 0 && (filtro === 'todos' || filtro === 'proprio' || c.id === filtro);
+      c.hidden = !mostra;
+      if (mostra) total += vis;
+    });
+    vazio.hidden = total > 0;
+    chips.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cat === filtro)));
+  }
+  chips.forEach(b => b.addEventListener('click', () => { filtro = b.dataset.cat; aplica(); if (filtro.startsWith('c-')) document.getElementById(filtro).scrollIntoView({ block: 'start' }); }));
+  campo.addEventListener('input', aplica);
+  if (location.hash.startsWith('#c-')) { filtro = 'todos'; }
+  aplica();
+})();
+</script>
+</body>
+</html>

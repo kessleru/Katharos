@@ -174,6 +174,35 @@ class TestJogosECS2(unittest.TestCase):
         self.assertIn('cs2', its['video-cs2'].ps.lower())
 
 
+class TestPacotesDeJogo(unittest.TestCase):
+    """Regras de todo pacote que edita arquivo de configuração de jogo."""
+    def test_minecraft_so_usa_chaves_confirmadas_e_so_baixa(self):
+        for regras in (k.MC_OPCOES, k.MC_OPCOES_FRACO):
+            self.assertFalse(set(regras) - k.MC_CHAVES_CONFIRMADAS, 'chave do Minecraft sem fonte')
+            for chave, (como, valor) in regras.items():
+                self.assertIn(como, ('max', 'min', 'set'))
+        self.assertNotIn('maxFps', {**k.MC_OPCOES, **k.MC_OPCOES_FRACO}, 'o teto de FPS não é mexido')
+
+    def test_nenhum_script_de_jogo_grava_com_bom(self):
+        """Set-Content -Encoding UTF8 grava BOM no PowerShell 5.1; arquivo de jogo (Java, cfg da Valve) pode não aceitar."""
+        for pac, it in ITENS:
+            if pac in ('cs2', 'minecraft'):
+                self.assertNotRegex(it.ps or '', r'Set-Content[^\n]*-Encoding\s+UTF8', f'{pac}/{it.id}')
+                self.assertNotRegex(it.ps or '', r'Out-File', f'{pac}/{it.id}')
+
+    def test_pacote_de_jogo_faz_copia_e_exige_jogo_fechado(self):
+        for pac, it in ITENS:
+            if pac == 'minecraft':
+                self.assertIn('.katharos.bak', it.ps)
+                self.assertIn('Get-Process', it.ps)
+                self.assertIn('Guarda-Desfazer', it.ps)
+                self.assertIn('UTF8Encoding $false', it.ps)
+
+    def test_pacote_de_jogo_esta_no_menu(self):
+        cmds = [c for _, _, its in k.GRUPOS for c, _, _ in its]
+        self.assertIn('minecraft', cmds)
+
+
 class TestMenu(unittest.TestCase):
     def test_todo_comando_do_menu_existe_no_parser(self):
         p = k.monta_parser()

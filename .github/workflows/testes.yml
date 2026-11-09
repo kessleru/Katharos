@@ -63,3 +63,6 @@ jobs:
           $dif = Compare-Object $a $d
           Write-Host "linhas diferentes entre antes e depois: $(@($dif).Count)"
           $dif | Select-Object -First 30 | ForEach-Object { Write-Host "$($_.SideIndicator) $($_.InputObject)" }
+      - name: ida e volta de arquivo de jogo (Minecraft)
+        shell: pwsh
+        run: ./tests/ci_minecraft.ps1

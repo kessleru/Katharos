@@ -22,6 +22,7 @@ Quando uma versão existe:
 Pacote do CS2 mais completo e catálogo de jogos maior.
 
 - **CS2**: o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (`.katharos.bak`) e o jogo fechado. Resolução, qualidade global de sombras e textura dos modelos não são tocadas. Há uma variante para PC fraco (`video-cs2-fraco`, modo extremo), o Reflex (`reflex-cs2`, só com NVIDIA) e `medir-cs2`, que cria um cfg para mostrar frametime e ping na tela (você digita `exec katharos-medir`).
+- **Minecraft Java** ganha pacote próprio (`minecraft`): edita o `options.txt` da pasta padrão, só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes. Arquivos de jogo agora são gravados sem BOM.
 - **`cs2` e `steam` leem o vídeo atual** (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.
 - **Catálogo com 61 jogos em 6 categorias**, todos sem anti-cheat de terceiros, que recebem prioridade de CPU. O CS:GO saiu: virou CS2.
 - **Prioridade para jogos com anti-cheat** virou item à parte, desligado por padrão (`prioridade-jogos-ac`), com aviso. Nenhum perfil o marca.
