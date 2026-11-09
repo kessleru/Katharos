@@ -180,10 +180,36 @@ class TestMenuEnxuto(unittest.TestCase):
             self.assertIn('Não achei', k.SEM_ITENS[c])
         achados = k.jogos_neste_pc()
         if k.WINDOWS:   # no Windows responde sim ou não para cada jogo; fora dele não afirma nada
-            self.assertEqual(set(achados), {'cs2', 'minecraft', 'unreal'})
+            self.assertEqual(set(achados), {'steam', 'cs2', 'minecraft', 'unreal'})
             self.assertTrue(all(isinstance(v, bool) for v in achados.values()))
         else:
             self.assertEqual(achados, {})
+
+    def tela_jogar(self, achados):
+        import io, contextlib
+        t = k.Terminal(True, True)
+        ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), mock.patch.object(k, 'jogos_neste_pc', lambda: achados), \
+                mock.patch.object(k, 'primeira_vez', lambda c: None), mock.patch.object(k, 'estado', lambda: {}), \
+                mock.patch('builtins.input', side_effect=['4', '0', '0']):
+            k.menu(ctx, k.monta_parser(), type('A', (), {})())
+        return buf.getvalue()
+
+    def test_jogar_mostra_so_os_jogos_que_este_pc_tem(self):
+        n = [c for c, _ in k.MENU].index('jogar') + 1
+        self.assertEqual(n, 4)
+        txt = self.tela_jogar({'steam': True, 'cs2': True, 'minecraft': False, 'unreal': False})
+        self.assertIn('cs2', txt)
+        self.assertIn('steam', txt)
+        self.assertNotIn('minecraft  ', txt)
+        self.assertNotIn('unreal  ', txt)
+        self.assertIn('jogos', txt, 'o Windows aparece sempre')
+
+    def test_jogar_sem_nenhum_jogo_ainda_tem_o_windows(self):
+        txt = self.tela_jogar({'steam': False, 'cs2': False, 'minecraft': False, 'unreal': False})
+        self.assertIn('o Windows para jogar', txt)
+        self.assertNotIn('cs2   ', txt)
 
     def test_dicas_mostram_poucas_teclas_separadas_por_bolinha(self):
         import io, contextlib

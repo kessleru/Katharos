@@ -28,7 +28,7 @@ Ou direto, num PowerShell aberto como administrador: `python programa\katharos.p
 
 ## Modos
 
-Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem sete linhas (`raiox`, `turbo`, `escolher`, `jogar`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas, `jogar` junta o que é de jogo (o Windows, cada jogo com pacote próprio e a conferência da Steam, dizendo quais achou neste PC) e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
+Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem sete linhas (`raiox`, `turbo`, `escolher`, `jogar`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas, `jogar` junta o que é de jogo e mostra só o que este PC tem (o Windows sempre; a Steam, o CS2, o Minecraft e os jogos Unreal só se estiverem instalados) e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
 
 | Modo | O que marca |
 | --- | --- |

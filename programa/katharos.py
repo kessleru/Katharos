@@ -7133,22 +7133,27 @@ def itens_unreal(ctx):
 
 # ─────────────── quais jogos com pacote próprio estão neste PC ───────────────
 
-def _cs2_instalado():
-    """True/False se a Steam diz que o CS2 (app 730) está instalado; None se não deu para saber. Só lê o registro e a
-    lista de bibliotecas da Steam."""
+def _steam_pastas():
+    """As bibliotecas da Steam deste PC (a pasta dela e as outras de libraryfolders.vdf), ou None se não há Steam.
+    Só lê o registro e esse arquivo."""
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam') as ch:
             raiz = Path(str(winreg.QueryValueEx(ch, 'SteamPath')[0]))
     except (ImportError, OSError):
-        return False if WINDOWS else None
+        return None
     pastas = [raiz]
     try:
         vdf = (raiz / 'steamapps' / 'libraryfolders.vdf').read_text(encoding='utf-8', errors='replace')
         pastas += [Path(p.replace('\\\\', '\\')) for p in re.findall(r'"path"\s+"([^"]+)"', vdf)]
     except OSError:
         pass
-    return any((p / 'steamapps' / 'appmanifest_730.acf').is_file() for p in pastas)
+    return pastas
+
+
+def _cs2_instalado():
+    """True/False se a Steam diz que o CS2 (app 730) está instalado."""
+    return any((p / 'steamapps' / 'appmanifest_730.acf').is_file() for p in (_steam_pastas() or []))
 
 
 def jogos_neste_pc():
@@ -7157,6 +7162,7 @@ def jogos_neste_pc():
         return {}
     out = {}
     try:
+        out['steam'] = _steam_pastas() is not None
         out['cs2'] = _cs2_instalado()
         out['minecraft'] = os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt'))
         out['unreal'] = any(_ue_instalado(pasta) for _, _, pasta, _ in UE_JOGOS)
@@ -10738,7 +10744,7 @@ GRUPOS = [
         ('disco', 'menos escrita, boot mais rápido', 'pacote'),
         ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
     ]),
-    ('jogos', 'Comece por "jogos", que ajusta o Windows. Depois abra o jogo que você joga, se ele estiver na lista.', [
+    ('jogos', 'Comece por "jogos", que ajusta o Windows para qualquer jogo. Depois, o jogo que você joga.', [
         ('jogos', 'o Windows para jogar: Modo de Jogo, prioridade, latência', 'pacote'),
         ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
         ('minecraft', 'Minecraft Java: distância e partículas', 'pacote'),
@@ -11032,9 +11038,14 @@ def menu(ctx, parser, args, tela=None):
             if grupo[1]:
                 t.paragrafo(grupo[1], 2, 'apagado')
                 t.escreve()
-            achados = jogos_neste_pc() if tela == 'jogar' else {}
-            por_numero = t.menu_itens([('', '', grupo[2])], {**quando, **{c: 'não achei neste PC' for c, v in achados.items() if v is False}},
-                                      destaque={c: 'neste PC' for c, v in achados.items() if v}, zero='voltar')
+            lista = grupo[2]
+            if tela == 'jogar':   # só o que este PC tem: "jogos" (o Windows) vale para todos; o resto, se o jogo foi achado
+                achados = jogos_neste_pc()
+                lista = [(c, d) for c, d in lista if achados.get(c, True) or c == 'jogos']
+            por_numero = t.menu_itens([('', '', lista)], quando, zero='voltar')
+            if tela == 'jogar':
+                t.nota('Só aparece o que está neste PC. Se o seu jogo não aparece, digite o nome: cs2, minecraft ou unreal.', 2)
+                t.escreve()
         else:
             t.paragrafo('Escolha uma área. Dentro dela os itens já vêm marcados pelo modo, e você tira ou põe o que quiser.'
                         if tela == 'escolher' else 'As outras ferramentas, por assunto.', 2, 'apagado')
