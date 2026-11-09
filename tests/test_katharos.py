@@ -206,13 +206,17 @@ class TestPacotesDeJogo(unittest.TestCase):
         for id_, nome, pasta, fonte in k.UE_JOGOS:
             self.assertTrue(fonte.startswith('https://'), nome)
             self.assertNotIn(nome, k.JOGOS_ANTICHEAT, f'{nome} tem anti-cheat de terceiros')
-        ids = {i.id for p, i in ITENS if p == 'unreal'}
-        self.assertEqual(ids, {'ue-' + j[0] for j in k.UE_JOGOS})
-        for p, i in ITENS:
-            if p == 'unreal':
-                self.assertIn('^([^=]+)=(.*)$', i.ps)
-                self.assertNotIn('sg.TextureQuality', i.ps)
-                self.assertNotIn('sg.AntiAliasingQuality', i.ps)
+        antigo = k._ue_instalado
+        k._ue_instalado = lambda pasta: True   # no Windows de verdade só aparece o jogo instalado; aqui conferimos todos
+        try:
+            itens = [i for i in k.PACOTES['unreal'].itens(Ctx) if i]
+        finally:
+            k._ue_instalado = antigo
+        self.assertEqual({i.id for i in itens}, {'ue-' + j[0] for j in k.UE_JOGOS})
+        for i in itens:
+            self.assertIn('^([^=]+)=(.*)$', i.ps)
+            self.assertNotIn('sg.TextureQuality', i.ps)
+            self.assertNotIn('sg.AntiAliasingQuality', i.ps)
 
     def test_pacote_de_jogo_esta_no_menu(self):
         cmds = [c for _, _, its in k.GRUPOS for c, _, _ in its]
