@@ -2732,11 +2732,12 @@ def mostra_codigo(t, itens):
             t.paragrafo('sem código', 4, 'apagado')
 
 
-def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer'):
+def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=False):
     """A tela de escolha: tudo explicado, marcado conforme o modo; a pessoa ajusta. Devolve os marcados,
     ou None se voltou."""
     t = ctx.t
-    marca_por_modo(itens, modo)
+    if not manter_marcas:
+        marca_por_modo(itens, modo)
     completa = config('explicacao') != 'curta'
     t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}')
     desenha_itens(t, itens, completa)
@@ -2936,7 +2937,7 @@ def resumo_antes(t, pac, itens, titulo=True, recuo=2):
     if titulo:
         t.titulo(f'antes de aplicar: {pac.titulo}')
     for it in itens:
-        t.item('◆', 'destaque', corta(tela(it.titulo), 60), recuo=recuo)
+        t.item('◆', 'destaque', corta(tela(it.titulo), 56), t.p(NOME_NIVEL.get(it.nivel, ''), COR_NIVEL.get(it.nivel, 'apagado')), recuo=recuo)
         if getattr(it, 'ganho', ''):
             t.paragrafo('ganha: ' + it.ganho, recuo + 4, 'sub')
         if getattr(it, 'custo', '') and it.custo != 'nenhum':
@@ -4199,7 +4200,7 @@ def _pos_sfc(ctx, cod, txt):
     if re.search(r'successfully repaired|reparou com', t):
         return 'SFC: encontrou e reparou arquivos corrompidos'
     if re.search(r'unable to fix|não pôde reparar|nao pode reparar', t):
-        return 'SFC: há arquivos que não consegui reparar (veja relatorios/sfc.txt)'
+        return 'SFC: há arquivos que não consegui reparar (veja a pasta relatorios)'
     return f'SFC: código {cod}'
 
 
@@ -4592,6 +4593,55 @@ def rel_desconhecido(tipo, nome, extra=''):
         lst.append({'nome': str(nome), 'extra': str(extra)})
 
 
+_EXECUCAO = datetime.now()
+MAX_RELATORIOS = 60
+
+
+def _grava_em(d):
+    try:
+        d.mkdir(exist_ok=True)
+        teste = d / '.escrita'
+        teste.write_text('', encoding='utf-8')
+        teste.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def pasta_relatorios():
+    """relatorios/ na pasta do Katharos, ao lado do KATHAROS.bat (a que a pessoa extraiu do ZIP). Rodando pela cópia
+    dos atalhos (~/.katharos/app), usa a mesma pasta, que ficou guardada na primeira execução. Só se ela sumiu ou
+    não aceita escrita é que cai em ~/.katharos/relatorios."""
+    aqui = Path(__file__).resolve().parent
+    if aqui.name.lower() == 'programa':
+        d = aqui.parent / 'relatorios'
+        if _grava_em(d):
+            if estado().get('pasta_katharos') != str(aqui.parent):
+                marca_estado('pasta_katharos', str(aqui.parent))
+            return d
+    guardada = estado().get('pasta_katharos')
+    if guardada and Path(guardada).is_dir() and _grava_em(Path(guardada) / 'relatorios'):
+        return Path(guardada) / 'relatorios'
+    return pasta('relatorios')
+
+
+def rel_arquivo_da_execucao():
+    """Um arquivo por execução, com data e hora: AAAA-MM-DD_HH-MM-SS_ferramenta.md (as etapas da mesma
+    execução reescrevem o mesmo arquivo; execuções diferentes ficam lado a lado)."""
+    cmd = next((a for a in sys.argv[1:] if not a.startswith('-')), 'menu')
+    cmd = re.sub(r'[^a-z0-9-]', '', cmd.lower())[:20] or 'menu'
+    return pasta_relatorios() / f'{_EXECUCAO:%Y-%m-%d_%H-%M-%S}_{nome_do_pc().lower()}_{cmd}.md'
+
+
+def rel_poda(d):
+    arqs = sorted(d.glob('????-??-??_??-??-??_*.md'))
+    for velho in arqs[:-MAX_RELATORIOS]:
+        try:
+            velho.unlink()
+        except OSError:
+            pass
+
+
 def rel_salva(r):
     try:
         r['atualizado'] = agora_iso()
@@ -4609,7 +4659,14 @@ def rel_salva(r):
         r['suspeitos_total'] = int(r.get('suspeitos_total') or 0) + _SUSP_N[0]
         _SUSP_N[0] = 0
         grava_json(REL_JSON, r)
-        REL_MD.write_text(rel_md(r), encoding='utf-8')
+        texto = rel_md(r)
+        REL_MD.write_text(texto, encoding='utf-8')
+        try:
+            arq = rel_arquivo_da_execucao()
+            arq.write_text(texto, encoding='utf-8')
+            rel_poda(arq.parent)
+        except OSError as e:
+            LOG.escreve(f'cópia datada do relatório não gravada: {e!r}')
     except OSError as e:
         LOG.escreve(f'relatório não gravado: {e!r}')
 
@@ -4847,7 +4904,7 @@ def ferramenta_relatorio(ctx, args):
                 'Ele tem o PC, o que foi aplicado, os avisos e erros com dica, e o que o Katharos não reconheceu: é o que ajuda a '
                 'melhorar a base de dados. Textos que vieram do PC são limpos antes de entrar, e o arquivo diz que é dado, não instrução.', 2, 'sub')
     if getattr(args, 'zerar', False):
-        if t.confirma('Apagar o relatório e recomeçar do zero?', sim=args.sim):
+        if t.confirma('Apagar o relatório atual e recomeçar do zero? (as cópias datadas da pasta relatorios ficam)', sim=args.sim):
             for a in (REL_JSON, REL_MD):
                 try:
                     a.unlink()
@@ -4866,6 +4923,10 @@ def ferramenta_relatorio(ctx, args):
     t.tabela(['seção', 'atualizada'], [[k, ha_quanto_iso(v.get('quando', '')) or '-'] for k, v in r['secoes'].items()] +
              [['ocorrências', f'{len(r.get("eventos", []))} registradas']], alinha='ee')
     t.relatorio(REL_MD, 'relatório único', recuo=2)
+    pasta_rel = pasta_relatorios()
+    n_rel = len(list(pasta_rel.glob('????-??-??_??-??-??_*.md')))
+    t.paragrafo(f'Cada execução também deixa uma cópia com data e hora em {caminho_curto(pasta_rel)} ({n_rel} guardadas; as {MAX_RELATORIOS} mais '
+                'recentes ficam, as antigas são apagadas sozinhas).', 2, 'apagado')
     if getattr(args, 'copiar', False) or getattr(args, 'salvar', None):
         rel_fim(ctx, type('A', (), {'comando': '', 'copiar': getattr(args, 'copiar', False), 'salvar': getattr(args, 'salvar', None)})())
         return 0
@@ -5525,7 +5586,7 @@ CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'n
 # cada perfil: nome, para que serve, e {pacote: [ids dos itens]} ("@seguro" = tudo o que o modo seguro marca).
 # Item que não existe neste PC (ou que a pessoa protegeu) é pulado; nada é aplicado sem a prévia e a confirmação.
 PERFIS = {
-    'jogo': ('Modo jogo', 'mais fluidez no jogo: Modo de Jogo, prioridades de CPU e rede, energia no máximo e sem apps em segundo plano. Não mexe no visual', {
+    'jogo': ('Jogos', 'mais fluidez ao jogar: Modo de Jogo, prioridades de CPU e rede, energia no máximo e sem apps em segundo plano. Não mexe no visual', {
         'jogos': ['modo-jogo', 'gamedvr', 'prioridade-jogos', 'mmcss', 'primeiro-plano', 'mouse', 'teclado', 'aderencia', 'rede-jogos'],
         'energia': ['desempenho', 'usb', 'throttling'],
         'cs2': ['gpu-cs2', 'janela-otim', 'video-cs2', 'cfg-cs2'],
@@ -5581,7 +5642,7 @@ PERFIL_NOTAS = {
 
 def mostra_perfil(t, chave, detalhado=True, recuo=6, desc=True):
     """Nome, para quem é, barras do que ele ataca, o que se perde e o risco."""
-    nome, desc_, selecao = PERFIS[chave]
+    nome, desc_, selecao = todos_perfis()[chave]
     foco = FOCO_PERFIL.get(chave, {})
     para, perde, risco = PERFIL_NOTAS.get(chave, ('', '', ''))
     n = sum(len(v) if isinstance(v, (list, tuple)) else 0 for v in selecao.values())
@@ -5599,8 +5660,69 @@ def mostra_perfil(t, chave, detalhado=True, recuo=6, desc=True):
             t.escreve(' ' * recuo + t.p(f'{e:<12}', 'apagado') + t.p(blocos, 'destaque' if v >= 4 else 'texto') + ' ' + t.p(EIXO_DESCR[e], 'apagado'))
     if perde:
         t.paragrafo('você perde: ' + perde, recuo, 'apagado')
+    cm = contagem_modos(chave)
+    if cm:
+        t.escreve(' ' * recuo + t.p('modo dos itens: ', 'apagado') + t.p(' · '.join(f'{v} {k}' for k, v in cm.items()), 'texto'))
     t.escreve(' ' * recuo + t.p('mexe em ', 'apagado') + t.p(f'cerca de {n + 6 * mais} itens' if mais else f'{n} itens', 'texto')
               + t.p(' · risco ', 'apagado') + t.p(risco, 'verde' if risco in ('baixo', 'mínimo') else 'amarelo'))
+
+
+# Um PC "completo" só para contar os itens de um perfil sem ler o PC de verdade (cartões, site e a lista de perfis).
+PC_MODELO = {'jogos': ['Steam'], 'gpus': ['NVIDIA', 'Intel'], 'so': {'win11': True}, 'pc': {'notebook': True},
+             'tem': {'nvidia': True, 'edge': True, 'chrome': True, 'office': True, 'onedrive': True}}
+
+
+def itens_do_perfil(chave, perfil=None):
+    """[(pacote, [itens])] do perfil, com o modo (nivel) de cada item. Sem perfil do PC, usa o PC_MODELO."""
+    class _Ctx:
+        pass
+    c = _Ctx()
+    c.perfil = perfil or PC_MODELO
+    out = []
+    for nome, ids in todos_perfis()[chave][2].items():
+        if nome not in PACOTES:
+            continue
+        its = [i for i in (PACOTES[nome].itens(c) or []) if i]
+        if isinstance(ids, str):
+            if ids.startswith('@') and ids[1:] in MODOS:
+                marca_por_modo(its, ids[1:])
+                its = [i for i in its if i.marcado]
+        else:
+            quer = {str(x) for x in ids}
+            its = [i for i in its if i.id in quer]
+        if its:
+            out.append((PACOTES[nome], its))
+    return out
+
+
+def contagem_modos(chave):
+    """{modo: quantos itens do perfil entram nele}"""
+    c = {m: 0 for m in MODOS}
+    c['só se marcar'] = 0
+    for _, its in itens_do_perfil(chave):
+        for i in its:
+            c[NOME_NIVEL.get(i.nivel, 'equilibrado') if i.nivel else 'só se marcar'] += 1
+    return {k: v for k, v in c.items() if v}
+
+
+def perfis_meus():
+    """Perfis que a pessoa salvou: ~/.katharos/perfis/NOME.json -> {chave: (nome, descrição, selecao)}."""
+    out = {}
+    try:
+        arqs = sorted(pasta('perfis').glob('*.json'))
+    except OSError:
+        return out
+    for arq in arqs:
+        d = le_perfil(arq)
+        if d and d['pacotes']:
+            chave = re.sub(r'[^a-z0-9-]', '', arq.stem.lower())[:24]
+            if chave and chave not in PERFIS:
+                out[chave] = (arq.stem[:40], 'perfil seu, salvo em ' + caminho_curto(arq), d['pacotes'])
+    return out
+
+
+def todos_perfis():
+    return {**PERFIS, **perfis_meus()}
 
 
 def selecao_do_perfil(ctx, selecao):
@@ -5625,8 +5747,76 @@ def selecao_do_perfil(ctx, selecao):
     return out
 
 
-def aplica_selecao(ctx, args, titulo, selecao):
-    """Mostra o que um perfil (ou uma configuração importada) mudaria, pede confirmação e aplica. Uma vez só."""
+def pacotes_para_escolher():
+    """[(nome, descrição)] dos comandos que são pacotes de itens, na ordem do menu."""
+    return [(c, d) for _, _, its in GRUPOS for c, d, f in its if f == 'pacote' and c in PACOTES]
+
+
+def personaliza_selecao(ctx, args, selecao):
+    """Deixa a pessoa ajustar item por item o que vai ser aplicado e juntar outros pacotes. Devolve a nova seleção
+    ({pacote: [ids]}) ou None se desistiu. Sem perfil nenhum, começa vazio: é o "montar o seu"."""
+    t = ctx.t
+    nova = {}
+    for nome, ids in selecao.items():
+        if nome not in PACOTES:
+            continue
+        its = [i for i in (PACOTES[nome].itens(ctx) or []) if i]
+        quer = {str(x) for x in ids} if not isinstance(ids, str) else {i.id for i in its if ids.startswith('@') and ids[1:] in MODOS
+                                                                         and (i.nivel and i.nivel <= NIVEL_MODO[ids[1:]])}
+        for i in its:
+            i.marcado = i.id in quer
+        r = escolhe_itens(ctx, its, config('modo'), args, titulo=PACOTES[nome].titulo, manter_marcas=True)
+        if r is None:
+            return None
+        if r:
+            nova[nome] = [i.id for i in r]
+    lista_pac = pacotes_para_escolher()
+    while True:
+        t.titulo('juntar mais itens' if nova else 'montar do zero')
+        for n, (c, d) in enumerate(lista_pac, 1):
+            marca = t.p('✓', 'verde') if c in nova else ' '
+            t.escreve(f'  {marca} {t.p(f"{n:>2}", "destaque", True)}  {t.p(f"{c:<14}", "texto", True)} {t.p(corta(d, max(10, t.largura - 26)), "sub")}')
+        if not t.interativo or args.sim:
+            break
+        r = t.pergunta('número ou nome do pacote para escolher itens (Enter = pronto, 0 = cancelar)').strip().lower()
+        if r in ('', 'ok', 'pronto'):
+            break
+        if r in ('0', 'q', 'v'):
+            return None
+        nome = lista_pac[int(r) - 1][0] if r.isdigit() and 0 < int(r) <= len(lista_pac) else (r if r in dict(lista_pac) else None)
+        if not nome:
+            t.aviso(f'"{corta(r, 20)}" não é um pacote da lista.')
+            continue
+        its = [i for i in (PACOTES[nome].itens(ctx) or []) if i]
+        ja = set(nova.get(nome, []))
+        for i in its:
+            i.marcado = i.id in ja
+        r2 = escolhe_itens(ctx, its, config('modo'), args, titulo=PACOTES[nome].titulo, manter_marcas=True)
+        if r2 is None:
+            continue
+        if r2:
+            nova[nome] = [i.id for i in r2]
+        else:
+            nova.pop(nome, None)
+    return nova
+
+
+def salva_perfil_proprio(ctx, args, selecao):
+    t = ctx.t
+    if not t.interativo or args.sim or args.teste:
+        return
+    nome = t.pergunta('Salvar esta escolha como perfil seu? Dê um nome (Enter = não salvar)').strip()
+    nome = re.sub(r'[^\w .-]', '', nome, flags=re.U).strip()[:40]
+    if not nome:
+        return
+    d = {'katharos': VERSAO, 'tipo': 'perfil', 'criado': agora_iso(), 'pacotes': {n: list(v) for n, v in selecao.items() if isinstance(v, list)}}
+    grava_json(pasta('perfis') / (nome + '.json'), d)
+    t.ok(f'Perfil "{nome}" salvo. Para usar de novo: katharos perfil (ele aparece na lista) ou katharos perfil aplicar ' +
+         re.sub(r'[^a-z0-9-]', '', nome.lower()))
+
+
+def aplica_selecao(ctx, args, titulo, selecao, personalizavel=True):
+    """Mostra o que um perfil (ou uma configuração importada) mudaria, deixa personalizar, pede confirmação e aplica."""
     t = ctx.t
     if not WINDOWS:
         t.erro('O katharos só funciona no Windows.')
@@ -5636,16 +5826,39 @@ def aplica_selecao(ctx, args, titulo, selecao):
     perfil_pc(ctx)
     if not confere_conta(ctx) and not args.teste:
         return 1
-    alvo = selecao_do_perfil(ctx, selecao)
+    while True:
+        alvo = selecao_do_perfil(ctx, selecao) if selecao else []
+        if not alvo and not (personalizavel and t.interativo and not args.sim):
+            t.ok('Nada a aplicar neste PC: tudo já está assim, não existe aqui, ou está protegido.')
+            return 0
+        if alvo:
+            t.titulo(f'{titulo}: o que será aplicado')
+            total = 0
+            for pac, its in alvo:
+                total += len(its)
+                t.escreve('  ' + t.p(pac.titulo, 'texto', True) + '  ' + t.p(pl(len(its), 'item', 'itens'), 'apagado'))
+                resumo_antes(t, pac, its, titulo=False, recuo=4)
+        else:
+            t.nota('  Nada escolhido ainda.')
+        if not (personalizavel and t.interativo and not args.sim and not args.teste):
+            break
+        r = t.pergunta('p = personalizar (tirar, pôr ou juntar itens de outros pacotes) · Enter = seguir · 0 = cancelar').strip().lower()
+        if r in ('0', 'q'):
+            t.nota('nada foi alterado.')
+            return 0
+        if r in ('p', 'personalizar'):
+            nova = personaliza_selecao(ctx, args, selecao)
+            if nova is not None:
+                selecao = nova
+                titulo = 'sua escolha'
+            continue
+        if not alvo:
+            t.nota('nada foi alterado.')
+            return 0
+        break
     if not alvo:
-        t.ok('Nada a aplicar neste PC: tudo já está assim, não existe aqui, ou está protegido.')
+        t.ok('Nada a aplicar neste PC.')
         return 0
-    t.titulo(f'{titulo}: o que será aplicado')
-    total = 0
-    for pac, its in alvo:
-        total += len(its)
-        t.escreve('  ' + t.p(pac.titulo, 'texto', True) + '  ' + t.p(pl(len(its), 'item', 'itens'), 'apagado'))
-        resumo_antes(t, pac, its, titulo=False, recuo=4)
     t.nota('  Quase tudo volta com o "desfazer"; programas e apps removidos não voltam. Para ver item por item, use as telas de cada pacote.')
     if pc_gerenciado(ctx.perfil):
         t.aviso('Este PC parece ser gerenciado por empresa ou escola: a organização pode desfazer estas mudanças.')
@@ -5671,6 +5884,8 @@ def aplica_selecao(ctx, args, titulo, selecao):
               ('erros', t.p(str(erros), 'vermelho' if erros else 'apagado')), ('desfazer', 'katharos desfazer tudo')])
     t.fecha_caixa()
     manter_ou_desfazer(ctx, args, [p.nome for p, _ in alvo if p.reversivel])
+    if titulo == 'sua escolha':
+        salva_perfil_proprio(ctx, args, {p.nome: [i.id for i in its] for p, its in alvo})
     return 1 if erros else 0
 
 
@@ -5945,38 +6160,46 @@ def ferramenta_perfil(ctx, args):
                 for k, v in d['config'].items():
                     salva_config(k, v)
         return aplica_selecao(ctx, args, 'perfil importado', d['pacotes']) if d['pacotes'] else 0
-    if acao == 'aplicar' or (acao and acao in PERFIS):
+    if acao == 'montar':
+        t.aba('monte a sua otimização do zero, escolhendo pacotes e itens')
+        t.paragrafo('Sem perfil: você escolhe os pacotes e marca item por item. Antes de aplicar aparece a lista e a confirmação, '
+                    'e no fim dá para salvar como perfil seu.', 2, 'sub')
+        return aplica_selecao(ctx, args, 'sua escolha', {})
+    todos = todos_perfis()
+    if acao == 'aplicar' or (acao and acao in todos):
         nome = alvo if acao == 'aplicar' else acao
-        if nome not in PERFIS:
-            t.erro('Perfil "' + corta(str(nome), 20) + '" não existe. Opções: ' + ', '.join(PERFIS))
+        if nome not in todos:
+            t.erro('Perfil "' + corta(str(nome), 20) + '" não existe. Opções: ' + ', '.join(todos) + ' (ou "montar")')
             return 1
-        titulo, desc, selecao = PERFIS[nome]
+        titulo, desc, selecao = todos[nome]
         t.aba(f'{titulo}: {desc}')
         mostra_perfil(t, nome, recuo=2, desc=False)
         t.escreve()
         return aplica_selecao(ctx, args, titulo, selecao)
     t.aba('perfis prontos, atalhos na área de trabalho, exportar e importar')
-    t.paragrafo('Um perfil junta itens de vários pacotes para um uso. Você vê a prévia e confirma antes de qualquer mudança, '
-                'e tudo volta com o "desfazer".', 2, 'sub')
+    t.paragrafo('Um perfil junta itens de vários comandos para um uso. Cada item tem o seu modo (seguro, equilibrado ou extremo), '
+                'e o perfil escolhe quais itens entram. Antes de aplicar você vê a lista, pode personalizar item por item e confirma.', 2, 'sub')
     t.titulo('perfis')
-    chaves = list(PERFIS)
+    todos = todos_perfis()
+    chaves = list(todos)
     for i, k in enumerate(chaves, 1):
-        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(PERFIS[k][0], "texto", True)}')
+        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}')
         mostra_perfil(t, k)
         t.escreve()
     t.titulo('outras ações')
+    t.item('m', 'destaque', 'montar', t.p('sem perfil: você escolhe os pacotes e os itens, e pode salvar como seu', 'apagado'))
     t.item('a', 'destaque', 'atalhos', t.p('pasta Katharos na área de trabalho, com ícone', 'apagado'))
     t.item('e', 'destaque', 'exportar', t.p('salva o que está aplicado para repetir em outro PC', 'apagado'))
     t.item('i', 'destaque', 'importar', t.p('aplica um arquivo exportado (ou o relatório único)', 'apagado'))
     if not t.interativo or args.sim:
         return 0
     t.escreve()
-    r = t.pergunta('número do perfil, a, e, i (Enter = voltar)').strip().lower()
+    r = t.pergunta('número do perfil, m, a, e, i (Enter = voltar)').strip().lower()
     if r.isdigit() and 0 < int(r) <= len(chaves):
         args.acao, args.alvo = 'aplicar', chaves[int(r) - 1]
         return ferramenta_perfil(ctx, args)
-    if r in ('a', 'e', 'i'):
-        args.acao = {'a': 'atalhos', 'e': 'exportar', 'i': 'importar'}[r]
+    if r in ('m', 'a', 'e', 'i'):
+        args.acao = {'m': 'montar', 'a': 'atalhos', 'e': 'exportar', 'i': 'importar'}[r]
         if r == 'i':
             args.alvo = t.pergunta('arquivo (.json ou o relatório .md)').strip().strip('"')
         return ferramenta_perfil(ctx, args)
@@ -7633,7 +7856,7 @@ def monta_parser():
     d.add_argument('pacotes', nargs='*', help='ex.: servicos privacidade, ou tudo')
     sub.add_parser('estado', parents=[depois], help='o que já foi aplicado')
     pe = sub.add_parser('perfil', parents=[depois], help='perfis prontos, atalhos na área de trabalho, exportar e importar')
-    pe.add_argument('acao', nargs='?', help='aplicar, atalhos, exportar, importar (ou o nome de um perfil: ' + ', '.join(PERFIS) + ')')
+    pe.add_argument('acao', nargs='?', help='montar (do zero), aplicar, atalhos, exportar, importar (ou o nome de um perfil: ' + ', '.join(PERFIS) + ')')
     pe.add_argument('alvo', nargs='?', help='nome do perfil (aplicar) ou arquivo (exportar, importar)')
     pe.add_argument('--remover', action='store_true', help='com "atalhos": tira a pasta Katharos da área de trabalho')
     sub.add_parser('seguranca', parents=[depois], help='auditoria de segurança (só lê)')
@@ -7668,35 +7891,52 @@ def _defaults(args):
     return args
 
 
-def primeira_vez(ctx):
-    """Na primeira abertura, oferece o atalho com ícone na área de trabalho: depois disso a pasta baixada pode ir embora."""
+def primeira_vez(ctx, args=None):
+    """Na primeira abertura: oferece o atalho com ícone na área de trabalho e pergunta para que o PC é usado."""
     t = ctx.t
-    if not WINDOWS or not t.interativo or estado().get('atalhos_oferecido') or estado().get('atalhos_criados'):
-        return
-    marca_estado('atalhos_oferecido', agora_iso())
+    if not WINDOWS or not t.interativo or estado().get('primeira_vez'):
+        return None
+    marca_estado('primeira_vez', agora_iso())
     t.limpa()
     t.logo('KATHAROS')
-    t.titulo('primeira vez')
-    t.paragrafo('Posso criar uma pasta "Katharos" na sua área de trabalho, com o ícone, um atalho para abrir o menu e outro '
-                'para desfazer tudo. O programa é copiado para a sua pasta de usuário, então a pasta que você baixou pode '
-                'ser apagada depois.', 2, 'sub')
-    t.paragrafo('Mais atalhos (um por perfil) ficam em "perfil" > atalhos.', 2, 'apagado')
-    if t.confirma('Criar a pasta Katharos na área de trabalho?'):
-        s = cria_atalhos(ctx, ['menu', 'normal'])
-        if s.ok:
-            marca_estado('atalhos_criados', agora_iso())
-        t.pergunta('Enter para abrir o menu')
+    if not estado().get('atalhos_criados'):
+        t.titulo('atalho na área de trabalho')
+        t.paragrafo('Posso criar uma pasta "Katharos" na sua área de trabalho, com o ícone, um atalho para abrir o menu e outro '
+                    'para desfazer tudo. O programa é copiado para a sua pasta de usuário, então a pasta que você baixou pode '
+                    'ser apagada depois.', 2, 'sub')
+        if t.confirma('Criar a pasta Katharos na área de trabalho?'):
+            s = cria_atalhos(ctx, ['menu', 'normal'])
+            if s.ok:
+                marca_estado('atalhos_criados', agora_iso())
+        t.escreve()
+    t.titulo('para que você usa este PC?')
+    t.paragrafo('Um perfil escolhe os ajustes para esse uso. Antes de aplicar você vê a lista, pode tirar ou pôr itens e confirma.', 2, 'sub')
+    todos = todos_perfis()
+    chaves = list(todos)
+    for i, k in enumerate(chaves, 1):
+        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}  {t.p(corta(todos[k][1], max(10, t.largura - 8 - len(todos[k][0]))), "apagado")}')
+    t.escreve(f'  {t.p(" m", "destaque", True)}  {t.p("montar o meu", "texto", True)}  {t.p("sem perfil: escolho os pacotes e os itens", "apagado")}')
+    r = t.pergunta('número, m, ou Enter para só abrir o menu').strip().lower()
+    if r == 'm':
+        return ('montar', None)
+    if r.isdigit() and 0 < int(r) <= len(chaves):
+        return ('aplicar', chaves[int(r) - 1])
+    return None
 
 
 def menu(ctx, parser, args):
     t = ctx.t
-    primeira_vez(ctx)
     aviso = ''
+    inicio = primeira_vez(ctx)
+    if inicio:
+        args.comando, args.acao, args.alvo = 'perfil', inicio[0], inicio[1]
+        ferramenta_perfil(ctx, args)
+        t.pergunta('Enter para abrir o menu')
     usados = estado().get('usado', {})
     while True:
         t.limpa()
         t.logo('KATHAROS')
-        extra = f'modo {config("modo")}' + (' · sem administrador' if WINDOWS and not eh_admin() else '')
+        extra = ' · '.join(x for x in ((f'modo {config("modo")}' if config('modo') != PADROES['modo'] else ''), ('sem administrador' if WINDOWS and not eh_admin() else '')) if x)
         t.cabecalho('início', extra, app=APP)
         if not WINDOWS:
             t.aviso('Este computador não é Windows: dá para ver o menu, mas os comandos só funcionam no Windows.')
@@ -7710,7 +7950,7 @@ def menu(ctx, parser, args):
             t.info('sugeridos pelo raio-x: ' + ' · '.join(ctx.proximos))
             t.escreve()
         if usados.get('raiox') and not estado().get('atalhos_criados'):
-            t.nota('dica: "perfil" > atalhos cria a pasta Katharos na área de trabalho, com ícone, um clique por perfil', 2)
+            t.nota('dica: "perfil" aplica ajustes por uso (jogo, bateria...) ou deixa você montar o seu; "perfil" > atalhos põe um clique por perfil na área de trabalho', 2)
         t.nota('digite o número ou o nome · 0 sai · Ctrl+C cancela qualquer tela', 2)
         t.escreve()
         escolha = t.pergunta('o que fazer').strip().lower()
