@@ -1618,5 +1618,26 @@ class TestDnsTeste(unittest.TestCase):
         self.assertTrue(any(i.id == 'dns-teste' and i.nivel == 1 for i in itens))
 
 
+class TestAvisoDeUso(unittest.TestCase):
+    def test_desfazer_e_leitura_nunca_pedem_aceite(self):
+        for c in ('desfazer', 'socorro', 'raiox', 'aviso'):
+            self.assertIn(c, k.SEM_ACEITE)
+        self.assertNotIn('turbo', k.SEM_ACEITE)
+
+    def test_aceite_so_vale_na_versao_do_texto(self):
+        with mock.patch.object(k, 'estado', return_value={'aviso_aceito': {'versao': k.VERSAO_AVISO}}):
+            self.assertTrue(k.aviso_aceito())
+        with mock.patch.object(k, 'estado', return_value={}):
+            self.assertFalse(k.aviso_aceito())
+
+    def test_sem_terminal_e_sem_aceite_nao_aplica(self):
+        with mock.patch.object(k, 'estado', return_value={}), mock.patch.object(k, 'AVISOS_INICIO', []):
+            self.assertEqual(k.main(['turbo']), 1)
+
+    def test_aviso_e_licenca_existem(self):
+        self.assertIn('AS IS', (RAIZ / 'LICENSE').read_text(encoding='utf-8'))
+        self.assertIn('Antes de usar', (RAIZ / 'README.md').read_text(encoding='utf-8'))
+
+
 if __name__ == '__main__':
     unittest.main()

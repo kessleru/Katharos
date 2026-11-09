@@ -10783,6 +10783,72 @@ def abre_por_clique(cru):
         t.nota('  Cancelado. Nada foi feito.', 2)
         return 0
     return main([cmd])
+# ──────────────────────────────────────────────────────────────────────────────
+# Aviso de uso: o que a pessoa precisa saber antes de mudar o Windows, dito em poucas linhas.
+# Aparece uma vez (com aceite digitado) antes de qualquer comando que muda o PC, e a qualquer hora em "aviso".
+# ──────────────────────────────────────────────────────────────────────────────
+
+VERSAO_AVISO = 1   # sobe quando o texto muda de um jeito que pede um novo aceite
+
+AVISO_PONTOS = [
+    ('O que ele faz',
+     'O Katharos muda configurações do Windows: serviços, tarefas, registro, rede, energia e, se você marcar, remove programas. '
+     'É para quem quer escolher o que muda. Cada item diz o que faz (? e o número) e mostra o código (v e o número).'),
+    ('Como voltar',
+     'Tudo que ele muda guarda o valor anterior e volta com "desfazer". A exceção são os itens marcados "sem volta" '
+     '(remover programas e apps, apagar arquivos): esses não voltam. Antes de mexer a fundo, crie um ponto de restauração '
+     '("restaurar") e salve o que for importante.'),
+    ('Onde não usar',
+     'Não use em computador de trabalho, de escola ou de outra pessoa sem a autorização de quem cuida dele. '
+     'Programas de empresa, VPN e antivírus corporativo podem parar de funcionar com ajustes de desempenho ou privacidade.'),
+    ('Sem garantia',
+     'É um programa gratuito, entregue "como está", sem garantia de funcionar no seu PC, de dar ganho de desempenho ou de '
+     'ser compatível com tudo. Você usa por sua conta e risco: o autor não responde por perda de dados, falhas ou outros '
+     'danos que venham do uso. Isto não tira os direitos que a lei garante a você.'),
+    ('Jogos',
+     'Itens de jogo podem conflitar com anti-cheat: se o seu jogo usa, leia o aviso do item antes. '
+     'O Katharos não tem ligação com a Microsoft, a Steam nem com nenhum jogo ou fabricante.'),
+    ('Na dúvida',
+     'Comece pelo "raiox" (só lê), use o modo seguro e rode com --teste: ele mostra o que faria sem mudar nada.'),
+]
+
+# Comandos que só leem ou que protegem (desfazer nunca pode ficar atrás de um aviso): não pedem o aceite.
+SEM_ACEITE = {'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
+              'benchmark', 'verificar', 'config', 'desfazer', 'socorro', 'retomar', 'restaurar', 'amostrar', 'manutencao'}
+
+
+def aviso_aceito():
+    a = estado().get('aviso_aceito')
+    return isinstance(a, dict) and a.get('versao', 0) >= VERSAO_AVISO
+
+
+def mostra_aviso(t):
+    """O texto do aviso, na tela."""
+    t.titulo('antes de usar')
+    for titulo, texto in AVISO_PONTOS:
+        t.escreve('  ' + t.p(titulo, 'destaque', True))
+        t.paragrafo(texto, 4, 'sub')
+        t.escreve()
+
+
+def pede_aceite(ctx):
+    """Mostra o aviso e só segue se a pessoa digitar "entendi". Devolve True se pode seguir."""
+    t = ctx.t
+    t.limpa()
+    t.logo('KATHAROS')
+    mostra_aviso(t)
+    if t.confirma('Li o aviso e quero continuar.', palavra='entendi'):
+        marca_estado('aviso_aceito', {'versao': VERSAO_AVISO, 'quando': agora_iso()})
+        return True
+    t.nota('Sem o aceite o Katharos não muda nada. Você pode ler de novo com "katharos aviso".', 2)
+    return False
+
+
+def ferramenta_aviso(ctx, args):
+    t = ctx.t
+    mostra_aviso(t)
+    t.nota('  A licença e o aviso completo estão no arquivo LICENSE e na seção "Antes de usar" do README.', 2)
+    return 0
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -10922,6 +10988,7 @@ GRUPOS = [
     ('preferências', 'como o Katharos se comporta neste PC', [
         ('atalhos', 'pasta Katharos na área de trabalho, com ícone', 'ferramenta_atalhos'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
+        ('aviso', 'leia antes de usar: riscos e responsabilidade', 'ferramenta_aviso'),
         ('ajuda', 'os passos mais comuns, em poucas linhas', 'ferramenta_ajuda'),
     ]),
 ]
@@ -11041,6 +11108,7 @@ def monta_parser():
     pn.add_argument('--ativar-cliques', action='store_true', help='liga os botões Corrigir/Abrir do painel (registra katharos:// só para você)')
     pn.add_argument('--desativar-cliques', action='store_true', help='remove o link katharos:// do registro')
     sub.add_parser('ajuda', parents=[depois], help='os passos mais comuns')
+    sub.add_parser('aviso', parents=[depois], help='o aviso de uso: riscos e responsabilidade')
     rt = sub.add_parser('retomar', parents=[depois], help='termina o que ficou pela metade se o PC travou no meio de uma aplicação')
     rt.add_argument('--descartar', action='store_true', help='esquece a anotação do que ficou pela metade')
     sub.add_parser('socorro', parents=[depois], help='desfaz tudo o que o Katharos mudou e explica o ponto de restauração')
@@ -11306,6 +11374,14 @@ def main(argv=None):
         t.aviso(msg)
     AVISOS_INICIO.clear()
     globals()['AVISO_VIVO'] = t.aviso
+    precisa = (args.comando or 'menu') not in SEM_ACEITE and not args.teste and not getattr(args, 'codigo', False)
+    if precisa and not aviso_aceito():
+        if t.interativo:
+            if not pede_aceite(ctx):
+                return 0
+        elif not args.sim:   # sem terminal, quem usa --sim já está escolhendo seguir sem perguntar
+            t.aviso('Leia o aviso de uso antes (katharos aviso) e aceite no menu, ou use --sim para seguir sem perguntar.')
+            return 1
     try:
         pend = pendentes_andamento() if args.comando != 'retomar' else None
         if pend:

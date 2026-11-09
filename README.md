@@ -8,6 +8,19 @@ Mesmo visual e mesma ideia do [Ferramentas](https://github.com/kessleru/Ferramen
 
 Site: **[kessleru.github.io/Katharos](https://kessleru.github.io/Katharos)**
 
+## Antes de usar
+
+O Katharos muda configurações do Windows. Leia isto antes de rodar (o programa mostra o mesmo aviso na primeira vez e pede que você digite `entendi`; depois, `katharos aviso`).
+
+- **O que ele faz.** O Katharos muda configurações do Windows: serviços, tarefas, registro, rede, energia e, se você marcar, remove programas. É para quem quer escolher o que muda. Cada item diz o que faz (? e o número) e mostra o código (v e o número).
+- **Como voltar.** Tudo que ele muda guarda o valor anterior e volta com "desfazer". A exceção são os itens marcados "sem volta" (remover programas e apps, apagar arquivos): esses não voltam. Antes de mexer a fundo, crie um ponto de restauração ("restaurar") e salve o que for importante.
+- **Onde não usar.** Não use em computador de trabalho, de escola ou de outra pessoa sem a autorização de quem cuida dele. Programas de empresa, VPN e antivírus corporativo podem parar de funcionar com ajustes de desempenho ou privacidade.
+- **Sem garantia.** É um programa gratuito, entregue "como está", sem garantia de funcionar no seu PC, de dar ganho de desempenho ou de ser compatível com tudo. Você usa por sua conta e risco: o autor não responde por perda de dados, falhas ou outros danos que venham do uso. Isto não tira os direitos que a lei garante a você.
+- **Jogos.** Itens de jogo podem conflitar com anti-cheat: se o seu jogo usa, leia o aviso do item antes. O Katharos não tem ligação com a Microsoft, a Steam nem com nenhum jogo ou fabricante.
+- **Na dúvida.** Comece pelo "raiox" (só lê), use o modo seguro e rode com --teste: ele mostra o que faria sem mudar nada.
+
+O programa é distribuído sob a licença MIT (arquivo `LICENSE`), que também diz que ele é entregue "como está", sem garantia de nenhum tipo.
+
 ## Rodando
 
 [Baixe o ZIP](https://github.com/kessleru/Katharos/archive/refs/heads/main.zip) e extraia. Ele traz só duas coisas: o **`KATHAROS.bat`**, que é onde você clica, e a pasta `programa`, que ele usa. Na primeira vez, o Katharos oferece criar uma pasta **Katharos** na área de trabalho, com ícone. Deixe a pasta baixada onde está: é nela que ficam os relatórios (`relatorios/`).
