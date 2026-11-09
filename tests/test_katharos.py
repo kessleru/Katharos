@@ -364,6 +364,13 @@ class TestBenchmark(unittest.TestCase):
         self.assertIn('medida instável', txt)
         self.assertIn('4.2x', txt)
 
+    def test_todos_os_nucleos_so_com_multi(self):
+        import tempfile
+        class T:
+            def __getattr__(self, n): return lambda *a, **kw: None
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIn('cpu_multi', k.roda_bench(T(), rapido=True, leve=True, pasta_tmp=d, multi=True))
+
     def test_cpu_multi_roda_e_devolve_taxa_positiva(self):
         self.assertGreater(k.bench_cpu_multi(2), 0)
 
@@ -375,7 +382,7 @@ class TestBenchmark(unittest.TestCase):
                 return lambda *a, **kw: ''
         k.Progresso = type('P', (), {'__init__': lambda s, *a, **kw: None, '__enter__': lambda s: s, '__exit__': lambda s, *a: False})
         r = k.roda_bench(T(), rapido=True, leve=True, pasta_tmp=d)
-        self.assertEqual(set(r), {'cpu', 'cpu_multi', 'ram', 'disco_escrita', 'disco_4k'})
+        self.assertEqual(set(r), {'cpu', 'ram', 'disco_escrita', 'disco_4k'}, 'o teste padrão é leve: todos os núcleos só com --completo')
         self.assertTrue(all(v['mediana'] > 0 for v in r.values()))
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
 

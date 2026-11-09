@@ -8607,7 +8607,7 @@ def bench_disco_4k(arq, ops=200):
     return ops / (time.perf_counter() - t0)
 
 
-def roda_bench(t, rapido=True, leve=False, pasta_tmp=None):
+def roda_bench(t, rapido=True, leve=False, pasta_tmp=None, multi=False):
     """Roda os testes e devolve {chave: estatística}. O arquivo temporário é apagado em qualquer caso."""
     reps = REPETICOES['rapido' if rapido else 'completo']
     mb = 16 if leve else 64
@@ -8617,10 +8617,11 @@ def roda_bench(t, rapido=True, leve=False, pasta_tmp=None):
     out = {}
     try:
         etapas = [('cpu', lambda: bench_cpu(16 if leve else 48)),
-                  ('cpu_multi', lambda: bench_cpu_multi(8 if leve else 24)),
                   ('ram', lambda: bench_ram(mb)),
                   ('disco_escrita', lambda: bench_disco_escrita(arq, mb)),
                   ('disco_4k', lambda: bench_disco_4k(arq, 100 if leve else 200))]
+        if multi:   # só com --completo: todos os núcleos a 100% por alguns segundos é o mais perto de um teste de estresse que o programa chega
+            etapas.insert(1, ('cpu_multi', lambda: bench_cpu_multi(8 if leve else 24)))
         for chave, fn in etapas:
             rotulo = next(l[1] for l in LINHAS_BENCH if l[0] == chave)
             with Progresso(t, None, rotulo) as pr:
@@ -8692,7 +8693,8 @@ def ferramenta_benchmark(ctx, args):
     t.aba('mede disco, CPU e RAM com repetição e diz se a diferença é real')
     t.paragrafo('Meça com o PC parado e sem programas abertos, antes e depois de aplicar algo. O programa repete cada teste, '
                 'descarta a primeira rodada e só diz "melhorou" ou "piorou" quando a diferença é maior que a variação das próprias '
-                'medidas. Os arquivos de teste ficam em ~/.katharos/bench e são apagados no fim. Nada sai do PC.', 2, 'sub')
+                'medidas. É um teste leve (cerca de 1 minuto), não um teste de estresse: não leva a CPU ao limite nem esquenta o PC. '
+                'Os arquivos de teste ficam em ~/.katharos/bench e são apagados no fim. Nada sai do PC.', 2, 'sub')
     if args.teste:
         t.item('○', 'azul', f'{REPETICOES["rapido" if rapido else "completo"]} rodadas de 5 testes, até 64 MB no disco', recuo=2, cor_nome='sub')
         return 0
@@ -8710,7 +8712,7 @@ def ferramenta_benchmark(ctx, args):
         leve = True
         t.nota(f'  Modo leve do teste ({apertado}): arquivos menores e uma etapa de cada vez.')
     t.escreve()
-    atual = roda_bench(t, rapido=rapido, leve=leve)
+    atual = roda_bench(t, rapido=rapido, leve=leve, multi=not rapido)
     salvos = bench_salvos()
     antes = le_json(salvos[-1], {}).get('medidas') if salvos else None
     quando = salvos[-1].stem[:16].replace('_', ' ') if salvos else ''
@@ -10938,7 +10940,7 @@ def monta_parser():
     r.add_argument('--queixas', metavar='LISTA', help='lento,boot,disco,calor,bateria,jogos,privacidade,tudo')
     sub.add_parser('medir', parents=[depois], help='medidas agora, comparadas com a primeira')
     pb = sub.add_parser('benchmark', parents=[depois], help='disco, CPU e RAM com repetição, comparado com o anterior')
-    pb.add_argument('--completo', action='store_true', help='mais rodadas (leva alguns minutos); o padrão é o rápido, cerca de 1 minuto')
+    pb.add_argument('--completo', action='store_true', help='mais rodadas e o teste de todos os núcleos (leva alguns minutos); o padrão é o leve, cerca de 1 minuto, sem estresse')
     td = sub.add_parser('tendencia', parents=[depois], help='mostra se algo está piorando com o tempo, pelas medidas do segundo plano')
     td.add_argument('--agora', action='store_true', help='grava uma medida agora antes de mostrar')
     sd = sub.add_parser('saude', parents=[depois], help='erros do Windows, drivers e o que o sistema precisa ajustar (só lê)')
