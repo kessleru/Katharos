@@ -90,7 +90,8 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | | `socorro` | O PC ficou estranho: desfaz tudo o que o Katharos mudou e explica o ponto de restauração do Windows |
 | Conhecer | `tendencia` | Mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo (usa as medidas do segundo plano) |
 | | `conselheiro` | O motor de inteligência: propõe mudanças com o número que as justifica, a confiança e o comando; não aplica nada sozinho e mede o resultado depois |
-| | `painel` | Gera um painel HTML com gráficos das medidas, dos benchmarks e das datas de cada pacote; sem internet e sem scripts |
+| | `saude` | Lê os erros do Windows (Visualizador de Eventos, 14 dias), confere drivers e o estado do sistema e explica cada problema e o que fazer; só leitura |
+| | `painel` | Gera um painel HTML com gráficos das medidas, dos benchmarks, das datas de cada pacote e da saúde do Windows; sem internet e sem scripts |
 | | `retomar` | Se o PC travou ou a janela fechou no meio de uma aplicação, termina só o que faltou (`--descartar` esquece a anotação) |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 

@@ -69,3 +69,8 @@ jobs:
       - name: ida e volta de arquivo de jogo (Unreal Engine)
         shell: pwsh
         run: ./tests/ci_unreal.ps1
+      - name: saúde do Windows (só leitura) e painel
+        run: |
+          python programa/katharos.py saude --sem-cor
+          python programa/katharos.py painel --nao-abrir --sem-cor
+          python -c "import pathlib; p=pathlib.Path.home()/'.katharos'/'painel.html'; h=p.read_text(encoding='utf-8'); assert 'Saúde do Windows' in h, 'painel sem a seção de saúde'; print('painel ok', len(h))"

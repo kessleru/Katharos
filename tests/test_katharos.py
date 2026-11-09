@@ -483,6 +483,54 @@ class TestPainel(unittest.TestCase):
         am = [{'_dt': base + timedelta(hours=12 * i), 'livre_c': 80 - i, 'ram_usada': 6 + i * 0.1, 'boot_s': 30 + i, 'cpu': 3.0, 'inicializacao': 9, 'processos': 150} for i in range(14)]
         return am, base
 
+    def _saude(self):
+        grupos = [{'provedor': 'Microsoft-Windows-Kernel-Power', 'id': 41, 'arg': '0', 'n': 2, 'dias': 2, 'primeiro': '2026-11-01T10:00:00', 'ultimo': '2026-11-08T10:00:00', 'msg': ''},
+                  {'provedor': 'Misterio<script>', 'id': 7, 'arg': '', 'n': 3, 'dias': 1, 'primeiro': '2026-11-01T10:00:00', 'ultimo': '2026-11-02T10:00:00', 'msg': '<b>x</b>'}]
+        dados = {'saude_grupos': grupos, 'saude_total': {'eventos': 5}, 'saude_por_dia': [{'dia': '2026-11-07', 'n': 1}, {'dia': '2026-11-08', 'n': 4}],
+                 'saude_drivers': [{'nome': 'GPU <i>', 'classe': 'DISPLAY', 'fab': 'X', 'versao': '1', 'data': '2024-01-01T00:00:00', 'assinado': True}],
+                 'saude_windows': {'reinicio_pendente': True}}
+        return {'quando': '2026-11-09T08:00:00', 'analise': k.analisa_saude(dados, __import__('datetime').datetime(2026, 11, 9, 12))}
+
+    def test_painel_mostra_saude_do_windows_escapada_e_sem_scripts(self):
+        h = k.monta_painel([], [], [], [], 'PC', '1', saude=self._saude())
+        self.assertIn('Saúde do Windows', h)
+        self.assertIn('O PC desligou sem avisar', h)
+        self.assertIn('O que fazer:', h)
+        self.assertIn('Drivers instalados', h)
+        self.assertNotIn('<script', h)
+        self.assertNotIn('Misterio<script>', h)
+        self.assertNotIn('GPU <i>', h)
+        self.assertNotIn('https://', h)
+
+    def test_painel_sem_saude_nao_tem_a_secao(self):
+        self.assertNotIn('Saúde do Windows', k.monta_painel([], [], [], [], 'PC', '1'))
+
+    def test_painel_saude_sem_problemas_diz_que_esta_tudo_certo(self):
+        sa = {'quando': '2026-11-09T08:00:00', 'analise': k.analisa_saude({'saude_total': {'eventos': 0}, 'saude_windows': {'uptime_dias': 1, 'livre_pct': 50}}, __import__('datetime').datetime(2026, 11, 9))}
+        self.assertIn('Nenhum problema encontrado', k.monta_painel([], [], [], [], 'PC', '1', saude=sa))
+
+    def test_conselheiro_propoe_a_partir_da_saude(self):
+        ev = {'saude': self._saude()['analise'], 'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {},
+              'fundo_ligado': True, 'agora': __import__('datetime').datetime(2026, 11, 9), 'perfil': {}}
+        ids = [x['id'] for x in k.gera_sugestoes(ev) if x['id'].startswith('saude:')]
+        self.assertTrue(any('video-antigo' in i for i in ids) or any('reinicio' in i for i in ids) or ids, ids)
+        for x in k.gera_sugestoes(ev):
+            self.assertIn(x['comando'], k.COMANDOS)
+
+    def test_aviso_de_saude_no_fundo_nao_alarma_no_primeiro_retrato_e_respeita_o_intervalo(self):
+        import tempfile, pathlib
+        from unittest import mock
+        atual = self._saude()['analise']
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', pathlib.Path(d)), mock.patch.object(k, 'coleta_saude', return_value=atual):
+            e = {}
+            self.assertEqual(k.avisa_saude(None, e), [])          # sem retrato anterior
+            self.assertIn('saude_ultima', e)
+            self.assertEqual(k.avisa_saude(None, e), [])          # menos de 20 h: nem coleta
+            e2 = {}
+            k.grava_json(k.saude_arq(), {'quando': '2026-11-01T00:00:00', 'analise': {'problemas': []}})
+            msgs = k.avisa_saude(None, e2)
+            self.assertTrue(msgs and 'katharos saude' in msgs[0], msgs)
+
     def test_painel_e_autocontido_e_tem_graficos(self):
         am, base = self._dados()
         h = k.monta_painel(am, [], [(base + __import__('datetime').timedelta(days=2), 'inicializacao')], k.analisa_tendencia(am), 'PC', '1.4.0')
@@ -521,6 +569,113 @@ class TestPainel(unittest.TestCase):
         self.assertTrue(k.sparkline_txt([1, 5, 9], ascii_=True).isascii())
         self.assertEqual(k.sparkline_txt([]), '')
         self.assertLessEqual(len(k.sparkline_txt(list(range(100)))), 24)
+
+
+class TestSaude(unittest.TestCase):
+    AGORA = __import__('datetime').datetime(2026, 11, 9, 12)
+
+    def g(self, provedor, id_, n=1, dias=1, arg='', ultimo='2026-11-08T10:00:00', msg=''):
+        return {'provedor': provedor, 'id': id_, 'arg': arg, 'n': n, 'dias': dias, 'primeiro': '2026-11-01T10:00:00', 'ultimo': ultimo, 'msg': msg}
+
+    def test_desligamento_inesperado_sem_bugcheck(self):
+        p = k.explica_grupo(self.g('Microsoft-Windows-Kernel-Power', 41, 2, 2, arg='0'))
+        self.assertEqual((p['gravidade'], p['titulo']), ('alta', 'O PC desligou sem avisar'))
+        self.assertIn('2 ocorrências em 2 dias', p['evidencia'])
+
+    def test_tela_azul_via_kernel_power_com_codigo_decimal(self):
+        p = k.explica_grupo(self.g('Microsoft-Windows-Kernel-Power', 41, 1, 1, arg='209'))   # 0xd1
+        self.assertIn('DRIVER_IRQL_NOT_LESS_OR_EQUAL', p['titulo'])
+
+    def test_tela_azul_via_wer_com_codigo_hexa(self):
+        p = k.explica_grupo(self.g('Microsoft-Windows-WER-SystemErrorReporting', 1001, arg='0x00000124 (0x0, 0x1, 0x2, 0x3)'))
+        self.assertIn('WHEA_UNCORRECTABLE_ERROR', p['titulo'])
+        self.assertIn('hardware', p['explica'])
+
+    def test_codigo_de_tela_azul_desconhecido_nao_inventa_causa(self):
+        p = k.explica_grupo(self.g('Microsoft-Windows-WER-SystemErrorReporting', 1001, arg='0x000000ab (0x0)'))
+        self.assertIn('0x000000ab', p['titulo'])
+
+    def test_programa_que_fecha_sozinho_usa_o_nome_do_programa(self):
+        p = k.explica_grupo(self.g('Application Error', 1000, 4, 3, arg='jogo.exe'))
+        self.assertEqual((p['gravidade'], p['titulo']), ('média', 'jogo.exe fechou sozinho'))
+        self.assertEqual(k.explica_grupo(self.g('Application Error', 1000, 1, 1, arg='explorer.exe'))['gravidade'], 'alta')
+
+    def test_servico_que_falha(self):
+        p = k.explica_grupo(self.g('Service Control Manager', 7031, 5, 2, arg='FooSvc'))
+        self.assertIn('FooSvc', p['titulo'])
+        self.assertEqual(p['comando'], 'servicos')
+
+    def test_ruido_conhecido_e_dito_como_ruido(self):
+        self.assertEqual(k.explica_grupo(self.g('DistributedCOM', 10016, 400, 14)), 'ruido')
+
+    def test_erro_desconhecido_nao_ganha_explicacao_inventada(self):
+        self.assertIsNone(k.explica_grupo(self.g('AlgumaCoisa', 9999, 7)))
+
+    def test_driver_de_video_antigo_com_quedas_vira_grave(self):
+        grupos = [self.g('Display', 4101, 5, 3)]
+        drv = [{'nome': 'NVIDIA GeForce RTX', 'classe': 'DISPLAY', 'fab': 'NVIDIA', 'versao': '31.0.15.3623', 'data': '2025-01-10T00:00:00', 'assinado': True}]
+        out = k.analisa_drivers(drv, [], grupos, self.AGORA)
+        self.assertEqual(out[0]['gravidade'], 'alta')
+        self.assertIn('não usa internet', out[0]['explica'])
+
+    def test_driver_de_video_recente_nao_gera_nada(self):
+        drv = [{'nome': 'GPU', 'classe': 'DISPLAY', 'fab': 'AMD', 'versao': '1', 'data': '2026-09-01T00:00:00', 'assinado': True}]
+        self.assertEqual(k.analisa_drivers(drv, [], [], self.AGORA), [])
+
+    def test_driver_antigo_sem_quedas_so_avisa_depois_de_18_meses(self):
+        velho = [{'nome': 'GPU', 'classe': 'DISPLAY', 'fab': 'AMD', 'versao': '1', 'data': '2024-01-01T00:00:00', 'assinado': True}]
+        self.assertEqual(k.analisa_drivers(velho, [], [], self.AGORA)[0]['gravidade'], 'média')
+        meio = [{'nome': 'GPU', 'classe': 'DISPLAY', 'fab': 'AMD', 'versao': '1', 'data': '2026-02-01T00:00:00', 'assinado': True}]
+        self.assertEqual(k.analisa_drivers(meio, [], [], self.AGORA), [])
+
+    def test_driver_nao_assinado_e_dispositivo_com_erro(self):
+        out = k.analisa_drivers([{'nome': 'X', 'classe': 'NET', 'fab': 'Acme', 'versao': '1', 'data': '2025-01-01T00:00:00', 'assinado': False}],
+                                [{'nome': 'Placa Y', 'codigo': 43, 'classe': 'Display'}], [], self.AGORA)
+        self.assertEqual({x['id'].split(':')[0] for x in out}, {'sem-assinatura', 'dispositivo'})
+        self.assertIn('parou o dispositivo', [x for x in out if x['id'].startswith('dispositivo')][0]['evidencia'])
+
+    def test_windows_precisa_de_ajuste(self):
+        w = {'reinicio_pendente': True, 'ultima_atualizacao': '2026-06-01T00:00:00', 'livre_pct': 4.0, 'livre_gb': 12.0, 'defender_tempo_real': False,
+             'uptime_dias': 45, 'pontos_restauracao': 0}
+        ids = {x['id'] for x in k.analisa_windows(w, self.AGORA)}
+        self.assertEqual(ids, {'reinicio-pendente', 'atualizacao-atrasada', 'disco-cheio', 'defender-desligado', 'uptime', 'sem-restauracao'})
+
+    def test_windows_em_ordem_nao_gera_nada(self):
+        w = {'reinicio_pendente': False, 'ultima_atualizacao': '2026-11-01T00:00:00', 'livre_pct': 40.0, 'defender_tempo_real': True,
+             'defender_assinatura_dias': 0, 'uptime_dias': 2, 'pontos_restauracao': 3}
+        self.assertEqual(k.analisa_windows(w, self.AGORA), [])
+        self.assertEqual(k.analisa_windows(None, self.AGORA), [])
+
+    def test_analise_completa_ordena_por_gravidade_e_conta_ruido(self):
+        dados = {'saude_grupos': [self.g('DistributedCOM', 10016, 300, 14), self.g('Application Error', 1000, 1, 1, arg='a.exe'),
+                                  self.g('Microsoft-Windows-Kernel-Power', 41, 2, 2, arg='0'), self.g('Misterio', 1, 3)],
+                 'saude_total': {'eventos': 306}, 'saude_windows': {'uptime_dias': 40}}
+        a = k.analisa_saude(dados, self.AGORA)
+        self.assertEqual(a['problemas'][0]['gravidade'], 'alta')
+        self.assertEqual(a['resumo']['ruido'], 300)
+        self.assertEqual(a['resumo']['graves'], 1)
+        self.assertEqual([g['provedor'] for g in a['outros']], ['Misterio'])
+
+    def test_analise_sem_dados_nao_quebra(self):
+        a = k.analisa_saude({}, self.AGORA)
+        self.assertEqual(a['problemas'], [])
+
+    def test_novos_graves_so_o_que_cresceu(self):
+        antes = {'problemas': [{'id': 'x', 'n': 2}]}
+        atual = {'problemas': [{'id': 'x', 'n': 2, 'categoria': 'erro', 'gravidade': 'alta'}, {'id': 'y', 'n': 1, 'categoria': 'erro', 'gravidade': 'alta'},
+                               {'id': 'z', 'n': 1, 'categoria': 'driver', 'gravidade': 'alta'}]}
+        self.assertEqual([x['id'] for x in k.novos_graves(atual, antes)], ['y'])
+
+    def test_script_de_coleta_so_le(self):
+        for proibido in ('Set-', 'Remove-', 'Stop-', 'Disable-', 'Enable-', 'New-ItemProperty', 'sc.exe', 'netsh', 'reg add', 'Restart-'):
+            self.assertNotIn(proibido, k.SAUDE_PS.replace('Set-Valor', ''), proibido)
+
+    def test_catalogo_tem_explicacao_e_acao_em_tudo(self):
+        for chave, (gr, tit, ex, faz, cmd) in {**k.CATALOGO_ERROS, **{(p, 0): v for p, v in k.CATALOGO_PROVEDORES.items()}}.items():
+            self.assertTrue(tit and ex and faz, chave)
+            self.assertIn(gr, ('alta', 'média', 'baixa', 'info'))
+            if cmd:
+                self.assertIn(cmd, k.COMANDOS, f'{chave} aponta para comando que não existe')
 
 
 class TestMotor(unittest.TestCase):
