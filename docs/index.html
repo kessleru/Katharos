@@ -88,8 +88,8 @@
   .grego { font-size: 13px; color: var(--apagado); }
   .grego b { color: var(--ambar); font-weight: 500; }
   .ctas { display: flex; gap: 10px; flex-wrap: wrap; }
-  /* a arte passa do container: ocupa a largura toda da tela, por cima das guias */
-  .cena { position: relative; z-index: 32; width: min(100vw, 2000px); left: 50%; translate: -50% 0; margin-top: calc(-1 * min(27vw, 400px)); pointer-events: none; }
+  /* a arte fica dentro das linhas do container */
+  .cena { position: relative; z-index: 2; overflow: hidden; margin-top: calc(-1 * min(22vw, 300px)); pointer-events: none; }
   .cena img { width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
 
   /* faixa de dados abaixo do hero */
@@ -184,7 +184,8 @@
   @media (max-width: 1000px) {
     .menu { display: none !important; }
     .topo .celulas { grid-template-columns: 1fr auto; }
-    .cena { width: 190vw; left: 0; translate: -88vw 0; margin-top: -40px; }
+    .cena { margin-top: -24px; }
+    .cena img { width: 190%; max-width: none; margin-left: -88%; }
     .dados .celulas, .comandos .celulas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dados .celulas > :nth-child(3), .comandos .celulas > :nth-child(3) { border-left: 0; }
     .dados .celulas > :nth-child(n+3), .comandos .celulas > :nth-child(n+3) { border-top: 1px solid var(--linha); }
@@ -255,9 +256,9 @@
         </div>
         <p class="grego"><b>καθαρός</b> · em grego, limpo</p>
       </div>
+      <div class="cena">
+        <img src="cena-ascii.webp" alt="Um guerreiro de armadura descansa sentado na grama alta, com o espadão sobre os joelhos, desenhado com caracteres de texto em tom âmbar" width="2000" height="1120" fetchpriority="high">
     </div>
-    <div class="cena">
-      <img src="cena-ascii.webp" alt="Um guerreiro de armadura descansa sentado na grama alta, com o espadão sobre os joelhos, desenhado com caracteres de texto em tom âmbar" width="2000" height="1120" fetchpriority="high">
     </div>
   </section>
 
