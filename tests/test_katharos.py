@@ -317,6 +317,14 @@ class TestBenchmark(unittest.TestCase):
     def test_poucas_repeticoes_nao_conclui(self):
         self.assertIn('poucas', k.compara_bench(k.estatistica([1, 2]), k.estatistica([5, 6]))[0])
 
+    def test_pc_apertado_decide_modo_leve_do_benchmark(self):
+        self.assertIn('4 GB', k.pc_apertado({'ram': {'total': 4, 'usada': 2}}))
+        self.assertIn('livre', k.pc_apertado({'ram': {'total': 16, 'usada': 15}}))
+        self.assertIn('HD', k.pc_apertado({'ram': {'total': 16, 'usada': 4}, 'disco': {'tipo': 'HDD'}}))
+        self.assertEqual(k.pc_apertado({'ram': {'total': 16, 'usada': 4}, 'disco': {'tipo': 'SSD'}}), '')
+        self.assertEqual(k.pc_apertado({}), '')
+        self.assertEqual(k.pc_apertado(None), '')
+
     def test_instabilidade_so_acima_de_15_por_cento(self):
         self.assertFalse(k.instavel(k.estatistica([100, 105, 98, 102])))
         self.assertTrue(k.instavel(k.estatistica([100, 140, 90, 120])))
@@ -349,6 +357,22 @@ class TestBenchmark(unittest.TestCase):
         self.assertEqual(set(r), {'cpu', 'cpu_multi', 'ram', 'disco_escrita', 'disco_4k'})
         self.assertTrue(all(v['mediana'] > 0 for v in r.values()))
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
+
+
+class TestImpactoBoot(unittest.TestCase):
+    BOOT = [{'nome': 'Spotify.exe', 'exibe': 'Spotify', 'vezes': 5, 's': 4.2}, {'nome': 'Teams.exe', 'exibe': 'Microsoft Teams', 'vezes': 3, 's': 9.0}]
+
+    def test_casa_por_nome_ou_executavel(self):
+        self.assertEqual(k.impacto_boot(self.BOOT, 'Spotify', r'C:\\Users\\x\\AppData\\Roaming\\Spotify\\Spotify.exe'), (4.2, 5))
+        self.assertEqual(k.impacto_boot(self.BOOT, 'com.squirrel.Teams.Teams', r'C:\\Users\\x\\Teams.exe'), (9.0, 3))
+
+    def test_nome_curto_nao_casa_com_tudo(self):
+        self.assertIsNone(k.impacto_boot(self.BOOT, 'ms', r'C:\\x\\a.exe'))
+        self.assertIsNone(k.impacto_boot(self.BOOT, 'Discord', r'C:\\x\\Update.exe'))
+
+    def test_sem_dados_nao_quebra(self):
+        self.assertIsNone(k.impacto_boot(None, 'Spotify', ''))
+        self.assertIsNone(k.impacto_boot([], 'Spotify', None))
 
 
 class TestRetomar(unittest.TestCase):

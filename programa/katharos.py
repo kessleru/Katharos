@@ -3762,6 +3762,35 @@ Dado 'assinaturas' (Lista $out)
 '''
 
 
+BOOT_PROG_PS = r'''
+$__ini = (Get-Date).AddDays(-60)
+$__ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 101; StartTime = $__ini } -ErrorAction SilentlyContinue)
+$__l = foreach ($e in $__ev) {
+  $d = @{}; ([xml]$e.ToXml()).Event.EventData.Data | ForEach-Object { $d[$_.Name] = $_.'#text' }
+  [pscustomobject]@{ nome = [string]$d.Name; exibe = [string]$d.FriendlyName; ms = [int]$d.DegradationTime }
+}
+Dado 'boot_programas' (Lista ($__l | Group-Object nome, exibe | ForEach-Object { [pscustomobject]@{ nome = $_.Group[0].nome; exibe = $_.Group[0].exibe; vezes = $_.Count; s = [math]::Round(($_.Group | Measure-Object ms -Average).Average / 1000, 1) } }))
+'''
+
+
+def _chave(txt):
+    return re.sub(r'[^a-z0-9]', '', str(txt or '').lower().replace('.exe', ''))
+
+
+def impacto_boot(boot, nome, exe):
+    """(segundos, vezes) que o Windows mediu de atraso no boot para este item de inicialização, ou None.
+    Casa pelo nome do item ou do executável com o nome (ou nome amigável) que o log de diagnóstico guarda.
+    Só vale com chave de pelo menos 4 letras, para 'a' ou 'ms' não casarem com tudo."""
+    chaves = {c for c in (_chave(nome), _chave(Path(str(exe or '').replace('\\', '/')).name)) if len(c) >= 4}
+    melhor = None
+    for b in boot or []:
+        alvos = {_chave(b.get('nome')), _chave(b.get('exibe'))}
+        if any(c in x or (x and len(x) >= 4 and x in c) for c in chaves for x in alvos if x):
+            if melhor is None or b.get('s', 0) > melhor[0]:
+                melhor = (float(b.get('s', 0)), int(b.get('vezes', 1)))
+    return melhor
+
+
 @pacote('inicializacao', 'inicialização', 'o que abre junto com o Windows',
         'Desliga pelo mesmo mecanismo do Gerenciador de Tarefas (StartupApproved): o programa continua instalado e você religa '
         'quando quiser. Também olha a pasta Inicializar, as tarefas de inicialização dos apps da Loja e as tarefas agendadas '
@@ -3769,10 +3798,14 @@ Dado 'assinaturas' (Lista $out)
 def itens_inicializacao(ctx):
     s = roda_ps(ctx.t, LISTA_INICIO_PS, 'lista-inicio', minutos=2, mostra=False)
     itens = []
+    impactos = {}
     exes = {}
     for e in lista(s.dados.get('inicio')):
         if e.get('ligado'):
             exes[e.get('nome', '')] = re.sub(r'^"([^"]+)".*$', r'\1', e.get('cmd', '')).split(' -')[0]
+    boot = []
+    if exes and WINDOWS:
+        boot = [x for x in lista(roda_ps(ctx.t, BOOT_PROG_PS, 'boot-programas', minutos=2, mostra=False).dados.get('boot_programas')) if isinstance(x, dict)]
     assin = {}
     if exes and WINDOWS:
         r = roda_ps(ctx.t, ps_monta(ASSINATURA_PS, lista=ps_lista(sorted(set(exes.values())))), 'assinaturas', minutos=3, mostra=False)
@@ -3803,9 +3836,14 @@ def itens_inicializacao(ctx):
             rel_desconhecido('inicialização sem assinatura digital', nome, corta_esq(exe, 70))
         if porque == 'programa que abre com o Windows':
             rel_desconhecido('inicialização que o Katharos não classificou', nome, corta_esq(exe, 70))
+        imp = impacto_boot(boot, nome, exe)
+        ganho = 'liga mais rápido e sobra RAM'
+        if imp and imp[0] > 0:
+            ganho = f'o Windows mediu ~{br(imp[0], 1)} s de atraso no boot (média de {pl(imp[1], "boot", "boots")}) e sobra RAM'
+        impactos[nome] = imp[0] if imp else 0.0
         itens.append(Item('ini:' + nome, nome, f'{porque[0].upper() + porque[1:]}. ({onde}: {corta_esq(caminho_curto(exe), 60)})',
-                          'liga mais rápido e sobra RAM', 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota))
-    itens.sort(key=lambda i: (i.nivel == 0, i.nivel, i.titulo.lower()))
+                          ganho, 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota))
+    itens.sort(key=lambda i: (i.nivel == 0, i.nivel, -impactos.get(i.titulo, 0.0), i.titulo.lower()))
     return itens
 
 
@@ -4053,8 +4091,9 @@ def itens_visual(ctx):
                 R('HKCU:\\Software\\Microsoft\\Windows\\DWM', 'EnableAeroPeek', 0))),
         Item('menus', 'menus sem espera', 'Submenus abrem na hora (MenuShowDelay 0 em vez de 400 ms).', 'sensação de rapidez', 'nenhum', 1,
              R(d, 'MenuShowDelay', '0', 'String')),
-        Item('transparencia', 'transparência', 'Sem efeito acrílico na barra, no menu e na tela de entrada.', 'menos uso da placa de vídeo',
-             'visual mais opaco', 2, RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', 'EnableTransparency', 0),
+        Item('transparencia', 'transparência', 'Sem efeito acrílico na barra, no menu e na tela de entrada.',
+             'menos uso da placa de vídeo; só se nota em placa integrada ou com pouca RAM',
+             'visual mais opaco', 2 if (not pf(ctx.perfil, 'tem.nvidia') and not pf(ctx.perfil, 'tem.amd')) or pf(ctx.perfil, 'ram.total', 16) <= 8 else 0, RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', 'EnableTransparency', 0),
                                         R(f'{HKLM_POL}\\System', 'DisableAcrylicBackgroundOnLogon', 1))),
         Item('arrastar', 'arrastar janela sem conteúdo', 'Ao arrastar, só o contorno se move.', 'menos trabalho de vídeo em PC fraco',
              'visual estranho para quem não está acostumado', 3, R(d, 'DragFullWindows', '0', 'String')),
@@ -4417,8 +4456,9 @@ if (-not $__c.AutomaticManagedPagefile) { if ($TESTE) { Plano 'memoria virtual a
         Item('compressao', 'compressão de memória ligada', f'Com {gb(ram, 0)}, comprimir a memória evita usar o disco.', 'menos travadas por falta de RAM',
              'nenhum', 1, "if ($TESTE) { Plano 'ligar compressao de memoria' } else { Guarda-Desfazer 'mmc' 'Disable-MMAgent -MemoryCompression'; Enable-MMAgent -MemoryCompression; $script:MUDOU++ }")
         if pf(p, 'memoria.compressao') is False and ram < 16 else None,
-        Item('sem-compressao', 'compressão de memória desligada', f'Com {gb(ram, 0)} de RAM sobra memória e comprimir só gasta CPU.',
-             'um pouco menos de CPU', 'se a RAM encher, usa mais o disco', 3,
+        Item('sem-compressao', 'compressão de memória desligada', f'Com {gb(ram, 0)} de RAM a compressão quase nunca entra em ação: ela só trabalha '
+             'quando a memória aperta, então desligar não tem ganho medido.',
+             'nenhum medido', 'se a RAM encher, usa mais o disco', 0,
              "if ((Get-MMAgent).MemoryCompression) { if ($TESTE) { Plano 'desligar compressao de memoria' } else { Guarda-Desfazer 'mmc' 'Enable-MMAgent -MemoryCompression'; Disable-MMAgent -MemoryCompression; $script:MUDOU++ } }")
         if ram >= 32 else None,
         Item('onedrive', 'OneDrive bloqueado', 'Política que impede o OneDrive de rodar e tira ele do painel do Explorador. '
@@ -8447,6 +8487,23 @@ def mostra_bench(t, atual, antes=None, rotulo_antes=''):
     t.escreve()
 
 
+def pc_apertado(p):
+    """Motivo (texto) para usar a versão leve do benchmark, ou ''. Em PC com pouca RAM livre ou HD, o teste pesado
+    competiria com o próprio Windows e a medida sairia falseada."""
+    try:
+        ram = (p or {}).get('ram') or {}
+        total, usada = float(ram.get('total') or 0), float(ram.get('usada') or 0)
+        if total and total <= 4:
+            return f'só {br(total, 0)} GB de RAM'
+        if total and total - usada < 1.5:
+            return f'só {br(total - usada, 1)} GB de RAM livre agora'
+        if ((p or {}).get('disco') or {}).get('tipo') == 'HDD':
+            return 'o disco é um HD'
+    except (TypeError, ValueError):
+        pass
+    return ''
+
+
 def bateria_fraca(ctx):
     """Notebook na bateria com menos de 30%? O teste gasta bateria e a CPU pode baixar o clock, o que falsearia a medida."""
     if not WINDOWS:
@@ -8477,6 +8534,10 @@ def ferramenta_benchmark(ctx, args):
     leve = bool(gb and gb < 5)
     if leve:
         t.nota('  Pouco espaço livre: usando a versão leve (arquivos menores).')
+    apertado = pc_apertado(perfil_pc(ctx))
+    if apertado and not leve:
+        leve = True
+        t.nota(f'  Modo leve do teste ({apertado}): arquivos menores e uma etapa de cada vez.')
     t.escreve()
     atual = roda_bench(t, rapido=rapido, leve=leve)
     salvos = bench_salvos()
