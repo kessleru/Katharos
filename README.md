@@ -28,7 +28,7 @@ Ou direto, num PowerShell aberto como administrador: `python programa\katharos.p
 
 ## Modos
 
-Todo item tem uma etiqueta de modo, e o modo só decide **o que vem marcado** quando você abre um pacote sozinho (`limpar`, `jogos`...). Quem escolhe os itens num perfil é o perfil: a lista dele mostra a etiqueta de cada item. Na primeira abertura o programa pergunta para que você usa o PC, então a maioria das pessoas nunca precisa pensar em modo. Em toda tela você vê cada item explicado (o que faz, ganho, custo e o modo a partir do qual ele vem marcado) e marca ou desmarca o que quiser.
+Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem seis linhas (`raiox`, `turbo`, `escolher`, `painel`, `desfazer`, `mais`); `escolher` mostra as áreas e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
 
 | Modo | O que marca |
 | --- | --- |
@@ -37,7 +37,7 @@ Todo item tem uma etiqueta de modo, e o modo só decide **o que vem marcado** qu
 | **extremo** | Tudo o que pode ajudar neste PC: sensores, área de trabalho remota, scanner, localização, hibernação no SSD, ajustes de jogos e de rede. Cada item diz o que se perde. |
 | *só se marcar* | Itens que nunca vêm marcados (esvaziar a Lixeira, trocar DNS, MPO, HAGS, remover o Office, preferências). |
 
-Na tela de escolha: números marcam e desmarcam (`3 5 8-10`), `t` todos, `n` nenhum, `s` `e` `x` remarca pelo modo, `c` explicações curtas ou completas, Enter segue, `0` volta.
+Na tela de escolha cada item ocupa uma linha, com o modo dele à direita (`!` = tem um aviso). Enter segue, um número tira ou põe (`3 5 8-10`), `? 3` explica o item 3 (o que faz, ganho e custo), `0` volta. `?` mostra o resto: `t` todos, `n` nenhum, `s` `e` `x` remarca pelo modo, `c` explicação de todos, `v 3` o código do item. `config explicacao completa` volta a mostrar tudo sempre.
 
 ## Inteligente
 
@@ -81,7 +81,8 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | | `portas` | Quem escuta em cada porta (programa, pasta, "só este PC" ou "toda a rede") e, se você pedir, encerra o processo (nunca os do sistema) |
 | | `segredos` | Chaves, tokens, senhas e endereços de banco esquecidos nos arquivos dos seus projetos. Valor mascarado, nada sai do PC |
 | | `verificar` | Refaz a conta em modo teste dos pacotes aplicados: o que o Windows ou uma política desfez; oferece reaplicar |
-| Atalhos | `perfil` | Perfis prontos (jogos, notebook na bateria, PC fraco, privacidade, programador, PC de trabalho). Antes de aplicar, `p` deixa tirar, pôr ou juntar itens de outros pacotes; `perfil montar` começa sem perfil nenhum e a escolha pode ser salva com um nome (fica em `~/.katharos/perfis` e aparece na lista). Cada um mostra barras de 0 a 5 do que ataca (desempenho, leveza, espaço, bateria, privacidade, conforto), o que você perde e o risco, com prévia e confirmação. `perfil atalhos` cria a pasta **Katharos** na área de trabalho, com o ícone, um atalho por perfil à sua escolha. `perfil exportar` e `perfil importar` repetem a configuração em outro PC |
+| Atalhos | `atalhos` | Cria a pasta **Katharos** na área de trabalho, com o ícone e os atalhos que você escolher (menu, raio-x, otimizar, painel, voltar ao normal...); `--remover` tira |
+| | `exportar` · `importar` | Salva o que está aplicado neste PC e repete em outro; antes de aplicar, `p` deixa tirar, pôr ou juntar itens |
 | | `organizar` | Separa os arquivos soltos da área de trabalho em pastas por tipo (prévia, confirmação e `--desfazer`). Pastas, atalhos, ocultos e o que você mexeu hoje ficam |
 | Resultado | `cartao` · `relatorio` | O antes e depois num cartão · o **relatório único** (copiar para a IA, salvar numa pasta ou apagar) |
 | Manutenção | `agendar` | Segundo plano (semanal, diária ou contínua: ao iniciar com o Windows e a cada 4 h): tarefa do Windows, sem programa aberto; só ocioso e na tomada, prioridade baixa, limpa, reaplica o que atualizações desfazem, Defender, SMART, avisos por notificação; uma vez por mês, ponto de restauração e limpeza de componentes |
@@ -127,7 +128,7 @@ O número é MAIOR.MENOR.CORREÇÃO, explicado no [CHANGELOG.md](CHANGELOG.md); 
 - **Código à vista.** `--codigo` e `v N` mostram o PowerShell exato antes de aplicar. Itens de jogo que podem conflitar com anti-cheat têm um aviso em amarelo.
 - **Relatório único.** Em vez de um arquivo por ferramenta, tudo vai para `relatorios/ultimo.md` (o relatório atual; os dados em JSON ficam em `.katharos`): PC, raio-x, segurança, o que foi aplicado, avisos e erros com dica, e o que o Katharos não reconheceu. É feito para mandar a uma IA melhorar a base de dados. Tudo que vem do PC (nomes de programa, de arquivo, mensagens) é limpo antes de entrar (sem controle, sem Markdown, sem frases que pareçam ordens) e o arquivo avisa que é dado, não instrução. Cada execução também grava uma cópia com data e hora na mesma pasta `relatorios/`, ao lado do `KATHAROS.bat` (`AAAA-MM-DD_HH-MM-SS_pc_comando.md`; ficam as 60 mais recentes). Pelos atalhos da área de trabalho a pasta é a mesma (o programa lembra onde ela está). Só se você apagar ou mover a pasta, ou ela não aceitar escrita, os relatórios vão para `~/.katharos/relatorios`. Confira antes de compartilhar: tem o nome do PC, os programas instalados e caminhos de pastas.
 - **Jogos sem risco de ban.** Nada toca em arquivo ou memória de jogo, e nada roda junto com ele. No CS2, só os arquivos de configuração do usuário (o mesmo que o menu do jogo grava) e um `.cfg` à parte, com cópia antes. Céu preto e texturas trocadas não existem aqui: no CS2 os comandos de céu exigem `sv_cheats`, e trocar textura é bloqueado em servidor oficial.
-- **Perfil importado nunca é executado.** `perfil importar` só escolhe, entre os itens que o Katharos já conhece, quais aplicar, depois da prévia e da confirmação.
+- **Arquivo importado nunca é executado.** `importar` só escolhe, entre os itens que o Katharos já conhece, quais aplicar, depois da prévia e da confirmação.
 - **Verifique o download.** `python programa\katharos.py --sha256` deve bater com o `SHA256SUMS.txt` do repositório. Veja o [SECURITY.md](SECURITY.md).
 
 Relatório, medidas, backups, logs e preferências ficam em `%USERPROFILE%\.katharos`.

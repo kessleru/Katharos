@@ -7,6 +7,7 @@ import re
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.argv = ['katharos']
@@ -109,32 +110,141 @@ class TestItens(unittest.TestCase):
                 self.assertTrue(i.custo or i.alerta, f'{nome}/{i.id}: irreversível sem aviso')
 
 
-class TestPerfis(unittest.TestCase):
-    def test_perfis_citam_so_itens_existentes(self):
-        por_pacote = {}
-        for nome, i in ITENS:
-            por_pacote.setdefault(nome, set()).add(i.id)
-        for chave, (nome, desc, sel) in k.PERFIS.items():
-            for pac, ids in sel.items():
-                self.assertIn(pac, k.PACOTES, f'perfil {chave}: pacote {pac} não existe')
-                if isinstance(ids, str):
-                    self.assertIn(ids[1:], k.MODOS, f'perfil {chave}: modo {ids}')
-                else:
-                    falta = set(ids) - por_pacote.get(pac, set())
-                    self.assertFalse(falta, f'perfil {chave}/{pac}: itens inexistentes {falta}')
+class _Grava:
+    """Terminal que só guarda o que foi escrito, com respostas prontas para as perguntas."""
+    interativo = True
+    largura = 100
 
-    def test_perfis_tem_nota_e_foco(self):
-        for chave in k.PERFIS:
-            self.assertIn(chave, k.PERFIL_NOTAS, chave)
-            self.assertIn(chave, k.FOCO_PERFIL, chave)
-            self.assertTrue(k.itens_do_perfil(chave), f'perfil {chave} ficou vazio')
+    def __init__(self, respostas=()):
+        self.linhas, self.respostas = [], list(respostas)
 
-    def test_perfil_nao_marca_item_de_anticheat_sem_aviso(self):
-        for chave in k.PERFIS:
-            for pac, its in k.itens_do_perfil(chave):
-                for i in its:
-                    if 'PerfOptions' in (i.ps or ''):
-                        self.assertIn((pac.nome, i.id), k.ALERTA_ITEM, f'{chave}/{i.id}: prioridade por exe sem alerta de anti-cheat')
+    def p(self, txt, *a, **kw):
+        return str(txt)
+
+    def escreve(self, txt='', **kw):
+        self.linhas.append(str(txt))
+
+    def paragrafo(self, txt, *a, **kw):
+        self.linhas.append(str(txt))
+
+    nota = aviso = titulo = paragrafo
+
+    def pergunta(self, txt=''):
+        return self.respostas.pop(0) if self.respostas else ''
+
+    def __getattr__(self, nome):
+        return lambda *a, **kw: ''
+
+    @property
+    def texto(self):
+        return '\n'.join(self.linhas)
+
+
+class TestMenuEnxuto(unittest.TestCase):
+    """O menu de abertura tem poucas linhas e nada some: todo comando está no menu, em "escolher" ou em "mais"."""
+    def test_menu_de_abertura_tem_no_maximo_seis_linhas(self):
+        self.assertLessEqual(len(k.MENU), 6)
+        for cmd, desc in k.MENU:
+            self.assertTrue(cmd in k.COMANDOS or cmd in k.TELAS, cmd)
+            self.assertLessEqual(len(desc), 60, cmd)
+
+    def test_nenhum_comando_fica_sem_caminho_no_menu(self):
+        alcanca = {c for c, _ in k.MENU}
+        for tela in k.TELAS:
+            for _, _, itens in k.grupos_da_tela(tela):
+                alcanca |= {c for c, _ in itens}
+        todos = {c for _, _, its in k.GRUPOS for c, _, _ in its}
+        self.assertFalse(todos - alcanca, f'sem caminho no menu: {sorted(todos - alcanca)}')
+
+    def test_escolher_so_tem_areas_com_itens_e_mais_so_tem_ferramentas(self):
+        for _, _, itens in k.grupos_da_tela('escolher'):
+            for c, _ in itens:
+                self.assertEqual(k.COMANDOS[c][1], 'pacote', c)
+        for _, _, itens in k.grupos_da_tela('mais'):
+            for c, _ in itens:
+                self.assertNotEqual(k.COMANDOS[c][1], 'pacote', c)
+
+    def test_perfil_saiu_e_o_que_ele_fazia_virou_comando(self):
+        self.assertNotIn('perfil', k.COMANDOS)
+        self.assertFalse(hasattr(k, 'PERFIS'))
+        for cmd in ('atalhos', 'exportar', 'importar'):
+            self.assertIn(cmd, k.COMANDOS)
+        sub = [a for a in k.monta_parser()._actions if a.dest == 'comando'][0]
+        self.assertNotIn('perfil', sub.choices)
+
+    def test_atalhos_so_chamam_comandos_que_existem(self):
+        for id_, nome, desc, args in k.lista_atalhos():
+            if args:
+                self.assertIn(args.split()[0], k.COMANDOS, id_)
+
+    def test_menu_desenha_so_as_linhas_do_menu(self):
+        t = k.Terminal(True, True)
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            por_numero = t.menu_itens([('', '', k.MENU)])
+        self.assertEqual(por_numero, {str(i): c for i, (c, _) in enumerate(k.MENU, 1)})
+        self.assertLessEqual(len([l for l in buf.getvalue().splitlines() if l.strip()]), len(k.MENU) + 1)
+
+
+class TestEscolhaDeItens(unittest.TestCase):
+    """A tela de marcar itens: uma linha por item, uma dica curta, e o resto só quando a pessoa pede."""
+    def itens(self):
+        return [k.Item('a', 'item A', 'explicação longa do A', 'ganho A', 'custo A', 1),
+                k.Item('b', 'item B', 'explicação longa do B', 'ganho B', 'custo B', 3),
+                k.Item('c', 'item C', 'explicação longa do C', 'ganho C', 'custo C', 0)]
+
+    def roda(self, respostas, modo='equilibrado'):
+        t = _Grava(respostas)
+        ctx = type('C', (), {'t': t})()
+        args = type('A', (), {'sim': False})()
+        with mock.patch.object(k, 'config', lambda c: k.PADROES[c]):
+            r = k.escolhe_itens(ctx, self.itens(), modo, args)
+        return t, r
+
+    def test_padrao_e_uma_linha_por_item_sem_explicacao(self):
+        t, r = self.roda([''])
+        self.assertEqual([i.id for i in r], ['a'])
+        self.assertNotIn('explicação longa', t.texto)
+        self.assertIn('item A', t.texto)
+
+    def test_dica_curta_cabe_em_duas_linhas(self):
+        self.assertLessEqual(len(k.AJUDA_CURTA), 120)
+
+    def test_interrogacao_e_numero_explica_um_item(self):
+        t, _ = self.roda(['? 2', ''])
+        self.assertIn('explicação longa do B', t.texto)
+        self.assertNotIn('explicação longa do A', t.texto)
+        t, _ = self.roda(['2?', ''])
+        self.assertIn('explicação longa do B', t.texto)
+
+    def test_numero_tira_e_poe(self):
+        _, r = self.roda(['1 3', ''])
+        self.assertEqual([i.id for i in r], ['c'])
+        _, r = self.roda(['1-3', ''])
+        self.assertEqual([i.id for i in r], ['b', 'c'])
+
+    def test_modos_e_atalhos_antigos_continuam_valendo(self):
+        _, r = self.roda(['x', ''])
+        self.assertEqual([i.id for i in r], ['a', 'b'])
+        _, r = self.roda(['t', ''])
+        self.assertEqual(len(r), 3)
+        _, r = self.roda(['n', ''])
+        self.assertEqual(r, [])
+        _, r = self.roda(['0'])
+        self.assertIsNone(r)
+
+    def test_texto_solto_nao_marca_nada(self):
+        t, r = self.roda(['abc 2', ''])
+        self.assertEqual([i.id for i in r], ['a'])
+        self.assertIn('não é uma opção', t.texto)
+
+    def test_item_sem_volta_e_com_alerta_aparecem_na_linha(self):
+        it = k.Item('z', 'remove algo', 'e', 'g', 'c', 1, reverte=False)
+        it.marcado, it.alerta = True, 'cuidado'
+        linha = k._linha_item(_Grava(), it, 1)
+        self.assertIn('sem volta', linha)
+        self.assertIn('!', linha)
 
 
 class TestJogosECS2(unittest.TestCase):
@@ -153,9 +263,10 @@ class TestJogosECS2(unittest.TestCase):
         item = its['prioridade-jogos-ac']
         self.assertEqual(item.nivel, 0)
         self.assertTrue(item.alerta)
-        for chave in k.PERFIS:
-            for _, lista in k.itens_do_perfil(chave):
-                self.assertNotIn('prioridade-jogos-ac', [i.id for i in lista], chave)
+        for modo in k.MODOS:   # nenhum modo marca sozinho
+            lista = [i for n, i in todos_itens() if n == 'jogos']
+            k.marca_por_modo(lista, modo)
+            self.assertNotIn('prioridade-jogos-ac', [i.id for i in lista if i.marcado], modo)
 
     def test_itens_novos_do_cs2_existem(self):
         ids = {i.id for _, i in ITENS}
@@ -1271,30 +1382,6 @@ class TestSugestoes(unittest.TestCase):
             base[chave] = {**base.get(chave, {}), **v} if isinstance(v, dict) else v
         return base
 
-    def test_hd_ou_pouca_ram_sugere_pc_fraco(self):
-        self.assertEqual(k.sugere_perfil(self.pc(disco={'tipo': 'HDD'}))[0], 'fraco')
-        self.assertEqual(k.sugere_perfil(self.pc(ram={'total': 4}))[0], 'fraco')
-
-    def test_pc_de_empresa_sugere_trabalho(self):
-        self.assertEqual(k.sugere_perfil(self.pc(pc={'dominio': True}))[0], 'trabalho')
-
-    def test_jogos_com_placa_dedicada(self):
-        p = self.pc(gpus=['NVIDIA GeForce RTX 4060'], jogos=['Counter-Strike 2'])
-        self.assertEqual(k.sugere_perfil(p)[0], 'jogo')
-        self.assertIsNone(k.sugere_perfil(self.pc(jogos=['Counter-Strike 2'])), 'sem placa dedicada não sugere jogo')
-
-    def test_notebook_e_dev(self):
-        self.assertEqual(k.sugere_perfil(self.pc(pc={'notebook': True, 'bateria': True}))[0], 'bateria')
-        self.assertEqual(k.sugere_perfil(self.pc(tem={'wsl': True}))[0], 'dev')
-
-    def test_nada_se_destaca(self):
-        self.assertIsNone(k.sugere_perfil(self.pc()))
-
-    def test_sugestao_sempre_e_perfil_que_existe(self):
-        for p in (self.pc(disco={'tipo': 'HDD'}), self.pc(pc={'dominio': True}), self.pc(tem={'docker': True}),
-                  self.pc(pc={'notebook': True, 'bateria': True})):
-            self.assertIn(k.sugere_perfil(p)[0], k.PERFIS)
-
     def test_windows_desconhecido(self):
         self.assertFalse(k.so_reconhecido({'so': {'build': 0}}))
         self.assertFalse(k.so_reconhecido({'so': {'build': 9600}}))
@@ -1354,8 +1441,7 @@ class TestEntrega(unittest.TestCase):
     def test_site_gerado_esta_em_dia(self):
         """O site é gerado do programa: a contagem de comandos e a versão têm de bater."""
         site = (RAIZ / 'docs' / 'index.html').read_text(encoding='utf-8')
-        n = sum(len(itens) for _, _, itens in k.GRUPOS)
-        self.assertIn(f'até o {n}', site, 'rode arte/gera_site.py')
+        self.assertIn(k.MENU[-1][0], site, 'rode arte/gera_site.py')
         self.assertIn(k.VERSAO, site, 'rode arte/gera_site.py')
         self.assertNotIn('{{', site)
 

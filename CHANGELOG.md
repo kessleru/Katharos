@@ -18,6 +18,15 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.0.0 · 9 de novembro de 2026
+
+Terminal mais simples: menu curto, sem perfis e escolha de itens numa linha cada.
+
+- **Menu de seis linhas**: `raiox`, `turbo`, `escolher`, `painel`, `desfazer` e `mais`. `escolher` abre as áreas com itens para marcar e `mais` as outras ferramentas, as duas com uma linha por assunto. Nenhuma ferramenta saiu, e o nome de qualquer comando continua valendo em qualquer tela.
+- **Sem perfis**: o comando `perfil` e os perfis prontos saíram. Fica o modo (seguro, equilibrado ou extremo) ou a escolha item por item. O que o `perfil` fazia de útil virou comando: `atalhos`, `exportar` e `importar`. A primeira abertura não pergunta mais para que você usa o PC.
+- **Escolha de itens enxuta**: uma linha por item, com o modo à direita e `!` quando há aviso. A dica cabe numa linha: Enter segue, número tira ou põe, `? 3` explica o item 3. As outras teclas (`t`, `n`, `s`/`e`/`x`, `c`, `v 3`) continuam valendo e aparecem com `?`. `config explicacao completa` mostra a explicação de todos, como antes.
+- **Turbo com uma pergunta a menos**: depois do plano, uma pergunta só (Enter começa, `r` revisa item por item, `0` cancela).
+
 ## 1.4.1 · 9 de novembro de 2026
 
 Segundo plano com métricas e gráficos, mais um pacote de jogos.

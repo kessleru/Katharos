@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '1.4.1'
+VERSAO = '2.0.0'
 DATA_VERSAO = '9 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -887,7 +887,7 @@ class Terminal:
         except EOFError:
             raise KeyboardInterrupt  # sem entrada (fim do pipe): sai do laço em vez de repetir para sempre
 
-    def menu_itens(self, grupos, quando=None, destaque=None):
+    def menu_itens(self, grupos, quando=None, destaque=None, zero='sair'):
         """Desenha um menu numerado em grupos e devolve {número: comando}.
         grupos: [(título, explicação, [(comando, descrição), ...]), ...] (a explicação pode faltar).
         quando: {comando: 'há 2 dias'}; destaque: {comando: 'etiqueta'} aparece à direita, em destaque."""
@@ -896,11 +896,12 @@ class Terminal:
         for g in grupos:
             titulo, itens = g[0], g[-1]
             expl = g[1] if len(g) == 3 else ''
-            self.escreve()
-            linha = ' ' + self.p('◇', 'destaque') + '  ' + self.p(titulo, 'texto', True)
-            if expl and _larg(titulo) + _larg(expl) + 8 <= self.largura:
-                linha += self.p('  ' + expl, 'apagado')
-            self.escreve(linha, guia=False)
+            if titulo:   # grupo sem título (o menu de abertura): só as linhas
+                self.escreve()
+                linha = ' ' + self.p('◇', 'destaque') + '  ' + self.p(titulo, 'texto', True)
+                if expl and _larg(titulo) + _larg(expl) + 8 <= self.largura:
+                    linha += self.p('  ' + expl, 'apagado')
+                self.escreve(linha, guia=False)
             for cmd, desc in itens:
                 num += 1
                 por_numero[str(num)] = cmd
@@ -914,7 +915,7 @@ class Terminal:
                     esq += ' ' * (self.largura - vlen(esq) - _larg(q)) + self.p(q, cor_q)
                 self.escreve(esq)
         self.escreve()
-        self.escreve(f'  {self.p(" 0", "apagado", True)}  {self.p("sair", "apagado")}')
+        self.escreve(f'  {self.p(" 0", "apagado", True)}  {self.p(zero, "apagado")}')
         self.escreve()
         return por_numero
 
@@ -1030,11 +1031,11 @@ EXPLICA_MODOS = [
      'scanner, localização, hibernação no SSD, ajustes de jogos e de rede. Você perde recursos (cada item diz quais).'),
 ]
 
-PADROES = {'modo': 'equilibrado', 'explicacao': 'completa', 'cores': 'automático', 'simbolos': 'automático',
+PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
            'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
-    'explicacao': ('explicações', 'completa (o que faz, ganho e custo de cada item) ou curta (só o nome)'),
+    'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
     'cores': ('cores', 'automático ou sem cor'),
     'simbolos': ('símbolos', 'automático ou simples (para terminal que mostra quadradinhos)'),
     'grandes-mb': ('arquivo grande', 'a partir de quantos MB o "grandes" mostra um arquivo'),
@@ -2219,28 +2220,6 @@ def so_reconhecido(p):
     return (pf(p, 'so.build', 0) or 0) >= 10240
 
 
-GPU_DEDICADA = re.compile(r'nvidia|geforce|radeon rx|radeon pro|arc a\d|arc b\d', re.I)
-
-
-def sugere_perfil(p):
-    """(chave do perfil, motivo) para este PC, ou None quando nada se destaca. É só uma sugestão: a pessoa escolhe."""
-    ram = pf(p, 'ram.total', 0) or 0
-    if eh_hd(p):
-        return 'fraco', 'o Windows está num HD mecânico, que é o que mais pesa em PC lento'
-    if 0 < ram <= 6:
-        return 'fraco', f'tem só {ram:g} GB de RAM'
-    if pf(p, 'pc.dominio') or pf(p, 'pc.gerenciado'):
-        return 'trabalho', 'é um PC de empresa ou escola, onde só o que é seguro vale a pena'
-    dedicada = any(GPU_DEDICADA.search(str(g)) for g in lista(pf(p, 'gpus', [])))
-    if lista(pf(p, 'jogos', [])) and dedicada:
-        return 'jogo', 'tem jogos instalados e placa de vídeo dedicada'
-    if pf(p, 'pc.notebook') and pf(p, 'pc.bateria', True):
-        return 'bateria', 'é um notebook, e a bateria é o que mais se sente'
-    if pf(p, 'tem.wsl') or pf(p, 'tem.docker') or pf(p, 'tem.visualstudio'):
-        return 'dev', 'tem ferramentas de programação (WSL, Docker ou Visual Studio)'
-    return None
-
-
 def eh_hd(p):
     return str(pf(p, 'disco.tipo', '')).upper() == 'HDD'
 
@@ -2879,41 +2858,57 @@ def _numeros(txt, maximo):
     return nums
 
 
-def desenha_itens(t, itens, completa=True):
-    larg_nivel = 12
+def _detalhe_item(t, it):
+    """O que o item faz, o ganho, o custo e os avisos: o texto inteiro de um item."""
+    t.paragrafo(it.explica, 8, 'sub')
+    extra = []
+    if it.ganho:
+        extra.append(t.p('ganho: ', 'apagado') + t.p(it.ganho, 'verde'))
+    if it.custo:
+        extra.append(t.p('custo: ', 'apagado') + t.p(it.custo, 'amarelo'))
+    for e in extra:
+        if vlen(e) <= t.largura - 8:
+            t.escreve(' ' * 8 + e)
+        else:
+            rot, _, resto = ANSI.sub('', e).partition(': ')
+            t.paragrafo(f'{rot}: {resto}', 8, 'verde' if rot == 'ganho' else 'amarelo')
+    if it.nota:
+        t.paragrafo('neste PC: ' + it.nota, 8, 'azul')
+    if it.alerta:
+        t.paragrafo('atenção: ' + it.alerta, 8, 'amarelo')
+    if not it.reverte:
+        t.paragrafo('não volta com o "desfazer" (reinstale se precisar)', 8, 'apagado')
+
+
+def _linha_item(t, it, i):
+    """Uma linha por item: marca, número, nome e, à direita, o modo em que ele entra. "!" = tem um aviso (? número mostra)."""
+    marca = t.p('✓', 'verde', True) if it.marcado else t.p('○', 'apagado')
+    etiqueta = NOME_NIVEL.get(it.nivel, '') + ('' if it.reverte else ' · sem volta')
+    nivel = t.p(etiqueta, COR_NIVEL.get(it.nivel, 'apagado'))
+    alerta = t.p(' !', 'amarelo', True) if it.alerta else ''
+    nome = corta(it.titulo, max(10, t.largura - 12 - len(etiqueta) - (2 if it.alerta else 0)))
+    esq = f'  {marca} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if it.marcado else "sub")}{alerta}'
+    if vlen(esq) + vlen(nivel) + 2 <= t.largura:
+        esq += ' ' * (t.largura - vlen(esq) - vlen(nivel)) + nivel
+    return esq
+
+
+def desenha_itens(t, itens, completa=False):
     for i, it in enumerate(itens, 1):
-        marca = t.p('✓', 'verde', True) if it.marcado else t.p('○', 'apagado')
-        nivel = t.p(NOME_NIVEL.get(it.nivel, ''), COR_NIVEL.get(it.nivel, 'apagado'))
-        nome = corta(it.titulo, max(10, t.largura - 12 - larg_nivel))
-        esq = f'  {marca} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if it.marcado else "sub")}'
-        if vlen(esq) + vlen(nivel) + 2 <= t.largura:
-            esq += ' ' * (t.largura - vlen(esq) - vlen(nivel)) + nivel
-        t.escreve(esq)
+        t.escreve(_linha_item(t, it, i))
         if completa:
-            t.paragrafo(it.explica, 8, 'sub')
-            extra = []
-            if it.ganho:
-                extra.append(t.p('ganho: ', 'apagado') + t.p(it.ganho, 'verde'))
-            if it.custo:
-                extra.append(t.p('custo: ', 'apagado') + t.p(it.custo, 'amarelo'))
-            for e in extra:
-                if vlen(e) <= t.largura - 8:
-                    t.escreve(' ' * 8 + e)
-                else:
-                    rot, _, resto = ANSI.sub('', e).partition(': ')
-                    t.paragrafo(f'{rot}: {resto}', 8, 'verde' if rot == 'ganho' else 'amarelo')
-            if it.nota:
-                t.paragrafo('neste PC: ' + it.nota, 8, 'azul')
-            if it.alerta:
-                t.paragrafo('atenção: ' + it.alerta, 8, 'amarelo')
-            if not it.reverte:
-                t.paragrafo('não volta com o "desfazer" (reinstale se precisar)', 8, 'apagado')
+            _detalhe_item(t, it)
             t.escreve()
 
 
-AJUDA_SELECAO = ('números marcam e desmarcam (ex.: 3 5 8-10) · t = todos · n = nenhum · '
-                 's, e, x = o que o modo seguro, equilibrado ou extremo marca · c = explicações curtas ou completas · '
-                 'l = listar de novo · v 3 = ver o código do item 3 e o id dele (para proteger) · Enter = seguir · 0 = voltar')
+AJUDA_CURTA = 'Enter segue · número tira ou põe · ? 3 explica o item 3 · ? ajuda · 0 volta'
+AJUDA_SELECAO = ('Enter = seguir com os marcados · 0 = voltar sem aplicar\n'
+                 'números tiram ou põem: 3   3 5   8-10\n'
+                 '? 3 = explica o item 3 (o que faz, ganho, custo)\n'
+                 'c = mostra ou esconde a explicação de todos\n'
+                 't = marca todos · n = desmarca todos\n'
+                 's, e, x = marca o que o modo seguro, equilibrado ou extremo marca\n'
+                 'v 3 = o código (PowerShell) do item 3 e o id dele')
 
 
 def mostra_codigo(t, itens):
@@ -2930,26 +2925,44 @@ def mostra_codigo(t, itens):
 
 
 def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=False):
-    """A tela de escolha: tudo explicado, marcado conforme o modo; a pessoa ajusta. Devolve os marcados,
-    ou None se voltou."""
+    """A tela de escolha: uma linha por item, marcado conforme o modo; a pessoa ajusta. Devolve os marcados,
+    ou None se voltou. A explicação de cada item aparece com "? número" (ou de todos, com "c")."""
     t = ctx.t
     if not manter_marcas:
         marca_por_modo(itens, modo)
-    completa = config('explicacao') != 'curta'
+    completa = config('explicacao') == 'completa'
     t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}')
     desenha_itens(t, itens, completa)
     if getattr(args, 'sim', False) or not t.interativo:
         return [i for i in itens if i.marcado]
     while True:
         marcados = sum(i.marcado for i in itens)
-        t.paragrafo(AJUDA_SELECAO, 2, 'apagado')
+        t.escreve()
+        t.paragrafo(AJUDA_CURTA, 2, 'apagado')
         r = t.pergunta(f'{marcados} de {len(itens)} marcados · modo {modo}').strip().lower()
         if r in ('', 'ok', 'seguir', 'aplicar'):
             return [i for i in itens if i.marcado]
         if r in ('0', 'v', 'voltar', 'q', 'sair'):
             return None
         mudou = True
-        if r in ('t', 'todos'):
+        m = re.match(r'^(?:\?\s*(\d+)|(\d+)\s*\?)$', r)
+        if m:
+            mudou = False
+            n = int(m.group(1) or m.group(2))
+            if 0 < n <= len(itens):
+                t.escreve()
+                t.escreve(_linha_item(t, itens[n - 1], n))
+                _detalhe_item(t, itens[n - 1])
+            else:
+                t.aviso(f'não existe o item {n}.')
+        elif r in ('?', 'ajuda', 'h', 'm', 'mais'):
+            mudou = False
+            t.escreve()
+            for linha in AJUDA_SELECAO.split('\n'):
+                t.nota(linha, 4)
+            t.paragrafo('À direita de cada item está o modo a partir do qual ele vem marcado; "só se marcar" nunca vem '
+                        'marcado sozinho. "!" é um aviso (veja com ? e o número). Quase tudo volta com o "desfazer".', 4, 'sub')
+        elif r in ('t', 'todos'):
             for i in itens:
                 i.marcado = True
             grupos = set()
@@ -2975,21 +2988,16 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
                 mostra_codigo(t, [itens[n - 1]])
             else:
                 t.aviso(f'não existe o item {n}.')
-        elif r in ('?', 'ajuda', 'h'):
-            mudou = False
-            t.paragrafo('Cada item diz o que faz, o ganho e o custo. "seguro", "equilibrado" e "extremo" à direita '
-                        'dizem a partir de qual modo ele vem marcado; "só se marcar" nunca vem marcado sozinho. '
-                        'Quase tudo volta com o "desfazer".', 2, 'sub')
         else:
-            nums = _numeros(r, len(itens))
+            nums = _numeros(r, len(itens)) if re.match(r'^[\d\s,;-]+$', r) else []
             if not nums:
                 mudou = False
-                t.aviso(f'"{corta(r, 20)}" não é uma opção.')
+                t.aviso(f'"{corta(r, 20)}" não é uma opção. Digite ? para ver todas.')
             for n in nums:
                 _alterna(itens, n - 1)
         if mudou:
             t.escreve()
-            desenha_itens(t, itens, completa and r in ('c', 'completa', 'l', 'listar'))
+            desenha_itens(t, itens, completa)
 
 
 # ─────────────── executar ───────────────
@@ -5270,7 +5278,7 @@ def rel_md(r):
     if r.get('aplicado'):
         L += ['## O que está aplicado (itens por pacote)', '']
         L += _tab(['Pacote', 'Quando', 'Itens'], [[n, _q(v.get('quando', '')), ', '.join(v.get('itens', []))] for n, v in sorted(r['aplicado'].items())])
-    L += ['## Dados em JSON', '', 'Mesma informação, para ferramentas lerem. Também serve de perfil para o comando `perfil importar`.', '',
+    L += ['## Dados em JSON', '', 'Mesma informação, para ferramentas lerem. Também serve de arquivo para o comando `importar`.', '',
           '<!-- katharos:dados:inicio -->', '```json', json.dumps(r, ensure_ascii=False, indent=1), '```', '<!-- katharos:dados:fim -->', '']
     return '\n'.join(L)
 
@@ -6006,9 +6014,9 @@ def ferramenta_cartao(ctx, args):
 
 # ███████████████████████████████████████████████████████████████████████████
 #
-#   PERFIS, ATALHOS E ÁREA DE TRABALHO
-#   perfis prontos (jogo, bateria, PC fraco, privacidade, programador), exportar e importar a configuração,
-#   uma pasta "Katharos" na área de trabalho com atalhos que têm o ícone, e organizar a área de trabalho
+#   ATALHOS, EXPORTAR/IMPORTAR E ÁREA DE TRABALHO
+#   exportar e importar o que foi aplicado, uma pasta "Katharos" na área de trabalho com atalhos que têm o ícone,
+#   e organizar a área de trabalho
 #
 # ███████████████████████████████████████████████████████████████████████████
 
@@ -6016,155 +6024,9 @@ VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': (
                   'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
-# cada perfil: nome, para que serve, e {pacote: [ids dos itens]} ("@seguro" = tudo o que o modo seguro marca).
-# Item que não existe neste PC (ou que a pessoa protegeu) é pulado; nada é aplicado sem a prévia e a confirmação.
-PERFIS = {
-    'jogo': ('Jogos', 'mais fluidez ao jogar: Modo de Jogo, prioridades de CPU e rede, energia no máximo e sem apps em segundo plano. Não mexe no visual', {
-        'jogos': ['modo-jogo', 'gamedvr', 'prioridade-jogos', 'mouse', 'teclado', 'aderencia'],
-        'energia': ['desempenho', 'usb', 'throttling'],
-        'cs2': ['gpu-cs2', 'janela-otim', 'video-cs2', 'cfg-cs2'],
-        'privacidade': ['segundo-plano']}),
-    'bateria': ('Notebook na bateria', 'dura mais longe da tomada: plano fresco, sem efeitos e sem apps em segundo plano', {
-        'energia': ['fresco'],
-        'visual': ['efeitos', 'animacoes', 'transparencia'],
-        'privacidade': ['segundo-plano', 'widgets']}),
-    'fraco': ('PC fraco', 'pouca RAM ou disco lento: tira o que pesa e limpa o lixo', {
-        'visual': ['efeitos', 'animacoes', 'menus', 'transparencia', 'arrastar', 'icones'],
-        'privacidade': ['segundo-plano', 'widgets', 'telemetria', 'telemetria-svc', 'anuncios'],
-        'servicos': ['atualizadores', 'fabricante', 'sob-demanda'],
-        'ia': ['copilot', 'recall', 'ia-servico'],
-        'disco': ['p2p', 'tarefas', 'sensor'],
-        'limpar': ['temp', 'wu', 'erros', 'miniaturas', 'logs']}),
-    'privacidade': ('Privacidade máxima', 'telemetria, anúncios, histórico e IA do Windows desligados', {
-        'privacidade': ['telemetria', 'telemetria-svc', 'autologgers', 'telemetria-tarefas', 'anuncios', 'atividades', 'cortana',
-                        'anuncios-config', 'office-telemetria', 'vs-telemetria', 'firefox-telemetria', 'nuvem-clipboard', 'busca-web',
-                        'widgets', 'segundo-plano', 'erros', 'edge-fundo'],
-        'ia': ['copilot', 'recall', 'recall-recurso', 'paint', 'notepad', 'edge-ia', 'office-ia', 'digitacao', 'ia-servico']}),
-    'dev': ('Programador', 'caminhos longos, extensões visíveis, menu completo e menos escrita em disco', {
-        'ajustes': ['caminhos', 'finalizar'],
-        'visual': ['extensoes', 'menu-classico'],
-        'disco': ['lastaccess', 'ntfs'],
-        'energia': ['desempenho']}),
-    'trabalho': ('PC de trabalho', 'só o que não tem contrapartida (telemetria, anúncios, lixo), no nível do modo seguro', {
-        'privacidade': '@seguro', 'limpar': '@seguro', 'ia': '@seguro'}),
-}
-
-
-# O que cada perfil ataca, de 0 a 5, para o usuário comparar antes de escolher.
-EIXOS = ('desempenho', 'leveza', 'espaço', 'bateria', 'privacidade', 'conforto')
-EIXO_DESCR = {'desempenho': 'FPS e resposta', 'leveza': 'menos RAM e processos', 'espaço': 'libera disco', 'bateria': 'dura mais',
-              'privacidade': 'menos coleta', 'conforto': 'menos atrito no dia a dia'}
-FOCO_PERFIL = {
-    'jogo':        {'desempenho': 5, 'leveza': 2, 'privacidade': 1},
-    'bateria':     {'leveza': 2, 'bateria': 5, 'privacidade': 1},
-    'fraco':       {'desempenho': 3, 'leveza': 5, 'espaço': 4, 'bateria': 1, 'privacidade': 2},
-    'privacidade': {'leveza': 1, 'privacidade': 5},
-    'dev':         {'desempenho': 1, 'espaço': 1, 'conforto': 5},
-    'trabalho':    {'espaço': 2, 'privacidade': 3},
-}
-# (para quem é, o que você perde, risco)
-PERFIL_NOTAS = {
-    'jogo':        ('quem joga no PC ligado na tomada', 'apps em segundo plano deixam de atualizar; o CS2 fica com gráficos mais simples', 'médio'),
-    'bateria':     ('notebook longe da tomada', 'desempenho máximo; animações e transparência', 'baixo'),
-    'fraco':       ('PC com pouca RAM ou HD lento', 'animações, widgets e Copilot; o Windows fica mais "seco"', 'médio'),
-    'privacidade': ('quem não quer ser medido pelo Windows', 'Copilot, Recall, histórico de atividades e busca na web do menu Iniciar', 'médio'),
-    'dev':         ('quem programa', 'nada que pese: só muda o que atrapalha o trabalho', 'baixo'),
-    'trabalho':    ('PC de trabalho, de empresa ou escola', 'quase nada: só o que não tem contrapartida', 'mínimo'),
-}
-
-
-def mostra_perfil(t, chave, detalhado=True, recuo=6, desc=True):
-    """Nome, para quem é, barras do que ele ataca, o que se perde e o risco."""
-    nome, desc_, selecao = todos_perfis()[chave]
-    foco = FOCO_PERFIL.get(chave, {})
-    para, perde, risco = PERFIL_NOTAS.get(chave, ('', '', ''))
-    n = sum(len(v) if isinstance(v, (list, tuple)) else 0 for v in selecao.values())
-    mais = len([1 for v in selecao.values() if isinstance(v, str)])
-    if desc:
-        t.paragrafo(f'{desc_}', recuo, 'sub')
-    if not detalhado:
-        return
-    if para:
-        t.paragrafo('para: ' + para, recuo, 'apagado')
-    for e in EIXOS:
-        v = foco.get(e, 0)
-        if v:
-            blocos = '█' * v + '░' * (5 - v)
-            t.escreve(' ' * recuo + t.p(f'{e:<12}', 'apagado') + t.p(blocos, 'destaque' if v >= 4 else 'texto') + ' ' + t.p(EIXO_DESCR[e], 'apagado'))
-    if perde:
-        t.paragrafo('você perde: ' + perde, recuo, 'apagado')
-    cm = contagem_modos(chave)
-    if cm:
-        t.escreve(' ' * recuo + t.p('modo dos itens: ', 'apagado') + t.p(' · '.join(f'{v} {k}' for k, v in cm.items()), 'texto'))
-    t.escreve(' ' * recuo + t.p('mexe em ', 'apagado') + t.p(f'cerca de {n + 6 * mais} itens' if mais else f'{n} itens', 'texto')
-              + t.p(' · risco ', 'apagado') + t.p(risco, 'verde' if risco in ('baixo', 'mínimo') else 'amarelo'))
-
-
-# Um PC "completo" só para contar os itens de um perfil sem ler o PC de verdade (cartões, site e a lista de perfis).
+# Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
 PC_MODELO = {'jogos': ['Steam'], 'gpus': ['NVIDIA', 'Intel'], 'so': {'win11': True}, 'pc': {'notebook': True},
              'tem': {'nvidia': True, 'edge': True, 'chrome': True, 'office': True, 'onedrive': True}}
-
-
-def itens_do_perfil(chave, perfil=None):
-    """[(pacote, [itens])] do perfil, com o modo (nivel) de cada item. Sem perfil do PC, usa o PC_MODELO."""
-    class _Ctx:
-        pass
-    c = _Ctx()
-    c.perfil = perfil or PC_MODELO
-    out = []
-    for nome, ids in todos_perfis()[chave][2].items():
-        if nome not in PACOTES:
-            continue
-        its = [i for i in (PACOTES[nome].itens(c) or []) if i]
-        if isinstance(ids, str):
-            if ids.startswith('@') and ids[1:] in MODOS:
-                marca_por_modo(its, ids[1:])
-                its = [i for i in its if i.marcado]
-        else:
-            quer = {str(x) for x in ids}
-            its = [i for i in its if i.id in quer]
-        if its:
-            out.append((PACOTES[nome], its))
-    return out
-
-
-def contagem_modos(chave):
-    """{modo: quantos itens do perfil entram nele}"""
-    c = {m: 0 for m in MODOS}
-    c['só se marcar'] = 0
-    for _, its in itens_do_perfil(chave):
-        for i in its:
-            c[NOME_NIVEL.get(i.nivel, 'equilibrado') if i.nivel else 'só se marcar'] += 1
-    return {k: v for k, v in c.items() if v}
-
-
-def perfis_meus():
-    """Perfis que a pessoa salvou: ~/.katharos/perfis/NOME.json -> {chave: (nome, descrição, selecao)}."""
-    out = {}
-    try:
-        arqs = sorted(pasta('perfis').glob('*.json'))
-    except OSError:
-        return out
-    for arq in arqs:
-        d = le_perfil(arq)
-        if d and d['pacotes']:
-            chave = re.sub(r'[^a-z0-9-]', '', arq.stem.lower())[:24]
-            if chave and chave not in PERFIS:
-                out[chave] = (arq.stem[:40], 'perfil seu, salvo em ' + caminho_curto(arq), d['pacotes'])
-    return out
-
-
-def sugestao_para_este_pc(ctx):
-    """(chave, motivo) do perfil sugerido para este PC, ou None. Só lê o PC; a pessoa escolhe."""
-    try:
-        return sugere_perfil(perfil_pc(ctx))
-    except Exception as e:
-        LOG.escreve(f'sugestão de perfil falhou: {e!r}')
-        return None
-
-
-def todos_perfis():
-    return {**PERFIS, **perfis_meus()}
 
 
 def selecao_do_perfil(ctx, selecao):
@@ -6196,7 +6058,7 @@ def pacotes_para_escolher():
 
 def personaliza_selecao(ctx, args, selecao):
     """Deixa a pessoa ajustar item por item o que vai ser aplicado e juntar outros pacotes. Devolve a nova seleção
-    ({pacote: [ids]}) ou None se desistiu. Sem perfil nenhum, começa vazio: é o "montar o seu"."""
+    ({pacote: [ids]}) ou None se desistiu."""
     t = ctx.t
     nova = {}
     for nome, ids in selecao.items():
@@ -6243,22 +6105,8 @@ def personaliza_selecao(ctx, args, selecao):
     return nova
 
 
-def salva_perfil_proprio(ctx, args, selecao):
-    t = ctx.t
-    if not t.interativo or args.sim or args.teste:
-        return
-    nome = t.pergunta('Salvar esta escolha como perfil seu? Dê um nome (Enter = não salvar)').strip()
-    nome = re.sub(r'[^\w .-]', '', nome, flags=re.U).strip()[:40]
-    if not nome:
-        return
-    d = {'katharos': VERSAO, 'tipo': 'perfil', 'criado': agora_iso(), 'pacotes': {n: list(v) for n, v in selecao.items() if isinstance(v, list)}}
-    grava_json(pasta('perfis') / (nome + '.json'), d)
-    t.ok(f'Perfil "{nome}" salvo. Para usar de novo: katharos perfil (ele aparece na lista) ou katharos perfil aplicar ' +
-         re.sub(r'[^a-z0-9-]', '', nome.lower()))
-
-
 def aplica_selecao(ctx, args, titulo, selecao, personalizavel=True):
-    """Mostra o que um perfil (ou uma configuração importada) mudaria, deixa personalizar, pede confirmação e aplica."""
+    """Mostra o que uma configuração importada mudaria, deixa personalizar, pede confirmação e aplica."""
     t = ctx.t
     if not WINDOWS:
         t.erro('O katharos só funciona no Windows.')
@@ -6326,8 +6174,6 @@ def aplica_selecao(ctx, args, titulo, selecao, personalizavel=True):
               ('erros', t.p(str(erros), 'vermelho' if erros else 'apagado')), ('desfazer', 'katharos desfazer tudo')])
     t.fecha_caixa()
     manter_ou_desfazer(ctx, args, [p.nome for p, _ in alvo if p.reversivel])
-    if titulo == 'sua escolha':
-        salva_perfil_proprio(ctx, args, {p.nome: [i.id for i in its] for p, its in alvo})
     return 1 if erros else 0
 
 
@@ -6429,16 +6275,16 @@ PASTA_ATALHOS = 'Katharos'
 
 
 def lista_atalhos():
-    """[(id, nome do atalho, descrição, argumentos)]: o menu, um por perfil, e as ações que mais se repetem."""
-    a = [('menu', 'Abrir o Katharos', 'O menu completo do Katharos', '')]
-    for k, (nome, desc, _) in PERFIS.items():
-        a.append((k, nome, desc, f'perfil aplicar {k}'))
-    a += [('normal', 'Voltar ao normal', 'Desfaz tudo o que o Katharos mudou, valor por valor', 'desfazer tudo'),
-          ('manutencao', 'Manutenção agora', 'Limpeza leve e conferência de saúde do PC', 'agendar --agora'),
-          ('organizar', 'Organizar a área de trabalho', 'Separa os arquivos soltos em pastas, com desfazer', 'organizar'),
-          ('seguranca', 'Auditoria de segurança', 'Só lê: mostra o que está fraco no PC', 'seguranca'),
-          ('relatorio', 'Copiar relatório para a IA', 'Copia o relatório único para colar numa conversa', 'relatorio --copiar')]
-    return a
+    """[(id, nome do atalho, descrição, argumentos)]: o menu e as ações que mais se repetem."""
+    return [('menu', 'Abrir o Katharos', 'O menu do Katharos', ''),
+            ('raiox', 'Raio-x do PC', 'Só lê: dá a nota do PC e diz o que fazer primeiro', 'raiox'),
+            ('turbo', 'Otimizar tudo', 'Otimiza em sequência, no modo que você escolher, com prévia e confirmação', 'turbo'),
+            ('painel', 'Painel', 'Gráficos do PC ao longo do tempo, no navegador', 'painel'),
+            ('normal', 'Voltar ao normal', 'Desfaz tudo o que o Katharos mudou, valor por valor', 'desfazer tudo'),
+            ('manutencao', 'Manutenção agora', 'Limpeza leve e conferência de saúde do PC', 'agendar --agora'),
+            ('organizar', 'Organizar a área de trabalho', 'Separa os arquivos soltos em pastas, com desfazer', 'organizar'),
+            ('seguranca', 'Auditoria de segurança', 'Só lê: mostra o que está fraco no PC', 'seguranca'),
+            ('relatorio', 'Copiar relatório para a IA', 'Copia o relatório único para colar numa conversa', 'relatorio --copiar')]
 
 
 ATALHOS_PS = r'''
@@ -6525,8 +6371,8 @@ def escolhe_atalhos(ctx, args):
     t = ctx.t
     t.aba('uma pasta "Katharos" na área de trabalho, com atalhos que têm o ícone do Katharos')
     t.paragrafo('Cada atalho abre o Katharos já na ação escolhida (ele pede administrador). Tudo fica numa pasta só, '
-                'para não bagunçar a área de trabalho, e você escolhe quais criar. Os perfis sempre mostram a prévia e pedem '
-                'confirmação antes de mudar algo.', 2, 'sub')
+                'para não bagunçar a área de trabalho, e você escolhe quais criar. O que muda o PC sempre mostra a prévia '
+                'e pede confirmação.', 2, 'sub')
     if getattr(args, 'remover', False):
         remove_atalhos(t)
         return 0
@@ -6539,11 +6385,11 @@ def escolhe_atalhos(ctx, args):
         t.titulo('atalhos')
         for i, (id_, nome, desc, _) in enumerate(todos, 1):
             m = t.p('✓', 'verde', True) if id_ in marcados else t.p('○', 'apagado')
-            t.escreve(f'  {m} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if id_ in marcados else "sub")}')
-            t.paragrafo(desc, 8, 'apagado')
+            t.escreve(f'  {m} {t.p(f"{i:>2}", "destaque", True)}  {t.p(f"{nome:<30}", "texto" if id_ in marcados else "sub")}'
+                      f'{t.p(corta(desc, max(10, t.largura - 40)), "apagado")}')
         if getattr(args, 'sim', False) or not t.interativo:
             break
-        t.paragrafo('números marcam e desmarcam · t = todos · n = nenhum · Enter = criar · 0 = cancelar', 2, 'apagado')
+        t.nota('Enter = criar · número = tira ou põe · 0 = cancelar', 2)
         r = t.pergunta(f'{len(marcados)} marcados').strip().lower()
         if r in ('', 'ok'):
             break
@@ -6563,93 +6409,51 @@ def escolhe_atalhos(ctx, args):
     s = cria_atalhos(ctx, [a[0] for a in todos if a[0] in marcados])
     if not getattr(args, 'teste', False):
         marca_estado('atalhos_criados', agora_iso())
-        t.nota('  para tirar: katharos perfil atalhos --remover')
+        t.nota('  para tirar: katharos atalhos --remover')
     return 0 if s.ok else 1
 
 
-# ─────────────── o comando perfil ───────────────
+# ─────────────── atalhos, exportar e importar ───────────────
 
-def ferramenta_perfil(ctx, args):
+def ferramenta_atalhos(ctx, args):
+    return escolhe_atalhos(ctx, args)
+
+
+def ferramenta_exportar(ctx, args):
     t = ctx.t
-    acao = getattr(args, 'acao', None)
     alvo = getattr(args, 'alvo', None)
-    if acao == 'atalhos':
-        return escolhe_atalhos(ctx, args)
-    if acao == 'exportar':
-        t.aba('salva o que está aplicado neste PC para repetir em outro')
-        dest = Path(alvo).expanduser() if alvo else Path.home() / 'katharos-perfil.json'
-        d = perfil_atual()
-        if not d['pacotes']:
-            t.aviso('Nada aplicado ainda: não há o que exportar.')
-            return 0
-        grava_json(dest, d)
-        t.ok(f'Perfil salvo em {caminho_curto(dest)} ({pl(len(d["pacotes"]), "pacote")}). No outro PC: katharos perfil importar ARQUIVO')
+    t.aba('salva o que está aplicado neste PC para repetir em outro')
+    dest = Path(alvo).expanduser() if alvo else Path.home() / 'katharos-exportado.json'
+    d = perfil_atual()
+    if not d['pacotes']:
+        t.aviso('Nada aplicado ainda: não há o que exportar.')
         return 0
-    if acao == 'importar':
-        t.aba('aplica um perfil exportado (ou o relatório único) neste PC')
-        if not alvo:
-            t.erro('Diga o arquivo: katharos perfil importar katharos-perfil.json')
-            return 1
-        d = le_perfil(alvo)
-        if not d or not (d['pacotes'] or d['config']):
-            t.erro(f'Não consegui ler um perfil válido em {alvo}.')
-            return 1
-        t.info('O arquivo só escolhe entre itens que o Katharos já conhece: nada dele é executado como comando.')
-        if d['config']:
-            t.titulo('preferências do arquivo')
-            t.chaves([(k, v) for k, v in d['config'].items()])
-            if not args.teste and t.confirma('Adotar estas preferências?', sim=args.sim):
-                for k, v in d['config'].items():
-                    salva_config(k, v)
-        return aplica_selecao(ctx, args, 'perfil importado', d['pacotes']) if d['pacotes'] else 0
-    if acao == 'montar':
-        t.aba('monte a sua otimização do zero, escolhendo pacotes e itens')
-        t.paragrafo('Sem perfil: você escolhe os pacotes e marca item por item. Antes de aplicar aparece a lista e a confirmação, '
-                    'e no fim dá para salvar como perfil seu.', 2, 'sub')
-        return aplica_selecao(ctx, args, 'sua escolha', {})
-    todos = todos_perfis()
-    if acao == 'aplicar' or (acao and acao in todos):
-        nome = alvo if acao == 'aplicar' else acao
-        if nome not in todos:
-            t.erro('Perfil "' + corta(str(nome), 20) + '" não existe. Opções: ' + ', '.join(todos) + ' (ou "montar")')
-            return 1
-        titulo, desc, selecao = todos[nome]
-        t.aba(f'{titulo}: {desc}')
-        mostra_perfil(t, nome, recuo=2, desc=False)
-        t.escreve()
-        return aplica_selecao(ctx, args, titulo, selecao)
-    t.aba('perfis prontos, atalhos na área de trabalho, exportar e importar')
-    t.paragrafo('Um perfil junta itens de vários comandos para um uso. Cada item tem o seu modo (seguro, equilibrado ou extremo), '
-                'e o perfil escolhe quais itens entram. Antes de aplicar você vê a lista, pode personalizar item por item e confirma.', 2, 'sub')
-    t.titulo('perfis')
-    todos = todos_perfis()
-    chaves = list(todos)
-    sug = sugestao_para_este_pc(ctx)
-    if sug and sug[0] in todos:
-        t.nota(f'  Sugestão para este PC: {todos[sug[0]][0]}, porque {sug[1]}. É só uma sugestão.')
-        t.escreve()
-    for i, k in enumerate(chaves, 1):
-        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}' + (t.p('  (sugerido)', 'verde') if sug and sug[0] == k else ''))
-        mostra_perfil(t, k)
-        t.escreve()
-    t.titulo('outras ações')
-    t.item('m', 'destaque', 'montar', t.p('sem perfil: você escolhe os pacotes e os itens, e pode salvar como seu', 'apagado'))
-    t.item('a', 'destaque', 'atalhos', t.p('pasta Katharos na área de trabalho, com ícone', 'apagado'))
-    t.item('e', 'destaque', 'exportar', t.p('salva o que está aplicado para repetir em outro PC', 'apagado'))
-    t.item('i', 'destaque', 'importar', t.p('aplica um arquivo exportado (ou o relatório único)', 'apagado'))
-    if not t.interativo or args.sim:
-        return 0
-    t.escreve()
-    r = t.pergunta('número do perfil, m, a, e, i (Enter = voltar)').strip().lower()
-    if r.isdigit() and 0 < int(r) <= len(chaves):
-        args.acao, args.alvo = 'aplicar', chaves[int(r) - 1]
-        return ferramenta_perfil(ctx, args)
-    if r in ('m', 'a', 'e', 'i'):
-        args.acao = {'m': 'montar', 'a': 'atalhos', 'e': 'exportar', 'i': 'importar'}[r]
-        if r == 'i':
-            args.alvo = t.pergunta('arquivo (.json ou o relatório .md)').strip().strip('"')
-        return ferramenta_perfil(ctx, args)
+    grava_json(dest, d)
+    t.ok(f'Salvo em {caminho_curto(dest)} ({pl(len(d["pacotes"]), "pacote")}). No outro PC: katharos importar ARQUIVO')
     return 0
+
+
+def ferramenta_importar(ctx, args):
+    t = ctx.t
+    alvo = getattr(args, 'alvo', None)
+    t.aba('aplica neste PC um arquivo exportado (ou o relatório único)')
+    if not alvo and t.interativo and not args.sim:
+        alvo = t.pergunta('arquivo (.json ou o relatório .md)').strip().strip('"')
+    if not alvo:
+        t.erro('Diga o arquivo: katharos importar katharos-exportado.json')
+        return 1
+    d = le_perfil(alvo)
+    if not d or not (d['pacotes'] or d['config']):
+        t.erro(f'Não consegui ler um arquivo válido em {alvo}.')
+        return 1
+    t.info('O arquivo só escolhe entre itens que o Katharos já conhece: nada dele é executado como comando.')
+    if d['config']:
+        t.titulo('preferências do arquivo')
+        t.chaves([(k, v) for k, v in d['config'].items()])
+        if not args.teste and t.confirma('Adotar estas preferências?', sim=args.sim):
+            for k, v in d['config'].items():
+                salva_config(k, v)
+    return aplica_selecao(ctx, args, 'arquivo importado', d['pacotes']) if d['pacotes'] else 0
 
 
 # ─────────────── organizar a área de trabalho ───────────────
@@ -7604,7 +7408,7 @@ def escolhe_modo(t, args):
     t.escreve()
     if getattr(args, 'sim', False) or not t.interativo:
         return padrao
-    r = t.pergunta('modo (número ou nome, Enter = ' + padrao + ')').strip().lower()
+    r = t.pergunta('modo: 1, 2 ou 3 (Enter = ' + padrao + ')').strip().lower()
     return {'1': 'seguro', '2': 'equilibrado', '3': 'extremo'}.get(r, r if r in MODOS else padrao)
 
 
@@ -7682,18 +7486,19 @@ def ferramenta_turbo(ctx, args):
     if not escolhidos:
         t.nota('nada escolhido.')
         return 0
-    detalhar = False
-    if t.interativo and not args.sim:
-        t.paragrafo('Quer revisar item por item de cada etapa agora? Sem revisar, cada etapa usa o que o modo '
-                    f'{modo} marca. s = revisar, Enter = usar o modo', 2, 'apagado')
-        detalhar = t.pergunta('revisar').strip().lower() in ('s', 'sim')
     plano = {'criado': agora_iso(), 'modo': modo, 'etapas': ['medir-antes'] + [i.id for i in escolhidos if i.id != 'reinicio'],
              'itens': {}, 'feitas': [], 'tentativas': {}, 'concluido': False}
     if any(i.id == 'reinicio' for i in escolhidos):
         plano['etapas'] += ['reinicio', 'medir-depois']
     else:
         plano['etapas'] += ['medir-depois']
-    if detalhar:
+
+    def mostra_plano():
+        t.titulo('plano')
+        t.passos([('pendente', e if e not in PACOTES else PACOTES[e].titulo,
+                   ('' if e not in plano['itens'] else pl(len(plano['itens'][e]), 'item', 'itens'))) for e in plano['etapas']])
+
+    def revisa():
         for i in escolhidos:
             if i.id in PACOTES:
                 t.titulo(f'revisar: {PACOTES[i.id].titulo}')
@@ -7704,9 +7509,8 @@ def ferramenta_turbo(ctx, args):
                     continue
                 sel = escolhe_itens(ctx, its, modo, args)
                 plano['itens'][i.id] = [x.id for x in (sel or [])]
-    t.titulo('plano')
-    t.passos([('pendente', e if e not in PACOTES else PACOTES[e].titulo,
-               ('' if e not in plano['itens'] else pl(len(plano['itens'][e]), 'item', 'itens'))) for e in plano['etapas']])
+
+    mostra_plano()
     if args.teste:
         t.escreve()
         t.nota('modo teste: mostrando o que cada etapa faria.')
@@ -7717,12 +7521,29 @@ def ferramenta_turbo(ctx, args):
                     t.titulo(PACOTES[e].titulo)
                     executa_itens(ctx, PACOTES[e], its, teste=True)
         return 0
-    if not t.confirma(f'Começar o turbo no modo {modo}?', sim=args.sim):
-        t.nota('nada foi alterado.')
-        return 0
+    if args.sim or not t.interativo:
+        if not t.confirma(f'Começar o turbo no modo {modo}?', sim=args.sim):
+            t.nota('nada foi alterado.')
+            return 0
+    else:
+        # uma pergunta só: começar, revisar item por item ou desistir
+        while True:
+            t.escreve()
+            t.nota(f'Cada etapa aplica o que o modo {modo} marca. Enter = começar · r = revisar item por item antes · 0 = cancelar', 2)
+            r = t.pergunta(f'começar o turbo no modo {modo}').strip().lower()
+            if r in ('0', 'n', 'nao', 'não', 'q', 'v', 'cancelar'):
+                t.nota('nada foi alterado.')
+                return 0
+            if r in ('r', 'revisar'):
+                revisa()
+                mostra_plano()
+                continue
+            if r in ('', 's', 'sim', 'ok'):
+                break
+            t.aviso(f'"{corta(r, 20)}" não é uma opção.')
     grava_json(ARQ_TURBO, plano)
     rel_secao('turbo', {'modo': plano['modo'], 'etapas': plano['etapas'], 'itens': plano['itens'], 'feitas': [], 'concluido': False})
-    t.nota('  o plano ficou no relatório único: em outro PC, rode "katharos turbo --plano" com esse relatório (ou com o perfil exportado).')
+    t.nota('  o plano ficou no relatório único: em outro PC, rode "katharos turbo --plano" com esse relatório (ou com o arquivo do "exportar").')
     return executa_turbo(ctx, args, plano)
 
 
@@ -10635,7 +10456,7 @@ def avisa_saude(ctx, e):
 #   3. o Windows pede administrador (UAC);  4. o Katharos pergunta de novo, por extenso, antes de qualquer comando;  5. o comando segue o fluxo normal,
 #   com a própria confirmação e o desfazer. O link nunca leva parâmetros, nunca aplica sozinho e só abre comandos da lista abaixo.
 URI_RE = re.compile(r'katharos://([a-z][a-z0-9-]{1,30})/?')
-URI_BLOQUEADOS = frozenset({'desfazer', 'socorro', 'perfil', 'turbo', 'manutencao', 'config', 'estado'})
+URI_BLOQUEADOS = frozenset({'desfazer', 'socorro', 'importar', 'exportar', 'atalhos', 'turbo', 'manutencao', 'config', 'estado'})
 URI_SO_LEITURA = frozenset({'raiox', 'saude', 'verificar', 'benchmark', 'conselheiro', 'painel', 'tendencia', 'seguranca', 'grandes', 'medir', 'memoria', 'portas', 'ajuda'})
 URI_CHAVE = r'Software\Classes\katharos'
 
@@ -10799,25 +10620,31 @@ def ferramenta_config(ctx, args):
         t.ok(f'{DESCR_CONFIG[k][0]}: {config(k)}')
 
 
+# Todos os comandos, em grupos. O menu de abertura mostra só o MENU (seis linhas); os outros ficam em duas telas:
+# "escolher" (as áreas com itens para marcar) e "mais" (as ferramentas). Qualquer nome vale em qualquer tela.
 GRUPOS = [
     ('comece por aqui', 'o raio-x diz o que vale a pena; o turbo faz tudo de uma vez', [
-        ('raiox', 'diagnóstico completo, nota e o que fazer', 'ferramenta_raiox'),
-        ('turbo', 'otimiza tudo em sequência, com reinício', 'ferramenta_turbo'),
-        ('perfil', 'perfis (jogo, bateria...), atalhos e exportar', 'ferramenta_perfil'),
+        ('raiox', 'nota do PC e o que fazer primeiro (só lê)', 'ferramenta_raiox'),
+        ('turbo', 'otimiza tudo de uma vez, no modo que você escolher', 'ferramenta_turbo'),
     ]),
-    ('conhecer o PC', 'só olha, não muda nada', [
+    ('medir', 'só olha, não muda nada', [
         ('medir', 'CPU, RAM, disco e temperatura agora', 'ferramenta_medir'),
         ('benchmark', 'velocidade de disco, CPU e RAM, antes e depois', 'ferramenta_benchmark'),
         ('memoria', 'quem usa a RAM e o que liberar', 'ferramenta_memoria'),
-        ('tendencia', 'o PC está piorando com o tempo? (segundo plano)', 'ferramenta_tendencia'),
+    ]),
+    ('acompanhar', 'o PC ao longo do tempo, com o segundo plano', [
         ('painel', 'gráficos do PC ao longo do tempo, no navegador', 'ferramenta_painel'),
+        ('tendencia', 'o PC está piorando com o tempo?', 'ferramenta_tendencia'),
         ('conselheiro', 'propõe mudanças com base nas medidas', 'ferramenta_conselheiro'),
         ('saude', 'erros do Windows, drivers e o que ajustar', 'ferramenta_saude'),
+        ('agendar', 'segundo plano: manutenção e medidas sozinhas', 'ferramenta_agendar'),
+    ]),
+    ('segurança', 'só olha, não muda nada', [
         ('seguranca', 'auditoria: o que está fraco na segurança', 'ferramenta_seguranca'),
         ('portas', 'quem escuta em cada porta, e para quem', 'ferramenta_portas'),
         ('segredos', 'chaves esquecidas nos seus projetos', 'ferramenta_segredos'),
     ]),
-    ('liberar espaço e arrumar', 'apaga lixo e organiza; arquivos seus vão para a Lixeira ou voltam com desfazer', [
+    ('espaço', 'arquivos seus vão para a Lixeira ou voltam com desfazer', [
         ('limpar', 'temporários, caches e restos', 'pacote'),
         ('grandes', 'arquivos grandes e duplicados', 'ferramenta_grandes'),
         ('organizar', 'área de trabalho em pastas, com desfazer', 'ferramenta_organizar'),
@@ -10834,26 +10661,27 @@ GRUPOS = [
         ('ia', 'Copilot, Recall e IA do Windows', 'pacote'),
         ('navegador', 'Chrome, Edge e Brave mais leves', 'pacote'),
     ]),
-    ('desempenho', 'jogos, Steam, energia, disco e internet', [
-        ('jogos', 'Modo de Jogo, prioridades, latência', 'pacote'),
+    ('desempenho', 'energia, disco e internet', [
         ('energia', 'plano de energia, turbo e USB', 'pacote'),
         ('disco', 'menos escrita, boot mais rápido', 'pacote'),
         ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
-        ('steam', 'Steam: disco, tela e o que atrapalha (só lê)', 'ferramenta_steam'),
+    ]),
+    ('jogos', 'o Windows para jogar e os ajustes de cada jogo', [
+        ('jogos', 'Modo de Jogo, prioridades, latência', 'pacote'),
         ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
         ('minecraft', 'Minecraft Java: distância e partículas', 'pacote'),
         ('unreal', 'Satisfactory e Stray: gráficos no arquivo do jogo', 'pacote'),
+        ('steam', 'Steam: disco, tela e o que atrapalha (só lê)', 'ferramenta_steam'),
     ]),
-    ('consertar e manter em dia', 'quando algo quebra ou envelhece', [
+    ('manutenção', 'quando algo quebra ou envelhece', [
         ('reparar', 'DISM, SFC, chkdsk, rede e Update', 'pacote'),
         ('atualizar', 'Windows, drivers e programas', 'pacote'),
-        ('agendar', 'segundo plano: manutenção sozinha, com o Windows', 'ferramenta_agendar'),
     ]),
     ('gosto pessoal', 'aparência e atalhos; nada aqui vem marcado', [
         ('ajustes', 'barra, relógio, Num Lock, atualizações', 'pacote'),
         ('interface', 'área de trabalho e atalhos do Edge', 'pacote'),
     ]),
-    ('voltar atrás e conferir', 'ver o que mudou e voltar', [
+    ('voltar atrás', 'ver o que mudou e voltar', [
         ('desfazer', 'volta qualquer mudança, valor por valor', 'ferramenta_desfazer'),
         ('socorro', 'o PC ficou estranho: volta tudo de uma vez', 'ferramenta_socorro'),
         ('retomar', 'termina o que ficou pela metade', 'ferramenta_retomar'),
@@ -10861,13 +10689,45 @@ GRUPOS = [
         ('verificar', 'confere se o que foi aplicado continua valendo', 'ferramenta_verificar'),
         ('estado', 'o que já foi aplicado neste PC', 'ferramenta_estado'),
     ]),
-    ('resultado e preferências', 'mostrar e configurar', [
+    ('resultado', 'mostrar o que mudou e levar para outro PC', [
         ('cartao', 'antes e depois, num cartão para mostrar', 'ferramenta_cartao'),
         ('relatorio', 'o relatório único: copiar para a IA ou salvar', 'ferramenta_relatorio'),
+        ('exportar', 'salva o que foi aplicado, para repetir em outro PC', 'ferramenta_exportar'),
+        ('importar', 'aplica um arquivo exportado (ou o relatório)', 'ferramenta_importar'),
+    ]),
+    ('preferências', 'como o Katharos se comporta neste PC', [
+        ('atalhos', 'pasta Katharos na área de trabalho, com ícone', 'ferramenta_atalhos'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
         ('ajuda', 'os passos mais comuns, em poucas linhas', 'ferramenta_ajuda'),
     ]),
 ]
+# O menu de abertura: poucas linhas. "escolher" e "mais" abrem as telas com o resto.
+MENU = [
+    ('raiox', 'nota do PC e o que fazer primeiro (só lê)'),
+    ('turbo', 'otimiza tudo de uma vez, no modo que você escolher'),
+    ('escolher', 'otimiza por área: você escolhe a área e os itens'),
+    ('painel', 'gráficos do PC ao longo do tempo, no navegador'),
+    ('desfazer', 'volta qualquer mudança'),
+    ('mais', 'medir, acompanhar, segurança, preferências...'),
+]
+TELAS = ('escolher', 'mais')
+
+
+def grupos_da_tela(tela):
+    """Os grupos de uma tela do menu: "escolher" = só as áreas com itens para marcar; "mais" = as ferramentas
+    que não estão no menu de abertura. Grupo vazio some."""
+    no_menu = {c for c, _ in MENU}
+    out = []
+    for titulo, expl, itens in GRUPOS:
+        if tela == 'escolher':
+            fica = [(c, d) for c, d, f in itens if f == 'pacote']
+        else:
+            fica = [(c, d) for c, d, f in itens if f != 'pacote' and c not in no_menu]
+        if fica:
+            out.append((titulo, expl, fica))
+    return out
+
+
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
@@ -10884,7 +10744,7 @@ def roda_ferramenta(ctx, args, abre=True):
         antes = (estado().get('duracoes') or {}).get(args.comando)
         if antes and antes > 20:
             t.nota(f'  Da última vez, neste PC, levou cerca de {duracao(antes)}.')
-        if f in ('pacote', 'ferramenta_turbo', 'ferramenta_perfil') and not bench_salvos():
+        if f in ('pacote', 'ferramenta_turbo') and not bench_salvos():
             t.nota('  Para medir o ganho com número, rode "benchmark" antes e depois (leva cerca de 1 minuto).')
     inicio = time.time()
     trava = None
@@ -10973,10 +10833,12 @@ def monta_parser():
     d = sub.add_parser('desfazer', parents=[depois], help='desfaz pacotes (nome do pacote ou "tudo")')
     d.add_argument('pacotes', nargs='*', help='ex.: servicos privacidade, ou tudo')
     sub.add_parser('estado', parents=[depois], help='o que já foi aplicado')
-    pe = sub.add_parser('perfil', parents=[depois], help='perfis prontos, atalhos na área de trabalho, exportar e importar')
-    pe.add_argument('acao', nargs='?', help='montar (do zero), aplicar, atalhos, exportar, importar (ou o nome de um perfil: ' + ', '.join(PERFIS) + ')')
-    pe.add_argument('alvo', nargs='?', help='nome do perfil (aplicar) ou arquivo (exportar, importar)')
-    pe.add_argument('--remover', action='store_true', help='com "atalhos": tira a pasta Katharos da área de trabalho')
+    at = sub.add_parser('atalhos', parents=[depois], help='pasta Katharos na área de trabalho, com atalhos que têm o ícone')
+    at.add_argument('--remover', action='store_true', help='tira a pasta Katharos da área de trabalho')
+    ex = sub.add_parser('exportar', parents=[depois], help='salva o que está aplicado neste PC, para repetir em outro')
+    ex.add_argument('alvo', nargs='?', help='arquivo de destino (padrão: katharos-exportado.json na sua pasta)')
+    im = sub.add_parser('importar', parents=[depois], help='aplica neste PC um arquivo exportado (ou o relatório único)')
+    im.add_argument('alvo', nargs='?', help='o arquivo .json exportado, ou o relatório .md')
     sub.add_parser('seguranca', parents=[depois], help='auditoria de segurança (só lê)')
     po = sub.add_parser('portas', parents=[depois], help='quem escuta em cada porta, e para quem')
     po.add_argument('filtro', nargs='?', help='só esta porta (ex.: 3000)')
@@ -11012,108 +10874,120 @@ def _defaults(args):
 
 
 def primeira_vez(ctx, args=None):
-    """Na primeira abertura: oferece o atalho com ícone na área de trabalho e pergunta para que o PC é usado."""
+    """Na primeira abertura: oferece o atalho com ícone na área de trabalho. Nada mais é perguntado."""
     t = ctx.t
     if not WINDOWS or not t.interativo or estado().get('primeira_vez'):
         return None
     marca_estado('primeira_vez', agora_iso())
+    if estado().get('atalhos_criados'):
+        return None
     t.limpa()
     t.logo('KATHAROS')
-    if not estado().get('atalhos_criados'):
-        t.titulo('atalho na área de trabalho')
-        t.paragrafo('Posso criar uma pasta "Katharos" na sua área de trabalho, com o ícone, um atalho para abrir o menu e outro '
-                    'para desfazer tudo. Os relatórios ficam na pasta que você baixou, em "relatorios": deixe ela onde está.', 2, 'sub')
-        if t.confirma('Criar a pasta Katharos na área de trabalho?'):
-            s = cria_atalhos(ctx, ['menu', 'normal'])
-            if s.ok:
-                marca_estado('atalhos_criados', agora_iso())
-        t.escreve()
-    t.titulo('para que você usa este PC?')
-    t.paragrafo('Um perfil escolhe os ajustes para esse uso. Antes de aplicar você vê a lista, pode tirar ou pôr itens e confirma.', 2, 'sub')
-    todos = todos_perfis()
-    chaves = list(todos)
-    sug = sugestao_para_este_pc(ctx)
-    if sug and sug[0] in todos:
-        t.nota(f'  Para este PC, a sugestão é {todos[sug[0]][0]}, porque {sug[1]}.')
-    for i, k in enumerate(chaves, 1):
-        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}  {t.p(corta(todos[k][1], max(10, t.largura - 8 - len(todos[k][0]))), "apagado")}')
-    t.escreve(f'  {t.p(" m", "destaque", True)}  {t.p("montar o meu", "texto", True)}  {t.p("sem perfil: escolho os pacotes e os itens", "apagado")}')
-    r = t.pergunta('número, m, ou Enter para só abrir o menu').strip().lower()
-    if r == 'm':
-        return ('montar', None)
-    if r.isdigit() and 0 < int(r) <= len(chaves):
-        return ('aplicar', chaves[int(r) - 1])
+    t.titulo('atalho na área de trabalho')
+    t.paragrafo('Posso criar uma pasta "Katharos" na sua área de trabalho, com o ícone, um atalho para abrir o menu e outro '
+                'para desfazer tudo. Os relatórios ficam na pasta que você baixou, em "relatorios": deixe ela onde está.', 2, 'sub')
+    if t.confirma('Criar a pasta Katharos na área de trabalho?'):
+        s = cria_atalhos(ctx, ['menu', 'normal'])
+        if s.ok:
+            marca_estado('atalhos_criados', agora_iso())
     return None
 
 
-def menu(ctx, parser, args):
+def _roda_do_menu(ctx, parser, args, cmd):
+    """Roda um comando escolhido no menu e, se o raio-x sugeriu telas, oferece uma de cada vez."""
+    t = ctx.t
+    try:
+        sub_args = _defaults(parser.parse_args([cmd]))
+    except SystemExit:
+        return
+    for k in ('ascii', 'sem_cor', 'teste', 'sim', 'modo'):
+        if getattr(args, k, None):
+            setattr(sub_args, k, getattr(args, k))
+    t.limpa()
+    roda_ferramenta(ctx, sub_args)
+    while ctx.proximos:
+        prox = ctx.proximos.pop(0)
+        if prox not in COMANDOS:
+            continue
+        t.escreve(guia=False)
+        try:
+            if t.pergunta(f'próxima sugestão: {prox}. Enter = abrir, p = pular, v = voltar ao menu').strip().lower() in ('v', 'voltar'):
+                ctx.proximos = []
+                break
+        except KeyboardInterrupt:
+            ctx.proximos = []
+            break
+        sa = _defaults(parser.parse_args([prox]))
+        for k in ('ascii', 'sem_cor', 'teste', 'sim', 'modo'):
+            if getattr(args, k, None):
+                setattr(sa, k, getattr(args, k))
+        roda_ferramenta(ctx, sa)
+    t.escreve(guia=False)
+    t.espera('Enter para voltar ao menu')
+
+
+def menu(ctx, parser, args, tela=None):
+    """O menu, em três níveis curtos: a abertura (seis linhas), a tela "escolher" ou "mais" (uma linha por grupo)
+    e o grupo (os comandos dele). Em qualquer nível vale o número da linha ou o nome de qualquer comando."""
     t = ctx.t
     aviso = ''
-    inicio = primeira_vez(ctx)
-    if inicio:
-        args.comando, args.acao, args.alvo = 'perfil', inicio[0], inicio[1]
-        ferramenta_perfil(ctx, args)
-        t.pergunta('Enter para abrir o menu')
-    usados = estado().get('usado', {})
+    grupo = None   # (título, explicação, [(comando, descrição)]) quando um grupo está aberto
+    primeira_vez(ctx)
     while True:
+        usados = estado().get('usado', {})
         t.limpa()
         t.logo('KATHAROS')
         extra = ' · '.join(x for x in ((f'modo {config("modo")}' if config('modo') != PADROES['modo'] else ''), ('sem administrador' if WINDOWS and not eh_admin() else '')) if x)
-        t.cabecalho('início', extra, app=APP)
+        t.cabecalho('início' if not tela else (tela if not grupo else f'{tela} › {grupo[0]}'), extra, app=APP)
         if not WINDOWS:
             t.aviso('Este computador não é Windows: dá para ver o menu, mas os comandos só funcionam no Windows.')
         quando = {c: ha_quanto_iso(q) for c, q in usados.items()}
-        por_numero = t.menu_itens([(g, e, [(c, d) for c, d, _ in itens]) for g, e, itens in GRUPOS], quando,
-                                  destaque={'raiox': 'comece aqui'} if not usados.get('raiox') else None)
+        grupos = grupos_da_tela(tela) if tela else []
+        if not tela:
+            por_numero = t.menu_itens([('', '', MENU)], quando, destaque={'raiox': 'comece aqui'} if not usados.get('raiox') else None)
+        elif grupo:
+            if grupo[1]:
+                t.paragrafo(grupo[1], 2, 'apagado')
+                t.escreve()
+            por_numero = t.menu_itens([('', '', grupo[2])], quando, zero='voltar')
+        else:
+            t.paragrafo('Escolha uma área. Dentro dela os itens já vêm marcados pelo modo, e você tira ou põe o que quiser.'
+                        if tela == 'escolher' else 'As outras ferramentas, por assunto.', 2, 'apagado')
+            t.escreve()
+            por_numero = t.menu_itens([('', '', [(g[0], ' · '.join(c for c, _ in g[2])) for g in grupos])], zero='voltar')
         if aviso:
             t.aviso(aviso)
             aviso = ''
         if ctx.proximos:
             t.info('sugeridos pelo raio-x: ' + ' · '.join(ctx.proximos))
             t.escreve()
-        if usados.get('raiox') and not estado().get('atalhos_criados'):
-            t.nota('dica: "perfil" aplica ajustes por uso (jogo, bateria...) ou deixa você montar o seu; "perfil" > atalhos põe um clique por perfil na área de trabalho', 2)
-        t.nota('digite o número ou o nome · 0 sai · Ctrl+C cancela qualquer tela', 2)
-        t.escreve()
+        t.nota('número ou nome de um comando · 0 ' + ('sai' if not tela else 'volta'), 2)
         escolha = t.pergunta('o que fazer').strip().lower()
-        if escolha in ('', '0', 'q', 'sair'):
-            t.fim('até mais', 'nada')
-            return 0
-        cmd = por_numero.get(escolha) or (escolha if escolha in COMANDOS else None)
-        if not cmd:
-            aviso = f'"{corta(escolha, 20)}" não é uma das opções.'
+        if escolha in ('', '0', 'q', 'sair', 'v', 'voltar'):
+            if grupo:
+                grupo = None
+            elif tela:
+                tela = None
+            else:
+                t.fim('até mais', 'nada')
+                return 0
             continue
-        try:
-            sub_args = _defaults(parser.parse_args([cmd]))
-        except SystemExit:
-            continue
-        for k in ('ascii', 'sem_cor', 'teste', 'sim', 'modo'):
-            if getattr(args, k, None):
-                setattr(sub_args, k, getattr(args, k))
-        t.limpa()
-        roda_ferramenta(ctx, sub_args)
-        # o raio-x pode sugerir telas: abre uma de cada vez
-        while ctx.proximos:
-            prox = ctx.proximos.pop(0)
-            if prox not in COMANDOS:
+        cmd = por_numero.get(escolha) or (escolha if escolha in COMANDOS or escolha in TELAS else None)
+        if cmd and tela and not grupo and cmd not in COMANDOS and cmd not in TELAS:   # uma linha de grupo
+            g = next(x for x in grupos if x[0] == cmd)
+            if len(g[2]) > 1:
+                grupo = g
                 continue
-            t.escreve(guia=False)
-            try:
-                if t.pergunta(f'próxima sugestão: {prox}. Enter = abrir, p = pular, v = voltar ao menu').strip().lower() in ('v', 'voltar'):
-                    ctx.proximos = []
-                    break
-            except KeyboardInterrupt:
-                ctx.proximos = []
-                break
-            sa = _defaults(parser.parse_args([prox]))
-            for k in ('ascii', 'sem_cor', 'teste', 'sim', 'modo'):
-                if getattr(args, k, None):
-                    setattr(sa, k, getattr(args, k))
-            roda_ferramenta(ctx, sa)
-        usados = estado().get('usado', {})
-        t.escreve(guia=False)
+            cmd = g[2][0][0]   # grupo de um comando só: abre direto
+        if not cmd:
+            perto = comando_parecido(escolha)
+            aviso = f'"{corta(escolha, 20)}" não é uma das opções.' + (f' Você quis dizer "{perto}"?' if perto else '')
+            continue
+        if cmd in TELAS:
+            tela, grupo = cmd, None
+            continue
         try:
-            t.espera('Enter para voltar ao menu')
+            _roda_do_menu(ctx, parser, args, cmd)
         except KeyboardInterrupt:
             return 130
 
@@ -11130,7 +11004,8 @@ def ferramenta_ajuda(ctx, args):
     t.aba('o essencial, em poucas linhas')
     passos = [
         ('raiox', 'mede o PC, dá uma nota e diz o que fazer primeiro. Não muda nada.'),
-        ('perfil', 'escolhe os ajustes pelo uso do PC (jogos, bateria, PC fraco...). Você vê a lista antes de aplicar.'),
+        ('turbo', 'otimiza tudo de uma vez. Você escolhe o modo (seguro, equilibrado ou extremo) e vê o plano antes de aplicar.'),
+        ('escolher', 'no menu: abre as áreas (limpar, privacidade, jogos...) para marcar item por item.'),
         ('benchmark', 'mede disco, CPU e RAM. Rode antes e depois para saber se mudou de verdade.'),
         ('desfazer', 'volta qualquer mudança. Se o PC ficou estranho, "socorro" volta tudo de uma vez.'),
         ('relatorio', 'o relatório do que foi feito, pronto para pedir ajuda (confira o nome do PC antes de compartilhar).'),
@@ -11151,7 +11026,11 @@ def main(argv=None):
     sem_janela_global()
     cru = list(argv if argv is not None else sys.argv[1:])
     primeiro = cru[0] if cru and not cru[0].startswith('-') else None
-    if primeiro and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar'):
+    tela = primeiro if primeiro in TELAS else None
+    if tela:
+        cru = cru[1:]
+        argv = cru
+    if primeiro and not tela and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar'):
         perto = comando_parecido(primeiro)
         if perto:
             print(f'katharos: "{primeiro}" não é um comando. Você quis dizer "{perto}"?  (katharos ajuda mostra o essencial)')
@@ -11182,7 +11061,7 @@ def main(argv=None):
     try:
         if args.comando:
             return roda_ferramenta(ctx, args)
-        return menu(ctx, parser, args)
+        return menu(ctx, parser, args, tela)
     except KeyboardInterrupt:
         t.fim('interrompido', 'erro')
         t.escreve(guia=False)
