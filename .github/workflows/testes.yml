@@ -2,11 +2,18 @@ name: testes
 on: [push, pull_request]
 jobs:
   python:
-    runs-on: ubuntu-latest
+    # 3.8 é o mínimo prometido; o runner novo do Ubuntu não traz essa versão, por isso a 22.04 para ela.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, python: '3.8' }
+          - { os: ubuntu-latest, python: '3.13' }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.8' }
+        with: { python-version: '${{ matrix.python }}' }
       - run: python -m unittest discover -s tests -v
   powershell:
     # Confere a sintaxe de todo script de item no PowerShell 5.1 de verdade (o do Windows).
@@ -26,3 +33,33 @@ jobs:
           }
           Write-Host "$ruim script(s) com erro de sintaxe"
           if ($ruim) { exit 1 }
+  windows-real:
+    # Roda o programa de verdade num Windows descartável: benchmark e ida e volta do desfazer.
+    # Experimental: ainda não vimos este job rodar, por isso não derruba o resultado geral.
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: testes de unidade no Windows
+        run: python -m unittest discover -s tests -v
+      - name: benchmark apaga os arquivos de teste
+        shell: pwsh
+        run: |
+          python programa/katharos.py benchmark --sem-cor
+          $sobrou = @(Get-ChildItem "$HOME\.katharos\bench" -ErrorAction SilentlyContinue).Count
+          Write-Host "arquivos sobrando em bench: $sobrou"
+          if ($sobrou) { exit 1 }
+      - name: ida e volta do desfazer (privacidade)
+        shell: pwsh
+        run: |
+          reg export "HKCU\Software" "$env:RUNNER_TEMP\antes.reg" /y | Out-Null
+          python programa/katharos.py privacidade --sim --modo seguro --sem-cor
+          python programa/katharos.py desfazer privacidade --sim --sem-cor
+          reg export "HKCU\Software" "$env:RUNNER_TEMP\depois.reg" /y | Out-Null
+          $a = Get-Content "$env:RUNNER_TEMP\antes.reg" | Where-Object { $_ -and $_ -notmatch '^(Windows Registry|\[)' } | Sort-Object
+          $d = Get-Content "$env:RUNNER_TEMP\depois.reg" | Where-Object { $_ -and $_ -notmatch '^(Windows Registry|\[)' } | Sort-Object
+          $dif = Compare-Object $a $d
+          Write-Host "linhas diferentes entre antes e depois: $(@($dif).Count)"
+          $dif | Select-Object -First 30 | ForEach-Object { Write-Host "$($_.SideIndicator) $($_.InputObject)" }

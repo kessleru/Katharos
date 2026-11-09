@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime
 
-VERSAO = '1.2.0'
+VERSAO = '1.3.0'
 DATA_VERSAO = '9 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -1599,9 +1599,9 @@ $f = Join-Path $BK 'mudancas.jsonl'
 if (-not (Test-Path -LiteralPath $f)) { Aviso 'nada guardado para desfazer neste pacote'; return }
 $linhas = @(Get-Content -LiteralPath $f -Encoding UTF8 | Where-Object { $_ })
 [array]::Reverse($linhas)
-$n = 0
+$n = 0; $ruins = 0
 foreach ($l in $linhas) {
-    try { $o = ConvertFrom-Json $l } catch { continue }
+    try { $o = ConvertFrom-Json $l } catch { $ruins++; continue }
     if ($TESTE) { Plano ("voltar {0}: {1}{2}" -f $o.t, $o.n, $o.de); continue }
     try {
         switch ($o.t) {
@@ -1635,6 +1635,7 @@ foreach ($l in $linhas) {
         $n++
     } catch { Aviso ("nao voltou {0}: {1}" -f $o.k, $_.Exception.Message) }
 }
+if ($ruins) { Aviso ("{0} linha(s) do registro de mudancas estavam ilegiveis e nao puderam voltar (o arquivo foi guardado)" -f $ruins) }
 if (-not $TESTE) {
     Rename-Item -LiteralPath $f -NewName ("mudancas-desfeito-{0:yyyyMMdd-HHmmss}.jsonl" -f (Get-Date))
     Feito ("{0} mudancas voltaram ao estado de antes" -f $n)
@@ -1854,7 +1855,10 @@ def roda_exe(cmd, minutos, pr=None, mult=1.0, saida_arq=None):
     mostrando a última linha no progresso. Devolve (código, texto completo); código -1 = tempo esgotado."""
     LOG.escreve('--- ' + subprocess.list2cmdline([str(c) for c in cmd]))
     try:
-        p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        # no Windows, as ferramentas pesadas (DISM, sfc, chkdsk) rodam com prioridade abaixo do normal: o PC continua usável
+        flags = getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0) if WINDOWS else 0
+        p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                             creationflags=flags)
     except OSError as e:
         return 127, str(e)
     fila = queue.Queue()
@@ -2161,6 +2165,11 @@ def perfil_pc(ctx, forca=False):
     ctx.mult = fator_hardware(p)
     if p is not PERFIL_VAZIO:
         rel_pc(p)
+        if not so_reconhecido(p):
+            if ctx.args is not None:
+                ctx.args.modo = 'seguro'
+            ctx.t.aviso('Não reconheci esta versão do Windows (só conheço Windows 10 e 11). Por segurança, '
+                        'só vão marcados os itens do modo seguro, e você pode ver cada item antes de confirmar.')
     return p
 
 
@@ -2179,6 +2188,34 @@ def pf(p, caminho, padrao=None):
             return padrao
         v = v.get(k)
     return padrao if v is None else v
+
+
+def so_reconhecido(p):
+    """O build do Windows foi lido e é de Windows 10 ou 11 (10240 ou mais)? Sem isso, os itens que dependem de versão
+    não têm base para decidir."""
+    return (pf(p, 'so.build', 0) or 0) >= 10240
+
+
+GPU_DEDICADA = re.compile(r'nvidia|geforce|radeon rx|radeon pro|arc a\d|arc b\d', re.I)
+
+
+def sugere_perfil(p):
+    """(chave do perfil, motivo) para este PC, ou None quando nada se destaca. É só uma sugestão: a pessoa escolhe."""
+    ram = pf(p, 'ram.total', 0) or 0
+    if eh_hd(p):
+        return 'fraco', 'o Windows está num HD mecânico, que é o que mais pesa em PC lento'
+    if 0 < ram <= 6:
+        return 'fraco', f'tem só {ram:g} GB de RAM'
+    if pf(p, 'pc.dominio') or pf(p, 'pc.gerenciado'):
+        return 'trabalho', 'é um PC de empresa ou escola, onde só o que é seguro vale a pena'
+    dedicada = any(GPU_DEDICADA.search(str(g)) for g in lista(pf(p, 'gpus', [])))
+    if lista(pf(p, 'jogos', [])) and dedicada:
+        return 'jogo', 'tem jogos instalados e placa de vídeo dedicada'
+    if pf(p, 'pc.notebook') and pf(p, 'pc.bateria', True):
+        return 'bateria', 'é um notebook, e a bateria é o que mais se sente'
+    if pf(p, 'tem.wsl') or pf(p, 'tem.docker') or pf(p, 'tem.visualstudio'):
+        return 'dev', 'tem ferramentas de programação (WSL, Docker ou Visual Studio)'
+    return None
 
 
 def eh_hd(p):
@@ -5874,6 +5911,15 @@ def perfis_meus():
     return out
 
 
+def sugestao_para_este_pc(ctx):
+    """(chave, motivo) do perfil sugerido para este PC, ou None. Só lê o PC; a pessoa escolhe."""
+    try:
+        return sugere_perfil(perfil_pc(ctx))
+    except Exception as e:
+        LOG.escreve(f'sugestão de perfil falhou: {e!r}')
+        return None
+
+
 def todos_perfis():
     return {**PERFIS, **perfis_meus()}
 
@@ -6335,8 +6381,12 @@ def ferramenta_perfil(ctx, args):
     t.titulo('perfis')
     todos = todos_perfis()
     chaves = list(todos)
+    sug = sugestao_para_este_pc(ctx)
+    if sug and sug[0] in todos:
+        t.nota(f'  Sugestão para este PC: {todos[sug[0]][0]}, porque {sug[1]}. É só uma sugestão.')
+        t.escreve()
     for i, k in enumerate(chaves, 1):
-        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}')
+        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}' + (t.p('  (sugerido)', 'verde') if sug and sug[0] == k else ''))
         mostra_perfil(t, k)
         t.escreve()
     t.titulo('outras ações')
@@ -7985,6 +8035,17 @@ def mostra_bench(t, atual, antes=None, rotulo_antes=''):
     t.escreve()
 
 
+def bateria_fraca(ctx):
+    """Notebook na bateria com menos de 30%? O teste gasta bateria e a CPU pode baixar o clock, o que falsearia a medida."""
+    if not WINDOWS:
+        return False
+    corpo = ("$b = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1\n"
+             "if ($b) { Dado 'bateria' @{ carga = [int]$b.EstimatedChargeRemaining; ligada = ([int]$b.BatteryStatus -ne 1) } }")
+    s = roda_ps(ctx.t, corpo, 'bateria', minutos=1, mostra=False)
+    d = s.dados.get('bateria') or {}
+    return bool(d) and not d.get('ligada') and (d.get('carga') or 100) < 30
+
+
 def ferramenta_benchmark(ctx, args):
     t = ctx.t
     rapido = not getattr(args, 'completo', False)
@@ -7996,6 +8057,9 @@ def ferramenta_benchmark(ctx, args):
         t.item('○', 'azul', f'{REPETICOES["rapido" if rapido else "completo"]} rodadas de 4 testes, até 64 MB no disco', recuo=2, cor_nome='sub')
         return 0
     if not exige_espaco(t, 'bench', 'benchmark'):
+        return 1
+    if bateria_fraca(ctx):
+        t.aviso('O notebook está na bateria com menos de 30%. Ligue na tomada e rode de novo: o teste gasta bateria e a CPU baixaria o clock, o que falsearia a medida.')
         return 1
     ok, gb, _ = espaco_ok('bench')
     leve = bool(gb and gb < 5)
@@ -8136,11 +8200,12 @@ GRUPOS = [
         ('cartao', 'antes e depois, num cartão para mostrar', 'ferramenta_cartao'),
         ('relatorio', 'o relatório único: copiar para a IA ou salvar', 'ferramenta_relatorio'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
+        ('ajuda', 'os passos mais comuns, em poucas linhas', 'ferramenta_ajuda'),
     ]),
 ]
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
-SEM_ESTADO = {'config', 'estado', 'desfazer', 'socorro', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -8149,6 +8214,12 @@ def roda_ferramenta(ctx, args, abre=True):
     if abre:
         extra = (f'modo {getattr(args, "modo", None) or config("modo")}' if f in ('pacote', 'ferramenta_turbo') else '')
         t.cabecalho(args.comando, ' · '.join(x for x in (extra, 'teste: nada é alterado' if args.teste else '') if x), app=APP)
+    if not getattr(args, 'teste', False) and args.comando not in SEM_ESTADO:
+        antes = (estado().get('duracoes') or {}).get(args.comando)
+        if antes and antes > 20:
+            t.nota(f'  Da última vez, neste PC, levou cerca de {duracao(antes)}.')
+        if f in ('pacote', 'ferramenta_turbo', 'ferramenta_perfil') and not bench_salvos():
+            t.nota('  Para medir o ganho com número, rode "benchmark" antes e depois (leva cerca de 1 minuto).')
     inicio = time.time()
     trava = None
     if args.comando not in SEM_ESTADO and not getattr(args, 'teste', False) and not getattr(args, 'codigo', False):
@@ -8168,6 +8239,9 @@ def roda_ferramenta(ctx, args, abre=True):
     if args.comando not in SEM_ESTADO:
         e = estado()
         e.setdefault('usado', {})[args.comando] = agora_iso()
+        gasto = time.time() - inicio
+        if not cod and gasto > 5:
+            e.setdefault('duracoes', {})[args.comando] = round(gasto)
         salva_estado(e)
     rel_fim(ctx, args)
     t.fim(('concluído em ' if not cod else 'terminou com pendências · ') + duracao(time.time() - inicio), 'ok' if not cod else 'aviso')
@@ -8201,6 +8275,7 @@ def monta_parser():
     sub.add_parser('medir', parents=[depois], help='medidas agora, comparadas com a primeira')
     pb = sub.add_parser('benchmark', parents=[depois], help='disco, CPU e RAM com repetição, comparado com o anterior')
     pb.add_argument('--completo', action='store_true', help='mais rodadas (leva alguns minutos); o padrão é o rápido, cerca de 1 minuto')
+    sub.add_parser('ajuda', parents=[depois], help='os passos mais comuns')
     sub.add_parser('socorro', parents=[depois], help='desfaz tudo o que o Katharos mudou e explica o ponto de restauração')
     sub.add_parser('memoria', parents=[depois], help='uso da RAM e limpeza da memória em espera')
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
@@ -8276,6 +8351,9 @@ def primeira_vez(ctx, args=None):
     t.paragrafo('Um perfil escolhe os ajustes para esse uso. Antes de aplicar você vê a lista, pode tirar ou pôr itens e confirma.', 2, 'sub')
     todos = todos_perfis()
     chaves = list(todos)
+    sug = sugestao_para_este_pc(ctx)
+    if sug and sug[0] in todos:
+        t.nota(f'  Para este PC, a sugestão é {todos[sug[0]][0]}, porque {sug[1]}.')
     for i, k in enumerate(chaves, 1):
         t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(todos[k][0], "texto", True)}  {t.p(corta(todos[k][1], max(10, t.largura - 8 - len(todos[k][0]))), "apagado")}')
     t.escreve(f'  {t.p(" m", "destaque", True)}  {t.p("montar o meu", "texto", True)}  {t.p("sem perfil: escolho os pacotes e os itens", "apagado")}')
@@ -8359,8 +8437,40 @@ def menu(ctx, parser, args):
             return 130
 
 
+def comando_parecido(texto):
+    """O comando mais parecido com o que foi digitado, ou None."""
+    import difflib
+    perto = difflib.get_close_matches(texto.lower(), list(COMANDOS), n=1, cutoff=0.6)
+    return perto[0] if perto else None
+
+
+def ferramenta_ajuda(ctx, args):
+    t = ctx.t
+    t.aba('o essencial, em poucas linhas')
+    passos = [
+        ('raiox', 'mede o PC, dá uma nota e diz o que fazer primeiro. Não muda nada.'),
+        ('perfil', 'escolhe os ajustes pelo uso do PC (jogos, bateria, PC fraco...). Você vê a lista antes de aplicar.'),
+        ('benchmark', 'mede disco, CPU e RAM. Rode antes e depois para saber se mudou de verdade.'),
+        ('desfazer', 'volta qualquer mudança. Se o PC ficou estranho, "socorro" volta tudo de uma vez.'),
+        ('relatorio', 'o relatório do que foi feito, pronto para pedir ajuda (confira o nome do PC antes de compartilhar).'),
+    ]
+    for cmd, texto in passos:
+        t.escreve(f'  {t.p(cmd, "destaque", True)}')
+        t.paragrafo(texto, 4, 'sub')
+    t.escreve()
+    t.nota('  Qualquer comando aceita --teste (mostra o que faria, sem mudar nada) e --codigo (mostra o PowerShell de cada item).')
+    return 0
+
+
 def main(argv=None):
     parser = monta_parser()
+    cru = list(argv if argv is not None else sys.argv[1:])
+    primeiro = cru[0] if cru and not cru[0].startswith('-') else None
+    if primeiro and primeiro not in COMANDOS and primeiro != 'manutencao':
+        perto = comando_parecido(primeiro)
+        if perto:
+            print(f'katharos: "{primeiro}" não é um comando. Você quis dizer "{perto}"?  (katharos ajuda mostra o essencial)')
+            return 2
     args = _defaults(parser.parse_args(argv))
     if args.sha256:
         print(hashlib.sha256(Path(__file__).read_bytes()).hexdigest() + '  katharos.py')

@@ -264,6 +264,61 @@ class TestBenchmark(unittest.TestCase):
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
 
 
+class TestSugestoes(unittest.TestCase):
+    def pc(self, **kw):
+        base = {'so': {'build': 22631}, 'pc': {}, 'ram': {'total': 16}, 'disco': {'tipo': 'SSD'}, 'gpus': [], 'tem': {}, 'jogos': []}
+        for chave, v in kw.items():
+            base[chave] = {**base.get(chave, {}), **v} if isinstance(v, dict) else v
+        return base
+
+    def test_hd_ou_pouca_ram_sugere_pc_fraco(self):
+        self.assertEqual(k.sugere_perfil(self.pc(disco={'tipo': 'HDD'}))[0], 'fraco')
+        self.assertEqual(k.sugere_perfil(self.pc(ram={'total': 4}))[0], 'fraco')
+
+    def test_pc_de_empresa_sugere_trabalho(self):
+        self.assertEqual(k.sugere_perfil(self.pc(pc={'dominio': True}))[0], 'trabalho')
+
+    def test_jogos_com_placa_dedicada(self):
+        p = self.pc(gpus=['NVIDIA GeForce RTX 4060'], jogos=['Counter-Strike 2'])
+        self.assertEqual(k.sugere_perfil(p)[0], 'jogo')
+        self.assertIsNone(k.sugere_perfil(self.pc(jogos=['Counter-Strike 2'])), 'sem placa dedicada não sugere jogo')
+
+    def test_notebook_e_dev(self):
+        self.assertEqual(k.sugere_perfil(self.pc(pc={'notebook': True, 'bateria': True}))[0], 'bateria')
+        self.assertEqual(k.sugere_perfil(self.pc(tem={'wsl': True}))[0], 'dev')
+
+    def test_nada_se_destaca(self):
+        self.assertIsNone(k.sugere_perfil(self.pc()))
+
+    def test_sugestao_sempre_e_perfil_que_existe(self):
+        for p in (self.pc(disco={'tipo': 'HDD'}), self.pc(pc={'dominio': True}), self.pc(tem={'docker': True}),
+                  self.pc(pc={'notebook': True, 'bateria': True})):
+            self.assertIn(k.sugere_perfil(p)[0], k.PERFIS)
+
+    def test_windows_desconhecido(self):
+        self.assertFalse(k.so_reconhecido({'so': {'build': 0}}))
+        self.assertFalse(k.so_reconhecido({'so': {'build': 9600}}))
+        self.assertTrue(k.so_reconhecido({'so': {'build': 19045}}))
+
+    def test_comando_parecido(self):
+        self.assertEqual(k.comando_parecido('limpr'), 'limpar')
+        self.assertEqual(k.comando_parecido('desfaser'), 'desfazer')
+        self.assertIsNone(k.comando_parecido('xyzxyzxyz'))
+
+    def test_main_sugere_em_vez_de_quebrar(self):
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = k.main(['limpr'])
+        self.assertEqual(rc, 2)
+        self.assertIn('limpar', buf.getvalue())
+
+    def test_ajuda_existe_e_nao_mexe_em_nada(self):
+        self.assertIn('ajuda', k.SEM_ESTADO)
+        self.assertEqual(k.main(['ajuda', '--sem-cor']), 0)
+
+
 class TestLimpezaNaoTocaEmArquivosPessoais(unittest.TestCase):
     PESSOAL = re.compile(r'Documents|Documentos|Pictures|Imagens|Downloads|Desktop|Área de Trabalho|OneDrive|Videos|Music|Músicas', re.I)
 
