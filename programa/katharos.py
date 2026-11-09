@@ -4257,6 +4257,16 @@ JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Des
 ANTICHEAT_NOMES = [x.strip() for x in JOGOS_ANTICHEAT.replace(' e outros', '').split(',')]
 
 
+def _nota_jogos_achados():
+    """'achei Cyberpunk 2077, Hades' para o item de prioridade: o que da lista está mesmo neste PC."""
+    try:
+        achados, _ = jogos_do_catalogo()
+    except Exception as e:
+        LOG.escreve(f'procurar jogos do catálogo falhou: {e!r}')
+        return ''
+    return ('achei ' + resumo_jogos_achados(achados)) if achados else ''
+
+
 @pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, prioridades e ajustes de latência',
         'Ajustes que os otimizadores de jogos usam, com a verdade sobre cada um: alguns ajudam sempre, outros só em casos específicos, '
         'e alguns são quase placebo (está escrito). Desligar segurança do Windows (VBS, Integridade de Memória) não está aqui de propósito: '
@@ -4288,7 +4298,7 @@ def itens_jogos(ctx):
              'todos sem anti-cheat de terceiros) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows. '
              f'Jogos com anti-cheat de terceiros ({JOGOS_ANTICHEAT}) ficam de fora de propósito.',
              'pequeno, e só quando algo disputa a CPU com o jogo', 'em PC fraco, música e Discord podem engasgar durante o jogo',
-             2 if j else 3, prio, minutos=4),
+             2 if j else 3, prio, minutos=4, nota=_nota_jogos_achados()),
         Item('prioridade-jogos-ac', 'prioridade alta também para jogos com anti-cheat (opcional)', 'Mesma opção oficial do Windows do item acima, para jogos '
              f'que usam anti-cheat de terceiros ({JOGOS_ANTICHEAT}). É um valor de registro lido pelo Windows quando o jogo abre: nada abre, '
              'injeta ou toca no processo do jogo, e é o método que o Process Lasso indica para jogos protegidos. Nenhum anti-cheat publica que '
@@ -6647,6 +6657,159 @@ def ferramenta_organizar(ctx, args):
     t.ok(f'{pl(len(movidos), "arquivo movido", "arquivos movidos")} para {PASTA_ORGANIZADO}' + (f'; {falhas} em uso ficaram onde estavam' if falhas else '') + '.')
     t.nota('  para voltar tudo: katharos organizar --desfazer')
     return 0
+# ███████████████████████████████████████████████████████████████████████████
+#
+#   QUAIS JOGOS ESTÃO NESTE PC
+#   só lê: o registro, as listas da Steam, da Epic e da GOG e os nomes dos arquivos nas pastas de instalação.
+#   Nunca abre o jogo, o processo dele nem arquivo dentro dele.
+#
+# ███████████████████████████████████████████████████████████████████████████
+
+def _steam_pastas():
+    """As bibliotecas da Steam deste PC (a pasta dela e as outras de libraryfolders.vdf), ou None se não há Steam.
+    Só lê o registro e esse arquivo."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam') as ch:
+            raiz = Path(str(winreg.QueryValueEx(ch, 'SteamPath')[0]))
+    except (ImportError, OSError):
+        return None
+    pastas = [raiz]
+    try:
+        vdf = (raiz / 'steamapps' / 'libraryfolders.vdf').read_text(encoding='utf-8', errors='replace')
+        pastas += [Path(p.replace('\\\\', '\\')) for p in re.findall(r'"path"\s+"([^"]+)"', vdf)]
+    except OSError:
+        pass
+    return pastas
+
+
+def _cs2_instalado():
+    """True/False se a Steam diz que o CS2 (app 730) está instalado."""
+    return any((p / 'steamapps' / 'appmanifest_730.acf').is_file() for p in (_steam_pastas() or []))
+
+
+def jogos_neste_pc():
+    """{comando: True/False} para os pacotes de um jogo só: se o jogo foi achado neste PC. Fora do Windows, vazio."""
+    if not WINDOWS:
+        return {}
+    out = {}
+    try:
+        out['steam'] = _steam_pastas() is not None
+        out['cs2'] = _cs2_instalado()
+        out['minecraft'] = os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt'))
+        out['unreal'] = any(_ue_instalado(pasta) for _, _, pasta, _ in UE_JOGOS)
+    except Exception as e:
+        LOG.escreve(f'procurar jogos falhou: {e!r}')
+    return {c: v for c, v in out.items() if v is not None}
+
+
+
+_CACHE_JOGOS = {}
+
+
+def _pastas_de_instalacao():
+    """Pastas onde há jogos instalados: bibliotecas da Steam (cada installdir), Epic, GOG e o InstallLocation que os
+    programas deixam no registro do Windows. Só lê listas e registro; nenhuma pasta de jogo é aberta aqui."""
+    achadas = set()
+    for p in _steam_pastas() or []:
+        try:
+            for acf in (p / 'steamapps').glob('appmanifest_*.acf'):
+                m = re.search(r'"installdir"\s+"([^"]+)"', acf.read_text(encoding='utf-8', errors='replace'))
+                if m:
+                    achadas.add(p / 'steamapps' / 'common' / m.group(1))
+        except OSError:
+            continue
+    try:
+        epic = Path(os.path.expandvars(r'%ProgramData%\Epic\EpicGamesLauncher\Data\Manifests'))
+        for it in epic.glob('*.item'):
+            d = le_json(it, None)
+            if isinstance(d, dict) and d.get('InstallLocation'):
+                achadas.add(Path(str(d['InstallLocation'])))
+    except OSError:
+        pass
+    try:
+        import winreg
+        for raiz, chave in ((winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\WOW6432Node\GOG.com\Games'),
+                            (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
+                            (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'),
+                            (winreg.HKEY_CURRENT_USER, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')):
+            try:
+                with winreg.OpenKey(raiz, chave) as pai:
+                    for i in range(winreg.QueryInfoKey(pai)[0]):
+                        try:
+                            with winreg.OpenKey(pai, winreg.EnumKey(pai, i)) as sub:
+                                for nome in ('path', 'InstallLocation'):
+                                    try:
+                                        v = str(winreg.QueryValueEx(sub, nome)[0]).strip().strip('"')
+                                    except OSError:
+                                        continue
+                                    if v:
+                                        achadas.add(Path(v))
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+    except ImportError:
+        pass
+    return [p for p in achadas if str(p) not in ('', '.')]
+
+
+def _nomes_de_exe(pasta, profundidade=3, teto=1500):
+    """Os nomes (minúsculos) dos .exe de uma pasta e das subpastas até a profundidade dada. Só lê nomes de arquivo."""
+    nomes, pilha, n = set(), [(str(pasta), 0)], 0
+    while pilha and n < teto:
+        atual, prof = pilha.pop()
+        try:
+            with os.scandir(atual) as it:
+                for e in it:
+                    n += 1
+                    if e.is_file(follow_symlinks=False) and e.name.lower().endswith('.exe'):
+                        nomes.add(e.name.lower())
+                    elif prof < profundidade and e.is_dir(follow_symlinks=False):
+                        pilha.append((e.path, prof + 1))
+        except OSError:
+            continue
+    return nomes
+
+
+def jogos_do_catalogo(pastas=None):
+    """(nomes dos jogos do catálogo achados neste PC, quantos jogos com anti-cheat de terceiros também estão aqui).
+    Compara o NOME dos executáveis nas pastas de instalação com o catálogo; sem pastas (fora do Windows), devolve vazio."""
+    if pastas is None:
+        if not WINDOWS:
+            return [], 0
+        if 'catalogo' in _CACHE_JOGOS:
+            return _CACHE_JOGOS['catalogo']
+        pastas = _pastas_de_instalacao()
+        guardar = True
+    else:
+        guardar = False
+    exes, inicio = set(), time.time()
+    sistema = os.path.expandvars('%WINDIR%').lower()
+    for p in pastas:
+        if time.time() - inicio > 10:   # PC com muita coisa instalada: melhor um resultado parcial do que a tela travada
+            break
+        txt = str(p).lower().rstrip('\\/')
+        if len(txt) <= 3 or (WINDOWS and sistema and txt.startswith(sistema)):   # raiz do disco e pasta do Windows não são de jogo
+            continue
+        exes |= _nomes_de_exe(p)
+    achados = [nome for nome, lista_exe in CATALOGO_JOGOS if any(e.lower() in exes for e in lista_exe)]
+    com_ac = len({e.lower() for e in EXE_COM_ANTICHEAT} & exes)
+    r = (achados, com_ac)
+    if guardar:
+        _CACHE_JOGOS['catalogo'] = r
+    return r
+
+
+def resumo_jogos_achados(achados, limite=6):
+    """'Cyberpunk 2077, Hades e mais 3', ou '' se não há nenhum."""
+    if not achados:
+        return ''
+    if len(achados) <= limite:
+        return ', '.join(achados)
+    return ', '.join(achados[:limite]) + f' e mais {len(achados) - limite}'
+
+
 
 # ═══════════════ Minecraft: Java Edition ═══════════════
 # O arquivo options.txt é o que o menu Configurações de Vídeo grava: uma linha "chave:valor" por opção.
@@ -7129,46 +7292,6 @@ def itens_unreal(ctx):
                           'sombras e longe do horizonte um pouco menos detalhados', 2,
                           '& {\n' + opcoes_txt_ps(nome, 'ue-' + id_, caminho, aberto, UE_REGRAS, sep='=') + '\n}'))
     return itens
-
-
-# ─────────────── quais jogos com pacote próprio estão neste PC ───────────────
-
-def _steam_pastas():
-    """As bibliotecas da Steam deste PC (a pasta dela e as outras de libraryfolders.vdf), ou None se não há Steam.
-    Só lê o registro e esse arquivo."""
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam') as ch:
-            raiz = Path(str(winreg.QueryValueEx(ch, 'SteamPath')[0]))
-    except (ImportError, OSError):
-        return None
-    pastas = [raiz]
-    try:
-        vdf = (raiz / 'steamapps' / 'libraryfolders.vdf').read_text(encoding='utf-8', errors='replace')
-        pastas += [Path(p.replace('\\\\', '\\')) for p in re.findall(r'"path"\s+"([^"]+)"', vdf)]
-    except OSError:
-        pass
-    return pastas
-
-
-def _cs2_instalado():
-    """True/False se a Steam diz que o CS2 (app 730) está instalado."""
-    return any((p / 'steamapps' / 'appmanifest_730.acf').is_file() for p in (_steam_pastas() or []))
-
-
-def jogos_neste_pc():
-    """{comando: True/False} para os pacotes de um jogo só: se o jogo foi achado neste PC. Fora do Windows, vazio."""
-    if not WINDOWS:
-        return {}
-    out = {}
-    try:
-        out['steam'] = _steam_pastas() is not None
-        out['cs2'] = _cs2_instalado()
-        out['minecraft'] = os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt'))
-        out['unreal'] = any(_ue_instalado(pasta) for _, _, pasta, _ in UE_JOGOS)
-    except Exception as e:
-        LOG.escreve(f'procurar jogos falhou: {e!r}')
-    return {c: v for c, v in out.items() if v is not None}
 
 
 # Pacote de um jogo sem nada a fazer: diz o que não foi achado, em vez de um "nada a fazer" seco.
@@ -11040,11 +11163,24 @@ def menu(ctx, parser, args, tela=None):
                 t.escreve()
             lista = grupo[2]
             if tela == 'jogar':   # só o que este PC tem: "jogos" (o Windows) vale para todos; o resto, se o jogo foi achado
+                if WINDOWS and 'catalogo' not in _CACHE_JOGOS:
+                    t.nota('procurando os jogos instalados neste PC (só lê os nomes das pastas)...', 2)
                 achados = jogos_neste_pc()
                 lista = [(c, d) for c, d in lista if achados.get(c, True) or c == 'jogos']
+                lista_ok, com_ac = jogos_do_catalogo()
             por_numero = t.menu_itens([('', '', lista)], quando, zero='voltar')
             if tela == 'jogar':
-                t.nota('Só aparece o que está neste PC. Se o seu jogo não aparece, digite o nome: cs2, minecraft ou unreal.', 2)
+                t.nota('O que aparece é o que este PC tem. Se o seu jogo não aparece, digite o nome: cs2, minecraft ou unreal.', 2)
+                if WINDOWS:
+                    t.escreve()
+                    if lista_ok:
+                        t.paragrafo(f'Jogos da lista do Katharos achados aqui ({len(lista_ok)}): {resumo_jogos_achados(lista_ok)}. '
+                                    'A prioridade alta do pacote "jogos" vale para eles.', 2, 'sub')
+                    else:
+                        t.paragrafo('Não achei jogos da lista do Katharos na Steam, na Epic, na GOG nem entre os programas instalados.', 2, 'apagado')
+                    if com_ac:
+                        t.paragrafo(f'Também achei {pl(com_ac, "jogo", "jogos")} com anti-cheat de terceiros: o Katharos não mexe neles '
+                                    '(só se você marcar o item opcional do pacote "jogos").', 2, 'apagado')
                 t.escreve()
         else:
             t.paragrafo('Escolha uma área. Dentro dela os itens já vêm marcados pelo modo, e você tira ou põe o que quiser.'

@@ -185,13 +185,15 @@ class TestMenuEnxuto(unittest.TestCase):
         else:
             self.assertEqual(achados, {})
 
-    def tela_jogar(self, achados):
+    def tela_jogar(self, achados, windows=False):
         import io, contextlib
         t = k.Terminal(True, True)
         ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), mock.patch.object(k, 'jogos_neste_pc', lambda: achados), \
-                mock.patch.object(k, 'primeira_vez', lambda c: None), mock.patch.object(k, 'estado', lambda: {}), \
+                mock.patch.object(k, 'jogos_do_catalogo', lambda: (['Hades'], 1)), mock.patch.object(k, 'primeira_vez', lambda c: None), mock.patch.object(k, 'estado', lambda: {}), \
+                mock.patch.object(k, 'WINDOWS', windows), mock.patch.object(k, 'eh_admin', lambda: True), \
+                mock.patch.dict(k._CACHE_JOGOS, {'catalogo': (['Hades'], 1)}), \
                 mock.patch('builtins.input', side_effect=['4', '0', '0']):
             k.menu(ctx, k.monta_parser(), type('A', (), {})())
         return buf.getvalue()
@@ -206,10 +208,43 @@ class TestMenuEnxuto(unittest.TestCase):
         self.assertNotIn('unreal  ', txt)
         self.assertIn('jogos', txt, 'o Windows aparece sempre')
 
+    def test_jogar_lista_os_jogos_do_catalogo_achados_e_o_anticheat(self):
+        txt = self.tela_jogar({'steam': True, 'cs2': False, 'minecraft': False, 'unreal': False}, windows=True)
+        self.assertIn('Hades', txt)
+        self.assertIn('anti-cheat de terceiros', txt)
+        self.assertIn('achados aqui (1)', txt)
+
     def test_jogar_sem_nenhum_jogo_ainda_tem_o_windows(self):
         txt = self.tela_jogar({'steam': False, 'cs2': False, 'minecraft': False, 'unreal': False})
         self.assertIn('o Windows para jogar', txt)
         self.assertNotIn('cs2   ', txt)
+
+    def test_acha_jogos_do_catalogo_pelo_nome_do_exe_e_conta_anticheat(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            a = Path(d) / 'Cyberpunk 2077' / 'bin' / 'x64'
+            a.mkdir(parents=True)
+            (a / 'Cyberpunk2077.exe').write_bytes(b'')
+            b = Path(d) / 'Apex'
+            b.mkdir()
+            (b / 'r5apex.exe').write_bytes(b'')
+            (Path(d) / 'Outro').mkdir()
+            (Path(d) / 'Outro' / 'notepad.exe').write_bytes(b'')
+            achados, com_ac = k.jogos_do_catalogo([Path(d) / 'Cyberpunk 2077', b, Path(d) / 'Outro', Path(d) / 'nao existe'])
+        self.assertEqual(achados, ['Cyberpunk 2077'])
+        self.assertEqual(com_ac, 1)
+        self.assertEqual(k.jogos_do_catalogo([]), ([], 0))
+
+    def test_so_lista_jogo_do_catalogo_e_nunca_um_exe_qualquer(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / 'setup.exe').write_bytes(b'')
+            self.assertEqual(k.jogos_do_catalogo([Path(d)])[0], [])
+
+    def test_resumo_dos_jogos_achados(self):
+        self.assertEqual(k.resumo_jogos_achados([]), '')
+        self.assertEqual(k.resumo_jogos_achados(['A', 'B']), 'A, B')
+        self.assertEqual(k.resumo_jogos_achados(list('ABCDEFGHI')), 'A, B, C, D, E, F e mais 3')
 
     def test_dicas_mostram_poucas_teclas_separadas_por_bolinha(self):
         import io, contextlib
