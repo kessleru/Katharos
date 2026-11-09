@@ -69,6 +69,10 @@ jobs:
       - name: ida e volta de arquivo de jogo (Unreal Engine)
         shell: pwsh
         run: ./tests/ci_unreal.ps1
+      - name: leitura leve de temperatura e consumo (sem janela, só leitura)
+        run: |
+          python programa/katharos.py amostrar --sem-cor
+          python -c "import pathlib,json; p=pathlib.Path.home()/'.katharos'/'horas.jsonl'; l=p.read_text(encoding='utf-8').splitlines(); b=json.loads(l[-1]); print(b); assert b['n']>=1 and 'rn' in b, 'sem leitura de RAM'"
       - name: saúde do Windows (só leitura) e painel
         run: |
           python programa/katharos.py saude --sem-cor

@@ -397,7 +397,7 @@ class TestSegundoPlano(unittest.TestCase):
         k.CASA = Path(tempfile.mkdtemp())
         try:
             for f in k.FREQ_FUNDO:
-                k.roda_ps = lambda t, corpo, *a, **kw: (corpos.__setitem__(f, corpo), type('S', (), {'ok': True, 'erros': []})())[1]
+                k.roda_ps = lambda t, corpo, *a, **kw: (corpos.setdefault(f, corpo), type('S', (), {'ok': True, 'erros': []})())[1]
                 self.assertEqual(k.instala_manutencao(Ctx(), f), 0)
                 self.assertEqual(k.estado().get('manut_freq'), f)
         finally:
@@ -413,6 +413,97 @@ class TestSegundoPlano(unittest.TestCase):
             self.assertIn('-Priority 7', c)
             self.assertIn(k.TAREFA_MANUT_ANTIGA, c, 'a tarefa antiga é removida para não rodar duas vezes')
             self.assertNotIn('«', c)
+
+    def test_modo_continuo_liga_tambem_a_leitura_leve_de_15_min_sem_janela(self):
+        from unittest import mock
+        import tempfile
+        corpos = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), \
+                mock.patch.object(k, 'roda_ps', lambda t, corpo, *a, **kw: (corpos.append(corpo), type('S', (), {'ok': True, 'erros': []})())[1]):
+            self.assertEqual(k.instala_manutencao(Ctx(), 'continua'), 0)
+            self.assertTrue(any(k.TAREFA_AMOSTRA in c and '-RepetitionInterval' in c for c in corpos))
+            n = len(corpos)
+            self.assertEqual(k.instala_manutencao(Ctx(), 'semanal'), 0)
+            self.assertTrue(any('Unregister' in c and k.TAREFA_AMOSTRA in c for c in corpos[n:]), 'fora do modo contínuo a leitura de 15 min é removida')
+        a = [c for c in corpos if k.TAREFA_AMOSTRA in c and 'Register-ScheduledTask' in c][0]
+        self.assertIn('-AllowStartIfOnBatteries', a)
+        self.assertIn('-Priority 7', a)
+        self.assertIn('-MultipleInstances IgnoreNew', a)
+        self.assertNotIn('-RunOnlyIfIdle', a, 'precisa medir também com o PC em uso')
+        self.assertIn('-RunLevel Limited', a, 'a leitura não precisa de administrador')
+        self.assertNotIn('-RunLevel Highest', a)
+        self.assertNotIn('«', a)
+
+    def test_leitura_leve_usa_pythonw_sem_janela_quando_existe(self):
+        from unittest import mock
+        with mock.patch.object(k.Path, 'exists', return_value=True):
+            exe, arg, sem = k.comando_da_amostra()
+        self.assertTrue(sem)
+        self.assertTrue(exe.lower().endswith('pythonw.exe'))
+        self.assertIn('amostrar --agendada', arg)
+
+    def test_tarefa_elevada_roda_sem_janela_e_de_pasta_so_de_administradores(self):
+        from unittest import mock
+        import tempfile
+        corpos = []
+        chamadas = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'WINDOWS', True), \
+                mock.patch.object(k, 'pasta_da_tarefa', return_value=Path(d) / 'ProgramData' / 'Katharos'), \
+                mock.patch.object(k, 'protege_pasta_da_tarefa', side_effect=lambda p: chamadas.append(p) or True), \
+                mock.patch.object(k, 'executavel_sem_janela', return_value=('C:\\\\Py\\\\pythonw.exe', True)), \
+                mock.patch.object(k, 'python_em_pasta_do_usuario', return_value=False), \
+                mock.patch.object(k, 'roda_ps', lambda t, corpo, *a, **kw: (corpos.append(corpo), type('S', (), {'ok': True, 'erros': []})())[1]):
+            self.assertEqual(k.instala_manutencao(Ctx(), 'semanal'), 0)
+            self.assertEqual(len(chamadas), 1, 'a pasta é protegida antes de copiar o programa')
+            self.assertTrue((Path(d) / 'ProgramData' / 'Katharos' / 'katharos.py').exists())
+        c = corpos[0]
+        self.assertIn('pythonw.exe', c)
+        self.assertNotIn('-Command', c, 'não pode abrir powershell.exe (piscaria uma janela)')
+        self.assertIn('-RunLevel Highest', c)
+        self.assertNotIn(str(Path(d) / 'katharos.py'), c, 'o script elevado não fica na pasta do usuário')
+
+    def test_tarefa_elevada_nao_e_criada_se_a_pasta_nao_puder_ser_protegida(self):
+        from unittest import mock
+        import tempfile
+        corpos = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'WINDOWS', True), \
+                mock.patch.object(k, 'pasta_da_tarefa', return_value=Path(d) / 'PD'), mock.patch.object(k, 'protege_pasta_da_tarefa', return_value=False), \
+                mock.patch.object(k, 'roda_ps', lambda t, corpo, *a, **kw: corpos.append(corpo)):
+            self.assertEqual(k.instala_manutencao(Ctx(), 'semanal'), 1)
+        self.assertEqual(corpos, [], 'sem proteção, nenhuma tarefa elevada')
+
+    def test_icacls_usa_sids_e_tira_a_heranca(self):
+        from unittest import mock
+        with mock.patch.object(k.subprocess, 'run', return_value=type('R', (), {'returncode': 0})()) as m:
+            self.assertTrue(k.protege_pasta_da_tarefa(Path('X')))
+        args = m.call_args[0][0]
+        self.assertIn('/inheritance:r', args)
+        for sid in ('*S-1-5-18', '*S-1-5-32-544'):
+            self.assertTrue(any(a.startswith(sid) and a.endswith('F') for a in args), sid)
+        self.assertTrue(any(a.startswith('*S-1-5-32-545') and a.endswith('RX') for a in args), 'Usuários só leem')
+
+    def test_sem_console_todo_processo_filho_nasce_sem_janela(self):
+        from unittest import mock
+        import subprocess as sp
+        visto = {}
+
+        class Falso:
+            def __init__(self, *a, **kw):
+                visto.update(kw)
+        with mock.patch.object(k.subprocess, 'Popen', Falso), mock.patch.object(k, 'WINDOWS', True), \
+                mock.patch.object(k.ctypes, 'windll', create=True) as w:
+            w.kernel32.GetConsoleWindow.return_value = 0
+            self.assertTrue(k.sem_janela_global())
+            k.subprocess.Popen(['x'], creationflags=0x40)
+            self.assertEqual(visto['creationflags'], 0x40 | 0x08000000, 'mantém as marcas que já existiam')
+        with mock.patch.object(k.subprocess, 'Popen', Falso), mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k.ctypes, 'windll', create=True) as w:
+            w.kernel32.GetConsoleWindow.return_value = 12345   # há console: uso normal, nada muda
+            self.assertFalse(k.sem_janela_global())
+
+    def test_toda_tarefa_agendada_usa_pythonw_ou_avisa(self):
+        # só a tarefa "continuar depois de reiniciar" abre janela, de propósito (o turbo continua à vista, com a pessoa acompanhando)
+        fonte = Path(k.__file__).read_text(encoding='utf-8')
+        self.assertEqual(fonte.count("-Execute 'powershell.exe'"), 1)
 
     def test_frequencia_desconhecida_cai_em_semanal(self):
         self.assertIn('semanal', k.FREQ_FUNDO)
@@ -659,6 +750,182 @@ class TestCliques(unittest.TestCase):
         self.assertNotIn('https://', com)
 
 
+class TestHoras(unittest.TestCase):
+    def _horas(self, dias=40, repouso_sobe=0.0, grave=False):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 9, 1)
+        out = []
+        for d in range(dias):
+            for h in range(24):
+                dt = base + timedelta(days=d, hours=h)
+                b = {'h': dt.strftime('%Y-%m-%dT%H'), '_dt': dt}
+                carga = 18 <= h <= 22
+                for i in range(4):
+                    k.agrega_hora(b, {'cpu': 70.0 if carga else 5.0, 'ram_pct': 55.0 + (10 if carga else 0), 'disco': 4.0, 'temp': (74 if carga else 41) + (d * repouso_sobe if not carga else 0) + i,
+                                      'em_jogo': carga and h == 20, 'top_cpu': 'jogo' if carga else '', 'top_ram': 'chrome'})
+                if grave and d in (10, 11, 12) and h == 20:
+                    b['tx'] = 93
+                out.append(b)
+        return out
+
+    def test_agrega_guarda_soma_contagem_minimo_e_maximo_sem_valor_ausente(self):
+        b = {}
+        k.agrega_hora(b, {'cpu': 10.0, 'temp': 50})
+        k.agrega_hora(b, {'cpu': 30.0, 'temp': 60, 'gpu_temp': None})
+        self.assertEqual((b['n'], b['cn'], b['cs'], b['cx'], b['cm']), (2, 2, 40.0, 30.0, 10.0))
+        self.assertEqual((b['tn'], b['tx'], b['tm']), (2, 60, 50))
+        self.assertNotIn('gn', b, 'leitura ausente não vira zero')
+        self.assertEqual(b['trn'], 1, 'só a leitura com CPU abaixo de 15% conta como repouso')
+
+    def test_registra_hora_atualiza_a_mesma_hora_e_cria_a_seguinte(self):
+        import tempfile
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as d:
+            arq = Path(d) / 'h.jsonl'
+            k.registra_hora({'cpu': 10.0, 'temp': 40}, datetime(2026, 1, 1, 10, 5), arq)
+            k.registra_hora({'cpu': 30.0, 'temp': 50}, datetime(2026, 1, 1, 10, 20), arq)
+            k.registra_hora({'cpu': 20.0, 'temp': 45}, datetime(2026, 1, 1, 11, 5), arq)
+            hs = k.le_horas(arq)
+            self.assertEqual([b['h'] for b in hs], ['2026-01-01T10', '2026-01-01T11'])
+            self.assertEqual(hs[0]['n'], 2)
+            self.assertEqual(hs[0]['tx'], 50)
+
+    def test_registra_hora_sobrevive_a_linha_cortada_e_a_amostra_pausada(self):
+        import tempfile
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as d:
+            arq = Path(d) / 'h.jsonl'
+            k.registra_hora({'cpu': 10.0}, datetime(2026, 1, 1, 10), arq)
+            with open(arq, 'a', encoding='utf-8') as f:
+                f.write('{"h":"2026-01-01T11","n":1,"cn')   # queda de energia no meio da escrita
+            self.assertIsNone(k.registra_hora({'em_jogo': True, 'pausado': True}, datetime(2026, 1, 1, 12), arq))
+            k.registra_hora({'cpu': 20.0}, datetime(2026, 1, 1, 12), arq)
+            self.assertEqual([b['h'] for b in k.le_horas(arq)], ['2026-01-01T10', '2026-01-01T12'])
+
+    def test_arquivo_tem_teto(self):
+        import tempfile
+        from datetime import datetime, timedelta
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'HORAS_MAX', 50):
+            arq = Path(d) / 'h.jsonl'
+            for i in range(400):
+                k.registra_hora({'cpu': 1.0}, datetime(2026, 1, 1) + timedelta(hours=i), arq)
+            self.assertLessEqual(len(k.le_horas(arq)), 50 + 240)
+            self.assertEqual(k.le_horas(arq)[-1]['h'], (datetime(2026, 1, 1) + timedelta(hours=399)).strftime('%Y-%m-%dT%H'))
+
+    def test_linha_por_hora_e_pequena(self):
+        import json
+        b = self._horas(1)[5]
+        b.pop('_dt')
+        self.assertLess(len(json.dumps(b, separators=(',', ':'))), 450)
+
+    def test_temperatura_normal_nao_gera_achado(self):
+        an = k.analisa_termica(self._horas(40))
+        self.assertEqual(an['achados'], [])
+        self.assertEqual(an['maxima'], 77)
+        self.assertAlmostEqual(an['media_repouso'], 42.5, 0)
+
+    def test_pico_acima_de_90_em_varias_horas_e_achado_grave(self):
+        an = k.analisa_termica(self._horas(40, grave=True))
+        self.assertEqual(an['achados'][0][0], 'alta')
+        self.assertIn('90', an['achados'][0][1])
+
+    def test_repouso_subindo_alem_do_ruido_e_achado_e_oscilacao_pequena_nao(self):
+        sobe = k.analisa_termica(self._horas(60, repouso_sobe=0.3))
+        self.assertTrue(any('em repouso subiu' in t for _, t in sobe['achados']), sobe['achados'])
+        estavel = k.analisa_termica(self._horas(60, repouso_sobe=0.02))
+        self.assertFalse(any('em repouso subiu' in t for _, t in estavel['achados']))
+
+    def test_poucos_dias_nao_viram_tendencia(self):
+        self.assertFalse(any('subiu' in t for _, t in k.analisa_termica(self._horas(8, repouso_sobe=2.0))['achados']))
+
+    def test_sem_leitura_de_temperatura_devolve_vazio(self):
+        horas = self._horas(5)
+        for b in horas:
+            for c in [c for c in b if c.startswith('t') and c not in ('top',)]:
+                del b[c]
+        self.assertEqual(k.analisa_termica(horas), {})
+
+    def test_serie_diaria_tem_minimo_media_e_maximo(self):
+        s = k.serie_diaria(self._horas(3), 't')
+        self.assertEqual(len(s), 3)
+        self.assertTrue(all(a <= m <= c for _, a, m, c in s))
+
+    def test_painel_com_horas_tem_temperatura_consumo_calor_e_nenhum_script(self):
+        h = k.monta_painel([], [], [], [], 'PC', '1', horas=self._horas(40, repouso_sobe=0.3))
+        for texto in ('<h2>Temperatura</h2>', '<h2>Consumo</h2>', 'Em repouso e sob carga', 'Quando esquenta', 'Temperatura por dia', 'Quem mais pesou na CPU', 'jogo'):
+            self.assertIn(texto, h)
+        self.assertIn('class="celula', h)
+        self.assertNotIn('<script', h)
+        self.assertNotIn('http', h)
+
+    def test_conselheiro_propoe_pela_temperatura_de_longo_prazo(self):
+        from datetime import datetime
+        ev = {'termica': k.analisa_termica(self._horas(40, grave=True)), 'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {},
+              'vistas': {}, 'fundo_ligado': True, 'agora': datetime(2026, 11, 9), 'perfil': {}}
+        s = [x for x in k.gera_sugestoes(ev) if x['id'].startswith('termica')]
+        self.assertTrue(s and s[0]['confianca'] == 'alta')
+        self.assertIn(s[0]['comando'], k.COMANDOS)
+        ev['termica'] = k.analisa_termica(self._horas(40))
+        self.assertEqual([x for x in k.gera_sugestoes(ev) if x['id'].startswith('termica')], [], 'temperatura normal não gera proposta')
+
+    def test_painel_sem_sensor_explica_sem_inventar_grafico(self):
+        horas = self._horas(5)
+        for b in horas:
+            for c in [c for c in b if c[0] == 't' and c != 'top']:
+                del b[c]
+        h = k.monta_painel([], [], [], [], 'PC', '1', horas=horas)
+        self.assertIn('não entrega a temperatura', h)
+        self.assertNotIn('Quando esquenta', h)
+        self.assertIn('<h2>Consumo</h2>', h)
+
+    def test_painel_com_poucas_horas_nao_mostra_secoes(self):
+        h = k.monta_painel([], [], [], [], 'PC', '1', horas=self._horas(1)[:2])
+        self.assertNotIn('<h2>Temperatura</h2>', h)
+
+    def test_descarga_da_bateria_so_com_horas_inteiras_na_bateria(self):
+        from datetime import datetime
+        horas = []
+        for i in range(6):
+            b = {'h': f'2026-01-01T{i:02d}', '_dt': datetime(2026, 1, 1, i)}
+            for j in range(4):
+                k.agrega_hora(b, {'cpu': 10.0, 'bat': 80 - i * 10 - j * 2, 'na_bateria': True})
+            horas.append(b)
+        self.assertGreater(k._descarga(horas), 0)
+        self.assertIsNone(k._descarga(horas[:2]))
+
+    def test_script_de_leitura_nao_toca_em_jogo_nem_muda_nada(self):
+        ps = k.AMOSTRA_PS
+        for proibido in ('OpenProcess', 'ReadProcessMemory', 'Get-Process -Id', '.Modules', 'MainModule', 'Inject', 'Set-', 'Remove-', 'Stop-', 'Add-Type', 'sc.exe', 'reg add', 'New-Item'):
+            self.assertNotIn(proibido, ps, proibido)
+        # processos individuais e a ferramenta da placa só são consultados fora de jogo
+        fora = ps.index('if (-not $__emJogo)')
+        self.assertLess(ps.index('$__emJogo = '), fora)
+        for so_fora in ('Win32_PerfFormattedData_PerfProc_Process', 'Get-Process | Sort-Object', 'nvidia-smi'):
+            self.assertGreater(ps.index(so_fora), fora, f'{so_fora} só pode rodar fora de jogo')
+        self.assertIn('$__pausar', ps)
+
+    def test_nomes_de_jogo_cobrem_catalogo_anticheat_e_exemplos(self):
+        n = k.nomes_de_jogo()
+        for esperado in ('cs2', 'valorant-win64-shipping', 'easyanticheat', 'vgc', 'faceitclient'):
+            self.assertIn(esperado, n)
+        self.assertTrue(all(x == x.lower() and not x.endswith('.exe') for x in n))
+
+    def test_config_coleta_em_jogo_aceita_segura_e_pausar(self):
+        self.assertEqual(k.PADROES['coleta-em-jogo'], 'segura')
+        self.assertIn('pausar', k.VALIDOS_CONFIG['coleta-em-jogo'])
+
+    def test_amostrar_pausado_nao_grava_nada(self):
+        from unittest import mock
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'config', return_value='pausar'), \
+                mock.patch.object(k, 'roda_ps', return_value=type('S', (), {'dados': {'amostra': {'em_jogo': True, 'pausado': True}}})()) as r, \
+                mock.patch.object(k, 'registra_hora') as reg:
+            a = k.amostra_leve(Ctx())
+        self.assertTrue(a['pausado'])
+        self.assertIn('$true', r.call_args[0][1].split('\n')[1], 'o modo pausar chega ao script')
+        reg.assert_called_once()   # registra_hora recusa o que está pausado (testado acima)
+
+
 class TestSaude(unittest.TestCase):
     AGORA = __import__('datetime').datetime(2026, 11, 9, 12)
 
@@ -721,6 +988,10 @@ class TestSaude(unittest.TestCase):
                                 [{'nome': 'Placa Y', 'codigo': 43, 'classe': 'Display'}], [], self.AGORA)
         self.assertEqual({x['id'].split(':')[0] for x in out}, {'sem-assinatura', 'dispositivo'})
         self.assertIn('parou o dispositivo', [x for x in out if x['id'].startswith('dispositivo')][0]['evidencia'])
+
+    def test_dispositivo_sem_nome_ganha_nome_legivel(self):
+        out = k.analisa_drivers([], [{'nome': '', 'codigo': 28, 'classe': 'Net', 'id': 'PCI\\VEN'}], [], self.AGORA)
+        self.assertTrue(out[0]['titulo'].endswith('classe Net'), out[0]['titulo'])
 
     def test_windows_precisa_de_ajuste(self):
         w = {'reinicio_pendente': True, 'ultima_atualizacao': '2026-06-01T00:00:00', 'livre_pct': 4.0, 'livre_gb': 12.0, 'defender_tempo_real': False,

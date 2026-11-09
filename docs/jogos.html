@@ -256,8 +256,7 @@
       <a href="#catalogo" aria-current="page">catálogo</a>
       <a href="#prioridade">prioridade</a>
       <a href="#anticheat">anti-cheat</a>
-      <a href="#pacotes">pacotes</a>
-      <a href="#medir">medir</a>
+      <a href="#pacotes">pacote completo</a>
     </nav>
     <div class="acoes">
       <a class="botao vazio" href="https://github.com/kessleru/Katharos">
@@ -275,8 +274,7 @@
     <div class="quadro">
       <div class="jhero-texto">
         <h1 id="titulo">Jogos<span>.</span></h1>
-        <p><b>61 jogos conhecidos</b> em 6 categorias. Os que não usam anti-cheat de terceiros abrem com prioridade de CPU. Dois deles têm pacote próprio: <b>CS2</b> (vídeo, Reflex e medição de quadros) e <b>Minecraft Java</b> (opções de vídeo).</p>
-        <p>Aqui está o que muda em cada um, o que fica de fora e como conferir se ajudou.</p>
+        <p><b>61 jogos conhecidos</b> em 6 categorias, todos sem anti-cheat de terceiros, com prioridade de CPU. CS2, Minecraft Java e Unreal têm pacote completo. <a href="guia-jogos.pdf">Guia em PDF</a></p>
       </div>
     </div>
   </section>
@@ -288,7 +286,7 @@
         <label class="busca"><span class="so-leitor" style="position:absolute;left:-9999px">Buscar jogo</span><input id="busca" type="search" placeholder="buscar jogo" autocomplete="off" spellcheck="false"></label>
       </div>
     </div>
-    <div class="quadro"><p class="legenda">Todos os jogos da lista recebem prioridade de CPU. <i>pacote próprio</i> marca o que tem ajustes de configuração além disso.</p></div>
+    <div class="quadro"><p class="legenda">Todos os jogos da lista recebem prioridade de CPU. <i>pacote próprio</i> marca o que tem pacote completo.</p></div>
     <div class="quadro" id="lista">
       <article class="cat" id="c-valve">
         <div class="cat-arte" aria-hidden="true"><img src="cs2.webp" alt="" width="1280" height="720" loading="lazy"></div>
@@ -348,50 +346,8 @@
   </section>
 
   <section class="faixa" id="pacotes" aria-labelledby="pac-t">
-    <div class="quadro cab celulas"><div><h2 id="pac-t">Pacotes próprios<span>.</span></h2></div></div>
-  </section>
-  <section class="faixa" aria-label="Quando um jogo ganha pacote próprio">
-    <div class="quadro tres">
-      <div><h3>O arquivo é o do próprio jogo</h3><p>O pacote só edita o arquivo de configuração que o jogo grava sozinho no seu usuário (o mesmo do menu de vídeo). Nunca arquivo do jogo, textura nem memória.</p></div>
-      <div><h3>Só o que o menu já faz</h3><p>Chaves confirmadas em fonte pública, valores que o menu aceita, só em linhas que existem e só para baixar custo. Com o jogo fechado e cópia antes.</p></div>
-      <div><h3>Competitivo, com cautela</h3><p>A Epic e a EA tratam ajuste de desempenho no arquivo do jogo como aceitável, mas não publicam uma lista do que pode, e proíbem o que tira informação da tela. Por isso, em jogo com anti-cheat, só entra como item opcional.</p></div>
-    </div>
-    <div class="quadro"><p class="fontes">Fontes: resposta de equipe da EA citada <a href="https://forums.ea.com/discussions/apex-legends-general-discussion-en/are-outside-configurations-allowed-in-apex-legends/5772102">neste tópico do fórum do Apex</a>; declaração de um programador da Epic sobre o <code>GameUserSettings.ini</code>, citada <a href="https://www.esportstales.com/fortnite/how-to-increase-fps-video-options-gameusersettings">aqui</a>. Nenhum dos dois é uma garantia.</p></div>
-  </section>
-  <section class="faixa" id="cs2" aria-label="Pacote do Counter-Strike 2">
-    <div class="quadro pac-tit"><h3>Counter-Strike 2</h3><code>katharos cs2</code></div>
-    <div class="quadro pacote">
-      <div class="pacote-arte"><img src="cs2.webp" alt="" width="1280" height="720" loading="lazy" style="object-position: 25% 15%"></div>
-      <div class="pacote-lado">
-        <p>Mexe em configuração do Windows e no arquivo de vídeo do seu usuário, só nas chaves confirmadas em fonte pública, sempre com cópia antes e com o jogo fechado. Resolução e textura ficam como estão.</p>
-        <ul class="itens-cs2"><li><span class="nv nv2">equilibrado</span><div><b>CS2 na placa de vídeo dedicada</b><small>ganha: muito mais FPS se ele estava na integrada · perde: mais consumo de bateria durante o jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>otimizações para jogos em janela</b><small>ganha: menos atraso no modo janela sem bordas · perde: nenhum conhecido; alguns jogos antigos ignoram</small></div></li><li><span class="nv nv0">só se marcar</span><div><b>CS2 sem otimizações de tela inteira</b><small>ganha: às vezes menos atraso · perde: às vezes Alt+Tab mais lento ou tela piscando</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>vídeo do CS2 no preset de FPS</b><small>ganha: o MSAA 4x sozinho pode custar 10 a 20% do FPS; o resto varia com o PC · perde: o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)</small></div></li><li><span class="nv nv3">extremo</span><div><b>vídeo do CS2 para PC fraco (a mais)</b><small>ganha: menos uso de memória de vídeo e mais FPS em placa antiga · perde: texturas mais borradas de perto</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>NVIDIA Reflex ligado no CS2</b><small>ganha: menos atraso quando a placa é o gargalo; com FPS muito alto, pouca diferença · perde: um pouco mais de consumo da placa</small></div></li><li><span class="nv nv0">só se marcar</span><div><b>tempo entre quadros e ping na tela do CS2</b><small>ganha: dá para ver se uma mudança ajudou, com número · perde: nada; só vale se você digitar o comando no jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>katharos.cfg com comandos do próprio jogo</b><small>ganha: placa mais fria nos menus; tela mais limpa · perde: nada; o arquivo só vale se você mandar o jogo carregar</small></div></li></ul>
-      </div>
-    </div>
-    <div class="quadro"><p class="fontes">Fontes: <a href="https://github.com/gucu112/cs2-config">gucu112/cs2-config</a> (chaves do arquivo de vídeo), <a href="https://csdb.gg/guides/fps-optimization-guide/">csdb.gg</a> (custo do MSAA).</p></div>
-  </section>
-  <section class="faixa" id="minecraft" aria-label="Pacote do Minecraft: Java Edition">
-    <div class="quadro pac-tit"><h3>Minecraft: Java Edition</h3><code>katharos minecraft</code></div>
-    <div class="quadro pacote">
-      <div class="pacote-arte"><img src="jg-sobrevivencia.webp" alt="" width="1280" height="720" loading="lazy" style="object-position: 30% 40%"></div>
-      <div class="pacote-lado">
-        <p>Edita o options.txt da pasta .minecraft padrão: só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes. Bedrock e launchers com pasta própria não são tocados.</p>
-        <ul class="itens-cs2"><li><span class="nv nv2">equilibrado</span><div><b>Minecraft: opções de vídeo mais leves</b><small>ganha: a distância de renderização é o que mais pesa; o ganho varia com o PC e com mods · perde: o mundo ao longe aparece mais perto; partículas menores</small></div></li><li><span class="nv nv3">extremo</span><div><b>Minecraft: opções para PC fraco (a mais)</b><small>ganha: mais FPS em PC fraco ou com placa integrada · perde: o jogo fica bem mais simples e o horizonte, curto</small></div></li></ul>
-      </div>
-    </div>
-    <div class="quadro"><p class="fontes">Fontes: <a href="https://minecraft.wiki/w/Options.txt">Minecraft Wiki, options.txt</a> (chaves e limites).</p></div>
-  </section>
-
-  <section class="faixa" id="medir" aria-labelledby="med-t">
-    <div class="quadro cab celulas"><div><h2 id="med-t">Conferir se ajudou<span>.</span></h2></div></div>
-  </section>
-  <section class="faixa" aria-label="Como medir">
-    <div class="quadro passos4">
-      <div><span class="n">1</span><h3>Escolha um trajeto</h3><p>Sempre o mesmo mapa e o mesmo caminho. Fumaça e combate mudam o número.</p></div>
-      <div><span class="n">2</span><h3>Meça antes</h3><p>No CS2, marque <code>medir-cs2</code> e digite <code>exec katharos-medir</code>. Nos outros, use o contador do próprio jogo (F3 no Minecraft). Anote o FPS em três passadas.</p></div>
-      <div><span class="n">3</span><h3>Aplique e meça de novo</h3><p>Aplique os itens, repita o mesmo trajeto três vezes e compare com a primeira medida.</p></div>
-      <div><span class="n">4</span><h3>Só conta o que passa do ruído</h3><p>Se a diferença é menor que a variação entre as passadas, o ajuste não ajudou. Desfaça: <code>katharos desfazer</code>.</p></div>
-    </div>
-    <div class="quadro"><p class="fontes">O <code>katharos benchmark</code> mede o PC inteiro (disco, CPU e RAM) com repetição e só diz "melhorou" quando a diferença passa da variação.</p></div>
+    <div class="quadro cab celulas"><div><h2 id="pac-t">Pacote completo<span>.</span></h2>
+      <p>Edita só o arquivo de vídeo que o próprio jogo grava, com cópia antes e o jogo fechado: <code>katharos cs2</code>, <code>katharos minecraft</code>, <code>katharos unreal</code>. O que muda, as fontes e como medir o ganho estão no <a href="guia-jogos.pdf">guia em PDF</a>.</p></div></div>
   </section>
 
   <section class="faixa" aria-label="Sugerir um jogo">

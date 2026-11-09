@@ -20,7 +20,7 @@ import hashlib
 import json
 import queue
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 
 VERSAO = '1.4.1'
 DATA_VERSAO = '9 nov 2026'
@@ -1031,7 +1031,7 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'completa', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': ''}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'completa (o que faz, ganho e custo de cada item) ou curta (só o nome)'),
@@ -1041,6 +1041,7 @@ DESCR_CONFIG = {
     'navegador': ('navegador leve', 'brave ou nenhum: se o turbo instala o Brave enxuto'),
     'confirmar': ('"manter alterações?"', 'risco (padrão): depois de mudar serviços, jogos, energia, disco ou visual, pergunta se está tudo bem e desfaz '
                   'sozinho se você não responder; sempre; ou nunca'),
+    'coleta-em-jogo': ('coleta com jogo aberto', 'segura (padrão): só lê CPU, RAM, disco e temperatura do sistema, sem olhar processos nem a placa de vídeo; ou pausar: não coleta nada enquanto houver jogo aberto'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
 
@@ -1274,6 +1275,26 @@ def prioridade_baixa():
             ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x40)  # IDLE
         except Exception:
             pass
+
+
+def sem_janela_global():
+    """Sem console (pythonw, tarefa agendada): todo processo filho nasce sem janela (CREATE_NO_WINDOW). Sem isto, qualquer powershell.exe,
+    tasklist ou taskkill abriria e fecharia uma janela, e isso pode tirar um jogo da tela cheia. Com console (uso normal), não muda nada."""
+    if not WINDOWS or getattr(subprocess.Popen, '_sem_janela', False):
+        return False
+    try:
+        if ctypes.windll.kernel32.GetConsoleWindow():
+            return False
+    except Exception:
+        return False
+    original = subprocess.Popen.__init__
+
+    def init(self, *a, **kw):
+        kw['creationflags'] = kw.get('creationflags', 0) | 0x08000000
+        original(self, *a, **kw)
+    subprocess.Popen.__init__ = init
+    subprocess.Popen._sem_janela = True
+    return True
 
 
 def desliga_edicao_rapida():
@@ -1697,8 +1718,10 @@ class _Filho:
         self.fila = queue.Queue()
         self.fora = WINDOWS and dentro_de_pacote()
         if not self.fora:
+            # sem console (pythonw, tarefa agendada): sem esta marca o PowerShell abriria uma janela, que poderia tirar um jogo da tela cheia
+            sem_janela = 0x08000000 if WINDOWS and not ctypes.windll.kernel32.GetConsoleWindow() else 0
             self.p = subprocess.Popen([ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(arq)],
-                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=sem_janela)
             self.pid = self.p.pid
             threading.Thread(target=self._le_pipe, daemon=True).start()
             return
@@ -5990,7 +6013,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # cada perfil: nome, para que serve, e {pacote: [ids dos itens]} ("@seguro" = tudo o que o modo seguro marca).
@@ -7969,29 +7992,76 @@ def ferramenta_manutencao(ctx, args):
     return 0
 
 
+def pasta_da_tarefa():
+    """Onde fica a cópia do programa que a tarefa ELEVADA executa. %ProgramData%\\Katharos: só administradores gravam ali. Se ficasse em
+    ~/.katharos, qualquer programa rodando como o seu usuário (sem administrador) poderia trocar o arquivo e ganhar administrador no próximo logon."""
+    base = os.environ.get('ProgramData') if WINDOWS else None
+    return Path(base) / 'Katharos' if base else CASA
+
+
+def protege_pasta_da_tarefa(pasta):
+    """Pasta só com SYSTEM e Administradores gravando (por SID, vale em qualquer idioma); Usuários só leem e executam. True se o icacls aceitou."""
+    try:
+        r = subprocess.run(['icacls', str(pasta), '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX'],
+                           capture_output=True, text=True, timeout=30)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def python_em_pasta_do_usuario():
+    """O Python que a tarefa elevada usa está numa pasta que um programa sem administrador consegue alterar (AppData, por exemplo)?"""
+    try:
+        return str(Path(sys.executable).resolve()).lower().startswith(str(Path.home().resolve()).lower())
+    except (OSError, RuntimeError):
+        return False
+
+
+def executavel_sem_janela():
+    """(executável, True) com pythonw.exe quando existe (não abre console: nada pisca na tela); senão o python.exe e False."""
+    pw = Path(sys.executable).with_name('pythonw.exe')
+    if pw.exists():
+        return str(pw), True
+    py = sys.executable
+    return (py[:-11] + 'python.exe' if py.lower().endswith('pythonw.exe') else py), False
+
+
 def instala_manutencao(ctx, freq='semanal'):
     if freq not in FREQ_FUNDO:
         freq = 'semanal'
+    t = ctx.t
     quando, gatilho = FREQ_FUNDO[freq]
-    script = CASA / 'katharos.py'
+    pasta = pasta_da_tarefa()
+    pasta.mkdir(parents=True, exist_ok=True)
+    if WINDOWS and not protege_pasta_da_tarefa(pasta):
+        t.erro(f'Não consegui proteger a pasta {pasta} (só administradores devem gravar nela). Sem isso a tarefa elevada ficaria insegura; nada foi criado.')
+        return 1
+    script = pasta / 'katharos.py'
     shutil.copy2(Path(__file__).resolve(), script)
-    py = sys.executable
-    if py.lower().endswith('pythonw.exe'):
-        py = py[:-5] + '.exe'
-    cmd = f"& {psq(py)} {psq(str(script))} manutencao --agendada --sem-cor"
+    exe, sem_janela = executavel_sem_janela()
+    arg = subprocess.list2cmdline([str(script), 'manutencao', '--agendada', '--sem-cor'])
+    if WINDOWS and python_em_pasta_do_usuario():
+        t.aviso('O Python que a tarefa usa está dentro da sua pasta de usuário, que programas sem administrador conseguem alterar; a tarefa roda como administrador e herdaria esse risco. '
+                'Para fechar essa brecha, instale o Python "para todos os usuários" (python.org, marque "Install for all users": vai para Arquivos de Programas) e rode "agendar" de novo.')
+    if not sem_janela:
+        t.aviso('Não achei o pythonw.exe ao lado do Python: a tarefa pode piscar uma janela ao rodar. O Python de python.org traz o pythonw.exe.')
     corpo = ps_monta(r'''
-$__a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "' + «cmd» + '"')
+$__a = New-ScheduledTaskAction -Execute «exe» -Argument «arg»
 $__t = «gatilho»
 $__p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
 $__s = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration (New-TimeSpan -Minutes 10) -IdleWaitTimeout (New-TimeSpan -Hours 12) -RestartOnIdle -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1) -Priority 7 -MultipleInstances IgnoreNew
 if ($TESTE) { Plano 'criar a tarefa de segundo plano'; return }
 Unregister-ScheduledTask -TaskName «antiga» -Confirm:$false -ErrorAction SilentlyContinue
-Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes, em segundo plano. Criada pelo Katharos.' -Force | Out-Null
+Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes, em segundo plano, sem janela. Criada pelo Katharos.' -Force | Out-Null
 Feito 'segundo plano ligado: «quando», com o PC ocioso por 10 min e na tomada'
-''', cmd=psq(cmd.replace('"', '\\"')), nome=psq(TAREFA_MANUT), antiga=psq(TAREFA_MANUT_ANTIGA), gatilho=gatilho, quando=quando)
+''', exe=psq(exe), arg=psq(arg), nome=psq(TAREFA_MANUT), antiga=psq(TAREFA_MANUT_ANTIGA), gatilho=gatilho, quando=quando)
     s = roda_ps(ctx.t, corpo, 'agendar', minutos=2)
     if s.ok and not s.erros:
         marca_estado('manut_freq', freq)
+        if freq == 'continua':
+            instala_amostra(ctx)   # a leitura de 15 min (temperatura e consumo, sem janela) faz parte do modo contínuo
+        else:
+            remove_amostra(ctx)
         return 0
     return 1
 
@@ -8036,6 +8106,11 @@ def ferramenta_agendar(ctx, args):
     if acao == 'r':
         for nome in (TAREFA_MANUT, TAREFA_MANUT_ANTIGA):
             roda_ps(t, f"Unregister-ScheduledTask -TaskName {psq(nome)} -Confirm:$false -ErrorAction SilentlyContinue", 'remover', minutos=1, mostra=False)
+        remove_amostra(ctx)
+        try:
+            (pasta_da_tarefa() / 'katharos.py').unlink()
+        except OSError:
+            pass
         e = estado()
         e.pop('manut_freq', None)
         salva_estado(e)
@@ -8879,6 +8954,310 @@ def projecao_enchimento(serie, minimo=6):
         return None
     dias = atual / -por_dia
     return (dias, serie[-1][0] + timedelta(days=dias)) if dias < 120 else None
+# ─────────────── coleta leve em segundo plano: temperatura e consumo por hora, com cuidado em jogo ───────────────
+# A cada 15 min uma tarefa do Windows acorda, lê alguns contadores do próprio sistema (os mesmos que o Gerenciador de Tarefas mostra),
+# grava e dorme. Nada fica residente em memória. As amostras viram UMA linha por hora (mín, máx, soma e contagem), por até ~400 dias:
+# é isso que permite gráfico de temperatura de meses sem arquivo gigante.
+#
+# CUIDADO COM JOGOS (anti-cheat): o coletor só lê contadores de desempenho e WMI do sistema. Nunca abre o processo de um jogo, nunca lê
+# memória, nunca injeta DLL, não instala driver nem overlay. Enquanto um jogo conhecido (ou um anti-cheat) estiver aberto, ele nem olha
+# a lista de processos para saber quem consome, nem chama a ferramenta da placa de vídeo: só CPU, RAM, disco, temperatura da zona térmica
+# e bateria do sistema. Com `config coleta-em-jogo pausar` ele não coleta nada enquanto houver jogo aberto.
+HORAS_MAX = 24 * 400
+HORAS_ARQ_NOME = 'horas.jsonl'
+TAREFA_AMOSTRA = 'Katharos - amostra leve'
+INTERVALO_AMOSTRA_MIN = 15
+# nomes de processo (minúsculas, sem .exe) que contam como "há jogo aberto": o catálogo + exemplos com anti-cheat + processos de anti-cheat conhecidos
+ANTICHEAT_PROCESSOS = ['easyanticheat', 'easyanticheat_eos', 'beservice', 'vgc', 'vgtray', 'faceit', 'faceitclient', 'faceit-ac', 'battleye', 'eac_launcher']
+
+
+def nomes_de_jogo():
+    return sorted({re.sub(r'\.exe$', '', x.lower()) for x in list(JOGOS_EXE) + list(EXE_COM_ANTICHEAT)} | set(ANTICHEAT_PROCESSOS))
+
+
+AMOSTRA_PS = r'''
+$__pausar = «pausar»
+$__jogos = @(«jogos»)
+$__nomes = @([System.Diagnostics.Process]::GetProcesses() | ForEach-Object { $_.ProcessName.ToLower() })
+$__emJogo = [bool](@($__nomes | Where-Object { $__jogos -contains $_ }).Count)
+if ($__emJogo -and $__pausar) { Dado 'amostra' @{ em_jogo = $true; pausado = $true }; return }
+$__cpuS = @()
+for ($i = 0; $i -lt 3; $i++) {
+    $p = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop }
+    if ($p -and $i -gt 0) { $__cpuS += [double]$p.PercentProcessorTime }
+    if ($i -lt 2) { Start-Sleep -Milliseconds 500 }
+}
+$__os = Get-CimInstance Win32_OperatingSystem
+$__ramT = $__os.TotalVisibleMemorySize / 1MB
+$__ramU = ($__os.TotalVisibleMemorySize - $__os.FreePhysicalMemory) / 1MB
+$__temp = Tenta { $z = @(Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | ForEach-Object { ($_.CurrentTemperature / 10) - 273.15 } | Where-Object { $_ -gt 5 -and $_ -lt 120 }); if ($z.Count) { [math]::Round(($z | Measure-Object -Maximum).Maximum, 0) } else { $null } } $null
+if ($null -eq $__temp) { $__temp = Tenta { $z = @(Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop | ForEach-Object { [double]$_.Temperature - 273.15 } | Where-Object { $_ -gt 5 -and $_ -lt 120 }); if ($z.Count) { [math]::Round(($z | Measure-Object -Maximum).Maximum, 0) } else { $null } } $null }
+$__disco = Tenta { [math]::Min(100, [double](Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop).PercentDiskTime) } $null
+$__gpuU = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
+$__bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+$a = @{ em_jogo = $__emJogo; ram_pct = [math]::Round($__ramU / $__ramT * 100, 1); ram_gb = [math]::Round($__ramU, 2) }
+if ($__cpuS.Count) { $a.cpu = [math]::Round(($__cpuS | Measure-Object -Average).Average, 1) }
+if ($null -ne $__temp) { $a.temp = $__temp }
+if ($null -ne $__disco) { $a.disco = $__disco }
+if ($null -ne $__gpuU) { $a.gpu_util = $__gpuU }
+if ($__bat) { $a.bat = [int]$__bat.EstimatedChargeRemaining; $a.na_bateria = ([int]$__bat.BatteryStatus -eq 1) }
+if (-not $__emJogo) {
+    # fora de jogo dá para saber quem mais pesa e a temperatura/consumo da placa NVIDIA (ferramenta oficial da própria NVIDIA, só leitura)
+    $__pp = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -ErrorAction Stop | Where-Object { $_.Name -notmatch '^(_Total|Idle)$' } | Sort-Object PercentProcessorTime -Descending | Select-Object -First 1 } $null
+    if ($__pp -and [double]$__pp.PercentProcessorTime -ge 5) { $a.top_cpu = ([string]$__pp.Name -replace '#\d+$', '') }
+    $__pm = Tenta { Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 1 } $null
+    if ($__pm) { $a.top_ram = [string]$__pm.ProcessName }
+    $__smi = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($__smi) {
+        $__l = Tenta { (& $__smi.Source --query-gpu=temperature.gpu,power.draw --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } $null
+        if ($__l) { $__v = @("$__l" -split ',' | ForEach-Object { $_.Trim() }); $__d = 0.0
+            if ($__v.Count -ge 1 -and [double]::TryParse($__v[0], [ref]$__d)) { $a.gpu_temp = $__d }
+            if ($__v.Count -ge 2 -and [double]::TryParse($__v[1], [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$__d)) { $a.gpu_w = $__d } }
+    }
+}
+Dado 'amostra' $a
+'''
+
+
+def horas_arq():
+    return CASA / HORAS_ARQ_NOME
+
+
+def _acum(b, pref, v, minmax=True):
+    """Soma/contagem (e mínimo/máximo) de um valor numérico num balde horário. Valor ausente não entra."""
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return
+    b[pref + 'n'] = b.get(pref + 'n', 0) + 1
+    b[pref + 's'] = round(b.get(pref + 's', 0) + v, 2)
+    if minmax:
+        b[pref + 'x'] = max(b.get(pref + 'x', v), v)
+        b[pref + 'm'] = min(b.get(pref + 'm', v), v)
+
+
+def agrega_hora(b, a):
+    """Soma uma amostra no balde da hora. Chaves: c=CPU %, r=RAM %, d=disco ocupado %, t=temperatura, g=temperatura da GPU, u=uso da GPU,
+    w=consumo da GPU (W); tr/tc=temperatura em repouso (CPU<15%) e sob carga (CPU>=50%); jg=amostras com jogo aberto; bn/b0/b1=bateria."""
+    b['n'] = b.get('n', 0) + 1
+    _acum(b, 'c', a.get('cpu'))
+    _acum(b, 'r', a.get('ram_pct'))
+    _acum(b, 'd', a.get('disco'))
+    _acum(b, 't', a.get('temp'))
+    _acum(b, 'g', a.get('gpu_temp'))
+    _acum(b, 'u', a.get('gpu_util'))
+    _acum(b, 'w', a.get('gpu_w'), minmax=False)
+    cpu, temp = a.get('cpu'), a.get('temp')
+    if isinstance(cpu, (int, float)) and isinstance(temp, (int, float)):
+        if cpu < 15:
+            _acum(b, 'tr', temp, minmax=False)
+        elif cpu >= 50:
+            _acum(b, 'tc', temp, minmax=False)
+    if a.get('em_jogo'):
+        b['jg'] = b.get('jg', 0) + 1
+    if isinstance(a.get('bat'), (int, float)) and a.get('na_bateria'):
+        b['bn'] = b.get('bn', 0) + 1
+        b.setdefault('b0', a['bat'])
+        b['b1'] = a['bat']
+    for chave, campo in (('top', 'top_cpu'), ('topr', 'top_ram')):
+        nome = a.get(campo)
+        if isinstance(nome, str) and nome:
+            d = b.setdefault(chave, {})
+            d[nome[:40]] = d.get(nome[:40], 0) + 1
+            if len(d) > 6:   # só os mais frequentes ficam: a linha não cresce
+                for peq in sorted(d, key=d.get)[:len(d) - 6]:
+                    del d[peq]
+    return b
+
+
+def registra_hora(a, quando=None, arq=None):
+    """Soma a amostra na linha da hora atual (cria a linha se a hora é nova). Só reescreve o fim do arquivo."""
+    if not isinstance(a, dict) or a.get('pausado') or not any(isinstance(a.get(k), (int, float)) for k in ('cpu', 'ram_pct', 'temp')):
+        return None
+    quando = quando or datetime.now()
+    h = quando.strftime('%Y-%m-%dT%H')
+    arq = Path(arq or horas_arq())
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dados = arq.read_bytes() if arq.exists() else b''
+    except OSError:
+        dados = b''
+    linhas = dados.decode('utf-8', errors='replace').splitlines()
+    ultimo = None
+    if linhas:
+        try:
+            ultimo = json.loads(linhas[-1])
+        except ValueError:
+            linhas.pop()   # última linha cortada por queda de energia: descarta e segue
+    if ultimo and ultimo.get('h') == h:
+        linhas.pop()
+        bucket = ultimo
+    else:
+        bucket = {'h': h}
+    agrega_hora(bucket, a)
+    linhas.append(json.dumps(bucket, ensure_ascii=False, separators=(',', ':')))
+    if len(linhas) > HORAS_MAX + 240:   # aparar só de vez em quando: reescrever um arquivo grande a cada 15 min seria desperdício
+        linhas = linhas[-HORAS_MAX:]
+    tmp = arq.with_suffix('.tmp')
+    tmp.write_text('\n'.join(linhas) + '\n', encoding='utf-8')
+    os.replace(tmp, arq)
+    return bucket
+
+
+def le_horas(arq=None):
+    out = []
+    try:
+        for l in Path(arq or horas_arq()).read_text(encoding='utf-8', errors='replace').splitlines():
+            try:
+                b = json.loads(l)
+                b['_dt'] = datetime.strptime(b['h'], '%Y-%m-%dT%H')
+                out.append(b)
+            except (ValueError, KeyError, TypeError):
+                continue
+    except OSError:
+        pass
+    return sorted(out, key=lambda b: b['_dt'])
+
+
+def _med(b, pref):
+    return b[pref + 's'] / b[pref + 'n'] if b.get(pref + 'n') else None
+
+
+def serie_diaria(horas, pref):
+    """[(dia, mínimo, média, máximo)] por dia, de um valor (pref='t' temperatura, 'c' CPU...). A média pesa pelo número de amostras."""
+    dias = {}
+    for b in horas:
+        if not b.get(pref + 'n'):
+            continue
+        d = dias.setdefault(b['_dt'].date(), [None, 0.0, 0, None])
+        d[0] = b[pref + 'm'] if d[0] is None else min(d[0], b[pref + 'm'])
+        d[3] = b[pref + 'x'] if d[3] is None else max(d[3], b[pref + 'x'])
+        d[1] += b[pref + 's']
+        d[2] += b[pref + 'n']
+    return [(datetime.combine(dia, datetime.min.time()), v[0], v[1] / v[2], v[3]) for dia, v in sorted(dias.items())]
+
+
+def serie_diaria_simples(horas, pref_s, pref_n, minimo=3):
+    """[(dia, média)] só de dias com pelo menos `minimo` amostras (repouso e carga têm poucas amostras por dia)."""
+    dias = {}
+    for b in horas:
+        if b.get(pref_n):
+            d = dias.setdefault(b['_dt'].date(), [0.0, 0])
+            d[0] += b[pref_s]
+            d[1] += b[pref_n]
+    return [(datetime.combine(dia, datetime.min.time()), s / n) for dia, (s, n) in sorted(dias.items()) if n >= minimo]
+
+
+def analisa_termica(horas, limite_atencao=80, limite_grave=90):
+    """Resumo honesto da temperatura (zona térmica do sistema, não o sensor do núcleo da CPU). Devolve {} se não há leituras."""
+    com_t = [b for b in horas if b.get('tn')]
+    if not com_t:
+        return {}
+    pico = max(com_t, key=lambda b: b['tx'])
+    r = {'horas': len(com_t), 'dias': len({b['_dt'].date() for b in com_t}), 'maxima': pico['tx'], 'maxima_quando': pico['_dt'],
+         'horas_atencao': sum(1 for b in com_t if b['tx'] >= limite_atencao), 'horas_graves': sum(1 for b in com_t if b['tx'] >= limite_grave),
+         'media_repouso': None, 'media_carga': None, 'achados': [], 'tem_gpu': any(b.get('gn') for b in horas)}
+    tr = [(b['trs'], b['trn']) for b in horas if b.get('trn')]
+    tc = [(b['tcs'], b['tcn']) for b in horas if b.get('tcn')]
+    if tr and sum(n for _, n in tr) >= 6:
+        r['media_repouso'] = sum(s for s, _ in tr) / sum(n for _, n in tr)
+    if tc and sum(n for _, n in tc) >= 6:
+        r['media_carga'] = sum(s for s, _ in tc) / sum(n for _, n in tc)
+    if r['horas_graves'] >= 2:
+        r['achados'].append(('alta', f'a temperatura passou de {limite_grave} °C em {pl(r["horas_graves"], "hora", "horas")} (máxima {br(r["maxima"], 0)} °C em {pico["_dt"]:%d/%m %H}h): '
+                                     'confira ventoinha, poeira, pasta térmica e fluxo de ar do gabinete'))
+    elif r['horas_atencao'] >= 6 and r['horas_atencao'] / r['horas'] >= 0.10:
+        r['achados'].append(('média', f'a temperatura passou de {limite_atencao} °C em {r["horas_atencao"]} de {r["horas"]} horas medidas ({br(r["horas_atencao"] / r["horas"] * 100, 0)}%)'))
+    rep = serie_diaria_simples(horas, 'trs', 'trn')
+    if len(rep) >= 14 and (rep[-1][0] - rep[0][0]).days >= 14:
+        valores = [v for _, v in rep]
+        antes, depois = _tercos([(d, v) for d, v in rep])
+        # ruído = variação de um dia para o seguinte (a subida lenta que queremos detectar não entra nessa conta)
+        ruido = _mediana([abs(b - a) for a, b in zip(valores, valores[1:])]) * 3
+        if depois - antes >= max(4.0, ruido):
+            r['achados'].append(('média', f'a temperatura em repouso subiu de {br(antes, 0)} para {br(depois, 0)} °C em {(rep[-1][0] - rep[0][0]).days} dias '
+                                          '(mediana do começo e do fim). O clima do ambiente também pesa; se continuar subindo, limpe o PC e troque a pasta térmica'))
+    return r
+
+
+def amostra_leve(ctx, args=None):
+    """Lê o PC (leve, uns 2 s) e soma na linha da hora. Devolve a amostra, ou None."""
+    if not WINDOWS:
+        return None
+    pausar = config('coleta-em-jogo', 'segura') == 'pausar'
+    corpo = ps_monta(AMOSTRA_PS, pausar='$true' if pausar else '$false', jogos=', '.join(psq(n) for n in nomes_de_jogo()))
+    s = roda_ps(ctx.t, corpo, 'amostra', minutos=1, mostra=False)
+    a = s.dados.get('amostra')
+    if isinstance(a, dict):
+        registra_hora(a)
+    return a
+
+
+def ferramenta_amostrar(ctx, args):
+    t = ctx.t
+    if not WINDOWS:
+        t.erro('só funciona no Windows.')
+        return 1
+    agendada = getattr(args, 'agendada', False)
+    if agendada:
+        prioridade_baixa()
+    a = amostra_leve(ctx, args)
+    if agendada:
+        return 0
+    t.aba('uma leitura leve do sistema, somada ao histórico por hora')
+    if not a:
+        t.erro('Não consegui ler o sistema.')
+        return 1
+    if a.get('pausado'):
+        t.nota('  Há um jogo aberto e a coleta está em "pausar": nada foi lido. (config coleta-em-jogo segura liga de novo a leitura só do sistema.)', 2)
+        return 0
+    t.chaves([('CPU', f'{br(a.get("cpu"), 0)} %' if 'cpu' in a else '-'), ('RAM', f'{br(a.get("ram_pct"), 0)} % ({br(a.get("ram_gb"), 1)} GB)'),
+              ('disco ocupado', f'{br(a.get("disco"), 0)} %' if 'disco' in a else '-'), ('temperatura', f'{br(a.get("temp"), 0)} °C' if 'temp' in a else 'sem sensor acessível pelo Windows'),
+              ('jogo aberto', 'sim: leitura só do sistema' if a.get('em_jogo') else 'não')])
+    return 0
+
+
+def comando_da_amostra():
+    """(executável, argumentos) da tarefa de 15 min. Preferência por pythonw.exe: não tem console, então nada pisca na tela (um jogo em tela cheia
+    poderia ser minimizado por uma janela que abre e fecha). Sem pythonw, cai no PowerShell escondido e avisa."""
+    script = CASA / 'katharos.py'
+    pw = Path(sys.executable).with_name('pythonw.exe')
+    if pw.exists():
+        return str(pw), subprocess.list2cmdline([str(script), 'amostrar', '--agendada', '--sem-cor']), True
+    py = sys.executable
+    return 'powershell.exe', ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& \'' + py + '\' \'' + str(script) + '\' amostrar --agendada --sem-cor"'), False
+
+
+def instala_amostra(ctx):
+    """Cria a tarefa de 15 min. Roda com o PC em uso e na bateria (é quando há o que medir), prioridade baixa, no máximo 2 min."""
+    t = ctx.t
+    script = CASA / 'katharos.py'
+    shutil.copy2(Path(__file__).resolve(), script)
+    exe, arg, sem_janela = comando_da_amostra()
+    # sem privilégio elevado de propósito: a leitura não precisa dele (o contador de zona térmica funciona sem administrador), e uma tarefa
+    # elevada executando um script em pasta do usuário seria uma porta de escalada de privilégio
+    corpo = ps_monta(r'''
+$__a = New-ScheduledTaskAction -Execute «exe» -Argument «arg»
+$__t = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes «min»)
+$__p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+$__s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -Priority 7 -MultipleInstances IgnoreNew
+if ($TESTE) { Plano 'criar a tarefa de leitura leve a cada 15 minutos'; return }
+Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Leitura leve de temperatura e consumo a cada 15 minutos, sem janela. Criada pelo Katharos.' -Force | Out-Null
+Feito 'leitura leve ligada: a cada «min» min, sem janela'
+''', exe=psq(exe), arg=psq(arg), min=INTERVALO_AMOSTRA_MIN, nome=psq(TAREFA_AMOSTRA))
+    s = roda_ps(t, corpo, 'agendar-amostra', minutos=2)
+    if not (s.ok and not s.erros):
+        return 1
+    marca_estado('amostra_ligada', agora_iso())
+    if not sem_janela:
+        t.aviso('Não achei o pythonw.exe: a leitura de 15 min usa um PowerShell escondido, que pode piscar na tela por um instante. '
+                'Instale o Python de python.org (traz o pythonw.exe) se isso incomodar durante jogos em tela cheia.')
+    return 0
+
+
+def remove_amostra(ctx):
+    roda_ps(ctx.t, f"Unregister-ScheduledTask -TaskName {psq(TAREFA_AMOSTRA)} -Confirm:$false -ErrorAction SilentlyContinue", 'remover-amostra', minutos=1, mostra=False)
+    e = estado()
+    e.pop('amostra_ligada', None)
+    salva_estado(e)
 # ─────────────── painel: gráficos em HTML autocontido (SVG feito aqui, sem internet, sem biblioteca) ───────────────
 import html as _html
 import math
@@ -9131,7 +9510,7 @@ def _secao_saude(sa, cliques=False):
     return cab + fig + ''.join(blocos)
 
 
-def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False):
+def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False, horas=()):
     """HTML completo do painel. amostras: de le_metricas(); benchs: [(datetime, {chave: mediana})]; pacotes: [(datetime, título)]."""
     marcas = [(d, f'aplicou: {t}') for d, t in pacotes]
     corpo = []
@@ -9182,6 +9561,9 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             if marcas:
                 leg += ' <span class="m">Linhas verdes pontilhadas</span>: quando você aplicou um pacote do Katharos (passe o mouse).'
             corpo.append(f'<p class="legenda">{leg}</p>')
+    if horas:
+        corpo.append(_secao_termica(horas, marcas))
+        corpo.append(_secao_consumo(horas, marcas))
     if saude:
         corpo.append(_secao_saude(saude, cliques))
     figs_b = []
@@ -9198,7 +9580,7 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
         corpo.append('<details><summary>Ver as medidas em tabela (últimas 60)</summary><table><tr><th>quando</th>'
                      + ''.join(f'<th>{_e(t)}</th>' for _, t, *_ in PAINEL_SERIES) + '</tr>' + linhas + '</table></details>')
     return ('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Katharos · painel do PC</title><style>' + PAINEL_CSS + '</style></head><body>'
+            '<title>Katharos · painel do PC</title><style>' + PAINEL_CSS + CSS_HORAS + '</style></head><body>'
             f'<h1>Painel do PC<small>{_e(pc)}</small></h1>'
             f'<p class="sub">{_e(periodo) if periodo else "Gráficos gerados pelo Katharos, neste computador. Nada sai do PC."}</p>'
             + ''.join(corpo) +
@@ -9243,7 +9625,7 @@ def ferramenta_painel(ctx, args):
     ev = coleta_evidencias(ctx)
     ev['amostras'] = am
     html_ = monta_painel(am, ev['benchs'], pacotes_para_painel(), analisa_tendencia(am), nome_do_pc(), VERSAO, gera_sugestoes(ev),
-                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude(), cliques=cliques_ativos())
+                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude(), cliques=cliques_ativos(), horas=le_horas())
     destino = CASA / 'painel.html'
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(html_, encoding='utf-8')
@@ -9261,6 +9643,265 @@ def ferramenta_painel(ctx, args):
     except Exception as e:
         t.aviso(f'Não consegui abrir o navegador ({e}). Abra o arquivo acima.')
     return 0
+# ─────────────── painel: temperatura em janela longa e consumo (a partir das linhas por hora) ───────────────
+CSS_HORAS = '''
+.banda{fill:var(--ambar);opacity:.22}.linha-b{fill:none;stroke:var(--verde);stroke-width:2;stroke-linejoin:round}.linha-c{fill:none;stroke:var(--ambar);stroke-width:2;stroke-linejoin:round}
+.leg{display:flex;flex-wrap:wrap;gap:14px;font:12px var(--mono);color:var(--apagado);margin:6px 0 0}.leg i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;background:var(--ambar)}
+.leg i.v{background:var(--verde)}.leg i.b{height:10px;opacity:.35}
+.q0{fill:var(--linha)}.q1{fill:var(--ambar);opacity:.28}.q2{fill:var(--ambar);opacity:.55}.q3{fill:var(--ambar);opacity:.95}.q4{fill:var(--verm);opacity:.7}.q5{fill:var(--verm)}
+.barra{fill:var(--ambar);opacity:.85}.barra.pico{fill:var(--verm)}.celula:hover{stroke:var(--osso);stroke-width:1}
+ul.rank{list-style:none;display:grid;gap:6px;font:13px var(--mono);margin-top:8px}ul.rank li{display:grid;grid-template-columns:minmax(90px,200px) 1fr auto;gap:10px;align-items:center}
+ul.rank .tr{height:8px;background:var(--linha)}ul.rank .tr b{display:block;height:100%;background:var(--ambar)}ul.rank span{color:var(--apagado)}
+'''
+CORES_CALOR = [(50, 'q0'), (60, 'q1'), (70, 'q2'), (80, 'q3'), (90, 'q4')]
+
+
+def _classe_calor(v):
+    for lim, c in CORES_CALOR:
+        if v < lim:
+            return c
+    return 'q5'
+
+
+def svg_multi(titulo, un, casas, banda=None, linhas=(), limites=(), marcas=(), largura=560, altura=200):
+    """Gráfico de tempo com faixa (mín–máx) e várias linhas. banda: [(dt, lo, hi)]; linhas: [([(dt, v)], classe_css, rotulo)]; limites: [(valor, rótulo)]."""
+    ml, mr, mt, mb = 46, 14, 14, 26
+    w, h = largura - ml - mr, altura - mt - mb
+    pontos = [(d, v) for serie, *_ in linhas for d, v in serie] + [(d, v) for d, lo, hi in (banda or []) for v in (lo, hi)]
+    if len(pontos) < 2:
+        return f'<svg viewBox="0 0 {largura} {altura}" role="img" aria-label="{_e(titulo)}: sem dados"></svg>'
+    t0, t1 = min(d for d, _ in pontos), max(d for d, _ in pontos)
+    span = max((t1 - t0).total_seconds(), 1.0)
+    lo, hi = _escala(min(v for _, v in pontos), max(v for _, v in pontos))
+    for lim, _ in limites:
+        if lim > hi:
+            hi = lim + (hi - lo) * 0.08
+
+    def x(d):
+        return ml + (d - t0).total_seconds() / span * w
+
+    def y(v):
+        return mt + h - (v - lo) / (hi - lo) * h
+    out = [f'<svg viewBox="0 0 {largura} {altura}" role="img" aria-label="{_e(titulo)}, de {t0:%d/%m/%Y} a {t1:%d/%m/%Y}" class="grafico">']
+    for v in _ticks(lo, hi, inteiro=casas == 0):
+        out.append(f'<line x1="{ml}" x2="{ml + w}" y1="{y(v):.1f}" y2="{y(v):.1f}" class="grade"/><text x="{ml - 6}" y="{y(v) + 4:.1f}" class="eixo" text-anchor="end">{_num(v, casas)}</text>')
+    out.append(f'<text x="{ml}" y="{altura - 6}" class="eixo">{t0:%d/%m}</text><text x="{ml + w}" y="{altura - 6}" class="eixo" text-anchor="end">{t1:%d/%m}</text>')
+    for lim, rot in limites:
+        if lo <= lim <= hi:
+            out.append(f'<line x1="{ml}" x2="{ml + w}" y1="{y(lim):.1f}" y2="{y(lim):.1f}" class="limite"/><text x="{ml + w}" y="{y(lim) - 4:.1f}" class="rotulo-limite" text-anchor="end">{_e(rot)}</text>')
+    for d, rot in marcas:
+        if t0 <= d <= t1:
+            out.append(f'<line x1="{x(d):.1f}" x2="{x(d):.1f}" y1="{mt}" y2="{mt + h}" class="marca"><title>{_e(rot)} ({d:%d/%m})</title></line>')
+    if banda and len(banda) > 1:
+        cima = ' '.join(f'{x(d):.1f},{y(b):.1f}' for d, a, b in banda)
+        baixo = ' '.join(f'{x(d):.1f},{y(a):.1f}' for d, a, b in reversed(banda))
+        out.append(f'<polygon points="{cima} {baixo}" class="banda"/>')
+    for i, (serie, classe, rot) in enumerate(linhas):
+        if len(serie) > 1:
+            out.append(f'<polyline points="{" ".join(f"{x(d):.1f},{y(v):.1f}" for d, v in serie)}" class="{classe}"/>')
+        if serie:
+            d, v = serie[-1]
+            out.append(f'<circle cx="{x(d):.1f}" cy="{y(v):.1f}" r="3.5" class="ponto"/>')
+        for d, v in serie:   # passar o mouse mostra o dia e o valor
+            out.append(f'<circle cx="{x(d):.1f}" cy="{y(v):.1f}" r="6" class="alvo"><title>{d:%d/%m/%Y}: {_e(rot)} {_num(v, casas)} {_e(un)}</title></circle>')
+    out.append('</svg>')
+    return ''.join(out)
+
+
+def svg_calor(horas, dias=28, largura=560):
+    """Mapa de calor: uma linha por dia (o mais recente embaixo), uma coluna por hora; a cor é a temperatura máxima daquela hora."""
+    com = [b for b in horas if b.get('tn')]
+    if not com:
+        return ''
+    fim = max(b['_dt'] for b in com).date()
+    ini = fim - timedelta(days=dias - 1)
+    cel = {(b['_dt'].date(), b['_dt'].hour): b for b in com if ini <= b['_dt'].date() <= fim}
+    ml, mt, cw, ch = 40, 6, (largura - 40 - 8) / 24, 12
+    altura = mt + dias * ch + 22
+    out = [f'<svg viewBox="0 0 {largura} {altura:.0f}" role="img" aria-label="Mapa de calor da temperatura máxima por hora e por dia" class="grafico">']
+    for i in range(dias):
+        dia = ini + timedelta(days=i)
+        if i % 7 == 0 or i == dias - 1:
+            out.append(f'<text x="{ml - 6}" y="{mt + i * ch + 10}" class="eixo" text-anchor="end">{dia:%d/%m}</text>')
+        for hh in range(24):
+            b = cel.get((dia, hh))
+            cx, cy = ml + hh * cw, mt + i * ch
+            if b:
+                out.append(f'<rect x="{cx:.1f}" y="{cy}" width="{cw - 1:.1f}" height="{ch - 1}" class="celula {_classe_calor(b["tx"])}"><title>{dia:%d/%m} {hh:02d}h: máxima {_num(b["tx"], 0)} °C</title></rect>')
+            else:
+                out.append(f'<rect x="{cx:.1f}" y="{cy}" width="{cw - 1:.1f}" height="{ch - 1}" fill="none" stroke="var(--linha)" stroke-width=".5"/>')
+    for hh in (0, 6, 12, 18):
+        out.append(f'<text x="{ml + hh * cw:.1f}" y="{altura - 6:.0f}" class="eixo">{hh:02d}h</text>')
+    out.append('</svg>')
+    return ''.join(out)
+
+
+def svg_barras24(valores, titulo, un, casas=0, pico=None, largura=560, altura=170):
+    """24 barras, uma por hora do dia. valores: lista de 24 números ou None."""
+    ml, mr, mt, mb = 40, 8, 10, 24
+    w, h = largura - ml - mr, altura - mt - mb
+    v = [x for x in valores if x is not None]
+    if not v:
+        return ''
+    hi = max(max(v) * 1.1, 1e-9)
+    bw = w / 24
+    out = [f'<svg viewBox="0 0 {largura} {altura}" role="img" aria-label="{_e(titulo)} por hora do dia" class="grafico">']
+    for t in _ticks(0, hi, inteiro=casas == 0):
+        yy = mt + h - t / hi * h
+        out.append(f'<line x1="{ml}" x2="{ml + w}" y1="{yy:.1f}" y2="{yy:.1f}" class="grade"/><text x="{ml - 6}" y="{yy + 4:.1f}" class="eixo" text-anchor="end">{_num(t, casas)}</text>')
+    for i, val in enumerate(valores):
+        if val is None:
+            continue
+        bh = val / hi * h
+        cls = 'barra pico' if pico is not None and val >= pico else 'barra'
+        out.append(f'<rect x="{ml + i * bw + 1:.1f}" y="{mt + h - bh:.1f}" width="{bw - 2:.1f}" height="{bh:.1f}" class="{cls}"><title>{i:02d}h: {_num(val, casas)} {_e(un)}</title></rect>')
+    for hh in (0, 6, 12, 18):
+        out.append(f'<text x="{ml + hh * bw:.1f}" y="{altura - 6}" class="eixo">{hh:02d}h</text>')
+    out.append('</svg>')
+    return ''.join(out)
+
+
+def _por_hora_do_dia(horas, pref):
+    """Média de um valor por hora do dia (0 a 23), ponderada pelo número de amostras."""
+    s, n = [0.0] * 24, [0] * 24
+    for b in horas:
+        if b.get(pref + 'n'):
+            s[b['_dt'].hour] += b[pref + 's']
+            n[b['_dt'].hour] += b[pref + 'n']
+    return [(s[i] / n[i]) if n[i] >= 3 else None for i in range(24)]
+
+
+def _cartao(rotulo, valor, un='', nota=''):
+    return f'<div class="cartao"><b>{_e(rotulo)}</b><div class="n">{_e(valor)}<i>{_e(un)}</i></div><div class="d neutro">{_e(nota)}</div></div>'
+
+
+def _fig(titulo, direita, svg, legenda=''):
+    return f'<figure><figcaption>{_e(titulo)}<span>{_e(direita)}</span></figcaption>{svg}{legenda}</figure>'
+
+
+def _secao_termica(horas, marcas=()):
+    if len(horas) < 3:
+        return ''
+    an = analisa_termica(horas)
+    cab = '<h2>Temperatura</h2>'
+    if not an:
+        return (cab + '<div class="vazio">O Windows deste PC não entrega a temperatura sem um programa de terceiros (acontece em muitos desktops): a leitura vem da zona térmica '
+                'do ACPI, e aqui ela não apareceu. O Katharos não instala driver de sensor, para não mexer onde um anti-cheat olha. '
+                'O consumo abaixo continua sendo medido.</div>')
+    n_dias = an['dias']
+    ini, fim = horas[0]['_dt'], horas[-1]['_dt']
+    partes = [cab, f'<p class="sub">{an["horas"]} horas com leitura em {n_dias} dias (de {ini:%d/%m/%Y} a {fim:%d/%m/%Y}). Leitura da zona térmica do sistema, '
+                   'não o sensor de cada núcleo: serve para ver tendência e calor demais, não para comparar com outro PC.</p>']
+    cart = [_cartao('Máxima', _num(an['maxima'], 0), '°C', f'em {an["maxima_quando"]:%d/%m %H}h')]
+    if an['media_repouso'] is not None:
+        cart.append(_cartao('Em repouso (CPU < 15%)', _num(an['media_repouso'], 0), '°C', 'média'))
+    if an['media_carga'] is not None:
+        cart.append(_cartao('Sob carga (CPU ≥ 50%)', _num(an['media_carga'], 0), '°C', 'média'))
+    cart.append(_cartao('Horas acima de 80 °C', f'{an["horas_atencao"]}', f'de {an["horas"]}', f'{_num(an["horas_atencao"] / an["horas"] * 100, 0)}% do tempo medido'))
+    partes.append('<div class="cartoes">' + ''.join(cart) + '</div>')
+    if an['achados']:
+        partes.append('<ul class="achados" style="margin-top:14px">' + ''.join(f'<li><span class="{"mau" if g == "alta" else "neutro"}">{_e(t[0].upper() + t[1:])}.</span></li>' for g, t in an['achados']) + '</ul>')
+    figs = []
+    dia_t = serie_diaria(horas, 't')
+    if len(dia_t) >= 2:
+        figs.append(_fig('Temperatura por dia', 'faixa mín–máx e média',
+                         svg_multi('Temperatura por dia', '°C', 0, banda=[(d, a, c) for d, a, _m, c in dia_t], linhas=[([(d, m) for d, _a, m, _c in dia_t], 'linha-c', 'média')],
+                                   limites=[(80, '80 °C')], marcas=marcas),
+                         '<div class="leg"><span><i></i>média do dia</span><span><i class="b"></i>do mínimo ao máximo</span></div>'))
+    rep, car = serie_diaria_simples(horas, 'trs', 'trn'), serie_diaria_simples(horas, 'tcs', 'tcn')
+    if len(rep) >= 3 and len(car) >= 3:
+        figs.append(_fig('Em repouso e sob carga', 'média por dia',
+                         svg_multi('Em repouso e sob carga', '°C', 0, linhas=[(rep, 'linha-b', 'em repouso'), (car, 'linha-c', 'sob carga')], marcas=marcas),
+                         '<div class="leg"><span><i class="v"></i>em repouso</span><span><i></i>sob carga</span></div>'))
+    elif len(rep) >= 3:
+        figs.append(_fig('Temperatura em repouso', 'média por dia', svg_multi('Temperatura em repouso', '°C', 0, linhas=[(rep, 'linha-b', 'em repouso')], marcas=marcas)))
+    calor = svg_calor(horas)
+    if calor and an['dias'] >= 3:
+        figs.append(_fig('Quando esquenta', 'máxima por hora, últimos 28 dias', calor,
+                         '<div class="leg"><span>cada quadrado é uma hora; cor mais forte é mais quente: abaixo de 50 °C, 60, 70, 80, 90 e acima</span></div>'))
+    hora_t = _por_hora_do_dia(horas, 't')
+    if sum(x is not None for x in hora_t) >= 6:
+        figs.append(_fig('Temperatura média por hora do dia', '°C', svg_barras24(hora_t, 'Temperatura média', '°C', 0, pico=80)))
+    if an['tem_gpu']:
+        dia_g = serie_diaria(horas, 'g')
+        if len(dia_g) >= 2:
+            figs.append(_fig('Placa de vídeo NVIDIA', 'faixa mín–máx e média (fora de jogo)',
+                             svg_multi('Temperatura da placa de vídeo', '°C', 0, banda=[(d, a, c) for d, a, _m, c in dia_g], linhas=[([(d, m) for d, _a, m, _c in dia_g], 'linha-c', 'média')], limites=[(83, '83 °C')], marcas=marcas),
+                             '<p class="legenda">Esta leitura só é feita com nenhum jogo aberto, de propósito: com um jogo aberto o Katharos não chama a ferramenta da placa.</p>'))
+    partes.append('<div class="graficos" style="margin-top:14px">' + ''.join(figs) + '</div>')
+    partes.append('<p class="legenda">A temperatura do ambiente muda com a estação e com o dia: uma subida lenta pode ser clima. Só chamo de problema o que passa do limite, '
+                  'ou o que sobe muito além da oscilação normal em repouso. Linhas verdes pontilhadas: quando você aplicou um pacote.</p>')
+    return ''.join(partes)
+
+
+def _rank_html(contagem, titulo, nota):
+    tot = sum(contagem.values())
+    if tot < 5:
+        return ''
+    itens = sorted(contagem.items(), key=lambda kv: -kv[1])[:6]
+    mx = itens[0][1]
+    lis = ''.join(f'<li><b>{_e(n)}</b><div class="tr"><b style="width:{c / mx * 100:.0f}%"></b></div><span>{c / tot * 100:.0f}%</span></li>' for n, c in itens)
+    return f'<h3>{_e(titulo)}</h3><ul class="rank">{lis}</ul><p class="legenda">{_e(nota)}</p>'
+
+
+def _secao_consumo(horas, marcas=()):
+    if len(horas) < 3:
+        return ''
+    n_am = sum(b.get('n', 0) for b in horas)
+    cart = []
+    c = [(b['cs'], b['cn']) for b in horas if b.get('cn')]
+    r = [(b['rs'], b['rn']) for b in horas if b.get('rn')]
+    d = [(b['ds'], b['dn']) for b in horas if b.get('dn')]
+    u = [(b['us'], b['un']) for b in horas if b.get('un')]
+    if c:
+        cart.append(_cartao('CPU média', _num(sum(s for s, _ in c) / sum(n for _, n in c), 0), '%'))
+    if r:
+        cart.append(_cartao('RAM média', _num(sum(s for s, _ in r) / sum(n for _, n in r), 0), '%'))
+    if d:
+        cart.append(_cartao('Disco ocupado, média', _num(sum(s for s, _ in d) / sum(n for _, n in d), 0), '%'))
+    if u:
+        cart.append(_cartao('Placa de vídeo (3D), média', _num(sum(s for s, _ in u) / sum(n for _, n in u), 0), '%'))
+    jg = sum(b.get('jg', 0) for b in horas)
+    if jg:
+        cart.append(_cartao('Leituras com jogo aberto', f'{jg}', f'de {n_am}', f'{_num(jg / n_am * 100, 0)}% do tempo'))
+    desc = _descarga(horas)
+    if desc:
+        cart.append(_cartao('Descarga na bateria', _num(desc, 0), '% por hora', 'média nas horas só na bateria'))
+    if not cart:
+        return ''
+    partes = ['<h2>Consumo</h2>', f'<p class="sub">{n_am} leituras de 15 em 15 minutos, enquanto você usa o PC, jogos incluídos. Só números do sistema: não olho dentro de nenhum jogo.</p>',
+              '<div class="cartoes">' + ''.join(cart) + '</div>']
+    figs = []
+    ph = _por_hora_do_dia(horas, 'c')
+    if sum(x is not None for x in ph) >= 6:
+        figs.append(_fig('CPU por hora do dia', '% médio', svg_barras24(ph, 'CPU média', '%', 0, pico=80)))
+    pr = _por_hora_do_dia(horas, 'r')
+    if sum(x is not None for x in pr) >= 6:
+        figs.append(_fig('RAM por hora do dia', '% médio', svg_barras24(pr, 'RAM média', '%', 0, pico=90)))
+    dia_c = serie_diaria(horas, 'c')
+    if len(dia_c) >= 3:
+        figs.append(_fig('CPU por dia', 'faixa e média', svg_multi('CPU por dia', '%', 0, banda=[(dd, a, cc) for dd, a, _m, cc in dia_c], linhas=[([(dd, m) for dd, _a, m, _c in dia_c], 'linha-c', 'média')], marcas=marcas)))
+    dia_r = serie_diaria(horas, 'r')
+    if len(dia_r) >= 3:
+        figs.append(_fig('RAM por dia', 'faixa e média', svg_multi('RAM por dia', '%', 0, banda=[(dd, a, cc) for dd, a, _m, cc in dia_r], linhas=[([(dd, m) for dd, _a, m, _c in dia_r], 'linha-c', 'média')], marcas=marcas)))
+    if figs:
+        partes.append('<div class="graficos" style="margin-top:14px">' + ''.join(figs) + '</div>')
+    top, topr = {}, {}
+    for b in horas:
+        for chave, dest in (('top', top), ('topr', topr)):
+            for nome, q in (b.get(chave) or {}).items():
+                dest[nome] = dest.get(nome, 0) + q
+    partes.append(_rank_html(top, 'Quem mais pesou na CPU', 'Maior consumidor de CPU (acima de 5%) em cada leitura feita fora de jogo. Durante um jogo o Katharos não olha processos.'))
+    partes.append(_rank_html(topr, 'Quem mais ocupou RAM', 'Maior ocupante de RAM em cada leitura feita fora de jogo.'))
+    return ''.join(partes)
+
+
+def _descarga(horas):
+    """% de bateria por hora, só nas horas em que todas as leituras foram na bateria e a carga caiu (descarta carregamento e horas mistas)."""
+    taxas = [b['b0'] - b['b1'] for b in horas if b.get('bn', 0) >= 3 and b['bn'] == b.get('n') and 'b0' in b and b['b0'] > b['b1']]
+    if len(taxas) < 4:
+        return None
+    return _mediana(taxas)
 # ─────────────── motor de inteligência: junta tudo o que o Katharos sabe e propõe, com prova, o que mudar ───────────────
 # Pipeline:  coletor de evidências → regras independentes → pontuação → memória → aprendizado.
 #  1. COLETOR     medidas do segundo plano, benchmarks, pacotes aplicados, eventos/erros do relatório, achados do raio-x, perfil do PC.
@@ -9315,7 +9956,7 @@ def coleta_evidencias(ctx=None, agora=None):
     return {'amostras': le_metricas(), 'benchs': benchs_para_painel(), 'pacotes': pacotes_aplicados_dt(),
             'eventos': rel.get('eventos') or [], 'raiox': ((rel.get('secoes') or {}).get('raiox') or {}).get('dados') or {},
             'dispensadas': e.get('conselheiro_dispensadas') or {}, 'vistas': e.get('conselheiro_vistas') or {},
-            'saude': (le_saude() or {}).get('analise') or {}, 'fundo_ligado': bool(e.get('manut_freq')), 'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {}}
+            'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')), 'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {}}
 
 
 # ───────── regras ─────────
@@ -9475,6 +10116,17 @@ def r_achados_do_raiox(ev):
         out.append(_sug('raiox:' + re.sub(r'[^a-z0-9]+', '-', str(a.get('titulo', '')).lower())[:40], str(a.get('titulo')), str(a.get('evidencia') or ''), cmd,
                         'média' if int(a.get('impacto') or 0) >= 3 else 'baixa', str(a.get('faz') or ''), '', int(a.get('impacto') or 2), 1))
     return out[:3]
+
+
+@regra
+def r_termica(ev):
+    """Temperatura em janela longa (leituras de 15 em 15 min, por hora): só propõe quando passa do limite ou sobe além da oscilação normal."""
+    out = []
+    for i, (grav, texto) in enumerate((ev.get('termica') or {}).get('achados', [])):
+        out.append(_sug(f'termica:{i}:{texto[:30]}', 'Temperatura alta' if grav == 'alta' else 'Temperatura em alta ao longo do tempo', texto[0].upper() + texto[1:] + '.',
+                        'energia', 'alta' if grav == 'alta' else 'média', 'o plano de energia limita o pico de CPU; limpeza física e pasta térmica resolvem a causa', '',
+                        5 if grav == 'alta' else 3, 0, metrica='temperatura'))
+    return out
 
 
 @regra
@@ -9677,7 +10329,7 @@ $__drvL = foreach ($__d in ($__drv | Sort-Object DriverDate | Select-Object -Fir
 }
 Dado 'saude_drivers' (Lista $__drvL)
 $__prob = foreach ($__p in @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.ConfigManagerErrorCode -ne 0 -and $_.ConfigManagerErrorCode -ne 22 } | Select-Object -First 30)) {
-  [pscustomobject]@{ nome = [string]$__p.Name; codigo = [int]$__p.ConfigManagerErrorCode; classe = [string]$__p.PNPClass }
+  [pscustomobject]@{ nome = [string]$__p.Name; id = [string]$__p.DeviceID; codigo = [int]$__p.ConfigManagerErrorCode; classe = [string]$__p.PNPClass }
 }
 Dado 'saude_dispositivos' (Lista $__prob)
 
@@ -9813,7 +10465,8 @@ def analisa_drivers(drivers, dispositivos, grupos_erro, agora):
     out = []
     for d in dispositivos or []:
         cod = int(d.get('codigo') or 0)
-        out.append(_prob(f'dispositivo:{d.get("nome")}', 'driver', 'alta', f'Dispositivo com problema: {d.get("nome")}', f'código {cod}: {CODIGOS_DISPOSITIVO.get(cod, "erro do gerenciador de dispositivos")}',
+        nome = (d.get('nome') or '').strip() or (f'dispositivo da classe {d["classe"]}' if d.get('classe') else '') or (str(d.get('id') or '')[:40]) or 'dispositivo sem nome'
+        out.append(_prob(f'dispositivo:{nome}', 'driver', 'alta', f'Dispositivo com problema: {nome}', f'código {cod}: {CODIGOS_DISPOSITIVO.get(cod, "erro do gerenciador de dispositivos")}',
                          'O Gerenciador de Dispositivos marcou este dispositivo com erro.', 'Atualize ou reinstale o driver pelo site do fabricante ou pelo Windows Update.', 'atualizar'))
     quedas_video = sum(int(g.get('n') or 0) for g in grupos_erro or []
                        if str(g.get('provedor', '')).lower() in ('nvlddmkm', 'amdkmdag', 'amdwddmg') or (str(g.get('provedor', '')).lower() == 'display' and int(g.get('id') or 0) == 4101))
@@ -10215,7 +10868,8 @@ GRUPOS = [
 ]
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
-SEM_ESTADO = {'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
+SEM_ESTADO = {'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -10340,6 +10994,8 @@ def monta_parser():
     c.add_argument('valor', nargs='?', help='valor novo (vazio volta ao padrão)')
     m = sub.add_parser('manutencao', parents=[depois], help='a manutenção em si (a tarefa agendada chama)')
     m.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
+    am = sub.add_parser('amostrar', parents=[depois], help='uma leitura leve do sistema, somada ao histórico por hora (a tarefa de 15 min chama)')
+    am.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
     return p
 
 
@@ -10487,9 +11143,13 @@ def ferramenta_ajuda(ctx, args):
 
 def main(argv=None):
     parser = monta_parser()
+    for fluxo in ('stdout', 'stderr'):   # pythonw (tarefa sem janela) não tem saída padrão: sem isto o primeiro print derrubaria o programa
+        if getattr(sys, fluxo) is None:
+            setattr(sys, fluxo, open(os.devnull, 'w'))
+    sem_janela_global()
     cru = list(argv if argv is not None else sys.argv[1:])
     primeiro = cru[0] if cru and not cru[0].startswith('-') else None
-    if primeiro and primeiro not in COMANDOS and primeiro != 'manutencao':
+    if primeiro and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar'):
         perto = comando_parecido(primeiro)
         if perto:
             print(f'katharos: "{primeiro}" não é um comando. Você quis dizer "{perto}"?  (katharos ajuda mostra o essencial)')

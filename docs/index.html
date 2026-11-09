@@ -488,20 +488,20 @@
 
   <section class="faixa" id="painel" aria-labelledby="painel-t">
     <div class="quadro cab celulas">
-      <div><h2 id="painel-t">Painel<span>.</span></h2><p>O segundo plano mede o PC sem programa aberto, e o painel transforma as medidas em gráficos que interpretam: tendência, projeção de quando o disco enche, o efeito de cada pacote, os erros do Windows e os drivers. Cada proposta mostra o número que a justifica.</p></div>
+      <div><h2 id="painel-t">Painel<span>.</span></h2><p>O segundo plano mede o PC; o painel mostra a evolução, as propostas e os erros do Windows, tudo no seu computador.</p></div>
     </div>
   </section>
   <section class="faixa telas-painel" aria-label="Telas do painel">
     <div class="quadro">
       <figure class="tp"><img src="painel-evolucao.webp" alt="Painel do Katharos: gráficos de espaço livre com projeção de quando o disco enche, RAM, tempo de boot, CPU, temperatura e programas de inicialização, com as datas de cada pacote aplicado" width="1650" height="1073" loading="lazy">
-        <figcaption><b>evolução</b>Linha forte é a mediana, pontos vermelhos fogem do normal, linhas verdes marcam quando você aplicou um pacote.</figcaption></figure>
+        <figcaption><b>evolução</b>Espaço, RAM, boot, CPU e temperatura ao longo do tempo.</figcaption></figure>
       <div class="tp-duo">
         <figure class="tp"><img src="painel-agora.webp" alt="Painel do Katharos: cartões com os valores de agora e propostas do conselheiro, cada uma com confiança e comando" width="1280" height="1640" loading="lazy">
-          <figcaption><b>propostas</b>Cada uma traz o número que a justifica, a confiança e um botão que abre o Katharos já no comando. Você confirma lá; nada é aplicado sozinho.</figcaption></figure>
+          <figcaption><b>propostas</b>Cada proposta traz o número que a justifica e um botão que abre o Katharos no comando.</figcaption></figure>
         <figure class="tp"><img src="painel-saude.webp" alt="Painel do Katharos: erros do Windows por dia e problemas explicados, como tela azul e programa que fecha sozinho, com o que fazer" width="1280" height="1640" loading="lazy">
-          <figcaption><b>saúde do Windows</b>Erros do Visualizador de Eventos explicados, com o que fazer. O que o catálogo não conhece aparece com a mensagem original.</figcaption></figure>
+          <figcaption><b>saúde do Windows</b>Erros do Windows explicados, com o que fazer.</figcaption></figure>
       </div>
-      <p class="tp-nota">Telas com dados de exemplo, geradas pelo próprio programa. O seu painel nasce vazio e se enche conforme o segundo plano mede. Para ligar: <code>agendar --frequencia continua</code>; para abrir: <code>painel</code>; para ler os erros agora: <code>saude</code>; para ativar os botões: <code>painel --ativar-cliques</code>.</p>
+      <p class="tp-nota">Dados de exemplo. Para ligar: <code>agendar --frequencia continua</code>. Para abrir: <code>painel</code>.</p>
     </div>
   </section>
 
@@ -631,7 +631,7 @@
   </section>
   <section class="faixa novidades" aria-label="Últimas versões">
     <div class="quadro">
-<div class="nov"><div class="nov-v"><b>v1.4.1</b><small>9 nov 2026</small></div><ul><li><b>Segundo plano</b> (agendar --frequencia semanal|diaria|continua): a tarefa do Windows agora pode rodar ao iniciar o sistema e a cada 4 horas, só com o PC ocioso e na tomada, em...</li><li><b>conselheiro</b>, o motor de inteligência: junta medidas, benchmarks, pacotes aplicados, erros do relatório e achados do raio-x e propõe o que mudar, cada proposta com o número que a...</li><li><b>tendencia</b> mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo, e o segundo plano avisa.</li><li><b>painel</b> gera um arquivo HTML com gráficos que interpretam os dados: linha suavizada, pontos fora do normal, projeção de quando o disco enche, limite de temperatura, as datas...</li><li><b>Botões no painel</b> (painel --ativar-cliques): cada proposta e cada problema ganha um botão &quot;Corrigir&quot; (ou &quot;Abrir&quot;, quando o comando só lê) que abre o Katharos já no comando certo.</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v1.4.1</b><small>9 nov 2026</small></div><ul><li><b>Segundo plano</b> (agendar --frequencia semanal|diaria|continua): a tarefa do Windows agora pode rodar ao iniciar o sistema e a cada 4 horas, só com o PC ocioso e na tomada, em...</li><li><b>conselheiro</b>, o motor de inteligência: junta medidas, benchmarks, pacotes aplicados, erros do relatório e achados do raio-x e propõe o que mudar, cada proposta com o número que a...</li><li><b>tendencia</b> mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo, e o segundo plano avisa.</li><li><b>painel</b> gera um arquivo HTML com gráficos que interpretam os dados: linha suavizada, pontos fora do normal, projeção de quando o disco enche, limite de temperatura, as datas...</li><li><b>Leitura leve a cada 15 minutos</b> (modo continua do agendar): temperatura, CPU, RAM, disco, placa de vídeo e bateria, somadas em uma linha por hora (até ~400 dias, uns 2 MB).</li></ul></div>
 <div class="nov"><div class="nov-v"><b>v1.4.0</b><small>9 nov 2026</small></div><ul><li><b>CS2:</b> o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (.katharos.bak) e o jogo fechado.</li><li><b>Minecraft Java</b> ganha pacote próprio (minecraft): edita o options.txt da pasta padrão, só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes.</li><li><b>cs2 e steam leem o vídeo atual</b> (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.</li><li><b>Catálogo com 61 jogos em 6 categorias</b>, todos sem anti-cheat de terceiros, que recebem prioridade de CPU.</li><li><b>Prioridade para jogos com anti-cheat</b> virou item à parte, desligado por padrão (prioridade-jogos-ac), com aviso.</li></ul></div>
 <div class="nov"><div class="nov-v"><b>v1.3.0</b><small>9 nov 2026</small></div><ul><li><b>Perfil sugerido para o seu PC</b>, com o motivo (por exemplo: &quot;tem só 4 GB de RAM&quot; ou &quot;tem jogos instalados e placa dedicada&quot;).</li><li><b>Windows que o programa não reconhece</b> (versão que não é 10 nem 11): só vão marcados os itens do modo seguro, e o programa avisa.</li><li><b>Comando digitado errado</b> sugere o mais parecido (&quot;quis dizer limpar?&quot;).</li><li><b>Estimativa de tempo:</b> o programa lembra quanto cada comando levou neste PC e mostra &quot;da última vez levou cerca de X&quot;.</li><li><b>DISM, SFC e chkdsk rodam com prioridade abaixo do normal</b>, para o PC continuar usável enquanto eles trabalham.</li></ul></div>
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
