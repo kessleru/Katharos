@@ -44,7 +44,7 @@
   :focus-visible { outline: 2px solid var(--ambar); outline-offset: 3px; }
 
   /* ── a grade: duas guias verticais que atravessam a página ── */
-  .guias { position: fixed; inset: 0 var(--borda); border-left: 1px solid var(--linha); border-right: 1px solid var(--linha); pointer-events: none; z-index: 30; }
+  .guias { position: fixed; inset: 0 var(--borda); border-left: 1px solid var(--linha); border-right: 1px solid var(--linha); pointer-events: none; z-index: 0; }
   .faixa { position: relative; z-index: 1; border-top: 1px solid var(--linha); }
   .quadro { position: relative; margin: 0 var(--borda); }
   .faixa > .quadro::before, .faixa > .quadro::after { content: '+'; position: absolute; top: -1px; z-index: 31;
@@ -110,7 +110,7 @@
   /* janela do programa: maior que o container */
   .janela-bloco { padding: 8px 0 64px; }
   .janela { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: #09090a; overflow: hidden;
-    box-shadow: 0 50px 120px -50px #000, 0 0 0 6px color-mix(in oklab, var(--fundo) 70%, transparent); position: relative; z-index: 32; }
+    box-shadow: 0 50px 120px -50px #000, 0 0 0 8px var(--fundo); position: relative; z-index: 32; }
   .abas { display: flex; align-items: center; padding: 10px 14px; background: #141416; border-bottom: 1px solid var(--linha); font-size: 12px; color: var(--apagado); gap: 10px; }
   .abas .pontos { display: flex; gap: 7px; } .abas .pontos i { width: 10px; height: 10px; border-radius: 50%; background: var(--linha-forte); }
   .abas b { color: var(--osso); font-weight: 500; margin-left: 8px; }
@@ -140,7 +140,7 @@
 
   /* o que nunca faz: cartão maior que o container */
   .nunca-bloco { padding: 8px 0 56px; }
-  .nunca { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--painel); display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); overflow: hidden; position: relative; z-index: 32; }
+  .nunca { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--painel); display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); overflow: hidden; position: relative; z-index: 32; box-shadow: 0 0 0 8px var(--fundo); }
   .nunca-lado { padding: 32px; border-right: 1px solid var(--linha); background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; }
   .nunca-lado strong { font: 800 64px/1 var(--mono); color: var(--osso); letter-spacing: -.05em; }
   .nunca-lado span { font: 400 15px/1.45 var(--sans); color: var(--texto); max-width: 24ch; }
