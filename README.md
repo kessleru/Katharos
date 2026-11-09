@@ -88,6 +88,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | | `restaurar` | Pontos de restauração: lista, cria, abre a Restauração do Sistema |
 | | `desfazer` | `desfazer servicos privacidade` ou `desfazer tudo`: volta cada valor ao que era antes |
 | | `socorro` | O PC ficou estranho: desfaz tudo o que o Katharos mudou e explica o ponto de restauração do Windows |
+| | `retomar` | Se o PC travou ou a janela fechou no meio de uma aplicação, termina só o que faltou (`--descartar` esquece a anotação) |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 
 ## Opções

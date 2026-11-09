@@ -317,6 +317,27 @@ class TestBenchmark(unittest.TestCase):
     def test_poucas_repeticoes_nao_conclui(self):
         self.assertIn('poucas', k.compara_bench(k.estatistica([1, 2]), k.estatistica([5, 6]))[0])
 
+    def test_instabilidade_so_acima_de_15_por_cento(self):
+        self.assertFalse(k.instavel(k.estatistica([100, 105, 98, 102])))
+        self.assertTrue(k.instavel(k.estatistica([100, 140, 90, 120])))
+        self.assertFalse(k.instavel(None))
+
+    def test_mostra_bench_avisa_medida_instavel_e_escala_dos_nucleos(self):
+        saida = []
+        class T:
+            def p(self, txt, *a, **kw): return txt
+            def titulo(self, *a, **kw): pass
+            def escreve(self, txt=''): saida.append(txt)
+        atual = {'cpu': k.estatistica([100, 101, 99, 100]), 'cpu_multi': k.estatistica([400, 500, 300, 450]),
+                 'ram': k.estatistica([1000, 1001, 999]), 'disco_escrita': k.estatistica([200, 201, 199]), 'disco_4k': k.estatistica([50, 51, 49])}
+        k.mostra_bench(T(), atual)
+        txt = '\n'.join(saida)
+        self.assertIn('medida instável', txt)
+        self.assertIn('4.2x', txt)
+
+    def test_cpu_multi_roda_e_devolve_taxa_positiva(self):
+        self.assertGreater(k.bench_cpu_multi(2), 0)
+
     def test_benchmark_apaga_o_arquivo_temporario(self):
         import tempfile
         d = Path(tempfile.mkdtemp())
@@ -325,9 +346,77 @@ class TestBenchmark(unittest.TestCase):
                 return lambda *a, **kw: ''
         k.Progresso = type('P', (), {'__init__': lambda s, *a, **kw: None, '__enter__': lambda s: s, '__exit__': lambda s, *a: False})
         r = k.roda_bench(T(), rapido=True, leve=True, pasta_tmp=d)
-        self.assertEqual(set(r), {'cpu', 'ram', 'disco_escrita', 'disco_4k'})
+        self.assertEqual(set(r), {'cpu', 'cpu_multi', 'ram', 'disco_escrita', 'disco_4k'})
         self.assertTrue(all(v['mediana'] > 0 for v in r.values()))
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
+
+
+class TestRetomar(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.casa = k.CASA
+        k.CASA = self.tmp
+
+    def tearDown(self):
+        k.CASA = self.casa
+
+    def _itens(self, *ids):
+        return [type('I', (), {'id': i})() for i in ids]
+
+    def test_anota_avanca_e_calcula_o_que_falta(self):
+        pac = k.PACOTES['rede']
+        ctx = type('C', (), {'args': type('A', (), {'comando': 'rede'})()})()
+        k._andamento_marca(ctx, pac, self._itens('a', 'b', 'c'))
+        k._andamento_avanca(['a'])
+        nome, falta, a = k.pendentes_andamento()
+        self.assertEqual((nome, falta), ('rede', ['b', 'c']))
+        k._andamento_avanca(['b', 'c'])
+        self.assertIsNone(k.pendentes_andamento())
+
+    def test_pacote_que_nao_existe_mais_nao_quebra(self):
+        k.salva_estado({'em_andamento': {'pacote': 'sumiu', 'ids': ['x'], 'feitos': []}})
+        self.assertIsNone(k.pendentes_andamento())
+
+    def test_estado_sem_anotacao_ou_corrompido_nao_quebra(self):
+        self.assertIsNone(k.pendentes_andamento())
+        k.salva_estado({'em_andamento': 'lixo'})
+        self.assertIsNone(k.pendentes_andamento())
+
+    def test_descartar_limpa_a_anotacao(self):
+        k.salva_estado({'em_andamento': {'pacote': 'rede', 'ids': ['ping'], 'feitos': []}})
+        saida = []
+        class T:
+            def __getattr__(self, n): return lambda *a, **kw: saida.append(n)
+        ctx = type('C', (), {'t': T()})()
+        args = type('A', (), {'descartar': True, 'teste': False, 'sim': True})()
+        self.assertEqual(k.ferramenta_retomar(ctx, args), 0)
+        self.assertNotIn('em_andamento', k.estado())
+
+    def _executa(self, fns):
+        k.Progresso = type('P', (), {'__init__': lambda s, *a, **kw: None, '__enter__': lambda s: s, '__exit__': lambda s, *a: False,
+                                     'avanca': lambda s, *a: None, 'atual': ''})
+        class T:
+            def __getattr__(self, n): return lambda *a, **kw: ''
+        itens = [k.Item(f'i{n}', f'item {n}', '', '', '', 1, '', py=f) for n, f in enumerate(fns)]
+        pac = type('P', (), {'nome': 'rede', 'reversivel': False})()
+        ctx = type('C', (), {'t': T(), 'args': None, 'mult': 1.0})()
+        return k.executa_itens(ctx, pac, itens)
+
+    def test_aplicacao_completa_nao_deixa_anotacao(self):
+        self._executa([lambda c, i, p, t: (1, 0), lambda c, i, p, t: (1, 0)])
+        self.assertNotIn('em_andamento', k.estado())
+
+    def test_aplicacao_interrompida_deixa_o_que_faltou(self):
+        def corta(c, i, p, t):
+            raise KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self._executa([lambda c, i, p, t: (1, 0), corta, lambda c, i, p, t: (1, 0)])
+        nome, falta, _ = k.pendentes_andamento()
+        self.assertEqual(falta, ['i1', 'i2'])
+
+    def test_retomar_esta_no_menu(self):
+        self.assertIn('retomar', k.COMANDOS)
 
 
 class TestSugestoes(unittest.TestCase):

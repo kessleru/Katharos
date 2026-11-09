@@ -2981,6 +2981,31 @@ def _envolve(it):
             'else { Diz "nada" "ja estava assim" }\n')
 
 
+def _andamento_marca(ctx, pac, itens):
+    """Anota no estado que uma aplicação começou: se o PC travar ou a janela fechar, o 'retomar' sabe o que faltou."""
+    e = estado()
+    e['em_andamento'] = {'pacote': pac.nome, 'ids': [i.id for i in itens], 'feitos': [], 'quando': agora_iso(),
+                         'origem': getattr(getattr(ctx, 'args', None), 'comando', None) or ''}
+    salva_estado(e)
+
+
+def _andamento_avanca(ids):
+    e = estado()
+    a = e.get('em_andamento')
+    if a:
+        a['feitos'] = sorted(set(a.get('feitos', [])) | set(ids))
+        salva_estado(e)
+
+
+def pendentes_andamento():
+    """(pacote, ids que faltam, andamento) da última aplicação interrompida, ou None. Pacote que não existe mais é ignorado."""
+    a = estado().get('em_andamento')
+    if not isinstance(a, dict) or a.get('pacote') not in PACOTES:
+        return None
+    falta = [i for i in a.get('ids', []) if i not in set(a.get('feitos', []))]
+    return (a['pacote'], falta, a) if falta else None
+
+
 def executa_itens(ctx, pac, itens, teste=False):
     """Roda os itens escolhidos. Os de PowerShell leves vão juntos num processo; os longos, sozinhos.
     Devolve (feitos, avisos, erros)."""
@@ -2999,6 +3024,8 @@ def executa_itens(ctx, pac, itens, teste=False):
     feitos, avisos, erros = 0, 0, 0
     eventos = []
     nome_bk = pac.nome if pac.reversivel else None
+    if not teste:
+        _andamento_marca(ctx, pac, itens)
     with Progresso(t, len(itens), 'aplicando' if not teste else 'simulando') as pr:
         for bloco in blocos:
             it0 = bloco[0]
@@ -3017,6 +3044,8 @@ def executa_itens(ctx, pac, itens, teste=False):
                     eventos.append({'tipo': 'itens', 'pacote': pac.nome, 'ids': [it0.id], 'feitos': 0, 'avisos': [],
                                     'erros': [f'{type(e).__name__}: {e}' + (f' → {dica_erro(e)}' if dica_erro(e) else '')]})
                 pr.avanca(it0.titulo)
+                if not teste:
+                    _andamento_avanca([it0.id])
                 continue
             corpo = '\n'.join(_envolve(i) for i in bloco)
             minutos = sum(i.minutos for i in bloco)
@@ -3034,8 +3063,11 @@ def executa_itens(ctx, pac, itens, teste=False):
                 erros += 1
                 t.erro(f'{it0.titulo}: passou do limite de {br(minutos * ctx.mult, 0)} min e foi encerrado; segui adiante.')
             pr.avanca(bloco[-1].titulo, len(bloco))
+            if not teste:
+                _andamento_avanca([i.id for i in bloco])
     if not teste:
         e = estado()
+        e.pop('em_andamento', None)
         pacs = e.setdefault('pacotes', {})
         reg = pacs.get(pac.nome) or {}
         ids = set(reg.get('itens', [])) | {i.id for i in itens}
@@ -8209,6 +8241,57 @@ def ferramenta_socorro(ctx, args):
     return 0
 
 
+def ferramenta_retomar(ctx, args):
+    t = ctx.t
+    t.aba('termina o que ficou pela metade, se o PC travou ou a janela fechou')
+    t.paragrafo('Cada aplicação anota o que já fez. Se foi interrompida, este comando refaz só os itens que faltaram '
+                '(os que já estavam aplicados não são mexidos de novo).', 2, 'sub')
+    a = estado().get('em_andamento')
+    pend = pendentes_andamento()
+    if getattr(args, 'descartar', False):
+        if a:
+            e = estado()
+            e.pop('em_andamento', None)
+            salva_estado(e)
+            t.ok('Anotação descartada. O que já tinha sido aplicado continua valendo (o "desfazer" volta).')
+        else:
+            t.ok('Não havia nada pela metade.')
+        return 0
+    if not pend:
+        if a:  # anotação sem itens pendentes (ou de pacote que não existe mais): só limpa
+            e = estado()
+            e.pop('em_andamento', None)
+            salva_estado(e)
+        t.ok('Nada pela metade: a última aplicação terminou.')
+        return 0
+    nome, falta, a = pend
+    pac = PACOTES[nome]
+    t.titulo('o que ficou pela metade')
+    t.chaves([('pacote', pac.titulo), ('começou', ha_quanto_iso(a.get('quando', ''))),
+              ('já feitos', f'{len(a.get("feitos", []))} de {len(a.get("ids", []))}')])
+    if pac.admin and not precisa_admin(ctx, args):
+        return 1
+    itens = [i for i in (pac.itens(ctx) or []) if i and i.id in falta]
+    itens, _ = aplica_protegidos(pac.nome, itens)
+    if not itens:
+        t.nota('Os itens que faltavam não se aplicam mais a este PC (ou estão protegidos). Anotação limpa.')
+        e = estado()
+        e.pop('em_andamento', None)
+        salva_estado(e)
+        return 0
+    resumo_antes(t, pac, itens)
+    if args.teste:
+        executa_itens(ctx, pac, itens, teste=True)
+        t.nota('modo teste: nada foi alterado.')
+        return 0
+    if not t.confirma(f'Terminar {pl(len(itens), "item", "itens")} de {pac.titulo}?', sim=args.sim):
+        t.nota('nada foi alterado. "katharos retomar --descartar" esquece a anotação.')
+        return 0
+    feitos, avisos, erros = executa_itens(ctx, pac, itens)
+    t.ok(f'Terminado: {pl(feitos, "mudança", "mudanças")}, {pl(avisos, "aviso", "avisos")}, {pl(erros, "erro", "erros")}.')
+    return 1 if erros else 0
+
+
 # ─────────────── benchmark: provar o ganho com número, sem enganar ───────────────
 # Regra: só declara melhora ou piora quando a diferença é maior que a variação das próprias medidas.
 
@@ -8217,6 +8300,7 @@ LINHAS_BENCH = [
     ('disco_escrita', 'disco: escrita sequencial', 'MB/s', 'maior'),
     ('disco_4k', 'disco: escritas pequenas (4K, com flush)', 'ops/s', 'maior'),
     ('cpu', 'CPU: um núcleo (hash)', 'MB/s', 'maior'),
+    ('cpu_multi', 'CPU: todos os núcleos (hash)', 'MB/s', 'maior'),
     ('ram', 'RAM: cópia de memória', 'MB/s', 'maior'),
 ]
 
@@ -8257,6 +8341,28 @@ def bench_cpu(mb=48):
     for _ in range(mb):
         h.update(bloco)
     return mb / (time.perf_counter() - t0)
+
+
+def bench_cpu_multi(mb=24):
+    """Todos os núcleos ao mesmo tempo: cada thread faz o hash do seu bloco (o hashlib solta o GIL em blocos grandes)."""
+    import hashlib as _h
+    from concurrent.futures import ThreadPoolExecutor
+    n = max(1, min(os.cpu_count() or 1, 32))
+    bloco = bytes(range(256)) * 4096
+
+    def trabalho(_):
+        h = _h.sha256()
+        for _ in range(mb):
+            h.update(bloco)
+    t0 = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        list(ex.map(trabalho, range(n)))
+    return n * mb / (time.perf_counter() - t0)
+
+
+def instavel(e, limite=0.15):
+    """True quando as rodadas variaram mais de 15% da mediana: PC ocupado, esquentando ou com economia de energia mexendo no clock."""
+    return bool(e and e.get('mediana') and e['amplitude'] / e['mediana'] > limite)
 
 
 def bench_ram(mb=64):
@@ -8300,6 +8406,7 @@ def roda_bench(t, rapido=True, leve=False, pasta_tmp=None):
     out = {}
     try:
         etapas = [('cpu', lambda: bench_cpu(16 if leve else 48)),
+                  ('cpu_multi', lambda: bench_cpu_multi(8 if leve else 24)),
                   ('ram', lambda: bench_ram(mb)),
                   ('disco_escrita', lambda: bench_disco_escrita(arq, mb)),
                   ('disco_4k', lambda: bench_disco_4k(arq, 100 if leve else 200))]
@@ -8330,7 +8437,13 @@ def mostra_bench(t, atual, antes=None, rotulo_antes=''):
             v, pct = compara_bench(antes[chave], e, melhor)
             cor = {'melhorou': 'verde', 'piorou': 'pessego'}.get(v, 'apagado')
             linha += '  ' + t.p(f'{v}' + (f' ({pct:+.0f}%)' if v in ('melhorou', 'piorou') else ''), cor)
+        if instavel(e):
+            linha += '  ' + t.p('medida instável', 'pessego')
         t.escreve('  ' + linha)
+    if atual.get('cpu') and atual.get('cpu_multi') and atual['cpu']['mediana'] > 0:
+        t.escreve('  ' + t.p(f'os núcleos juntos fizeram {atual["cpu_multi"]["mediana"] / atual["cpu"]["mediana"]:.1f}x o trabalho de um (núcleos lógicos: {os.cpu_count()})', 'apagado'))
+    if any(instavel(atual.get(c)) for c, *_ in LINHAS_BENCH):
+        t.escreve('  ' + t.p('Linhas "instáveis" variaram mais de 15% entre as rodadas: feche programas, ligue na tomada e rode de novo; comparar com elas não vale.', 'apagado'))
     t.escreve()
 
 
@@ -8353,7 +8466,7 @@ def ferramenta_benchmark(ctx, args):
                 'descarta a primeira rodada e só diz "melhorou" ou "piorou" quando a diferença é maior que a variação das próprias '
                 'medidas. Os arquivos de teste ficam em ~/.katharos/bench e são apagados no fim. Nada sai do PC.', 2, 'sub')
     if args.teste:
-        t.item('○', 'azul', f'{REPETICOES["rapido" if rapido else "completo"]} rodadas de 4 testes, até 64 MB no disco', recuo=2, cor_nome='sub')
+        t.item('○', 'azul', f'{REPETICOES["rapido" if rapido else "completo"]} rodadas de 5 testes, até 64 MB no disco', recuo=2, cor_nome='sub')
         return 0
     if not exige_espaco(t, 'bench', 'benchmark'):
         return 1
@@ -8492,6 +8605,7 @@ GRUPOS = [
     ('voltar atrás e conferir', 'ver o que mudou e voltar', [
         ('desfazer', 'volta qualquer mudança, valor por valor', 'ferramenta_desfazer'),
         ('socorro', 'o PC ficou estranho: volta tudo de uma vez', 'ferramenta_socorro'),
+        ('retomar', 'termina o que ficou pela metade', 'ferramenta_retomar'),
         ('restaurar', 'pontos de restauração do Windows', 'ferramenta_restaurar'),
         ('verificar', 'confere se o que foi aplicado continua valendo', 'ferramenta_verificar'),
         ('estado', 'o que já foi aplicado neste PC', 'ferramenta_estado'),
@@ -8505,7 +8619,7 @@ GRUPOS = [
 ]
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
-SEM_ESTADO = {'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -8576,6 +8690,8 @@ def monta_parser():
     pb = sub.add_parser('benchmark', parents=[depois], help='disco, CPU e RAM com repetição, comparado com o anterior')
     pb.add_argument('--completo', action='store_true', help='mais rodadas (leva alguns minutos); o padrão é o rápido, cerca de 1 minuto')
     sub.add_parser('ajuda', parents=[depois], help='os passos mais comuns')
+    rt = sub.add_parser('retomar', parents=[depois], help='termina o que ficou pela metade se o PC travou no meio de uma aplicação')
+    rt.add_argument('--descartar', action='store_true', help='esquece a anotação do que ficou pela metade')
     sub.add_parser('socorro', parents=[depois], help='desfaz tudo o que o Katharos mudou e explica o ponto de restauração')
     sub.add_parser('memoria', parents=[depois], help='uso da RAM e limpeza da memória em espera')
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
@@ -8785,6 +8901,13 @@ def main(argv=None):
         t.aviso(msg)
     AVISOS_INICIO.clear()
     globals()['AVISO_VIVO'] = t.aviso
+    try:
+        pend = pendentes_andamento() if args.comando != 'retomar' else None
+        if pend:
+            t.aviso(f'A última aplicação de {PACOTES[pend[0]].titulo} parou no meio ({pl(len(pend[1]), "item faltou", "itens faltaram")}). '
+                    'Rode "retomar" para terminar, ou "retomar --descartar" para esquecer.')
+    except Exception as e:
+        LOG.escreve(f'aviso de retomar falhou: {e!r}')
     try:
         if args.comando:
             return roda_ferramenta(ctx, args)
