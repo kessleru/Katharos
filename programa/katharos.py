@@ -2591,7 +2591,7 @@ def ferramenta_raiox(ctx, args):
     t.chaves([('nota', t.p(f'{nota}/100', cor, True)), ('achados', str(len(achados))),
               ('alto impacto', t.p(str(sum(a.impacto == 3 for a in achados)), 'vermelho')),
               ('sugestão', ' · '.join(comandos[:6]) or 'nada')])
-    t.relatorio(REL_MD, 'relatório único', recuo=2)
+    t.relatorio(rel_md_path(), 'relatório único', recuo=2)
     if comandos and t.interativo and not args.teste:
         t.fecha_caixa()
         t.escreve()
@@ -4515,7 +4515,7 @@ def itens_ajustes(ctx):
 # ███████████████████████████████████████████████████████████████████████████
 #
 #   RELATÓRIO ÚNICO
-#   um arquivo só (katharos-relatorio.md) que cada ferramenta atualiza, em vez de um relatório por ferramenta.
+#   um arquivo só (relatorios/ultimo.md) que cada ferramenta atualiza, em vez de um relatório por ferramenta.
 #   Foi feito para ser mandado a uma pessoa ou a uma IA melhorar o Katharos: tem os dados do PC, o que foi
 #   aplicado, o que deu aviso ou erro e o que o Katharos não reconheceu. Tudo o que vem do PC é tratado como
 #   DADO (nomes de programas, arquivos, mensagens): é limpo aqui e nunca entra no texto como instrução.
@@ -4523,7 +4523,6 @@ def itens_ajustes(ctx):
 # ███████████████████████████████████████████████████████████████████████████
 
 REL_JSON = CASA / 'relatorio.json'
-REL_MD = CASA / 'katharos-relatorio.md'
 REL_V = 1
 
 # texto que parece dar ordem a quem lê (a uma IA, por exemplo). Nome de programa ou de arquivo não tem isso.
@@ -4597,6 +4596,11 @@ _EXECUCAO = datetime.now()
 MAX_RELATORIOS = 60
 
 
+def rel_md_path():
+    """O relatório atual: relatorios/ultimo.md, junto dos datados."""
+    return pasta_relatorios() / 'ultimo.md'
+
+
 def _grava_em(d):
     try:
         d.mkdir(exist_ok=True)
@@ -4660,7 +4664,11 @@ def rel_salva(r):
         _SUSP_N[0] = 0
         grava_json(REL_JSON, r)
         texto = rel_md(r)
-        REL_MD.write_text(texto, encoding='utf-8')
+        try:
+            (CASA / 'katharos-relatorio.md').unlink()
+        except OSError:
+            pass
+        rel_md_path().write_text(texto, encoding='utf-8')
         try:
             arq = rel_arquivo_da_execucao()
             arq.write_text(texto, encoding='utf-8')
@@ -4867,12 +4875,12 @@ def copia_area(txt):
 
 def salva_relatorio_em(destino):
     """Copia o relatório único para uma pasta (sempre o mesmo nome: sobrescreve, não acumula arquivos)."""
-    if not REL_MD.exists():
+    if not rel_md_path().exists():
         rel_salva(rel_carrega())
     d = Path(destino).expanduser()
     d.mkdir(parents=True, exist_ok=True)
     alvo = d / f'katharos-relatorio-{nome_do_pc().lower()}.md'
-    shutil.copyfile(REL_MD, alvo)
+    shutil.copyfile(rel_md_path(), alvo)
     return alvo
 
 
@@ -4883,13 +4891,13 @@ def rel_fim(ctx, args):
         return
     if not (getattr(args, 'copiar', False) or getattr(args, 'salvar', None)):
         return
-    if not REL_MD.exists():
+    if not rel_md_path().exists():
         return
     if getattr(args, 'copiar', False):
-        if copia_area(REL_MD.read_text(encoding='utf-8')):
+        if copia_area(rel_md_path().read_text(encoding='utf-8')):
             t.ok('Relatório copiado. Cole na conversa com a IA (ou onde quiser).')
         else:
-            t.aviso(f'Não consegui copiar. O arquivo está em {caminho_curto(REL_MD)}.')
+            t.aviso(f'Não consegui copiar. O arquivo está em {caminho_curto(rel_md_path())}.')
     if getattr(args, 'salvar', None):
         try:
             t.ok('Relatório salvo em ' + caminho_curto(salva_relatorio_em(args.salvar)))
@@ -4905,7 +4913,7 @@ def ferramenta_relatorio(ctx, args):
                 'melhorar a base de dados. Textos que vieram do PC são limpos antes de entrar, e o arquivo diz que é dado, não instrução.', 2, 'sub')
     if getattr(args, 'zerar', False):
         if t.confirma('Apagar o relatório atual e recomeçar do zero? (as cópias datadas da pasta relatorios ficam)', sim=args.sim):
-            for a in (REL_JSON, REL_MD):
+            for a in (REL_JSON, rel_md_path()):
                 try:
                     a.unlink()
                 except OSError:
@@ -4917,12 +4925,12 @@ def ferramenta_relatorio(ctx, args):
     if not r['secoes']:
         t.aviso('Ainda não há nada: rode o raio-x (ou outra ferramenta) primeiro.')
         return 0
-    if not REL_MD.exists():
+    if not rel_md_path().exists():
         rel_salva(r)
     t.titulo('o que já está no relatório')
     t.tabela(['seção', 'atualizada'], [[k, ha_quanto_iso(v.get('quando', '')) or '-'] for k, v in r['secoes'].items()] +
              [['ocorrências', f'{len(r.get("eventos", []))} registradas']], alinha='ee')
-    t.relatorio(REL_MD, 'relatório único', recuo=2)
+    t.relatorio(rel_md_path(), 'relatório único', recuo=2)
     pasta_rel = pasta_relatorios()
     n_rel = len(list(pasta_rel.glob('????-??-??_??-??-??_*.md')))
     t.paragrafo(f'Cada execução também deixa uma cópia com data e hora em {caminho_curto(pasta_rel)} ({n_rel} guardadas; as {MAX_RELATORIOS} mais '
@@ -5351,7 +5359,7 @@ def ferramenta_seguranca(ctx, args):
     rel_secao('seguranca', {'nota': nota, 'ok': ok, 'nao_leu': nao,
                             'achados': [{'gravidade': g, 'titulo': a, 'evidencia': b, 'corrige': c} for g, a, b, c in A]})
     rel_secao('portas', {'lista': [{k: x.get(k) for k in ('porta', 'nome', 'exposta', 'caminho')} for x in _dedup_portas(f.get('escuta'))][:60]})
-    t.relatorio(REL_MD, 'relatório único', recuo=2)
+    t.relatorio(rel_md_path(), 'relatório único', recuo=2)
     return 0
 
 
@@ -7156,7 +7164,7 @@ def executa_turbo(ctx, args, plano):
         t.cabecalho('turbo', 'concluído', app=APP)
         t.titulo('resumo', caixa=True)
         t.chaves([('modo', plano['modo']), ('etapas', str(len(plano['feitas']))), ('desfazer', 'katharos desfazer PACOTE')])
-        t.relatorio(REL_MD, 'relatório único', recuo=2)
+        t.relatorio(rel_md_path(), 'relatório único', recuo=2)
         t.fecha_caixa()
         aplicados = [e for e in plano['etapas'] if e in RISCO_ALTO]
         manter_ou_desfazer(ctx, args, aplicados, segundos=120, desfaz_se_calar=False)
@@ -7314,7 +7322,7 @@ def ferramenta_manutencao(ctx, args):
         roda_ps(t, ps_monta(TOAST_PS, titulo=psq('Katharos'), texto=psq(f'{len(alertas)} alerta(s): {alertas[0]}')), 'aviso', minutos=1, mostra=False)
     t.titulo('resumo', caixa=True)
     t.chaves([('liberado', humano(livre)), ('reaplicadas', str(reapl)), ('alertas', t.p(str(len(alertas)), 'amarelo' if alertas else 'verde'))])
-    t.relatorio(REL_MD, 'relatório único', recuo=2)
+    t.relatorio(rel_md_path(), 'relatório único', recuo=2)
     return 0
 
 
@@ -7902,8 +7910,7 @@ def primeira_vez(ctx, args=None):
     if not estado().get('atalhos_criados'):
         t.titulo('atalho na área de trabalho')
         t.paragrafo('Posso criar uma pasta "Katharos" na sua área de trabalho, com o ícone, um atalho para abrir o menu e outro '
-                    'para desfazer tudo. O programa é copiado para a sua pasta de usuário, então a pasta que você baixou pode '
-                    'ser apagada depois.', 2, 'sub')
+                    'para desfazer tudo. Os relatórios ficam na pasta que você baixou, em "relatorios": deixe ela onde está.', 2, 'sub')
         if t.confirma('Criar a pasta Katharos na área de trabalho?'):
             s = cria_atalhos(ctx, ['menu', 'normal'])
             if s.ok:
