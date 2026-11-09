@@ -1,0 +1,28 @@
+name: testes
+on: [push, pull_request]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.8' }
+      - run: python -m unittest discover -s tests -v
+  powershell:
+    # Confere a sintaxe de todo script de item no PowerShell 5.1 de verdade (o do Windows).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: python tests/exporta_ps.py $env:RUNNER_TEMP\ps
+      - shell: powershell
+        run: |
+          $ruim = 0
+          foreach ($f in Get-ChildItem "$env:RUNNER_TEMP\ps" -Filter *.ps1) {
+            $erros = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$erros)
+            if ($erros) { $ruim++; Write-Host "ERRO em $($f.Name):"; $erros | Select-Object -First 3 | ForEach-Object { Write-Host "  $($_.Message) (linha $($_.Extent.StartLineNumber))" } }
+          }
+          Write-Host "$ruim script(s) com erro de sintaxe"
+          if ($ruim) { exit 1 }

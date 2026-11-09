@@ -8,3 +8,5 @@ SHA256SUMS.txt export-ignore
 docs export-ignore
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+tests export-ignore
+.github export-ignore
