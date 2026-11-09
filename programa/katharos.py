@@ -9040,6 +9040,7 @@ figcaption span{font:400 12px var(--mono);color:var(--apagado)}
 details{margin-top:28px}summary{cursor:pointer;color:var(--apagado)}table{border-collapse:collapse;margin-top:10px;font:12px var(--mono)}td,th{padding:3px 12px 3px 0;text-align:left;border-bottom:1px solid var(--linha)}
 @media (max-width:620px){.eixo{font-size:16px}.graficos{gap:12px}h1{font-size:26px}}
 ul.propostas{list-style:none;display:grid;gap:12px}.propostas li{background:var(--painel);border:1px solid var(--linha);border-left:3px solid var(--forte);padding:12px 14px}
+.agir{display:inline-block;margin-top:10px;font:600 13px var(--sans);color:var(--fundo);background:var(--ambar);padding:6px 14px;border-radius:4px;text-decoration:none}.agir:hover,.agir:focus-visible{background:var(--osso);outline:2px solid var(--ambar);outline-offset:2px}
 .propostas .c-alta{border-left-color:var(--verm)}.propostas .c-media{border-left-color:var(--ambar)}.propostas b{color:var(--osso)}.propostas p{margin-top:4px}.propostas .det{font:12px var(--mono);color:var(--apagado)}
 .rolagem{overflow-x:auto}table.efeito{width:100%;font:13px var(--sans)}table.efeito td,table.efeito th{padding:8px 12px 8px 0;vertical-align:top;border-bottom:1px solid var(--linha)}table.efeito th{color:var(--osso);white-space:nowrap}
 footer{margin-top:44px;color:var(--apagado);font:12px var(--mono)}
@@ -9081,7 +9082,7 @@ def _delta_cartao(serie, melhor, casas, un):
     return f'<span class="{"bom" if bom else "mau"}">{"+" if d > 0 else ""}{_num(d, casas)}{(" " + _e(un)) if un else ""} no período</span>'
 
 
-def _secao_saude(sa):
+def _secao_saude(sa, cliques=False):
     """sa: {'quando': iso, 'analise': analisa_saude(...)}. Erros do Windows, drivers e o que o sistema precisa, cada um com explicação e o que fazer."""
     from datetime import timedelta
     an = sa['analise']
@@ -9101,7 +9102,7 @@ def _secao_saude(sa):
         fim = max(por_dia)
         serie = [(datetime.combine(fim - timedelta(days=i), datetime.min.time()), float(por_dia.get(fim - timedelta(days=i), 0))) for i in range(SAUDE_DIAS - 1, -1, -1)]
         fig = ('<div class="graficos"><figure><figcaption>Erros graves e críticos por dia<span>Visualizador de Eventos</span></figcaption>'
-               + svg_linha(serie, 'Erros por dia', 'eventos', 0, (), zero=True, destaque=True) + '</figure></div>'
+               + svg_linha(serie, 'Erros por dia', 'eventos', 0, (), largura=1100, altura=190, zero=True, destaque=True) + '</figure></div>'
                '<p class="legenda">Dias com pico merecem atenção: veja abaixo o que aconteceu. Parte desses eventos é ruído conhecido do Windows (já descontado dos problemas).</p>')
     nomes = {'erro': 'Erros do Windows', 'driver': 'Drivers', 'windows': 'O que o Windows precisa'}
     blocos = []
@@ -9111,7 +9112,7 @@ def _secao_saude(sa):
             continue
         lis = ''.join(f'<li class="c-{ {"alta": "alta", "média": "media"}.get(x["gravidade"], "baixa") }"><b>{_e(x["titulo"])}</b>'
                       f'<p class="det">{_e(x["evidencia"])} · gravidade {_e(x["gravidade"])}</p><p>{_e(x["explica"])}</p>'
-                      f'<p><b>O que fazer:</b> {_e(x["faz"])}' + (f' <code>katharos {_e(x["comando"])}</code>' if x['comando'] else '') + '</p></li>' for x in itens)
+                      f'<p><b>O que fazer:</b> {_e(x["faz"])}' + (f' <code>katharos {_e(x["comando"])}</code>' if x['comando'] else '') + '</p>' + link_clique(x['comando'], cliques) + '</li>' for x in itens)
         blocos.append(f'<h3>{nomes[cat]}</h3><ul class="propostas">{lis}</ul>')
     if not an['problemas']:
         blocos.append('<div class="vazio">Nenhum problema encontrado nos logs, nos drivers nem no estado do Windows.</div>')
@@ -9130,7 +9131,7 @@ def _secao_saude(sa):
     return cab + fig + ''.join(blocos)
 
 
-def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None):
+def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False):
     """HTML completo do painel. amostras: de le_metricas(); benchs: [(datetime, {chave: mediana})]; pacotes: [(datetime, título)]."""
     marcas = [(d, f'aplicou: {t}') for d, t in pacotes]
     corpo = []
@@ -9157,8 +9158,10 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             corpo.append('<h2>O que eu proporia</h2><ul class="propostas">' + ''.join(
                 f'<li class="{"c-" + {"média": "media"}.get(x["confianca"], x["confianca"])}"><b>{_e(x["titulo"])}</b><p>{_e(x["porque"])}</p>'
                 f'<p class="det">Confiança {_e(x["confianca"])} · comando <code>katharos {_e(x["comando"])}</code>'
-                + (f' · {_e(x["impacto"])}' if x['impacto'] else '') + '</p></li>' for x in sugestoes) + '</ul>'
-                '<p class="legenda">Só proponho; nada é aplicado sem você pedir. Cada proposta tem o número que a justifica.</p>')
+                + (f' · {_e(x["impacto"])}' if x['impacto'] else '') + '</p>' + link_clique(x['comando'], cliques) + '</li>' for x in sugestoes) + '</ul>'
+                '<p class="legenda">Só proponho; nada é aplicado sem você pedir. Cada proposta tem o número que a justifica.'
+                + ('' if cliques else ' Quer um botão <b>Corrigir</b> em cada uma? Rode <code>katharos painel --ativar-cliques</code> (registra um link só para o seu usuário; <code>--desativar-cliques</code> remove).')
+                + ' Ao clicar, o Katharos abre no comando e você confirma lá.</p>')
         corpo.append('<h2>O que está mudando</h2>')
         if achados:
             corpo.append('<ul class="achados">' + ''.join(f'<li><span class="mau">{_e(t[0].upper() + t[1:])}.</span></li>' for _, t in achados) + '</ul>')
@@ -9180,7 +9183,7 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
                 leg += ' <span class="m">Linhas verdes pontilhadas</span>: quando você aplicou um pacote do Katharos (passe o mouse).'
             corpo.append(f'<p class="legenda">{leg}</p>')
     if saude:
-        corpo.append(_secao_saude(saude))
+        corpo.append(_secao_saude(saude, cliques))
     figs_b = []
     for chave, titulo, un in PAINEL_BENCH:
         s = [(d, float(m[chave])) for d, m in benchs if isinstance(m.get(chave), (int, float))]
@@ -9230,13 +9233,17 @@ def ferramenta_painel(ctx, args):
     t.aba('gráficos do PC ao longo do tempo, num painel que abre no navegador')
     t.paragrafo('Gera um arquivo HTML neste computador, com gráficos das medidas do segundo plano (espaço, RAM, boot, CPU, temperatura), '
                 'dos benchmarks e de quando você aplicou cada pacote. Sem internet, sem programa extra e sem scripts: é só um arquivo que você pode apagar.', 2, 'sub')
+    if getattr(args, 'ativar_cliques', False):
+        return ativa_cliques(t)
+    if getattr(args, 'desativar_cliques', False):
+        return desativa_cliques(t)
     if not le_metricas() and WINDOWS and not args.teste:
         amostra_agora(ctx)
     am = le_metricas()
     ev = coleta_evidencias(ctx)
     ev['amostras'] = am
     html_ = monta_painel(am, ev['benchs'], pacotes_para_painel(), analisa_tendencia(am), nome_do_pc(), VERSAO, gera_sugestoes(ev),
-                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude())
+                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude(), cliques=cliques_ativos())
     destino = CASA / 'painel.html'
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(html_, encoding='utf-8')
@@ -9965,6 +9972,117 @@ def avisa_saude(ctx, e):
     except Exception as ex:
         LOG.escreve(f'saúde falhou: {ex!r}')
         return []
+# ─────────────── cliques no painel: link katharos://comando abre o Katharos já no comando certo ───────────────
+# O painel é um HTML sem scripts, então o clique é um link com protocolo próprio, registrado só para o usuário atual (HKCU), por escolha:
+#   painel --ativar-cliques   /   painel --desativar-cliques
+# Defesa em camadas, porque qualquer página da internet também pode chamar katharos://:
+#   1. o navegador pergunta se pode abrir o Katharos;  2. o script de abertura só aceita exatamente `--uri katharos://comando` (sem mais nada);
+#   3. o Windows pede administrador (UAC);  4. o Katharos pergunta de novo, por extenso, antes de qualquer comando;  5. o comando segue o fluxo normal,
+#   com a própria confirmação e o desfazer. O link nunca leva parâmetros, nunca aplica sozinho e só abre comandos da lista abaixo.
+URI_RE = re.compile(r'katharos://([a-z][a-z0-9-]{1,30})/?')
+URI_BLOQUEADOS = frozenset({'desfazer', 'socorro', 'perfil', 'turbo', 'manutencao', 'config', 'estado'})
+URI_SO_LEITURA = frozenset({'raiox', 'saude', 'verificar', 'benchmark', 'conselheiro', 'painel', 'tendencia', 'seguranca', 'grandes', 'medir', 'memoria', 'portas', 'ajuda'})
+URI_CHAVE = r'Software\Classes\katharos'
+
+
+def uri_para_comando(valor):
+    """'katharos://limpar' -> 'limpar'. Qualquer outra forma (maiúscula, parâmetro, caminho, espaço, comando fora da lista) -> None."""
+    m = URI_RE.fullmatch(valor or '')
+    if not m:
+        return None
+    cmd = m.group(1)
+    return cmd if cmd in COMANDOS and cmd not in URI_BLOQUEADOS else None
+
+
+def rotulo_clique(cmd):
+    return 'Abrir' if cmd in URI_SO_LEITURA else 'Corrigir'
+
+
+def link_clique(cmd, ativo):
+    """O botão do painel. Sem cliques ativados (ou comando fora da lista), não há botão: o painel continua mostrando o comando para digitar."""
+    if not ativo or not uri_para_comando(f'katharos://{cmd}'):
+        return ''
+    aviso = ('Abre o Katharos neste comando; você confirma lá antes de qualquer mudança' if cmd not in URI_SO_LEITURA else 'Abre o Katharos neste comando (só leitura)')
+    return f'<a class="agir" href="katharos://{_e(cmd)}" title="{_e(aviso)}">{rotulo_clique(cmd)}</a>'
+
+
+def linha_de_comando_clique():
+    ps1 = Path(__file__).resolve().with_name('katharos.ps1')
+    shell = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'WindowsPowerShell' / 'v1.0' / 'powershell.exe'
+    return f'"{shell}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{ps1}" --uri "%1"'
+
+
+def cliques_ativos():
+    if not WINDOWS:
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, URI_CHAVE + r'\shell\open\command') as k:
+            return 'katharos.ps1' in str(winreg.QueryValueEx(k, '')[0])
+    except OSError:
+        return False
+
+
+def ativa_cliques(t):
+    if not WINDOWS:
+        t.erro('Os cliques só funcionam no Windows.')
+        return 1
+    if dentro_de_pacote():
+        t.erro('Este Python roda dentro da Microsoft Store e não grava o registro de verdade. Use o Python de python.org.')
+        return 1
+    ps1 = Path(__file__).resolve().with_name('katharos.ps1')
+    if not ps1.exists():
+        t.erro(f'Não achei o {ps1.name} ao lado do programa. Use a pasta extraída do ZIP.')
+        return 1
+    import winreg
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, URI_CHAVE) as k:
+        winreg.SetValueEx(k, '', 0, winreg.REG_SZ, 'URL:Katharos')
+        winreg.SetValueEx(k, 'URL Protocol', 0, winreg.REG_SZ, '')
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, URI_CHAVE + r'\shell\open\command') as k:
+        winreg.SetValueEx(k, '', 0, winreg.REG_SZ, linha_de_comando_clique())
+    e = estado()
+    e['cliques_ativos'] = agora_iso()
+    salva_estado(e)
+    LOG.escreve('cliques do painel ativados (HKCU\\' + URI_CHAVE + ')')
+    t.ok('Cliques ativados. Gere o painel de novo ("painel") para os botões aparecerem.')
+    t.nota('  Registra o link katharos:// só para o seu usuário. Ao clicar: o navegador pergunta, o Windows pede administrador e o Katharos pergunta de novo antes de qualquer comando.', 2)
+    t.nota('  Para remover: painel --desativar-cliques', 2)
+    return 0
+
+
+def desativa_cliques(t):
+    if not WINDOWS:
+        t.erro('Os cliques só funcionam no Windows.')
+        return 1
+    import winreg
+    for sub in (r'\shell\open\command', r'\shell\open', r'\shell', ''):
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, URI_CHAVE + sub)
+        except OSError:
+            pass
+    e = estado()
+    e.pop('cliques_ativos', None)
+    salva_estado(e)
+    LOG.escreve('cliques do painel desativados')
+    t.ok('Cliques desativados: o link katharos:// foi removido do registro.')
+    return 0
+
+
+def abre_por_clique(cru):
+    """Chamado pelo link do painel: só aceita exatamente ['--uri', 'katharos://comando']. Pergunta por extenso e então roda o comando como se a pessoa o tivesse digitado."""
+    t = Terminal(False, False)
+    cmd = uri_para_comando(cru[1]) if len(cru) == 2 and cru[0] == '--uri' else None
+    if not cmd:
+        t.erro('Link recusado: o Katharos só abre comandos simples da lista, sem parâmetros.')
+        LOG.escreve('link recusado: ' + repr(cru)[:200])
+        return 2
+    desc = COMANDOS[cmd][0]
+    t.cabecalho('link do painel', cmd, app=APP)
+    t.paragrafo(f'Você clicou em "{rotulo_clique(cmd)}" no painel. Isto abre o comando "{cmd}" ({desc}). Nada muda antes de você confirmar os passos dele.', 2, 'sub')
+    if not t.confirma(f'Abrir "{cmd}" agora?', 'sim'):
+        t.nota('  Cancelado. Nada foi feito.', 2)
+        return 0
+    return main([cmd])
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -10175,6 +10293,8 @@ def monta_parser():
     cs.add_argument('--dispensar', metavar='ID', help='esconde uma proposta por 30 dias')
     pn = sub.add_parser('painel', parents=[depois], help='gera o painel de gráficos (HTML) e abre no navegador')
     pn.add_argument('--nao-abrir', action='store_true', help='só gera o arquivo')
+    pn.add_argument('--ativar-cliques', action='store_true', help='liga os botões Corrigir/Abrir do painel (registra katharos:// só para você)')
+    pn.add_argument('--desativar-cliques', action='store_true', help='remove o link katharos:// do registro')
     sub.add_parser('ajuda', parents=[depois], help='os passos mais comuns')
     rt = sub.add_parser('retomar', parents=[depois], help='termina o que ficou pela metade se o PC travou no meio de uma aplicação')
     rt.add_argument('--descartar', action='store_true', help='esquece a anotação do que ficou pela metade')
@@ -10374,6 +10494,8 @@ def main(argv=None):
         if perto:
             print(f'katharos: "{primeiro}" não é um comando. Você quis dizer "{perto}"?  (katharos ajuda mostra o essencial)')
             return 2
+    if '--uri' in cru:   # link do painel: nada de parser, só o formato exato
+        return abre_por_clique(cru)
     args = _defaults(parser.parse_args(argv))
     if args.sha256:
         print(hashlib.sha256(Path(__file__).read_bytes()).hexdigest() + '  katharos.py')

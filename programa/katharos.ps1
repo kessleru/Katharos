@@ -12,6 +12,12 @@ $aqui = $PSScriptRoot
 $programa = Join-Path $aqui 'katharos.py'
 if (-not $Resto) { $Resto = @() }
 
+# Link do painel (katharos://comando): qualquer página pode chamar este protocolo, então só passa o formato exato
+# "--uri katharos://comando" (minúsculas, sem parâmetros). Qualquer outra coisa encerra aqui, antes de elevar.
+if ($Resto -contains '--uri') {
+    if ($Resto.Count -ne 2 -or $Resto[0] -cne '--uri' -or $Resto[1] -cnotmatch '^katharos://[a-z][a-z0-9-]{1,30}/?$') { exit 2 }
+}
+
 function EhAdmin {
     ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }

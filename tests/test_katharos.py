@@ -571,6 +571,94 @@ class TestPainel(unittest.TestCase):
         self.assertLessEqual(len(k.sparkline_txt(list(range(100)))), 24)
 
 
+class TestCliques(unittest.TestCase):
+    def test_uri_aceita_so_o_formato_exato_e_comando_permitido(self):
+        self.assertEqual(k.uri_para_comando('katharos://limpar'), 'limpar')
+        self.assertEqual(k.uri_para_comando('katharos://reparar/'), 'reparar')
+        for ruim in ('katharos://LIMPAR', 'katharos://limpar?x=1', 'katharos://limpar&calc', 'katharos://limpar calc', 'katharos://limpar/../x', 'katharos://limpar" -Command "calc',
+                     'katharos://naoexiste', 'katharos://', '', None, 'http://limpar', 'katharos://limpar;calc', 'katharos://limpar%20x', 'katharos://-limpar'):
+            self.assertIsNone(k.uri_para_comando(ruim), ruim)
+        for bloq in k.URI_BLOQUEADOS:
+            self.assertIsNone(k.uri_para_comando('katharos://' + bloq), bloq)
+
+    def test_toda_proposta_possivel_aponta_para_comando_que_o_link_aceita_ou_nao_tem_botao(self):
+        for cmd in k.URI_SO_LEITURA:
+            self.assertIn(cmd, k.COMANDOS, cmd)
+
+    def test_abre_por_clique_recusa_qualquer_forma_diferente_e_nunca_roda(self):
+        from unittest import mock
+        with mock.patch.object(k, 'main') as m:
+            for cru in (['--uri'], ['--uri', 'katharos://limpar', '--sim'], ['--sim', '--uri', 'katharos://limpar'], ['--uri', 'katharos://limpar;calc'], ['--uri', 'katharos://socorro']):
+                self.assertEqual(k.abre_por_clique(cru), 2, cru)
+            m.assert_not_called()
+
+    def test_abre_por_clique_pergunta_antes_e_so_roda_se_confirmar(self):
+        from unittest import mock
+        with mock.patch.object(k, 'main', return_value=0) as m, mock.patch.object(k.Terminal, 'confirma', return_value=False):
+            self.assertEqual(k.abre_por_clique(['--uri', 'katharos://limpar']), 0)
+            m.assert_not_called()
+        with mock.patch.object(k, 'main', return_value=0) as m, mock.patch.object(k.Terminal, 'confirma', return_value=True):
+            k.abre_por_clique(['--uri', 'katharos://limpar'])
+            m.assert_called_once_with(['limpar'])
+
+    def test_main_desvia_uri_sem_passar_pelo_parser(self):
+        from unittest import mock
+        with mock.patch.object(k, 'abre_por_clique', return_value=7) as m:
+            self.assertEqual(k.main(['--uri', 'katharos://limpar']), 7)
+            m.assert_called_once()
+
+    def test_linha_de_comando_do_registro_usa_o_script_e_so_o_uri(self):
+        c = k.linha_de_comando_clique()
+        self.assertTrue(c.endswith('--uri "%1"'))
+        self.assertIn('katharos.ps1', c)
+        self.assertIn('-File', c)
+        self.assertNotIn('cmd.exe', c.lower())
+        self.assertNotIn('.bat', c.lower())
+
+    def test_script_de_abertura_valida_o_uri_antes_de_elevar(self):
+        ps1 = (k.Path(k.__file__).with_name('katharos.ps1')).read_text(encoding='utf-8-sig')
+        pos_valida = ps1.index("-contains '--uri'")
+        self.assertIn('-cnotmatch', ps1)
+        self.assertLess(pos_valida, ps1.index('Start-Process'), 'a validação tem que vir antes de elevar')
+
+    def test_registro_so_do_usuario_atual_e_reversivel(self):
+        import types
+        from unittest import mock
+        gravado = {}
+
+        class Chave:
+            def __init__(self, c): self.c = c
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        fake = types.SimpleNamespace(HKEY_CURRENT_USER='HKCU', REG_SZ=1, CreateKey=lambda r, c: Chave(c),
+                                     SetValueEx=lambda ch, n, _r, _t, v: gravado.__setitem__((ch.c, n), v),
+                                     DeleteKey=lambda r, c: gravado.__setitem__(('del', c), True))
+        class T:
+            def __getattr__(self, n): return lambda *a, **kw: None
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'dentro_de_pacote', return_value=False), mock.patch.dict(sys.modules, {'winreg': fake}), \
+                mock.patch.object(k, 'estado', return_value={}), mock.patch.object(k, 'salva_estado'), mock.patch.object(k.Path, 'exists', return_value=True):
+            self.assertEqual(k.ativa_cliques(T()), 0)
+            self.assertEqual(gravado[(k.URI_CHAVE, 'URL Protocol')], '')
+            self.assertTrue(gravado[(k.URI_CHAVE + r'\shell\open\command', '')].endswith('--uri "%1"'))
+            self.assertTrue(all(c.startswith(r'Software\Classes\katharos') for c, _ in gravado))
+            self.assertEqual(k.desativa_cliques(T()), 0)
+            self.assertIn(('del', k.URI_CHAVE), gravado)
+
+    def test_painel_so_tem_botao_com_cliques_ativos_e_sem_scripts(self):
+        sug = [{'id': 'a', 'titulo': 'Liberar espaço', 'porque': 'x', 'comando': 'limpar', 'confianca': 'alta', 'impacto': '', 'risco': '', 'tipo': 'acao'},
+               {'id': 'b', 'titulo': 'Mexer', 'porque': 'x', 'comando': 'socorro', 'confianca': 'alta', 'impacto': '', 'risco': '', 'tipo': 'acao'}]
+        sem = k.monta_painel([{'_dt': __import__('datetime').datetime(2026, 1, 1), 'livre_c': 1}], [], [], [], 'PC', '1', sug, cliques=False)
+        self.assertNotIn('katharos://', sem)
+        self.assertIn('--ativar-cliques', sem)
+        com = k.monta_painel([{'_dt': __import__('datetime').datetime(2026, 1, 1), 'livre_c': 1}], [], [], [], 'PC', '1', sug, cliques=True)
+        self.assertIn('href="katharos://limpar"', com)
+        self.assertIn('>Corrigir<', com)
+        self.assertNotIn('katharos://socorro', com, 'comando bloqueado não ganha botão')
+        self.assertNotIn('<script', com)
+        self.assertNotIn('http://', com)
+        self.assertNotIn('https://', com)
+
+
 class TestSaude(unittest.TestCase):
     AGORA = __import__('datetime').datetime(2026, 11, 9, 12)
 

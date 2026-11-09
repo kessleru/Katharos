@@ -111,6 +111,7 @@
   .cab > * { padding: 22px clamp(20px, 3vw, 40px); display: flex; flex-direction: column; justify-content: center; }
   .cab h2 { font: 800 clamp(26px, 2.6vw, 34px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
   .cab h2 span { color: var(--ambar); }
+  .cab h2 + p { margin-top: 10px; }
   .cab p { font: 400 16px/1.55 var(--sans); max-width: 52ch; text-wrap: pretty; }
   .cab code, .texto-mono { font: 500 14px var(--mono); color: var(--osso); white-space: nowrap; }
   .cab a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
@@ -206,6 +207,17 @@
   .limites .nunca li s { transition: background-size .5s cubic-bezier(.6,0,.3,1) calc(var(--i) * 380ms + 200ms), color .3s calc(var(--i) * 380ms + 600ms); }
   .limites .nunca li span { transition: opacity .3s calc(var(--i) * 380ms + 650ms), translate .3s calc(var(--i) * 380ms + 650ms); }
   .limites.vis .nunca li s { color: #8e8a82; }
+
+  /* ── painel (telas) ── */
+  .telas-painel .quadro { padding: 28px clamp(20px, 3vw, 40px) 36px; display: grid; gap: 20px; }
+  .tp { margin: 0; border: 1px solid var(--linha-forte); border-radius: 10px; overflow: hidden; background: var(--painel); }
+  .tp img { display: block; width: 100%; height: auto; }
+  .tp figcaption { padding: 12px 16px 14px; border-top: 1px solid var(--linha); font: 400 14px/1.5 var(--sans); color: #a9a49b; }
+  .tp figcaption b { font: 700 13px/1.4 var(--mono); color: var(--osso); margin-right: 8px; }
+  .tp-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .tp-nota { font: 400 13px/1.6 var(--mono); color: var(--apagado); max-width: 90ch; }
+  .tp-nota code { color: var(--osso); }
+  @media (max-width: 760px) { .tp-duo { grid-template-columns: 1fr; } }
 
   /* ── passos ── */
   .passos .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; counter-reset: p; }
@@ -474,6 +486,25 @@
     </ol>
   </section>
 
+  <section class="faixa" id="painel" aria-labelledby="painel-t">
+    <div class="quadro cab celulas">
+      <div><h2 id="painel-t">Painel<span>.</span></h2><p>O segundo plano mede o PC sem programa aberto, e o painel transforma as medidas em gráficos que interpretam: tendência, projeção de quando o disco enche, o efeito de cada pacote, os erros do Windows e os drivers. Cada proposta mostra o número que a justifica.</p></div>
+    </div>
+  </section>
+  <section class="faixa telas-painel" aria-label="Telas do painel">
+    <div class="quadro">
+      <figure class="tp"><img src="painel-evolucao.webp" alt="Painel do Katharos: gráficos de espaço livre com projeção de quando o disco enche, RAM, tempo de boot, CPU, temperatura e programas de inicialização, com as datas de cada pacote aplicado" width="1650" height="1073" loading="lazy">
+        <figcaption><b>evolução</b>Linha forte é a mediana, pontos vermelhos fogem do normal, linhas verdes marcam quando você aplicou um pacote.</figcaption></figure>
+      <div class="tp-duo">
+        <figure class="tp"><img src="painel-agora.webp" alt="Painel do Katharos: cartões com os valores de agora e propostas do conselheiro, cada uma com confiança e comando" width="1280" height="1640" loading="lazy">
+          <figcaption><b>propostas</b>Cada uma traz o número que a justifica, a confiança e um botão que abre o Katharos já no comando. Você confirma lá; nada é aplicado sozinho.</figcaption></figure>
+        <figure class="tp"><img src="painel-saude.webp" alt="Painel do Katharos: erros do Windows por dia e problemas explicados, como tela azul e programa que fecha sozinho, com o que fazer" width="1280" height="1640" loading="lazy">
+          <figcaption><b>saúde do Windows</b>Erros do Visualizador de Eventos explicados, com o que fazer. O que o catálogo não conhece aparece com a mensagem original.</figcaption></figure>
+      </div>
+      <p class="tp-nota">Telas com dados de exemplo, geradas pelo próprio programa. O seu painel nasce vazio e se enche conforme o segundo plano mede. Para ligar: <code>agendar --frequencia continua</code>; para abrir: <code>painel</code>; para ler os erros agora: <code>saude</code>; para ativar os botões: <code>painel --ativar-cliques</code>.</p>
+    </div>
+  </section>
+
   <section class="faixa" id="perfis" aria-labelledby="perfis-t">
     <div class="quadro cab celulas">
       <div><h2 id="perfis-t">Perfis<span>.</span></h2></div>
@@ -600,9 +631,9 @@
   </section>
   <section class="faixa novidades" aria-label="Últimas versões">
     <div class="quadro">
-<div class="nov"><div class="nov-v"><b>v1.4.1</b><small>9 nov 2026</small></div><ul><li><b>Segundo plano</b> (agendar --frequencia semanal|diaria|continua): a tarefa do Windows agora pode rodar ao iniciar o sistema e a cada 4 horas, só com o PC ocioso e na tomada, em...</li><li><b>conselheiro</b>, o motor de inteligência: junta medidas, benchmarks, pacotes aplicados, erros do relatório e achados do raio-x e propõe o que mudar, cada proposta com o número que a...</li><li><b>tendencia</b> mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo, e o segundo plano avisa.</li><li><b>painel</b> gera um arquivo HTML com gráficos que interpretam os dados: linha suavizada, pontos fora do normal, projeção de quando o disco enche, limite de temperatura, as datas...</li></ul></div>
-<div class="nov"><div class="nov-v"><b>v1.4.0</b><small>9 nov 2026</small></div><ul><li><b>CS2:</b> o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (.katharos.bak) e o jogo fechado.</li><li><b>Minecraft Java</b> ganha pacote próprio (minecraft): edita o options.txt da pasta padrão, só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes.</li><li><b>cs2 e steam leem o vídeo atual</b> (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.</li><li><b>Catálogo com 61 jogos em 6 categorias</b>, todos sem anti-cheat de terceiros, que recebem prioridade de CPU.</li></ul></div>
-<div class="nov"><div class="nov-v"><b>v1.3.0</b><small>9 nov 2026</small></div><ul><li><b>Perfil sugerido para o seu PC</b>, com o motivo (por exemplo: &quot;tem só 4 GB de RAM&quot; ou &quot;tem jogos instalados e placa dedicada&quot;).</li><li><b>Windows que o programa não reconhece</b> (versão que não é 10 nem 11): só vão marcados os itens do modo seguro, e o programa avisa.</li><li><b>Comando digitado errado</b> sugere o mais parecido (&quot;quis dizer limpar?&quot;).</li><li><b>Estimativa de tempo:</b> o programa lembra quanto cada comando levou neste PC e mostra &quot;da última vez levou cerca de X&quot;.</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v1.4.1</b><small>9 nov 2026</small></div><ul><li><b>Segundo plano</b> (agendar --frequencia semanal|diaria|continua): a tarefa do Windows agora pode rodar ao iniciar o sistema e a cada 4 horas, só com o PC ocioso e na tomada, em...</li><li><b>conselheiro</b>, o motor de inteligência: junta medidas, benchmarks, pacotes aplicados, erros do relatório e achados do raio-x e propõe o que mudar, cada proposta com o número que a...</li><li><b>tendencia</b> mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo, e o segundo plano avisa.</li><li><b>painel</b> gera um arquivo HTML com gráficos que interpretam os dados: linha suavizada, pontos fora do normal, projeção de quando o disco enche, limite de temperatura, as datas...</li><li><b>Botões no painel</b> (painel --ativar-cliques): cada proposta e cada problema ganha um botão &quot;Corrigir&quot; (ou &quot;Abrir&quot;, quando o comando só lê) que abre o Katharos já no comando certo.</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v1.4.0</b><small>9 nov 2026</small></div><ul><li><b>CS2:</b> o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (.katharos.bak) e o jogo fechado.</li><li><b>Minecraft Java</b> ganha pacote próprio (minecraft): edita o options.txt da pasta padrão, só opções do menu de vídeo, só para baixo, com o jogo fechado e cópia antes.</li><li><b>cs2 e steam leem o vídeo atual</b> (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.</li><li><b>Catálogo com 61 jogos em 6 categorias</b>, todos sem anti-cheat de terceiros, que recebem prioridade de CPU.</li><li><b>Prioridade para jogos com anti-cheat</b> virou item à parte, desligado por padrão (prioridade-jogos-ac), com aviso.</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v1.3.0</b><small>9 nov 2026</small></div><ul><li><b>Perfil sugerido para o seu PC</b>, com o motivo (por exemplo: &quot;tem só 4 GB de RAM&quot; ou &quot;tem jogos instalados e placa dedicada&quot;).</li><li><b>Windows que o programa não reconhece</b> (versão que não é 10 nem 11): só vão marcados os itens do modo seguro, e o programa avisa.</li><li><b>Comando digitado errado</b> sugere o mais parecido (&quot;quis dizer limpar?&quot;).</li><li><b>Estimativa de tempo:</b> o programa lembra quanto cada comando levou neste PC e mostra &quot;da última vez levou cerca de X&quot;.</li><li><b>DISM, SFC e chkdsk rodam com prioridade abaixo do normal</b>, para o PC continuar usável enquanto eles trabalham.</li></ul></div>
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
     </div>
   </section>
