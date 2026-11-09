@@ -54,6 +54,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | --- | --- | --- |
 | Conhecer | `raiox` | Pergunta o que mais incomoda, mede tudo e mostra nota, causas das suas queixas e o que mais encontrou (HD, RAM, inicialização, dois antivírus, WMI ocupado, CPU limitada, temperatura, quem troca o plano de energia, bateria, SMART, telas azuis, tarefas suspeitas em AppData/Temp, ameaças do Defender, restos de programas, projetos dentro do OneDrive, BIOS com atualização falhando...). Gera um `.md` para a ficha do PC; `--salvar PASTA`. |
 | | `medir` | CPU, kernel, clock, RAM, processos, serviços, inicialização, espaço, temperatura e boot, comparados com a primeira medida |
+| | `benchmark` | Disco (escrita sequencial e escritas pequenas com flush), CPU e RAM, com repetição. Descarta a primeira rodada e só diz "melhorou" ou "piorou" quando a diferença é maior que a variação das medidas; compara com o resultado anterior. `--completo` faz mais rodadas |
 | | `memoria` | Como a RAM está dividida (em uso, em espera, livre), quem mais usa e, se quiser, esvazia a memória em espera (explicando por que quase sempre é placebo) |
 | Tudo | `turbo` | Modo → etapas → (opcional) item por item → ponto de restauração → mede → aplica → reinicia → continua sozinho → mede de novo. Salva o plano em JSON: `turbo --plano arquivo.json` repete as mesmas escolhas em outro PC sem perguntar |
 | Partes | `limpar` | Temporários, Windows Update, Otimização de Entrega, relatórios de erro e dumps, miniaturas, logs, navegadores fechados, shaders, instaladores guardados, caches de dev, Limpeza de Disco do Windows, Windows.old, componentes (DISM), armazenamento reservado, Lixeira |
@@ -86,6 +87,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | Manutenção | `agendar` | Tarefa semanal: só ocioso e na tomada, prioridade baixa, limpa, reaplica o que atualizações desfazem, Defender, SMART, avisos por notificação; uma vez por mês, ponto de restauração e limpeza de componentes |
 | | `restaurar` | Pontos de restauração: lista, cria, abre a Restauração do Sistema |
 | | `desfazer` | `desfazer servicos privacidade` ou `desfazer tudo`: volta cada valor ao que era antes |
+| | `socorro` | O PC ficou estranho: desfaz tudo o que o Katharos mudou e explica o ponto de restauração do Windows |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 
 ## Opções
@@ -98,6 +100,10 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | `--copiar` · `--salvar PASTA` | No fim de qualquer comando: copia o relatório único para a área de transferência · salva uma cópia dele numa pasta (ex.: o cofre) |
 | `--codigo` | Mostra o PowerShell de cada item escolhido e não aplica nada (na tela de escolha, `v 3` mostra o do item 3) |
 | `--ascii` · `--sem-cor` | Para terminais que mostram quadradinhos · sem cores (`NO_COLOR` também vale) |
+
+## Versões e contribuição
+
+O número é MAIOR.MENOR.CORREÇÃO, explicado no [CHANGELOG.md](CHANGELOG.md); cada versão tem uma tag (`v1.2.0`) e `katharos --versao` mostra a sua. Para ajudar, veja o [CONTRIBUTING.md](CONTRIBUTING.md): rodar os testes (`python -m unittest discover -s tests`), propor um item e contar um problema.
 
 ## Segurança
 
@@ -140,4 +146,8 @@ programa\katharos.py
 KATHAROS.bat               chama o programa\katharos.ps1
 programa\katharos.ps1      acha o Python, escolhe o terminal e abre como administrador
 docs/             o site (GitHub Pages)
+tests/            testes automáticos (rodam também no GitHub Actions)
+CHANGELOG.md      o que mudou em cada versão
+CONTRIBUTING.md   como ajudar
+relatorios\       criada no primeiro uso: um relatório por execução, com data e hora
 ```

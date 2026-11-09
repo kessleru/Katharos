@@ -22,7 +22,8 @@ import queue
 import subprocess
 from datetime import datetime
 
-VERSAO = '1.1.0'
+VERSAO = '1.2.0'
+DATA_VERSAO = '9 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #
@@ -1050,11 +1051,35 @@ def pasta(*partes):
     return d
 
 
+AVISOS_INICIO = []   # avisos de coisas que deram errado antes de haver terminal (mostrados no começo)
+AVISO_VIVO = None    # depois que o terminal existe, os avisos aparecem na hora
+
+
 def le_json(arq, padrao):
+    """Lê um JSON. Arquivo que não existe devolve o padrão. Arquivo que existe mas está ilegível é guardado ao lado
+    (nome.corrompido-DATA) e a pessoa é avisada: antes isso zerava o estado sem ninguém ver."""
+    arq = Path(arq)
     try:
         with open(arq, encoding='utf-8-sig') as f:
             return json.load(f)
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return padrao
+    except ValueError:
+        try:
+            copia = arq.with_name(f'{arq.name}.corrompido-{datetime.now():%Y%m%d-%H%M%S}')
+            os.replace(arq, copia)
+            msg = f'{arq.name} estava ilegível; guardei uma cópia em {copia.name} e recomecei com o padrão.'
+            if AVISO_VIVO:
+                AVISO_VIVO(msg)
+            else:
+                AVISOS_INICIO.append(msg)
+            lg = globals().get('LOG')
+            if lg:
+                lg.escreve(msg)
+        except OSError:
+            pass
+        return padrao
+    except OSError:
         return padrao
 
 
@@ -1872,6 +1897,118 @@ def roda_exe(cmd, minutos, pr=None, mult=1.0, saida_arq=None):
         except OSError:
             pass
     return cod, texto
+
+
+# ─────────────── robustez: lixo, trava de instância e espaço em disco ───────────────
+
+DIAS_LOG = 90
+MAX_CORROMPIDOS = 5
+
+
+def limpa_residuos(casa=None, agora=None):
+    """Tira o que sobra sozinho: .tmp de gravações interrompidas, logs com mais de 90 dias e cópias de JSON
+    corrompidos além das 5 mais recentes. Nunca mexe em backup/ (o desfazer depende dele) nem em relatórios."""
+    casa = Path(casa or CASA)
+    agora = agora or time.time()
+    n = 0
+    try:
+        for tmp in list(casa.rglob('*.tmp')):
+            if 'backup' in tmp.parts:
+                continue
+            if agora - tmp.stat().st_mtime > 3600:
+                tmp.unlink()
+                n += 1
+        logs = casa / 'logs'
+        if logs.is_dir():
+            for lg in logs.glob('*.log'):
+                if agora - lg.stat().st_mtime > DIAS_LOG * 86400:
+                    lg.unlink()
+                    n += 1
+        ruins = sorted(casa.glob('*.corrompido-*'))
+        for velho in ruins[:-MAX_CORROMPIDOS]:
+            velho.unlink()
+            n += 1
+    except OSError:
+        pass
+    return n
+
+
+def _vivo(pid):
+    """O processo com este PID ainda existe?"""
+    if pid <= 0:
+        return False
+    if WINDOWS:
+        try:
+            import ctypes
+            h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+            if not h:
+                return False
+            ctypes.windll.kernel32.CloseHandle(h)
+            return True
+        except Exception:
+            return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+
+
+class Trava:
+    """Uma única instância do Katharos mexendo no sistema por vez (duas janelas aplicando juntas escreveriam no mesmo
+    backup e no mesmo estado). Arquivo ~/.katharos/katharos.lock com o PID; trava de processo que já morreu é ignorada."""
+
+    def __init__(self, casa=None):
+        self.arq = Path(casa or CASA) / 'katharos.lock'
+        self.minha = False
+        self.dona = None
+
+    def pega(self):
+        try:
+            self.arq.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                pid = int((self.arq.read_text(encoding='utf-8').split() or ['0'])[0])
+            except (OSError, ValueError):
+                pid = 0
+            if pid and pid != os.getpid() and _vivo(pid):
+                self.dona = pid
+                return False
+            self.arq.write_text(f'{os.getpid()} {datetime.now().isoformat(timespec="seconds")}\n', encoding='utf-8')
+            self.minha = True
+        except OSError:
+            self.minha = False     # sem como gravar a trava: não impede o uso
+        return True
+
+    def solta(self):
+        if self.minha:
+            try:
+                self.arq.unlink()
+            except OSError:
+                pass
+            self.minha = False
+
+
+ESPACO_MIN_GB = {'dism': 3.0, 'sfc': 1.0, 'ponto': 2.0, 'bench': 1.0}
+
+
+def espaco_ok(para, livre=None):
+    """(ok, livre_gb, precisa_gb): antes de DISM, SFC, ponto de restauração e benchmark confere o espaço livre em C:.
+    Sem conseguir ler o espaço, deixa seguir (não bloqueia por falta de informação)."""
+    livre = livre_c() if livre is None else livre
+    precisa = ESPACO_MIN_GB.get(para, 1.0)
+    if not livre:
+        return True, 0.0, precisa
+    gb = livre / 2**30
+    return gb >= precisa, gb, precisa
+
+
+def exige_espaco(t, para, rotulo):
+    ok, gb, precisa = espaco_ok(para)
+    if not ok:
+        t.aviso(f'{rotulo}: só há {gb:.1f} GB livres em C: e isto pede pelo menos {precisa:g} GB. Libere espaço (comando limpar) e tente de novo.')
+    return ok
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -2881,6 +3018,10 @@ def garante_ponto(ctx, teste=False):
             return
     except ValueError:
         pass
+    ok, gb, precisa = espaco_ok('ponto')
+    if not ok:
+        ctx.t.aviso(f'Só há {gb:.1f} GB livres em C:. O ponto de restauração pede cerca de {precisa:g} GB e pode falhar; '
+                    'sem ele, o desfazer por valor continua valendo.')
     corpo = r'''
 Vivo 'ponto de restauracao'
 try { Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction Stop } catch {}
@@ -3180,6 +3321,8 @@ def _py_dism(argumentos, rotulo, minutos):
         if teste:
             ctx.t.item('○', 'azul', 'DISM ' + ' '.join(argumentos), recuo=4, cor_nome='sub')
             return 1, 0
+        if not exige_espaco(ctx.t, 'dism', rotulo):
+            return 0, 1
         antes = livre_c()
         cod, txt = roda_exe(['DISM.exe'] + argumentos, minutos, pr, ctx.mult)
         liberou = livre_c() - antes
@@ -4172,6 +4315,8 @@ def _py_reparo(rotulo, cmd, minutos, chave=None, pos=None):
         if teste:
             ctx.t.item('○', 'azul', ' '.join(cmd), recuo=4, cor_nome='sub')
             return 1, 0
+        if chave == 'sfc' and not exige_espaco(ctx.t, 'sfc', rotulo):
+            return 0, 1
         if chave:
             ult = estado().get('reparo_' + chave)
             try:
@@ -7677,6 +7822,202 @@ def ferramenta_memoria(ctx, args):
     return 0
 
 
+# ─────────────── socorro: voltar tudo quando o PC não está bem ───────────────
+
+def ferramenta_socorro(ctx, args):
+    t = ctx.t
+    t.aba('o PC ficou estranho depois de aplicar algo? Isto volta tudo')
+    t.paragrafo('Desfaz, valor por valor, tudo o que o Katharos mudou neste PC (registro, serviços, tarefas, plano de energia) '
+                'e reinicia o Explorer. Não apaga seus arquivos nem mexe em programas. Se mesmo assim algo continuar errado, '
+                'o último passo é o ponto de restauração do Windows, que este comando explica no fim.', 2, 'sub')
+    if not precisa_admin(ctx, args):
+        return 1
+    com_backup = [n for n in PACOTES if (CASA / 'backup' / n / 'mudancas.jsonl').exists()]
+    if not com_backup:
+        t.ok('O Katharos não tem nenhuma mudança guardada neste PC. Se o problema é recente, use o ponto de restauração (passos abaixo).')
+    else:
+        t.titulo('o que vai voltar')
+        for n in com_backup:
+            t.escreve(f'  {t.p("•", "destaque")} {PACOTES[n].titulo}')
+        t.escreve()
+        if not args.teste and not t.confirma('Voltar tudo isso agora?', sim=args.sim):
+            return 0
+        for n in com_backup:
+            t.titulo(PACOTES[n].titulo)
+            desfaz_pacote(ctx, n, args.teste)
+        if not args.teste:
+            roda_ps(t, 'Reinicia-Explorer', 'explorer', minutos=1, mostra=False)
+            e = estado()
+            e['socorro'] = agora_iso()
+            salva_estado(e)
+    t.titulo('se ainda não estiver bem')
+    for passo in ('Reinicie o PC. Várias mudanças só voltam por completo depois do reinício.',
+                  'Abra o Katharos e use o comando restaurar: ele lista os pontos do Windows, e "Antes do Katharos" é o último antes de mexer.',
+                  'Sem conseguir abrir nada: segure Shift e clique em Reiniciar, depois Solução de problemas > Opções avançadas > Restauração do Sistema.',
+                  'Se o Windows nem inicia, o mesmo caminho aparece sozinho depois de duas falhas seguidas de inicialização.'):
+        t.escreve(f'  {t.p("›", "destaque")} {passo}')
+    t.escreve()
+    return 0
+
+
+# ─────────────── benchmark: provar o ganho com número, sem enganar ───────────────
+# Regra: só declara melhora ou piora quando a diferença é maior que a variação das próprias medidas.
+
+REPETICOES = {'rapido': 4, 'completo': 6}   # a primeira rodada é descartada (cache frio ou quente muda tudo)
+LINHAS_BENCH = [
+    ('disco_escrita', 'disco: escrita sequencial', 'MB/s', 'maior'),
+    ('disco_4k', 'disco: escritas pequenas (4K, com flush)', 'ops/s', 'maior'),
+    ('cpu', 'CPU: um núcleo (hash)', 'MB/s', 'maior'),
+    ('ram', 'RAM: cópia de memória', 'MB/s', 'maior'),
+]
+
+
+def estatistica(medidas):
+    """{n, mediana, minimo, maximo, amplitude} de uma lista de medidas (precisa de pelo menos uma)."""
+    v = sorted(float(x) for x in medidas)
+    n = len(v)
+    meio = v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+    return {'n': n, 'mediana': meio, 'minimo': v[0], 'maximo': v[-1], 'amplitude': v[-1] - v[0]}
+
+
+def compara_bench(antes, depois, melhor='maior'):
+    """Compara duas estatísticas. Devolve (veredito, variação em %): 'melhorou', 'piorou' ou 'sem diferença mensurável'
+    (também quando há menos de 3 medidas de cada lado, porque aí não dá para saber o que é ruído)."""
+    if min(antes['n'], depois['n']) < 3 or not antes['mediana']:
+        return 'poucas repetições para comparar', 0.0
+    dif = depois['mediana'] - antes['mediana']
+    pct = dif / antes['mediana'] * 100
+    ruido = max(antes['amplitude'], depois['amplitude'])
+    if abs(dif) <= ruido:
+        return 'sem diferença mensurável', pct
+    bom = dif > 0 if melhor == 'maior' else dif < 0
+    return ('melhorou' if bom else 'piorou'), pct
+
+
+def _mede(fn, reps):
+    """Roda fn() reps vezes, descarta a primeira, devolve a estatística das demais."""
+    vals = [fn() for _ in range(reps)]
+    return estatistica(vals[1:] if len(vals) > 2 else vals)
+
+
+def bench_cpu(mb=48):
+    import hashlib as _h
+    bloco = bytes(range(256)) * 4096       # 1 MB
+    t0 = time.perf_counter()
+    h = _h.sha256()
+    for _ in range(mb):
+        h.update(bloco)
+    return mb / (time.perf_counter() - t0)
+
+
+def bench_ram(mb=64):
+    origem = bytearray(mb * 2**20)
+    t0 = time.perf_counter()
+    destino = bytes(origem)               # cópia de verdade, mb megabytes
+    dt = time.perf_counter() - t0
+    del destino
+    return mb / dt if dt > 0 else 0.0
+
+
+def bench_disco_escrita(arq, mb=64):
+    bloco = os.urandom(2**20)
+    t0 = time.perf_counter()
+    with open(arq, 'wb') as f:
+        for _ in range(mb):
+            f.write(bloco)
+        f.flush()
+        os.fsync(f.fileno())
+    return mb / (time.perf_counter() - t0)
+
+
+def bench_disco_4k(arq, ops=200):
+    bloco = os.urandom(4096)
+    t0 = time.perf_counter()
+    with open(arq, 'wb') as f:
+        for _ in range(ops):
+            f.write(bloco)
+            f.flush()
+            os.fsync(f.fileno())
+    return ops / (time.perf_counter() - t0)
+
+
+def roda_bench(t, rapido=True, leve=False, pasta_tmp=None):
+    """Roda os testes e devolve {chave: estatística}. O arquivo temporário é apagado em qualquer caso."""
+    reps = REPETICOES['rapido' if rapido else 'completo']
+    mb = 16 if leve else 64
+    tmp = Path(pasta_tmp or (CASA / 'bench'))
+    tmp.mkdir(parents=True, exist_ok=True)
+    arq = tmp / 'teste.bin'
+    out = {}
+    try:
+        etapas = [('cpu', lambda: bench_cpu(16 if leve else 48)),
+                  ('ram', lambda: bench_ram(mb)),
+                  ('disco_escrita', lambda: bench_disco_escrita(arq, mb)),
+                  ('disco_4k', lambda: bench_disco_4k(arq, 100 if leve else 200))]
+        for chave, fn in etapas:
+            rotulo = next(l[1] for l in LINHAS_BENCH if l[0] == chave)
+            with Progresso(t, None, rotulo) as pr:
+                out[chave] = _mede(fn, reps)
+    finally:
+        try:
+            arq.unlink()
+        except OSError:
+            pass
+    return out
+
+
+def bench_salvos():
+    return sorted(pasta('benchmarks').glob('*.json'))
+
+
+def mostra_bench(t, atual, antes=None, rotulo_antes=''):
+    t.titulo('resultado' if antes is None else f'comparado com {rotulo_antes}')
+    for chave, nome, un, melhor in LINHAS_BENCH:
+        e = atual.get(chave)
+        if not e:
+            continue
+        linha = f'{nome:<42} {e["mediana"]:>9.0f} {un}  (de {e["minimo"]:.0f} a {e["maximo"]:.0f})'
+        if antes and chave in antes:
+            v, pct = compara_bench(antes[chave], e, melhor)
+            cor = {'melhorou': 'verde', 'piorou': 'pessego'}.get(v, 'apagado')
+            linha += '  ' + t.p(f'{v}' + (f' ({pct:+.0f}%)' if v in ('melhorou', 'piorou') else ''), cor)
+        t.escreve('  ' + linha)
+    t.escreve()
+
+
+def ferramenta_benchmark(ctx, args):
+    t = ctx.t
+    rapido = not getattr(args, 'completo', False)
+    t.aba('mede disco, CPU e RAM com repetição e diz se a diferença é real')
+    t.paragrafo('Meça com o PC parado e sem programas abertos, antes e depois de aplicar algo. O programa repete cada teste, '
+                'descarta a primeira rodada e só diz "melhorou" ou "piorou" quando a diferença é maior que a variação das próprias '
+                'medidas. Os arquivos de teste ficam em ~/.katharos/bench e são apagados no fim. Nada sai do PC.', 2, 'sub')
+    if args.teste:
+        t.item('○', 'azul', f'{REPETICOES["rapido" if rapido else "completo"]} rodadas de 4 testes, até 64 MB no disco', recuo=2, cor_nome='sub')
+        return 0
+    if not exige_espaco(t, 'bench', 'benchmark'):
+        return 1
+    ok, gb, _ = espaco_ok('bench')
+    leve = bool(gb and gb < 5)
+    if leve:
+        t.nota('  Pouco espaço livre: usando a versão leve (arquivos menores).')
+    t.escreve()
+    atual = roda_bench(t, rapido=rapido, leve=leve)
+    salvos = bench_salvos()
+    antes = le_json(salvos[-1], {}).get('medidas') if salvos else None
+    quando = salvos[-1].stem[:16].replace('_', ' ') if salvos else ''
+    mostra_bench(t, atual, antes, 'o benchmark anterior (' + quando + ')' if antes else '')
+    dados = {'versao': VERSAO, 'quando': agora_iso(), 'pc': nome_do_pc(), 'leve': leve, 'medidas': atual,
+             'perfil_aplicado': (estado().get('perfil') or '')}
+    grava_json(pasta('benchmarks') / f'{datetime.now():%Y-%m-%d_%H-%M-%S}.json', dados)
+    try:
+        rel_secao('benchmark', {k: round(v['mediana'], 1) for k, v in atual.items()})
+    except Exception as e:
+        LOG.escreve(f'benchmark não entrou no relatório: {e!r}')
+    t.nota('  Rode de novo depois de aplicar algo: o programa compara com este resultado.')
+    return 0
+
+
 # ███████████████████████████████████████████████████████████████████████████
 #
 #   PARTE 5 · MENU E ENTRADA
@@ -7744,6 +8085,7 @@ GRUPOS = [
     ]),
     ('conhecer o PC', 'só olha, não muda nada', [
         ('medir', 'CPU, RAM, disco e temperatura agora', 'ferramenta_medir'),
+        ('benchmark', 'velocidade de disco, CPU e RAM, antes e depois', 'ferramenta_benchmark'),
         ('memoria', 'quem usa a RAM e o que liberar', 'ferramenta_memoria'),
         ('seguranca', 'auditoria: o que está fraco na segurança', 'ferramenta_seguranca'),
         ('portas', 'quem escuta em cada porta, e para quem', 'ferramenta_portas'),
@@ -7785,6 +8127,7 @@ GRUPOS = [
     ]),
     ('voltar atrás e conferir', 'ver o que mudou e voltar', [
         ('desfazer', 'volta qualquer mudança, valor por valor', 'ferramenta_desfazer'),
+        ('socorro', 'o PC ficou estranho: volta tudo de uma vez', 'ferramenta_socorro'),
         ('restaurar', 'pontos de restauração do Windows', 'ferramenta_restaurar'),
         ('verificar', 'confere se o que foi aplicado continua valendo', 'ferramenta_verificar'),
         ('estado', 'o que já foi aplicado neste PC', 'ferramenta_estado'),
@@ -7797,7 +8140,7 @@ GRUPOS = [
 ]
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
-SEM_ESTADO = {'config', 'estado', 'desfazer', 'restaurar', 'relatorio', 'cartao'}
+SEM_ESTADO = {'config', 'estado', 'desfazer', 'socorro', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -7807,11 +8150,21 @@ def roda_ferramenta(ctx, args, abre=True):
         extra = (f'modo {getattr(args, "modo", None) or config("modo")}' if f in ('pacote', 'ferramenta_turbo') else '')
         t.cabecalho(args.comando, ' · '.join(x for x in (extra, 'teste: nada é alterado' if args.teste else '') if x), app=APP)
     inicio = time.time()
+    trava = None
+    if args.comando not in SEM_ESTADO and not getattr(args, 'teste', False) and not getattr(args, 'codigo', False):
+        trava = Trava()
+        if not trava.pega():
+            t.aviso(f'Outra janela do Katharos está aplicando mudanças agora (processo {trava.dona}). Espere ela terminar '
+                    'ou feche-a, para as duas não escreverem no mesmo backup.')
+            return 1
     try:
         cod = ferramenta_pacote(ctx, args, args.comando) if f == 'pacote' else globals()[f](ctx, args)
     except KeyboardInterrupt:
         t.fim('interrompido', 'erro')
         return 130
+    finally:
+        if trava:
+            trava.solta()
     if args.comando not in SEM_ESTADO:
         e = estado()
         e.setdefault('usado', {})[args.comando] = agora_iso()
@@ -7840,12 +8193,15 @@ def monta_parser():
     p = argparse.ArgumentParser(prog='katharos', parents=[comum],
                                 description='Deixa qualquer Windows mais leve: diagnóstico, limpeza, programas, serviços, '
                                             'privacidade, energia, disco, reparo e manutenção. Sem comando, abre o menu.')
-    p.add_argument('--versao', action='version', version=f'katharos {VERSAO}')
+    p.add_argument('--versao', action='version', version=f'katharos {VERSAO} ({DATA_VERSAO})')
     p.add_argument('--sha256', action='store_true', help='mostra o SHA-256 deste arquivo, para comparar com o SHA256SUMS.txt do repositório')
     sub = p.add_subparsers(dest='comando', metavar='comando')
     r = sub.add_parser('raiox', parents=[depois], help='diagnóstico completo com nota e recomendações (só leitura)')
     r.add_argument('--queixas', metavar='LISTA', help='lento,boot,disco,calor,bateria,jogos,privacidade,tudo')
     sub.add_parser('medir', parents=[depois], help='medidas agora, comparadas com a primeira')
+    pb = sub.add_parser('benchmark', parents=[depois], help='disco, CPU e RAM com repetição, comparado com o anterior')
+    pb.add_argument('--completo', action='store_true', help='mais rodadas (leva alguns minutos); o padrão é o rápido, cerca de 1 minuto')
+    sub.add_parser('socorro', parents=[depois], help='desfaz tudo o que o Katharos mudou e explica o ponto de restauração')
     sub.add_parser('memoria', parents=[depois], help='uso da RAM e limpeza da memória em espera')
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
     tb.add_argument('--continuar', action='store_true', help='continua um turbo pela metade (a tarefa agendada usa)')
@@ -8014,6 +8370,11 @@ def main(argv=None):
     t = Terminal(args.ascii, args.sem_cor)
     ctx = Ctx(args, t)
     desliga_edicao_rapida()
+    limpa_residuos()
+    for msg in AVISOS_INICIO:
+        t.aviso(msg)
+    AVISOS_INICIO.clear()
+    globals()['AVISO_VIVO'] = t.aviso
     try:
         if args.comando:
             return roda_ferramenta(ctx, args)

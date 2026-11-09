@@ -151,6 +151,132 @@ class TestMenu(unittest.TestCase):
         self.assertEqual(len(cmds), len(set(cmds)))
 
 
+class TestRobustez(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.casa0 = k.CASA
+        k.CASA = self.tmp
+        k.AVISOS_INICIO.clear()
+
+    def tearDown(self):
+        import shutil
+        k.CASA = self.casa0
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_json_corrompido_e_guardado_e_avisado(self):
+        arq = self.tmp / 'estado.json'
+        arq.write_text('{ isto nao e json', encoding='utf-8')
+        self.assertEqual(k.le_json(arq, {'padrao': 1}), {'padrao': 1})
+        self.assertFalse(arq.exists())
+        copias = list(self.tmp.glob('estado.json.corrompido-*'))
+        self.assertEqual(len(copias), 1)
+        self.assertEqual(copias[0].read_text(encoding='utf-8'), '{ isto nao e json')
+        self.assertEqual(len(k.AVISOS_INICIO), 1)
+
+    def test_json_que_nao_existe_nao_gera_aviso(self):
+        self.assertEqual(k.le_json(self.tmp / 'nada.json', 7), 7)
+        self.assertEqual(k.AVISOS_INICIO, [])
+
+    def test_limpa_residuos_nao_toca_no_backup(self):
+        import os as _os
+        import time as _t
+        (self.tmp / 'backup' / 'limpar').mkdir(parents=True)
+        bk = self.tmp / 'backup' / 'limpar' / 'mudancas.jsonl'
+        bk.write_text('{}', encoding='utf-8')
+        velho_tmp = self.tmp / 'estado.json.tmp'
+        velho_tmp.write_text('x')
+        (self.tmp / 'logs').mkdir()
+        log_velho = self.tmp / 'logs' / '2020-01-01.log'
+        log_velho.write_text('x')
+        log_novo = self.tmp / 'logs' / 'hoje.log'
+        log_novo.write_text('x')
+        antigo = _t.time() - 200 * 86400
+        for a in (velho_tmp, log_velho):
+            _os.utime(a, (antigo, antigo))
+        _os.utime(bk, (antigo, antigo))
+        n = k.limpa_residuos(self.tmp)
+        self.assertEqual(n, 2)
+        self.assertTrue(bk.exists(), 'o backup do desfazer nunca pode ser apagado')
+        self.assertTrue(log_novo.exists())
+        self.assertFalse(velho_tmp.exists() or log_velho.exists())
+
+    def test_trava_impede_segunda_instancia_e_ignora_processo_morto(self):
+        a = k.Trava(self.tmp)
+        self.assertTrue(a.pega())
+        # outra "instância" com o PID do pai (vivo) segura a trava
+        (self.tmp / 'katharos.lock').write_text(f'{__import__("os").getppid()} x\n')
+        b = k.Trava(self.tmp)
+        self.assertFalse(b.pega())
+        self.assertEqual(b.dona, __import__('os').getppid())
+        # PID que não existe: trava velha, pode pegar
+        (self.tmp / 'katharos.lock').write_text('999999999 x\n')
+        c = k.Trava(self.tmp)
+        self.assertTrue(c.pega())
+        c.solta()
+        self.assertFalse((self.tmp / 'katharos.lock').exists())
+
+    def test_espaco(self):
+        self.assertFalse(k.espaco_ok('dism', livre=1 * 2**30)[0])
+        self.assertTrue(k.espaco_ok('dism', livre=10 * 2**30)[0])
+        self.assertTrue(k.espaco_ok('dism', livre=0)[0], 'sem conseguir ler o espaço, não bloqueia')
+
+    def test_socorro_e_benchmark_estao_no_menu(self):
+        cmds = [c for _, _, its in k.GRUPOS for c, _, _ in its]
+        self.assertIn('socorro', cmds)
+        self.assertIn('benchmark', cmds)
+        self.assertIn('socorro', k.SEM_ESTADO)
+
+
+class TestBenchmark(unittest.TestCase):
+    def test_estatistica(self):
+        e = k.estatistica([10, 12, 11, 100, 9])
+        self.assertEqual(e['mediana'], 11)
+        self.assertEqual((e['minimo'], e['maximo'], e['n']), (9, 100, 5))
+        self.assertEqual(k.estatistica([1, 3])['mediana'], 2)
+
+    def test_so_declara_ganho_maior_que_o_ruido(self):
+        antes = k.estatistica([100, 102, 98, 101])        # amplitude 4
+        depois_ruido = k.estatistica([101, 103, 99, 102])  # só 1% acima: dentro do ruído
+        depois_real = k.estatistica([150, 152, 149, 151])
+        self.assertEqual(k.compara_bench(antes, depois_ruido)[0], 'sem diferença mensurável')
+        self.assertEqual(k.compara_bench(antes, depois_real)[0], 'melhorou')
+        self.assertEqual(k.compara_bench(depois_real, antes)[0], 'piorou')
+
+    def test_menor_e_melhor(self):
+        a = k.estatistica([200, 201, 199])
+        d = k.estatistica([100, 101, 99])
+        self.assertEqual(k.compara_bench(a, d, 'menor')[0], 'melhorou')
+
+    def test_poucas_repeticoes_nao_conclui(self):
+        self.assertIn('poucas', k.compara_bench(k.estatistica([1, 2]), k.estatistica([5, 6]))[0])
+
+    def test_benchmark_apaga_o_arquivo_temporario(self):
+        import tempfile
+        d = Path(tempfile.mkdtemp())
+        class T:
+            def __getattr__(self, n):
+                return lambda *a, **kw: ''
+        k.Progresso = type('P', (), {'__init__': lambda s, *a, **kw: None, '__enter__': lambda s: s, '__exit__': lambda s, *a: False})
+        r = k.roda_bench(T(), rapido=True, leve=True, pasta_tmp=d)
+        self.assertEqual(set(r), {'cpu', 'ram', 'disco_escrita', 'disco_4k'})
+        self.assertTrue(all(v['mediana'] > 0 for v in r.values()))
+        self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
+
+
+class TestLimpezaNaoTocaEmArquivosPessoais(unittest.TestCase):
+    PESSOAL = re.compile(r'Documents|Documentos|Pictures|Imagens|Downloads|Desktop|Área de Trabalho|OneDrive|Videos|Music|Músicas', re.I)
+
+    def test_pacote_limpar_so_mexe_em_lixo_do_sistema(self):
+        for nome in ('limpar',):
+            for p, i in ITENS:
+                if p != nome:
+                    continue
+                for linha in (i.ps or '').splitlines():
+                    if re.search(r'Remove-Item|Clear-|\.Delete\(|rd |del ', linha, re.I):
+                        self.assertIsNone(self.PESSOAL.search(linha), f'{p}/{i.id} apaga perto de pasta pessoal: {linha.strip()[:100]}')
+
+
 class TestSemRedeEscondida(unittest.TestCase):
     def test_python_nao_abre_conexoes_proprias(self):
         fonte = (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8')
