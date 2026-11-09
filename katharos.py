@@ -2931,6 +2931,24 @@ def confere_conta(ctx):
     return True
 
 
+def resumo_antes(t, pac, itens, titulo=True, recuo=2):
+    """Logo antes do "Aplicar?": o que cada item faz, o que se ganha, o que se perde e se volta com o desfazer."""
+    if titulo:
+        t.titulo(f'antes de aplicar: {pac.titulo}')
+    for it in itens:
+        t.item('◆', 'destaque', corta(tela(it.titulo), 60), recuo=recuo)
+        if getattr(it, 'ganho', ''):
+            t.paragrafo('ganha: ' + it.ganho, recuo + 4, 'sub')
+        if getattr(it, 'custo', '') and it.custo != 'nenhum':
+            t.paragrafo('perde: ' + it.custo, recuo + 4, 'apagado')
+        if getattr(it, 'alerta', ''):
+            t.paragrafo('atenção: ' + it.alerta, recuo + 4, 'amarelo')
+    if pac.reversivel:
+        t.nota(' ' * recuo + 'Tudo isto volta com "katharos desfazer ' + pac.nome + '".')
+    else:
+        t.aviso('Parte disto não volta com o desfazer (programas e apps removidos, arquivos apagados). Confira a lista.')
+
+
 def ferramenta_pacote(ctx, args, nome=None):
     """Tela de um pacote: explica, mostra os itens marcados pelo modo, deixa escolher, confirma e aplica."""
     t = ctx.t
@@ -2969,6 +2987,7 @@ def ferramenta_pacote(ctx, args, nome=None):
         executa_itens(ctx, pac, escolhidos, teste=True)
         t.nota('modo teste: o que tem ○ azul seria mudado; o resto já está como deveria.')
         return 0
+    resumo_antes(t, pac, escolhidos)
     if not t.confirma(f'Aplicar {pl(len(escolhidos), "item", "itens")} de {pac.titulo}?', sim=args.sim):
         t.nota('nada foi alterado.')
         return 0
@@ -3877,18 +3896,15 @@ GPU_PS = r'''foreach ($__c in @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Co
   if ($__d -match '«fab»') { $__k = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\' + $__c.PSChildName; «reg» }
 }'''
 
-JOGOS_EXE = ['VALORANT-Win64-Shipping.exe', 'cs2.exe', 'csgo.exe', 'FortniteClient-Win64-Shipping.exe', 'League of Legends.exe',
-             'RocketLeague.exe', 'r5apex.exe', 'r5apex_dx12.exe', 'GTA5.exe', 'GTA5_Enhanced.exe', 'Minecraft.Windows.exe',
-             'RobloxPlayerBeta.exe', 'Overwatch.exe', 'dota2.exe', 'RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'TslGame.exe',
-             'FC25.exe', 'FC26.exe', 'Cyberpunk2077.exe', 'eldenring.exe', 'cod.exe', 'cod24-cod.exe', 'destiny2.exe',
-             'PathOfExile_x64.exe', 'PathOfExileSteam.exe', 'Diablo IV.exe', 'Wow.exe', 'Hearthstone.exe', 'bf2042.exe',
-             'bf6.exe', 'RDR2.exe', 'HogwartsLegacy.exe', 'Palworld-Win64-Shipping.exe', 'RustClient.exe',
-             'DeadByDaylight-Win64-Shipping.exe', 'EscapeFromTarkov.exe', 'Marvel-Win64-Shipping.exe', 'FallGuys_client_game.exe',
-             'ForzaHorizon5.exe', 'ForzaHorizon4.exe', 'Starfield.exe', 'bg3.exe', 'bg3_dx11.exe', 'witcher3.exe',
-             'MonsterHunterWilds.exe', 'MonsterHunterWorld.exe', 'Warframe.x64.exe', 'Terraria.exe', 'GenshinImpact.exe',
-             'ZenlessZoneZero.exe', 'StarRail.exe', 'Albion-Online.exe', 'LOSTARK.exe', 'NarakaBladepoint.exe', 'deadlock.exe',
-             'helldivers2.exe', 'SoTGame.exe', 'Phasmophobia.exe', 'VRChat.exe', 'tf_win64.exe', 'left4dead2.exe',
-             'TheFinals.exe', 'Discovery.exe', 'Among Us.exe', 'Lethal Company.exe', 'Stardew Valley.exe', 'RobloxStudioBeta.exe']
+# Prioridade alta só para jogos SEM anti-cheat de terceiros (VAC da Valve não conta: ele só procura programa injetado no jogo).
+# Jogos com Vanguard, EasyAntiCheat, BattlEye, Javelin, Ricochet, Hyperion, Warden etc. ficam de fora de propósito: nenhuma chave
+# do Katharos aponta para eles.
+JOGOS_EXE = ['cs2.exe', 'csgo.exe', 'dota2.exe', 'deadlock.exe', 'tf_win64.exe', 'left4dead2.exe',
+             'Minecraft.Windows.exe', 'Cyberpunk2077.exe', 'Diablo IV.exe', 'Hearthstone.exe', 'RDR2.exe', 'HogwartsLegacy.exe',
+             'Palworld-Win64-Shipping.exe', 'ForzaHorizon5.exe', 'ForzaHorizon4.exe', 'Starfield.exe', 'bg3.exe', 'bg3_dx11.exe',
+             'witcher3.exe', 'MonsterHunterWilds.exe', 'MonsterHunterWorld.exe', 'Warframe.x64.exe', 'Terraria.exe',
+             'Phasmophobia.exe', 'Among Us.exe', 'Lethal Company.exe', 'Stardew Valley.exe', 'PathOfExile_x64.exe', 'PathOfExileSteam.exe']
+JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Destiny 2, Call of Duty, Rust, Roblox, Genshin, EA FC e outros'
 
 
 @pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, prioridades e ajustes de latência',
@@ -3917,8 +3933,9 @@ def itens_jogos(ctx):
              'minutos o tempo todo).', 'mais FPS e menos disco durante o jogo', 'Win+Alt+G e gravação pela Game Bar param', 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', 'AppCaptureEnabled', 0), R(gc, 'GameDVR_Enabled', 0),
                 R(f'{HKLM_POL}\\GameDVR', 'AllowGameDVR', 0))),
-        Item('prioridade-jogos', 'prioridade alta para jogos conhecidos', f'Mais de {len(JOGOS_EXE)} jogos (Valorant, CS2, Fortnite, LoL, '
-             'Apex, GTA V, Minecraft, Roblox...) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows.',
+        Item('prioridade-jogos', 'prioridade alta para jogos conhecidos', f'{len(JOGOS_EXE)} jogos (CS2, Dota 2, Minecraft, Cyberpunk, '
+             'Elden... sem anti-cheat de terceiros) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows. '
+             f'Jogos com anti-cheat de terceiros ({JOGOS_ANTICHEAT}) ficam de fora de propósito.',
              'o jogo passa na frente de programas em segundo plano', 'em PC fraco, música e Discord podem engasgar durante o jogo',
              2 if j else 3, prio, minutos=4),
         Item('mmcss', 'agendador multimídia favorecendo jogos', 'Jogos ganham prioridade de GPU e CPU no agendador multimídia '
@@ -5508,10 +5525,10 @@ CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'n
 # cada perfil: nome, para que serve, e {pacote: [ids dos itens]} ("@seguro" = tudo o que o modo seguro marca).
 # Item que não existe neste PC (ou que a pessoa protegeu) é pulado; nada é aplicado sem a prévia e a confirmação.
 PERFIS = {
-    'jogo': ('Modo jogo', 'menos coisa atrapalhando o jogo: Modo de Jogo, prioridades, energia e visual leves', {
+    'jogo': ('Modo jogo', 'mais fluidez no jogo: Modo de Jogo, prioridades de CPU e rede, energia no máximo e sem apps em segundo plano. Não mexe no visual', {
         'jogos': ['modo-jogo', 'gamedvr', 'prioridade-jogos', 'mmcss', 'primeiro-plano', 'mouse', 'teclado', 'aderencia', 'rede-jogos'],
         'energia': ['desempenho', 'usb', 'throttling'],
-        'visual': ['efeitos', 'animacoes', 'menus', 'transparencia'],
+        'cs2': ['gpu-cs2', 'janela-otim', 'video-cs2', 'cfg-cs2'],
         'privacidade': ['segundo-plano']}),
     'bateria': ('Notebook na bateria', 'dura mais longe da tomada: plano fresco, sem efeitos e sem apps em segundo plano', {
         'energia': ['fresco'],
@@ -5534,9 +5551,56 @@ PERFIS = {
         'visual': ['extensoes', 'menu-classico'],
         'disco': ['lastaccess', 'ntfs'],
         'energia': ['desempenho']}),
-    'seguro': ('Seguro para PC de trabalho', 'só o que não tem contrapartida (telemetria, anúncios, lixo)', {
+    'trabalho': ('PC de trabalho', 'só o que não tem contrapartida (telemetria, anúncios, lixo), no nível do modo seguro', {
         'privacidade': '@seguro', 'limpar': '@seguro', 'ia': '@seguro'}),
 }
+
+
+# O que cada perfil ataca, de 0 a 5, para o usuário comparar antes de escolher.
+EIXOS = ('desempenho', 'leveza', 'espaço', 'bateria', 'privacidade', 'conforto')
+EIXO_DESCR = {'desempenho': 'FPS e resposta', 'leveza': 'menos RAM e processos', 'espaço': 'libera disco', 'bateria': 'dura mais',
+              'privacidade': 'menos coleta', 'conforto': 'menos atrito no dia a dia'}
+FOCO_PERFIL = {
+    'jogo':        {'desempenho': 5, 'leveza': 2, 'privacidade': 1},
+    'bateria':     {'leveza': 2, 'bateria': 5, 'privacidade': 1},
+    'fraco':       {'desempenho': 3, 'leveza': 5, 'espaço': 4, 'bateria': 1, 'privacidade': 2},
+    'privacidade': {'leveza': 1, 'privacidade': 5},
+    'dev':         {'desempenho': 1, 'espaço': 1, 'conforto': 5},
+    'trabalho':    {'espaço': 2, 'privacidade': 3},
+}
+# (para quem é, o que você perde, risco)
+PERFIL_NOTAS = {
+    'jogo':        ('quem joga no PC ligado na tomada', 'apps em segundo plano deixam de atualizar; o CS2 fica com gráficos mais simples', 'médio'),
+    'bateria':     ('notebook longe da tomada', 'desempenho máximo; animações e transparência', 'baixo'),
+    'fraco':       ('PC com pouca RAM ou HD lento', 'animações, widgets e Copilot; o Windows fica mais "seco"', 'médio'),
+    'privacidade': ('quem não quer ser medido pelo Windows', 'Copilot, Recall, histórico de atividades e busca na web do menu Iniciar', 'médio'),
+    'dev':         ('quem programa', 'nada que pese: só muda o que atrapalha o trabalho', 'baixo'),
+    'trabalho':    ('PC de trabalho, de empresa ou escola', 'quase nada: só o que não tem contrapartida', 'mínimo'),
+}
+
+
+def mostra_perfil(t, chave, detalhado=True, recuo=6, desc=True):
+    """Nome, para quem é, barras do que ele ataca, o que se perde e o risco."""
+    nome, desc_, selecao = PERFIS[chave]
+    foco = FOCO_PERFIL.get(chave, {})
+    para, perde, risco = PERFIL_NOTAS.get(chave, ('', '', ''))
+    n = sum(len(v) if isinstance(v, (list, tuple)) else 0 for v in selecao.values())
+    mais = len([1 for v in selecao.values() if isinstance(v, str)])
+    if desc:
+        t.paragrafo(f'{desc_}', recuo, 'sub')
+    if not detalhado:
+        return
+    if para:
+        t.paragrafo('para: ' + para, recuo, 'apagado')
+    for e in EIXOS:
+        v = foco.get(e, 0)
+        if v:
+            blocos = '█' * v + '░' * (5 - v)
+            t.escreve(' ' * recuo + t.p(f'{e:<12}', 'apagado') + t.p(blocos, 'destaque' if v >= 4 else 'texto') + ' ' + t.p(EIXO_DESCR[e], 'apagado'))
+    if perde:
+        t.paragrafo('você perde: ' + perde, recuo, 'apagado')
+    t.escreve(' ' * recuo + t.p('mexe em ', 'apagado') + t.p(f'cerca de {n + 6 * mais} itens' if mais else f'{n} itens', 'texto')
+              + t.p(' · risco ', 'apagado') + t.p(risco, 'verde' if risco in ('baixo', 'mínimo') else 'amarelo'))
 
 
 def selecao_do_perfil(ctx, selecao):
@@ -5580,13 +5644,8 @@ def aplica_selecao(ctx, args, titulo, selecao):
     total = 0
     for pac, its in alvo:
         total += len(its)
-        t.item('◆', 'destaque', pac.titulo, t.p(pl(len(its), 'item', 'itens'), 'apagado'))
-        for it in its[:8]:
-            t.paragrafo('· ' + corta(tela(it.titulo), 70), 6, 'sub')
-            if getattr(it, 'alerta', ''):
-                t.paragrafo('atenção: ' + it.alerta, 8, 'amarelo')
-        if len(its) > 8:
-            t.paragrafo(f'· e mais {len(its) - 8}', 6, 'apagado')
+        t.escreve('  ' + t.p(pac.titulo, 'texto', True) + '  ' + t.p(pl(len(its), 'item', 'itens'), 'apagado'))
+        resumo_antes(t, pac, its, titulo=False, recuo=4)
     t.nota('  Quase tudo volta com o "desfazer"; programas e apps removidos não voltam. Para ver item por item, use as telas de cada pacote.')
     if pc_gerenciado(ctx.perfil):
         t.aviso('Este PC parece ser gerenciado por empresa ou escola: a organização pode desfazer estas mudanças.')
@@ -5893,6 +5952,8 @@ def ferramenta_perfil(ctx, args):
             return 1
         titulo, desc, selecao = PERFIS[nome]
         t.aba(f'{titulo}: {desc}')
+        mostra_perfil(t, nome, recuo=2, desc=False)
+        t.escreve()
         return aplica_selecao(ctx, args, titulo, selecao)
     t.aba('perfis prontos, atalhos na área de trabalho, exportar e importar')
     t.paragrafo('Um perfil junta itens de vários pacotes para um uso. Você vê a prévia e confirma antes de qualquer mudança, '
@@ -5901,7 +5962,8 @@ def ferramenta_perfil(ctx, args):
     chaves = list(PERFIS)
     for i, k in enumerate(chaves, 1):
         t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(PERFIS[k][0], "texto", True)}')
-        t.paragrafo(PERFIS[k][1], 6, 'sub')
+        mostra_perfil(t, k)
+        t.escreve()
     t.titulo('outras ações')
     t.item('a', 'destaque', 'atalhos', t.p('pasta Katharos na área de trabalho, com ícone', 'apagado'))
     t.item('e', 'destaque', 'exportar', t.p('salva o que está aplicado para repetir em outro PC', 'apagado'))
@@ -6084,6 +6146,280 @@ def ferramenta_organizar(ctx, args):
     t.ok(f'{pl(len(movidos), "arquivo movido", "arquivos movidos")} para {PASTA_ORGANIZADO}' + (f'; {falhas} em uso ficaram onde estavam' if falhas else '') + '.')
     t.nota('  para voltar tudo: katharos organizar --desfazer')
     return 0
+
+# ███████████████████████████████████████████████████████████████████████████
+#   STEAM E CS2: SÓ LÊ E ORIENTA
+#   Regra: nada aqui toca em arquivo de jogo, na memória do jogo ou na Steam.
+#   O VAC procura programa estranho enganchado no jogo; o Katharos mexe só no Windows.
+# ███████████████████████████████████████████████████████████████████████████
+
+STEAM_PS = r'''
+$sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
+if (-not $sp) { $sp = Tenta { [string](Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam' -ErrorAction Stop).InstallPath } $null }
+if ($sp) { $sp = $sp -replace '/', '\' }
+$libs = @()
+if ($sp -and (Test-Path -LiteralPath $sp)) {
+  $libs += $sp
+  $vdf = Join-Path $sp 'steamapps\libraryfolders.vdf'
+  if (Test-Path -LiteralPath $vdf) {
+    foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw -ErrorAction SilentlyContinue), '"path"\s+"([^"]+)"')) { $libs += ($m.Groups[1].Value -replace '\\\\', '\') }
+  }
+}
+$libs = @($libs | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Sort-Object -Unique)
+$bib = @(); $jogos = @()
+foreach ($l in $libs) {
+  $letra = ([string]$l).Substring(0, 1)
+  $tipo = Tenta { $d = Get-Partition -DriveLetter $letra -ErrorAction Stop | Get-Disk -ErrorAction Stop; $f = Get-PhysicalDisk -ErrorAction Stop | Where-Object { [string]$_.DeviceId -eq [string]$d.Number } | Select-Object -First 1; @{ midia = [string]$f.MediaType; barramento = [string]$f.BusType } } @{ midia = ''; barramento = '' }
+  $vol = Tenta { Get-Volume -DriveLetter $letra -ErrorAction Stop } $null
+  $bib += [pscustomobject]@{ pasta = [string]$l; midia = $tipo.midia; barramento = $tipo.barramento; livre = $(if ($vol) { [int64]$vol.SizeRemaining } else { 0 }); total = $(if ($vol) { [int64]$vol.Size } else { 0 }) }
+  foreach ($a in @(Get-ChildItem -LiteralPath (Join-Path $l 'steamapps') -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)) {
+    $t = Get-Content -LiteralPath $a.FullName -Raw -ErrorAction SilentlyContinue
+    $nome = if ($t -match '"name"\s+"([^"]+)"') { $Matches[1] } else { '' }
+    $id = if ($t -match '"appid"\s+"(\d+)"') { $Matches[1] } else { '' }
+    $tam = if ($t -match '"SizeOnDisk"\s+"(\d+)"') { [int64]$Matches[1] } else { 0 }
+    $jogos += [pscustomobject]@{ nome = $nome; appid = $id; bytes = $tam; pasta = [string]$l }
+  }
+}
+$cs2 = ''
+foreach ($l in $libs) { $c = Join-Path $l 'steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe'; if (Test-Path -LiteralPath $c) { $cs2 = $c; break } }
+$pref = ''
+if ($cs2) { $pref = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction Stop).$cs2 } '' }
+$run = Tenta { [bool]((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction Stop).PSObject.Properties.Name -contains 'Steam') } $false
+$hz = @(Tenta { Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.CurrentRefreshRate } | ForEach-Object { [pscustomobject]@{ placa = [string]$_.Name; hz = [int]$_.CurrentRefreshRate } } } @())
+$dvr = Tenta { [int](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' -ErrorAction Stop).AppCaptureEnabled } $null
+$plano = Tenta { [string](powercfg /getactivescheme) } ''
+Dado 'steam' @{ pasta = $sp; bibliotecas = (Lista $bib); jogos = (Lista $jogos); cs2 = $cs2; cs2_gpu = $pref; abre_com_windows = $run; telas = (Lista $hz); dvr = $dvr; plano = $plano }
+'''
+
+CS2_APPID = '730'
+
+
+def _gb(b):
+    return gb((b or 0) / 1024 ** 3)
+
+
+def avalia_steam(d, p):
+    """[(impacto, título, explicação, comando ou '')] a partir do que o STEAM_PS leu."""
+    A = []
+    libs = [b for b in (d.get('bibliotecas') or []) if isinstance(b, dict)]
+    jogos = [j for j in (d.get('jogos') or []) if isinstance(j, dict)]
+    cs2 = str(d.get('cs2') or '')
+
+    def lib_de(pasta):
+        for b in libs:
+            if str(b.get('pasta', '')).lower() == str(pasta).lower():
+                return b
+        return {}
+    if cs2:
+        b = next((x for x in libs if cs2.lower().startswith(str(x.get('pasta', '')).lower())), {})
+        if str(b.get('midia')).upper() == 'HDD':
+            A.append((3, 'CS2 está num HD', 'Mapas e texturas carregam devagar e o jogo engasga quando lê o disco.',
+                      'Steam › CS2 › Propriedades › Arquivos instalados › Mover pasta de instalação, para um SSD.'))
+        if str(b.get('barramento')).upper() == 'USB':
+            A.append((2, 'CS2 está num disco USB', 'Disco externo é mais lento e pode desconectar no meio da partida.',
+                      'Mova para um disco interno pela própria Steam (Propriedades › Arquivos instalados).'))
+    for b in libs:
+        tot, livre = b.get('total') or 0, b.get('livre') or 0
+        if tot and livre / tot < .08:
+            A.append((2, f'biblioteca {tela(str(b.get("pasta")))} quase cheia', f'Só {_gb(livre)} livres: atualização de jogo pode falhar.',
+                      'rode "limpar" ou "grandes", ou desinstale um jogo parado pela Steam.'))
+    hz = [x for x in (d.get('telas') or []) if isinstance(x, dict)]
+    if any((x.get('hz') or 0) in (59, 60) for x in hz):
+        A.append((2, 'tela a 60 Hz', 'Se o seu monitor é de 144 Hz ou mais, o Windows pode estar usando só 60.',
+                  'Configurações › Sistema › Tela › Tela avançada › Taxa de atualização. No CS2, use a mesma taxa.'))
+    if d.get('dvr') == 1:
+        A.append((2, 'gravação em segundo plano ligada', 'A Game Bar grava os últimos minutos o tempo todo.', 'jogos'))
+    if re.search(r'economia|power saver|equilibrado|balanced', str(d.get('plano') or ''), re.I) and not pf(p, 'pc.notebook'):
+        A.append((1, 'plano de energia comum', 'Em PC de mesa, o plano de alto desempenho segura o clock em jogo.', 'energia'))
+    if d.get('abre_com_windows'):
+        A.append((1, 'Steam abre com o Windows', 'Ela fica rodando e atualizando jogos mesmo quando você não vai jogar.',
+                  'inicializacao (ou Steam › Configurações › Interface › "Executar a Steam ao iniciar o computador")'))
+    if cs2 and len(lista(p.get('gpus'))) >= 2 and not str(d.get('cs2_gpu') or '').startswith('GpuPreference=2'):
+        A.append((2, 'CS2 sem placa de vídeo definida', 'Neste PC há duas placas; o Windows pode abrir o jogo na integrada.',
+                  'Configurações › Sistema › Tela › Gráficos › cs2.exe › Alto desempenho.'))
+    return sorted(A, key=lambda a: -a[0]), jogos, libs
+
+
+DICAS_CS2 = [
+    ('Na Steam (você muda, é permitido)', [
+        'Configurações › Downloads: desligue "Permitir downloads durante o jogo".',
+        'Configurações › Interface: desligue "Executar a Steam ao iniciar o computador" se não joga todo dia.',
+        'Configurações › Biblioteca: "Modo de baixo desempenho" deixa a Steam mais leve em PC fraco.',
+        'Overlay da Steam: desligar é opcional. Ligado não dá VAC; desligado pesa um pouco menos.',
+    ]),
+    ('Opções de inicialização do CS2', [
+        'Steam › CS2 › Propriedades › Geral. Quase todas as opções antigas (-threads, -tickrate, -freq) '
+        'não fazem nada no CS2 ou já são o padrão. Pode deixar em branco.',
+    ]),
+    ('Dentro do CS2 (Configurações › Vídeo)', [
+        'Resolução e taxa de atualização iguais às do monitor.',
+        'NVIDIA Reflex ligado (placas NVIDIA): menos atraso entre o clique e a tela.',
+        'Sombras, oclusão de ambiente e MSAA são os que mais pesam. Baixe esses primeiro.',
+        'V-Sync desligado. Se a tela "rasgar", limite os FPS um pouco acima da taxa do monitor.',
+    ]),
+    ('O que dá ban (e o Katharos não faz)', [
+        'Programa que injeta código no jogo, troca DLLs do jogo ou lê a memória dele: VAC.',
+        '"FPS boosters" que mexem nos arquivos do CS2 ou "limpam" a pasta do jogo: risco de VAC e de corromper o jogo.',
+        'Se algo pede para desligar o anti-cheat ou rodar junto com o jogo para "otimizar", não use.',
+        'O Katharos só lê a Steam e só muda configurações do Windows. Nenhum arquivo do jogo é tocado.',
+    ]),
+]
+
+
+def ferramenta_steam(ctx, args):
+    t = ctx.t
+    t.aba('Steam e CS2: o que está atrapalhando, sem tocar no jogo')
+    t.paragrafo('Só leio: onde estão seus jogos, em que tipo de disco, a taxa da tela e o que a Steam faz no fundo. '
+                'Nada aqui muda arquivo de jogo, então não existe risco de VAC.', 2, 'sub')
+    if not WINDOWS:
+        t.erro('O katharos só funciona no Windows.')
+        return 1
+    perfil_pc(ctx)
+    with Progresso(t, None, 'lendo a Steam') as pr:
+        s = roda_ps(t, STEAM_PS, 'steam', minutos=2, mostra=False, pr=pr)
+    d = s.dados.get('steam') or {}
+    if not d.get('pasta'):
+        t.nota('  Não achei a Steam neste PC. As dicas de Windows para jogos estão em "jogos".')
+        return 0
+    achados, jogos, libs = avalia_steam(d, ctx.perfil or {})
+    if libs:
+        t.titulo('bibliotecas')
+    for b in libs:
+        midia = str(b.get('midia') or '?').upper().replace('UNSPECIFIED', '?')
+        cor = 'vermelho' if midia == 'HDD' else ('verde' if midia == 'SSD' else 'apagado')
+        t.item('·', 'apagado', corta_esq(tela(str(b.get('pasta'))), 40), t.p(midia, cor) + t.p(f'  {_gb(b.get("livre"))} livres', 'apagado'))
+    if jogos:
+        t.titulo('maiores jogos instalados')
+        for j in sorted(jogos, key=lambda x: -(x.get('bytes') or 0))[:8]:
+            nome = tela(str(j.get('nome') or '?'))
+            t.item('·', 'destaque' if str(j.get('appid')) == CS2_APPID else 'apagado', corta(nome, 40), t.p(_gb(j.get('bytes')), 'apagado'))
+    t.titulo('o que encontrei' if achados else 'tudo certo')
+    if not achados:
+        t.ok('Nada atrapalhando do lado do Windows e da Steam.')
+    for imp, tit, expl, faz in achados:
+        icone, cor = {3: ('■', 'vermelho'), 2: ('●', 'amarelo'), 1: ('·', 'azul')}[imp]
+        cmd = faz if faz in COMANDOS else ''
+        t.item(icone, cor, tit, t.p(cmd, 'destaque') if cmd else '')
+        t.paragrafo(expl, 6, 'sub')
+        if faz and not cmd:
+            t.paragrafo(faz, 6, 'apagado')
+    for titulo, linhas in DICAS_CS2:
+        t.titulo(titulo.lower())
+        for ln in linhas:
+            t.paragrafo('· ' + ln, 4, 'sub')
+    rel_secao('steam', {'bibliotecas': [{k: b.get(k) for k in ('midia', 'barramento', 'livre', 'total')} for b in libs],
+                        'jogos': len(jogos), 'cs2': bool(d.get('cs2')),
+                        'achados': [{'impacto': a[0], 'titulo': a[1]} for a in achados]})
+    return 0
+
+
+# ─────────────── pacote cs2: só o que é permitido ───────────────
+# Tudo aqui é configuração do Windows para o cs2.exe ou um .cfg com comandos normais do próprio jogo
+# (nenhum com a marca "cheat"). Nada abre, troca ou apaga arquivo do jogo, e nada roda junto com ele.
+# Fonte dos comandos: lista oficial de variáveis do CS2 na wiki de desenvolvedores da Valve.
+
+ACHA_CS2 = r'''
+$__sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
+$__libs = @()
+if ($__sp) { $__sp = $__sp -replace '/', '\'; $__libs += $__sp
+  $__v = Join-Path $__sp 'steamapps\libraryfolders.vdf'
+  if (Test-Path -LiteralPath $__v) { foreach ($__m in [regex]::Matches((Get-Content -LiteralPath $__v -Raw), '"path"\s+"([^"]+)"')) { $__libs += ($__m.Groups[1].Value -replace '\\\\', '\') } } }
+$CS2 = ''; $CS2CFG = ''
+foreach ($__l in ($__libs | Select-Object -Unique)) {
+  $__b = Join-Path $__l 'steamapps\common\Counter-Strike Global Offensive\game'
+  if (Test-Path -LiteralPath (Join-Path $__b 'bin\win64\cs2.exe')) { $CS2 = Join-Path $__b 'bin\win64\cs2.exe'; $CS2CFG = Join-Path $__b 'csgo\cfg'; break }
+}
+if (-not $CS2) { Aviso 'CS2 nao encontrado nas bibliotecas da Steam'; return }
+'''
+
+CFG_CS2 = '''// katharos.cfg: criado pelo Katharos. Só comandos normais do CS2, nenhum precisa de sv_cheats.
+// Para valer: Steam > CS2 > Propriedades > Opções de inicialização: +exec katharos
+// Para tirar: apague este arquivo (ou rode "katharos desfazer cs2").
+fps_max_ui 60            // menus a 60 FPS: a placa esfria fora da partida
+cl_autohelp 0            // sem dicas de ajuda na tela
+gameinstructor_enable 0  // sem lições para jogador novo
+'''
+
+
+# chaves do cs2_video.txt: só os valores de chaves que JÁ existem no arquivo são trocados; chave ausente fica como está.
+VIDEO_CS2 = {
+    'setting.msaa_samples': '0',
+    'setting.r_csgo_cmaa_enable': '1',
+    'setting.mat_vsync': '0',
+    'setting.r_aoproxy_enable': '0',
+    'setting.r_particle_max_detail_level': '0',
+    'setting.shaderquality': '0',
+    'setting.r_player_visibility_mode': '1',
+}
+
+
+@pacote('cs2', 'CS2', 'Counter-Strike 2: vídeo para FPS, placa certa, tela cheia e um .cfg só com comandos do jogo',
+        'Ajustes para o CS2 que não arriscam VAC: configurações do Windows para o cs2.exe e um arquivo de configuração '
+        'com comandos que o próprio jogo aceita. Os únicos arquivos tocados são os de configuração do seu usuário (vídeo e um .cfg à parte), '
+        'com cópia antes. Arquivo do jogo, textura e memória ficam intocados. Céu preto não está aqui: no CS2 os comandos de céu exigem '
+        'sv_cheats, e o caminho que sobra é trocar textura, que servidores oficiais bloqueiam e pode dar ban.')
+def itens_cs2(ctx):
+    p = ctx.perfil or {}
+    if 'Steam' not in lista(pf(p, 'jogos', [])):
+        return []
+    hibrido = len(lista(p.get('gpus'))) >= 2
+    gpu = ACHA_CS2 + r'''
+$__a = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction Stop).$CS2 } ''
+if ($__a -notmatch 'GpuPreference=2') { $__n = (($__a -replace 'GpuPreference=\d;', '') + 'GpuPreference=2;'); Set-Valor 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' $CS2 $__n 'String' 'cs2.exe na placa dedicada' | Out-Null }'''
+    fso = ACHA_CS2 + r'''
+$__k = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
+$__a = Tenta { [string](Get-ItemProperty $__k -ErrorAction Stop).$CS2 } ''
+if ($__a -notmatch 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { $__n = ('~ ' + (($__a -replace '^~\s*', '') + ' DISABLEDXMAXIMIZEDWINDOWEDMODE').Trim()); Set-Valor $__k $CS2 $__n 'String' 'cs2.exe sem otimizacoes de tela inteira' | Out-Null }'''
+    janela = r'''
+$__k = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
+$__a = Tenta { [string](Get-ItemProperty $__k -ErrorAction Stop).DirectXUserGlobalSettings } ''
+if ($__a -notmatch 'SwapEffectUpgradeEnable=1') { $__n = (($__a -replace 'SwapEffectUpgradeEnable=\d;', '') + 'SwapEffectUpgradeEnable=1;'); Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizacoes para jogos em janela' | Out-Null }'''
+    cfg = ACHA_CS2 + r'''
+$__f = Join-Path $CS2CFG 'katharos.cfg'
+if (Test-Path -LiteralPath $__f) { Ok 'katharos.cfg ja existe'; return }
+if ($TESTE) { Plano ('criar ' + $__f); return }
+Set-Content -LiteralPath $__f -Value «cfg» -Encoding UTF8
+Guarda-Desfazer 'cs2-cfg' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "' -ErrorAction SilentlyContinue")
+Feito 'katharos.cfg criado; ponha +exec katharos nas opcoes de inicializacao do CS2' '''.replace('«cfg»', psq(CFG_CS2))
+    video = r"""
+if (Get-Process cs2 -ErrorAction SilentlyContinue) { Aviso 'feche o CS2 antes: ele regrava o arquivo de video ao sair'; return }
+$__sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
+if (-not $__sp) { Aviso 'Steam nao encontrada'; return }
+$__arqs = @(Get-ChildItem -Path (Join-Path ($__sp -replace '/', '\') 'userdata\*\730\local\cfg\cs2_video.txt') -ErrorAction SilentlyContinue)
+if (-not $__arqs.Count) { Aviso 'cs2_video.txt nao encontrado: abra o CS2 uma vez e feche'; return }
+$__alvo = «alvo»
+foreach ($__a in $__arqs) {
+  $__t = Get-Content -LiteralPath $__a.FullName -Raw
+  $__n = $__t
+  foreach ($__k in $__alvo.Keys) { $__n = [regex]::Replace($__n, '("' + [regex]::Escape($__k) + '"\s+")[^"]*(")', ('${1}' + $__alvo[$__k] + '${2}')) }
+  if ($__n -eq $__t) { continue }
+  if ($TESTE) { Plano ('ajustar ' + $__a.FullName); continue }
+  $__b = $__a.FullName + '.katharos.bak'
+  if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a.FullName -Destination $__b }
+  Set-Content -LiteralPath $__a.FullName -Value $__n -NoNewline -Encoding UTF8
+  Guarda-Desfazer ('cs2-video|' + $__a.FullName) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a.FullName -replace "'", "''") + "' -Force")
+  Feito ('video do CS2 ajustado: ' + $__a.Directory.Parent.Parent.Parent.Name)
+}""".replace('«alvo»', '@{ ' + '; '.join(f"'{k}' = '{v}'" for k, v in VIDEO_CS2.items()) + ' }')
+    # cada item roda num bloco próprio: o "return" do ACHA_CS2 sai só do item, não do script inteiro
+    gpu, janela, fso, cfg, video = ('& {\n' + x + '\n}' for x in (gpu, janela, fso, cfg, video))
+    return [
+        Item('gpu-cs2', 'CS2 na placa de vídeo dedicada', 'O mesmo que Configurações › Tela › Gráficos › cs2.exe › Alto desempenho. '
+             'Em notebook com duas placas, o Windows às vezes abre o jogo na integrada.', 'muito mais FPS se ele estava na integrada',
+             'mais consumo de bateria durante o jogo', 2, gpu) if hibrido else None,
+        Item('janela-otim', 'otimizações para jogos em janela', 'Opção do Windows 11 (Configurações › Tela › Gráficos) que dá ao modo '
+             '"tela cheia em janela" a latência da tela cheia de verdade.', 'menos atraso no modo janela sem bordas',
+             'nenhum conhecido; alguns jogos antigos ignoram', 2, janela) if pf(p, 'so.win11') else None,
+        Item('fso-cs2', 'CS2 sem otimizações de tela inteira', 'A opção da aba Compatibilidade do cs2.exe. Em alguns PCs reduz o '
+             'atraso em tela cheia, em outros piora: teste uma partida e desfaça se não sentir diferença.', 'às vezes menos atraso',
+             'às vezes Alt+Tab mais lento ou tela piscando', 0, fso),
+        Item('video-cs2', 'vídeo do CS2 no preset de FPS', 'Ajusta o arquivo de vídeo do jogo (o mesmo que o menu Vídeo grava): '
+             'MSAA desligado com CMAA2 no lugar, oclusão de ambiente, partículas e shader no baixo, V-Sync desligado e contraste de '
+             'jogadores ligado. Sombras e resolução ficam como estão, porque ajudam a ver o inimigo. Faz cópia antes; o CS2 precisa estar fechado.',
+             'é onde mais se ganha FPS no CS2', 'o jogo fica menos bonito (fumaça e reflexos mais simples)', 2, video),
+        Item('cfg-cs2', 'katharos.cfg com comandos do próprio jogo', 'Cria um arquivo à parte (não mexe no seu autoexec) com '
+             'menus a 60 FPS e sem dicas de ajuda. Para valer, você põe +exec katharos nas opções de inicialização.',
+             'placa mais fria nos menus; tela mais limpa', 'nada; o arquivo só vale se você mandar o jogo carregar', 2, cfg),
+    ]
 
 
 # ───────────────────────────── ícone do Katharos (ICO com 5 tamanhos, embutido) ─────────────────────────────
@@ -7173,7 +7509,7 @@ GRUPOS = [
     ('comece por aqui', 'o raio-x diz o que vale a pena; o turbo faz tudo de uma vez', [
         ('raiox', 'diagnóstico completo, nota e o que fazer', 'ferramenta_raiox'),
         ('turbo', 'otimiza tudo em sequência, com reinício', 'ferramenta_turbo'),
-        ('perfil', 'perfis prontos (jogo, bateria, PC fraco...), atalhos e exportar', 'ferramenta_perfil'),
+        ('perfil', 'perfis (jogo, bateria...), atalhos e exportar', 'ferramenta_perfil'),
     ]),
     ('conhecer o PC', 'só olha, não muda nada', [
         ('medir', 'CPU, RAM, disco e temperatura agora', 'ferramenta_medir'),
@@ -7199,26 +7535,30 @@ GRUPOS = [
         ('ia', 'Copilot, Recall e IA do Windows', 'pacote'),
         ('navegador', 'Chrome, Edge e Brave mais leves', 'pacote'),
     ]),
-    ('desempenho', 'jogos, energia, disco e internet', [
+    ('desempenho', 'jogos, Steam, energia, disco e internet', [
         ('jogos', 'Modo de Jogo, prioridades, latência', 'pacote'),
         ('energia', 'plano de energia, turbo e USB', 'pacote'),
         ('disco', 'menos escrita, boot mais rápido', 'pacote'),
         ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
+        ('steam', 'Steam: disco, tela e o que atrapalha (só lê)', 'ferramenta_steam'),
+        ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
     ]),
-    ('consertar e atualizar', 'quando algo está quebrado ou velho', [
+    ('consertar e manter em dia', 'quando algo quebra ou envelhece', [
         ('reparar', 'DISM, SFC, chkdsk, rede e Update', 'pacote'),
         ('atualizar', 'Windows, drivers e programas', 'pacote'),
+        ('agendar', 'manutenção semanal automática', 'ferramenta_agendar'),
     ]),
     ('gosto pessoal', 'aparência e atalhos; nada aqui vem marcado', [
-        ('ajustes', 'barra, tema, relógio, Num Lock, Update', 'pacote'),
+        ('ajustes', 'barra, relógio, Num Lock, atualizações', 'pacote'),
         ('interface', 'área de trabalho e atalhos do Edge', 'pacote'),
     ]),
-    ('segurança e manutenção', 'voltar atrás, conferir e manter o PC em dia', [
+    ('voltar atrás e conferir', 'ver o que mudou e voltar', [
         ('desfazer', 'volta qualquer mudança, valor por valor', 'ferramenta_desfazer'),
         ('restaurar', 'pontos de restauração do Windows', 'ferramenta_restaurar'),
         ('verificar', 'confere se o que foi aplicado continua valendo', 'ferramenta_verificar'),
-        ('agendar', 'manutenção semanal automática', 'ferramenta_agendar'),
         ('estado', 'o que já foi aplicado neste PC', 'ferramenta_estado'),
+    ]),
+    ('resultado e preferências', 'mostrar e configurar', [
         ('cartao', 'antes e depois, num cartão para mostrar', 'ferramenta_cartao'),
         ('relatorio', 'o relatório único: copiar para a IA ou salvar', 'ferramenta_relatorio'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
@@ -7305,6 +7645,7 @@ def monta_parser():
     org.add_argument('--dias', type=int, help='deixa quieto o que foi mexido nos últimos N dias (padrão 1)')
     org.add_argument('--atalhos', action='store_true', help='também junta os atalhos numa pasta')
     org.add_argument('--desfazer', action='store_true', help='põe de volta o que a última organização moveu')
+    sub.add_parser('steam', parents=[depois], help='Steam e CS2: só lê e orienta, sem tocar nos jogos')
     sub.add_parser('verificar', parents=[depois], help='confere se o que foi aplicado continua valendo')
     sub.add_parser('cartao', parents=[depois], help='antes e depois, num cartão')
     re_ = sub.add_parser('relatorio', parents=[depois], help='o relatório único: copiar, salvar ou apagar')
