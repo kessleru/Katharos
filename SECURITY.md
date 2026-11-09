@@ -2,11 +2,12 @@
 
 ## Verificar o que você baixou
 
-O Katharos é um arquivo só (`katharos.py`) e um lançador (`katharos.ps1`). Confira que são os do repositório:
+O Katharos é um arquivo só (`programa\katharos.py`) e um lançador (`programa\katharos.ps1`), chamados pelo `KATHAROS.bat`. Confira que são os do repositório:
 
 ```powershell
-python katharos.py --sha256
-Get-FileHash katharos.ps1 -Algorithm SHA256
+python programa\katharos.py --sha256
+Get-FileHash programa\katharos.ps1 -Algorithm SHA256
+Get-FileHash KATHAROS.bat -Algorithm SHA256
 ```
 
 Compare com o `SHA256SUMS.txt` da versão em https://github.com/kessleru/Katharos. Se os valores não baterem, não rode.
@@ -17,7 +18,7 @@ Desligar Defender, firewall, UAC, SmartScreen, VBS, Windows Update, BitLocker ou
 
 ## Ver o que ele vai executar
 
-`katharos.py --codigo` (ou `v 3` na tela de escolha) mostra o PowerShell exato de cada item. O código é aberto e legível: ler o arquivo é a melhor auditoria.
+`--codigo` (ou `v 3` na tela de escolha) mostra o PowerShell exato de cada item. O código é aberto e legível: ler o arquivo é a melhor auditoria.
 
 ## Dados
 

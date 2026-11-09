@@ -2915,7 +2915,7 @@ def precisa_admin(ctx, args):
         else:
             t.erro('Não consegui abrir como administrador.')
     else:
-        t.paragrafo('Feche e abra o terminal com o botão direito > Executar como administrador, ou use o KATHAROS.bat (ele já abre como administrador).', 2, 'apagado')
+        t.paragrafo('Feche e abra o terminal com o botão direito > Executar como administrador, ou abra pelo KATHAROS.bat ou pelo atalho na área de trabalho (eles já abrem como administrador).', 2, 'apagado')
     return False
 
 
@@ -7668,8 +7668,29 @@ def _defaults(args):
     return args
 
 
+def primeira_vez(ctx):
+    """Na primeira abertura, oferece o atalho com ícone na área de trabalho: depois disso a pasta baixada pode ir embora."""
+    t = ctx.t
+    if not WINDOWS or not t.interativo or estado().get('atalhos_oferecido') or estado().get('atalhos_criados'):
+        return
+    marca_estado('atalhos_oferecido', agora_iso())
+    t.limpa()
+    t.logo('KATHAROS')
+    t.titulo('primeira vez')
+    t.paragrafo('Posso criar uma pasta "Katharos" na sua área de trabalho, com o ícone, um atalho para abrir o menu e outro '
+                'para desfazer tudo. O programa é copiado para a sua pasta de usuário, então a pasta que você baixou pode '
+                'ser apagada depois.', 2, 'sub')
+    t.paragrafo('Mais atalhos (um por perfil) ficam em "perfil" > atalhos.', 2, 'apagado')
+    if t.confirma('Criar a pasta Katharos na área de trabalho?'):
+        s = cria_atalhos(ctx, ['menu', 'normal'])
+        if s.ok:
+            marca_estado('atalhos_criados', agora_iso())
+        t.pergunta('Enter para abrir o menu')
+
+
 def menu(ctx, parser, args):
     t = ctx.t
+    primeira_vez(ctx)
     aviso = ''
     usados = estado().get('usado', {})
     while True:

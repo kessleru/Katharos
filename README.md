@@ -10,7 +10,9 @@ Site: **[kessleru.github.io/Katharos](https://kessleru.github.io/Katharos)**
 
 ## Rodando
 
-[Baixe o ZIP](https://github.com/kessleru/Katharos/archive/refs/heads/main.zip), extraia e clique duas vezes no **`KATHAROS.bat`**. Ele:
+[Baixe o ZIP](https://github.com/kessleru/Katharos/archive/refs/heads/main.zip) e extraia. Ele traz só duas coisas: o **`KATHAROS.bat`**, que é onde você clica, e a pasta `programa`, que ele usa. Na primeira vez, o Katharos oferece criar uma pasta **Katharos** na área de trabalho, com ícone; depois disso a pasta baixada pode ser apagada.
+
+O `KATHAROS.bat`:
 
 1. acha o Python que você já tem (Python Launcher, PATH, registro, pastas comuns e até o da Microsoft Store) e só instala o oficial pelo winget se não houver nenhum;
 2. abre o Katharos como administrador no melhor terminal do PC: **Windows Terminal**, senão PowerShell 7, senão Windows PowerShell.
@@ -22,7 +24,7 @@ KATHAROS.bat turbo                 :: tudo em sequência, com reinício e retoma
 KATHAROS.bat privacidade --teste   :: mostra o que faria, sem alterar nada
 ```
 
-Ou direto, num PowerShell aberto como administrador: `python katharos.py [comando] [opções]`.
+Ou direto, num PowerShell aberto como administrador: `python programa\katharos.py [comando] [opções]`.
 
 ## Modos
 
@@ -114,7 +116,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 - **Relatório único.** Em vez de um arquivo por ferramenta, tudo vai para `katharos-relatorio.md` (com um bloco JSON): PC, raio-x, segurança, o que foi aplicado, avisos e erros com dica, e o que o Katharos não reconheceu. É feito para mandar a uma IA melhorar a base de dados. Tudo que vem do PC (nomes de programa, de arquivo, mensagens) é limpo antes de entrar (sem controle, sem Markdown, sem frases que pareçam ordens) e o arquivo avisa que é dado, não instrução. Confira antes de compartilhar: tem o nome do PC, os programas instalados e caminhos de pastas.
 - **Jogos sem risco de ban.** Nada toca em arquivo ou memória de jogo, e nada roda junto com ele. No CS2, só os arquivos de configuração do usuário (o mesmo que o menu do jogo grava) e um `.cfg` à parte, com cópia antes. Céu preto e texturas trocadas não existem aqui: no CS2 os comandos de céu exigem `sv_cheats`, e trocar textura é bloqueado em servidor oficial.
 - **Perfil importado nunca é executado.** `perfil importar` só escolhe, entre os itens que o Katharos já conhece, quais aplicar, depois da prévia e da confirmação.
-- **Verifique o download.** `katharos.py --sha256` deve bater com o `SHA256SUMS.txt` do repositório. Veja o [SECURITY.md](SECURITY.md).
+- **Verifique o download.** `python programa\katharos.py --sha256` deve bater com o `SHA256SUMS.txt` do repositório. Veja o [SECURITY.md](SECURITY.md).
 
 Relatório, medidas, backups, logs e preferências ficam em `%USERPROFILE%\.katharos`.
 
@@ -128,14 +130,14 @@ Relatório, medidas, backups, logs e preferências ficam em `%USERPROFILE%\.kath
 ## Estrutura
 
 ```
-katharos.py
+programa\katharos.py
   NÚCLEO          kterm (terminal Kessleru) · preferências · PowerShell vigiado · backup e desfazer
   PARTE 1         perfil do PC · medidas · raio-x e regras do diagnóstico
   PARTE 2         itens, tela de escolha e execução
   PARTE 3         os pacotes (limpar … interface, rede, ajustes)
   PARTE 4         turbo, manutenção, restaurar, desfazer, estado, grandes, memória
   PARTE 5         menu e linha de comando
-KATHAROS.bat      chama o katharos.ps1
-katharos.ps1      acha o Python, escolhe o terminal e abre como administrador
+KATHAROS.bat               chama o programa\katharos.ps1
+programa\katharos.ps1      acha o Python, escolhe o terminal e abre como administrador
 docs/             o site (GitHub Pages)
 ```
