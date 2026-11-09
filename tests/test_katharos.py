@@ -1631,7 +1631,8 @@ class TestAvisoDeUso(unittest.TestCase):
             self.assertFalse(k.aviso_aceito())
 
     def test_sem_terminal_e_sem_aceite_nao_aplica(self):
-        with mock.patch.object(k, 'estado', return_value={}), mock.patch.object(k, 'AVISOS_INICIO', []):
+        with mock.patch.object(k, 'estado', return_value={}), mock.patch.object(k, 'AVISOS_INICIO', []), \
+                mock.patch.object(k, 'AVISO_VIVO', None):
             self.assertEqual(k.main(['turbo']), 1)
 
     def test_aviso_e_licenca_existem(self):
