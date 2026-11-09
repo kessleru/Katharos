@@ -26,6 +26,8 @@ Pacote do CS2 mais completo e catálogo de jogos maior.
 - **`cs2` e `steam` leem o vídeo atual** (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.
 - **Catálogo com 61 jogos em 6 categorias**, todos sem anti-cheat de terceiros, que recebem prioridade de CPU. O CS:GO saiu: virou CS2.
 - **Prioridade para jogos com anti-cheat** virou item à parte, desligado por padrão (`prioridade-jogos-ac`), com aviso. Nenhum perfil o marca.
+- **`dns-teste`** (pacote `rede`): consulta 6 sites 5 vezes em cada DNS direto no servidor e mostra mediana, faixa típica e falhas. Só diz que vale trocar se a diferença passar de 5 ms, de 25% e do ruído. Os itens de DNS saíram do modo equilibrado e não prometem mais "o mais rápido". O `ping` agora mostra mediana, oscilação e perda em 10 pacotes.
+- **Textos honestos**: `mmcss`, `primeiro-plano` e `rede-jogos` deixaram de vir marcados no perfil de jogo. O MMCSS só mexe em `SystemResponsiveness` e na categoria da tarefa Games (a Microsoft documenta que "GPU Priority" e "SFIO Priority" não são usados), e o `primeiro-plano` diz que 0x26 já é o padrão do Windows de cliente.
 
 ## 1.3.0 · 9 de novembro de 2026
 

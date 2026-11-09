@@ -4168,13 +4168,15 @@ def itens_jogos(ctx):
              'pequeno, e só quando algo disputa a CPU com o jogo', 'em PC fraco, música e Discord podem engasgar; sem garantia de que o anti-cheat aceite',
              0, prio_ac, minutos=4,
              alerta='anti-cheat rígido (Vanguard, FACEIT) pode reclamar de qualquer mudança no sistema; se o jogo reclamar, rode "desfazer"'),
-        Item('mmcss', 'agendador multimídia favorecendo jogos', 'Jogos ganham prioridade de GPU e CPU no agendador multimídia '
-             '(MMCSS) e o sistema reserva menos CPU para tarefas de fundo.', 'pequeno; ajuda jogos que usam o MMCSS',
-             'tarefas de fundo ficam com menos CPU enquanto joga', 2 if j else 3,
-             RR(R(mm, 'SystemResponsiveness', 10), R(mm, 'NoLazyMode', 1), R(mm, 'AlwaysOn', 1), R(mm + '\\Tasks\\Games', 'GPU Priority', 8), R(mm + '\\Tasks\\Games', 'Priority', 6),
-                R(mm + '\\Tasks\\Games', 'Scheduling Category', 'High', 'String'), R(mm + '\\Tasks\\Games', 'SFIO Priority', 'High', 'String'))),
-        Item('primeiro-plano', 'prioridade do primeiro plano', 'O programa em que você está mexendo ganha fatias maiores de CPU '
-             '(Win32PrioritySeparation 0x26).', 'pequeno; resposta um pouco melhor', 'tarefas de fundo um pouco mais lentas', 2 if j else 3,
+        Item('mmcss', 'agendador multimídia: menos CPU reservada ao fundo', 'Baixa a reserva de CPU para tarefas de fundo de 20% para 10% '
+             '(SystemResponsiveness) e põe a tarefa "Games" do agendador multimídia em categoria High. Só isso: a Microsoft documenta que '
+             '"GPU Priority" e "SFIO Priority" não são usados, então eles não são tocados. Só vale para jogos que usam o MMCSS.',
+             'pequeno e raramente medido; só em jogo que usa o agendador multimídia', 'tarefas de fundo ficam com menos CPU enquanto joga', 0,
+             RR(R(mm, 'SystemResponsiveness', 10), R(mm + '\\Tasks\\Games', 'Scheduling Category', 'High', 'String'))),
+        Item('primeiro-plano', 'prioridade do primeiro plano explícita', 'Grava Win32PrioritySeparation = 0x26, o valor que a opção "Programas" '
+             'do Windows grava em Desempenho. É o comportamento que o Windows de cliente já usa por padrão (fatias curtas, variáveis, com '
+             'reforço ao programa em uso): só muda alguma coisa se outro programa tiver alterado esse valor.',
+             'provavelmente nenhum, se o valor nunca foi mexido', 'nenhum', 0,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl', 'Win32PrioritySeparation', 38)),
         Item('mouse', 'sem aceleração do mouse', 'O ponteiro anda sempre a mesma distância para o mesmo movimento ("precisão aprimorada" desligada).',
              'mira mais consistente', 'em telas grandes o mouse parece mais lento até se acostumar', 2 if j else 0,
@@ -4202,7 +4204,7 @@ def itens_jogos(ctx):
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel', 'GlobalTimerResolutionRequests', 1)) if pf(p, 'so.win11') else None,
         Item('rede-jogos', 'rede: sem atraso de pacotes (Nagle) e sem limite multimídia', 'Confirmações TCP imediatas e sem o '
              'limitador de rede do agendador multimídia.', 'quase sempre zero ou mínimo (a maioria dos jogos usa UDP)',
-             'um pouco mais de pacotes na rede', 3, RR(nagle, R(mm, 'NetworkThrottlingIndex', -1))),
+             'um pouco mais de pacotes na rede', 0, RR(nagle, R(mm, 'NetworkThrottlingIndex', -1))),
         Item('mpo', 'desligar o Multiplane Overlay (MPO)', 'Correção conhecida para tela piscando, cintilação e engasgos com '
              'algumas placas NVIDIA e vários monitores.', 'só resolve se você tem esse problema', 'sem o problema, não muda nada (ou piora um pouco)', 0,
              R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm', 'OverlayTestMode', 5)),
@@ -4625,8 +4627,8 @@ def itens_navegador(ctx):
 
 # ═══════════════════════════════ rede ═══════════════════════════════
 
-DNS = [('cloudflare', 'Cloudflare', '1.1.1.1', '1.0.0.1', 'o mais rápido na maioria dos lugares do Brasil'),
-       ('google', 'Google', '8.8.8.8', '8.8.4.4', 'estável e rápido'),
+DNS = [('cloudflare', 'Cloudflare', '1.1.1.1', '1.0.0.1', 'resolvedor público com foco em privacidade'),
+       ('google', 'Google', '8.8.8.8', '8.8.4.4', 'resolvedor público do Google'),
        ('quad9', 'Quad9', '9.9.9.9', '149.112.112.112', 'bloqueia sites de golpe e malware'),
        ('adguard', 'AdGuard', '94.140.14.14', '94.140.15.15', 'bloqueia anúncios e rastreadores em todos os programas'),
        ('cloudflare-familia', 'Cloudflare Família', '1.1.1.3', '1.0.0.3', 'bloqueia malware e conteúdo adulto')]
@@ -4649,6 +4651,92 @@ if (-not $TESTE) { Clear-DnsClientCache -ErrorAction SilentlyContinue }
 '''
 
 
+def analisa_dns(amostras, atual):
+    """amostras: {ip: {dominio: [ms ou None]}}; atual: ip do DNS em uso. Devolve (linhas, veredito).
+    Cada servidor vira a mediana das medianas por domínio (a 1ª consulta de cada domínio é descartada: aquece o cache).
+    Só recomenda trocar se o melhor for pelo menos 5 ms e 25% mais rápido que o atual E o terceiro quartil dele ficar
+    abaixo da mediana do atual; senão o veredito é que não vale a troca."""
+    linhas = {}
+    for ip, doms in amostras.items():
+        meds, tudo, falhas, total = [], [], 0, 0
+        for d, v in doms.items():
+            v = list(v)
+            total += len(v)
+            falhas += sum(1 for x in v if x is None or x < 0)
+            ok = [x for x in (v[1:] if len(v) > 2 else v) if x is not None and x >= 0]
+            if ok:
+                meds.append(estatistica(ok)['mediana'])
+                tudo += ok
+        if not meds:
+            linhas[ip] = None
+            continue
+        ordem = sorted(tudo)
+        q = lambda f: ordem[min(len(ordem) - 1, int(f * len(ordem)))]
+        linhas[ip] = {'mediana': estatistica(meds)['mediana'], 'q1': q(0.25), 'q3': q(0.75), 'falhas': falhas, 'total': total}
+    ref = linhas.get(atual)
+    if not ref:
+        return linhas, 'sem medida do DNS atual: não dá para comparar'
+    melhor = min((ip for ip, r in linhas.items() if r and ip != atual), key=lambda i: linhas[i]['mediana'], default=None)
+    if melhor is None:
+        return linhas, 'só o DNS atual respondeu'
+    m = linhas[melhor]
+    dif = ref['mediana'] - m['mediana']
+    if dif >= 5 and dif >= 0.25 * ref['mediana'] and m['q3'] < ref['mediana'] and m['falhas'] <= ref['falhas']:
+        return linhas, f'{melhor} respondeu {dif:.0f} ms ({dif / ref["mediana"] * 100:.0f}%) mais rápido que o atual: a troca vale'
+    return linhas, 'nenhum servidor testado foi claramente mais rápido que o atual: não vale trocar só por velocidade'
+
+
+DNS_TESTE_PS = r'''
+$__cur = $null
+foreach ($__a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up')) {
+  $__s = @((Get-DnsClientServerAddress -InterfaceIndex $__a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+  if ($__s.Count) { $__cur = $__s[0]; break }
+}
+$__ips = @($__cur) + @('1.1.1.1', '8.8.8.8', '9.9.9.9', '94.140.14.14') | Where-Object { $_ } | Select-Object -Unique
+$__doms = 'google.com', 'youtube.com', 'facebook.com', 'globo.com', 'mercadolivre.com.br', 'steampowered.com'
+$__rows = New-Object System.Collections.Generic.List[object]
+foreach ($__ip in $__ips) {
+  Vivo ('DNS ' + $__ip)
+  foreach ($__d in $__doms) {
+    $__v = New-Object System.Collections.Generic.List[double]
+    for ($__i = 0; $__i -lt 5; $__i++) {
+      $__sw = [Diagnostics.Stopwatch]::StartNew()
+      $__r = Resolve-DnsName -Name $__d -Server $__ip -Type A -DnsOnly -NoHostsFile -QuickTimeout -ErrorAction SilentlyContinue
+      $__sw.Stop()
+      if ($__r) { $__v.Add([math]::Round($__sw.Elapsed.TotalMilliseconds, 1)) } else { $__v.Add(-1) }
+    }
+    $__rows.Add([pscustomobject]@{ ip = $__ip; dom = $__d; ms = @($__v) })
+  }
+}
+Dado 'dns_atual' ([string]$__cur)
+Dado 'dns_teste' (Lista $__rows)
+'''
+
+
+def _py_dns_teste(ctx, it, pr, teste):
+    """Mede a resposta real de cada DNS (sem cache local) e só recomenda trocar quando a diferença passa do ruído."""
+    if not WINDOWS:
+        ctx.t.paragrafo('O teste de DNS só roda no Windows.', 4, 'apagado')
+        return 0, 0
+    s = roda_ps(ctx.t, DNS_TESTE_PS, 'dns-teste', minutos=5, mostra=False, pr=pr)
+    atual = s.dados.get('dns_atual') or ''
+    amostras = {}
+    for r in s.dados.get('dns_teste') or []:
+        amostras.setdefault(r['ip'], {})[r['dom']] = [None if x < 0 else x for x in (r['ms'] if isinstance(r['ms'], list) else [r['ms']])]
+    if not amostras:
+        ctx.t.paragrafo('Nenhum DNS respondeu ao teste (sem internet?).', 4, 'apagado')
+        return 0, 0
+    linhas, veredito = analisa_dns(amostras, atual)
+    tab = []
+    for ip, r in sorted(linhas.items(), key=lambda kv: kv[1]['mediana'] if kv[1] else 1e9):
+        nome = ('seu DNS atual' if ip == atual else next((n for _, n, i, _, _ in DNS if i == ip), ip))
+        tab.append([f'{nome} ({ip})', f'{r["mediana"]:.0f} ms' if r else '-', f'{r["q1"]:.0f}–{r["q3"]:.0f} ms' if r else '-',
+                    f'{r["falhas"]}/{r["total"]}' if r else 'sem resposta'])
+    ctx.t.tabela(['servidor', 'mediana', 'faixa típica', 'falhas'], tab, alinha='eddd')
+    ctx.t.paragrafo(veredito + '. Sites populares costumam estar no cache do servidor; o que mais pesa no dia a dia é o cache do próprio Windows.', 4, 'apagado')
+    return 0, 0
+
+
 def _py_ping(ctx, it, pr, teste):
     """Mede a latência até o roteador e os DNS públicos, para escolher com número."""
     alvos = [('roteador', None)] + [(nome, ip) for _, nome, ip, _, _ in DNS[:4]]
@@ -4656,31 +4744,41 @@ def _py_ping(ctx, it, pr, teste):
         s = roda_ps(ctx.t, "Dado 'gw' ([string](Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object RouteMetric | Select-Object -First 1).NextHop)", 'gw', minutos=1, mostra=False)
         alvos[0] = ('roteador', s.dados.get('gw') or None)
     linhas = []
+    n = 10
     for nome, ip in alvos:
         if not ip:
             continue
         pr.atual = f'ping {ip}'
-        args = ['ping', '-n', '6', '-w', '1000', ip] if WINDOWS else ['ping', '-c', '6', '-W', '1', ip]
+        args = ['ping', '-n', str(n), '-w', '1000', ip] if WINDOWS else ['ping', '-c', str(n), '-W', '1', ip]
         cod, txt = roda_exe(args, 1, pr)
         ms = [int(x) for x in re.findall(r'(?:tempo|time)[=<](\d+)', txt, re.I)]
-        perda = 100 - 100 * len(ms) // 6
-        linhas.append([f'{nome} ({ip})', f'{sum(ms) // len(ms)} ms' if ms else '-', f'{min(ms)}–{max(ms)} ms' if ms else '-', f'{perda}%'])
-    ctx.t.tabela(['destino', 'média', 'variação', 'perda'], linhas, alinha='eddd')
+        perda = 100 - 100 * len(ms) // n
+        if ms:
+            est = estatistica(ms)
+            dp = (sum((x - sum(ms) / len(ms)) ** 2 for x in ms) / len(ms)) ** 0.5
+            linhas.append([f'{nome} ({ip})', f'{est["mediana"]:.0f} ms', f'{est["minimo"]:.0f}–{est["maximo"]:.0f} ms', f'{dp:.1f} ms', f'{perda}%'])
+        else:
+            linhas.append([f'{nome} ({ip})', '-', '-', '-', f'{perda}%'])
+    ctx.t.tabela(['destino', 'mediana', 'variação', 'oscilação', 'perda'], linhas, alinha='edddd')
     ctx.t.paragrafo('Roteador acima de 5 ms ou perda no roteador = problema no Wi-Fi ou no cabo, não na internet. '
-                    'Variação alta é o que causa "lag" em jogos.', 4, 'apagado')
+                    'Oscilação alta (desvio acima de 5 ms) e perda são o que causa "lag" em jogos; a média sozinha não mostra isso.', 4, 'apagado')
     return 0, 0
 
 
 @pacote('rede', 'rede e DNS', 'DNS mais rápido ou com bloqueio, medição de ping',
         'Troca o DNS de todas as placas de rede ligadas (o desfazer volta o que estava antes). Mede o ping até o roteador '
-        'e os DNS públicos para você decidir com número. Ajustes de TCP "milagrosos" não estão aqui: não têm ganho medido.')
+        'e os DNS públicos e mede a resposta real de cada DNS para você decidir com número. Ajustes de TCP "milagrosos" não estão aqui: não têm ganho medido.')
 def itens_rede(ctx):
     itens = [Item('ping', 'medir o ping', 'Ping até o roteador e até Cloudflare, Google, Quad9 e AdGuard.', 'decidir com número',
-                  'nenhum', 1, py=_py_ping, reverte=False)]
+                  'nenhum', 1, py=_py_ping, reverte=False),
+             Item('dns-teste', 'medir qual DNS responde mais rápido', 'Consulta 6 sites populares 5 vezes em cada servidor (o seu atual, Cloudflare, Google, Quad9 e AdGuard), '
+                  'direto no servidor, sem usar o cache do Windows, e mostra mediana e faixa típica. Só diz que vale trocar se a diferença for de '
+                  'pelo menos 5 ms e 25% e maior que o ruído. Leva uns 2 minutos e não muda nada no PC.', 'decidir o DNS com número, não com palpite',
+                  'nenhum', 1, py=_py_dns_teste, reverte=False, minutos=3)]
     for id_, nome, a, b, desc in DNS:
         itens.append(Item('dns-' + id_, f'DNS {nome} ({a})', f'Usa o DNS {nome}: {desc}. No Windows 11, para criptografar também, abra as propriedades da conexão em Configurações > Rede e Internet '
-                          'e escolha criptografia DNS "somente criptografada" (DNS sobre HTTPS); o Windows já conhece estes servidores.', 'sites resolvem mais rápido que no DNS da operadora',
-                          'redes de empresa com DNS próprio param de achar os servidores internos', 2 if id_ == 'cloudflare' else 0,
+                          'e escolha criptografia DNS "somente criptografada" (DNS sobre HTTPS); o Windows já conhece estes servidores.', 'só se o teste de DNS mostrar diferença no seu caso: meça antes de trocar',
+                          'redes de empresa com DNS próprio param de achar os servidores internos', 0,
                           ps_monta(DNS_PS, lista=f'{psq(a)},{psq(b)}'), grupo='dns'))
     itens.append(Item('dns-auto', 'DNS automático (do roteador)', 'Volta a usar o DNS que o roteador entrega.', 'o padrão',
                       'nenhum', 0, ps_monta(DNS_PS, lista=''), grupo='dns'))
@@ -5827,7 +5925,7 @@ CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'n
 # Item que não existe neste PC (ou que a pessoa protegeu) é pulado; nada é aplicado sem a prévia e a confirmação.
 PERFIS = {
     'jogo': ('Jogos', 'mais fluidez ao jogar: Modo de Jogo, prioridades de CPU e rede, energia no máximo e sem apps em segundo plano. Não mexe no visual', {
-        'jogos': ['modo-jogo', 'gamedvr', 'prioridade-jogos', 'mmcss', 'primeiro-plano', 'mouse', 'teclado', 'aderencia', 'rede-jogos'],
+        'jogos': ['modo-jogo', 'gamedvr', 'prioridade-jogos', 'mouse', 'teclado', 'aderencia'],
         'energia': ['desempenho', 'usb', 'throttling'],
         'cs2': ['gpu-cs2', 'janela-otim', 'video-cs2', 'cfg-cs2'],
         'privacidade': ['segundo-plano']}),

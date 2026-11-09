@@ -441,5 +441,39 @@ class TestEntrega(unittest.TestCase):
         self.assertEqual('.'.join(map(str, nums[0])), k.VERSAO, 'a versão mais nova do CHANGELOG tem de ser a do programa')
         self.assertTrue(achados[0][3].startswith(k.DATA_VERSAO.split()[0] + ' de'), 'a data do CHANGELOG tem de ser a do programa')
 
+class TestDnsTeste(unittest.TestCase):
+    def _a(self, outro):
+        base = [30.0, 28.0, 31.0, 29.0, 30.0]
+        rapido = [x / 3 for x in base]
+        novo = rapido if outro == 'rapido' else [29.0, 31.0, 30.0, 28.0, 32.0]
+        return {'1.1.1.1': {'a.com': [90.0] + novo, 'b.com': [90.0] + novo},
+                '192.168.0.1': {'a.com': [90.0] + base, 'b.com': [90.0] + base}}
+
+    def test_recomenda_quando_a_diferenca_e_grande_e_clara(self):
+        linhas, v = k.analisa_dns(self._a('rapido'), '192.168.0.1')
+        self.assertIn('vale', v)
+        self.assertNotIn('não vale', v)
+
+    def test_nao_recomenda_dentro_do_ruido(self):
+        linhas, v = k.analisa_dns(self._a('igual'), '192.168.0.1')
+        self.assertIn('não vale', v)
+
+    def test_sem_medida_do_atual_nao_compara(self):
+        linhas, v = k.analisa_dns({'1.1.1.1': {'a.com': [10.0, 11.0, 10.0]}}, '192.168.0.1')
+        self.assertIn('não dá para comparar', v)
+
+    def test_falhas_contam_e_nao_viram_milissegundos(self):
+        linhas, v = k.analisa_dns({'1.1.1.1': {'a.com': [None, 10.0, None, 12.0, 11.0]}, '8.8.8.8': {'a.com': [5.0, 6.0, 5.0, 6.0, 5.0]}}, '8.8.8.8')
+        self.assertEqual(linhas['1.1.1.1']['falhas'], 2)
+        self.assertLessEqual(linhas['1.1.1.1']['q3'], 12.0)
+
+    def test_dns_nao_afirma_o_que_nao_mediu(self):
+        for _, _, _, _, desc in k.DNS:
+            self.assertNotIn('mais rápido', desc)
+        itens = [i for n, i in ITENS if n == 'rede']
+        self.assertTrue(all(i.nivel == 0 for i in itens if i.id.startswith('dns-') and i.id != 'dns-teste'))
+        self.assertTrue(any(i.id == 'dns-teste' and i.nivel == 1 for i in itens))
+
+
 if __name__ == '__main__':
     unittest.main()
