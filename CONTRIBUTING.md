@@ -50,4 +50,4 @@ e, se mexeu em itens, perfis ou comandos, atualize o `CHANGELOG.md`.
 
 ## Versões
 
-O número tem três partes, MAIOR.MENOR.CORREÇÃO, explicadas no [CHANGELOG.md](CHANGELOG.md). Cada versão tem uma tag (`v1.2.0`), e o botão de download do site baixa a tag.
+O número tem três partes, MAIOR.MENOR.CORREÇÃO, explicadas no [CHANGELOG.md](CHANGELOG.md). Cada versão tem uma tag (`v1.2.0`).
