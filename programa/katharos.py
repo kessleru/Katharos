@@ -851,6 +851,21 @@ class Terminal:
     def nota(self, txt, recuo=2):
         self.escreve(' ' * recuo + self.p(txt, 'apagado'))
 
+    def dicas(self, pares, recuo=2):
+        """As teclas que valem agora, numa linha: a tecla em destaque, o que ela faz ao lado, bolinha entre uma e outra.
+        pares: [('Enter', 'continuar'), ('?', 'ajuda')]. Poucas: o resto fica na ajuda da tela."""
+        linha, larg = ' ' * recuo, recuo
+        for i, (tecla, faz) in enumerate(pares):
+            pedaco = self.p(tecla, 'destaque', True) + ' ' + self.p(faz, 'apagado')
+            n = _larg(tecla) + 1 + _larg(faz)
+            sep = '  ·  ' if i else ''
+            if i and larg + len(sep) + n > self.largura:
+                self.escreve(linha)
+                linha, larg, sep = ' ' * recuo, recuo, ''
+            linha += self.p(sep, 'apagado') + pedaco
+            larg += len(sep) + n
+        self.escreve(linha)
+
     def relatorio(self, arq, rotulo='relatório', recuo=4):
         """A linha "relatório: caminho", com o caminho clicável onde o terminal deixa."""
         self.escreve(' ' * recuo + self.p(f'{rotulo}: ', 'apagado')
@@ -2893,22 +2908,29 @@ def _linha_item(t, it, i):
     return esq
 
 
-def desenha_itens(t, itens, completa=False):
+def desenha_itens(t, itens, completa=False, zero=''):
     for i, it in enumerate(itens, 1):
         t.escreve(_linha_item(t, it, i))
         if completa:
             _detalhe_item(t, it)
             t.escreve()
+    if zero:   # a saída aparece como uma linha da lista, igual ao menu
+        t.escreve(f'  {t.p("   0", "apagado", True)}  {t.p(zero, "apagado")}')
 
 
-AJUDA_CURTA = 'Enter segue · número tira ou põe · ? 3 explica o item 3 · ? ajuda · 0 volta'
-AJUDA_SELECAO = ('Enter = seguir com os marcados · 0 = voltar sem aplicar\n'
-                 'números tiram ou põem: 3   3 5   8-10\n'
-                 '? 3 = explica o item 3 (o que faz, ganho, custo)\n'
-                 'c = mostra ou esconde a explicação de todos\n'
-                 't = marca todos · n = desmarca todos\n'
-                 's, e, x = marca o que o modo seguro, equilibrado ou extremo marca\n'
-                 'v 3 = o código (PowerShell) do item 3 e o id dele')
+# As três teclas que aparecem na tela de escolha; as outras ficam na ajuda ("?").
+DICAS_ESCOLHA = [('Enter', 'continuar'), ('número', 'marcar ou desmarcar'), ('?', 'ajuda')]
+AJUDA_ESCOLHA = [
+    ('Enter', 'continuar com os itens marcados'),
+    ('3', 'marcar ou desmarcar o item 3 (vários de uma vez: 3 5 8-10)'),
+    ('? 3', 'explicar o item 3: o que faz, o ganho e o custo'),
+    ('t', 'marcar todos'),
+    ('n', 'desmarcar todos'),
+    ('s  e  x', 'marcar o que o modo seguro, equilibrado ou extremo marca'),
+    ('c', 'mostrar ou esconder a explicação de todos'),
+    ('v 3', 'ver o código (PowerShell) do item 3'),
+    ('0', 'voltar sem aplicar nada'),
+]
 
 
 def mostra_codigo(t, itens):
@@ -2932,14 +2954,15 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
         marca_por_modo(itens, modo)
     completa = config('explicacao') == 'completa'
     t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}')
-    desenha_itens(t, itens, completa)
-    if getattr(args, 'sim', False) or not t.interativo:
+    interativo = t.interativo and not getattr(args, 'sim', False)
+    desenha_itens(t, itens, completa, zero='voltar' if interativo else '')
+    if not interativo:
         return [i for i in itens if i.marcado]
     while True:
         marcados = sum(i.marcado for i in itens)
         t.escreve()
-        t.paragrafo(AJUDA_CURTA, 2, 'apagado')
-        r = t.pergunta(f'{marcados} de {len(itens)} marcados · modo {modo}').strip().lower()
+        t.dicas(DICAS_ESCOLHA)
+        r = t.pergunta(f'{marcados} de {len(itens)} marcados').strip().lower()
         if r in ('', 'ok', 'seguir', 'aplicar'):
             return [i for i in itens if i.marcado]
         if r in ('0', 'v', 'voltar', 'q', 'sair'):
@@ -2958,10 +2981,10 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
         elif r in ('?', 'ajuda', 'h', 'm', 'mais'):
             mudou = False
             t.escreve()
-            for linha in AJUDA_SELECAO.split('\n'):
-                t.nota(linha, 4)
-            t.paragrafo('À direita de cada item está o modo a partir do qual ele vem marcado; "só se marcar" nunca vem '
-                        'marcado sozinho. "!" é um aviso (veja com ? e o número). Quase tudo volta com o "desfazer".', 4, 'sub')
+            for tecla, faz in AJUDA_ESCOLHA:
+                t.escreve(f'    {t.p(f"{tecla:<8}", "destaque", True)}  {t.p(faz, "sub")}')
+            t.escreve()
+            t.paragrafo('À direita de cada item está o modo em que ele vem marcado. "!" é um aviso: veja com ? e o número.', 4, 'apagado')
         elif r in ('t', 'todos'):
             for i in itens:
                 i.marcado = True
@@ -2992,12 +3015,12 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
             nums = _numeros(r, len(itens)) if re.match(r'^[\d\s,;-]+$', r) else []
             if not nums:
                 mudou = False
-                t.aviso(f'"{corta(r, 20)}" não é uma opção. Digite ? para ver todas.')
+                t.aviso(f'"{corta(r, 20)}" não é uma opção. Digite ? para ver a ajuda.')
             for n in nums:
                 _alterna(itens, n - 1)
         if mudou:
             t.escreve()
-            desenha_itens(t, itens, completa)
+            desenha_itens(t, itens, completa, zero='voltar')
 
 
 # ─────────────── executar ───────────────
@@ -3207,7 +3230,10 @@ def ferramenta_pacote(ctx, args, nome=None):
     if fora:
         t.nota(f'  {pl(fora, "item protegido", "itens protegidos")} (config protegidos): fora desta lista.')
     if not itens:
-        t.ok('Nada a fazer aqui neste PC.')
+        if pac.nome in SEM_ITENS:
+            t.aviso(SEM_ITENS[pac.nome])
+        else:
+            t.ok('Nada a fazer aqui neste PC.')
         return 0
     aplica_alertas(pac.nome, itens)
     pode, modo = cuidado_empresa(ctx, args, pac)
@@ -6082,7 +6108,8 @@ def personaliza_selecao(ctx, args, selecao):
             t.escreve(f'  {marca} {t.p(f"{n:>2}", "destaque", True)}  {t.p(f"{c:<14}", "texto", True)} {t.p(corta(d, max(10, t.largura - 26)), "sub")}')
         if not t.interativo or args.sim:
             break
-        r = t.pergunta('número ou nome do pacote para escolher itens (Enter = pronto, 0 = cancelar)').strip().lower()
+        t.dicas([('número', 'abrir a área'), ('Enter', 'pronto'), ('0', 'cancelar')])
+        r = t.pergunta('qual área').strip().lower()
         if r in ('', 'ok', 'pronto'):
             break
         if r in ('0', 'q', 'v'):
@@ -6132,7 +6159,8 @@ def aplica_selecao(ctx, args, titulo, selecao, personalizavel=True):
             t.nota('  Nada escolhido ainda.')
         if not (personalizavel and t.interativo and not args.sim and not args.teste):
             break
-        r = t.pergunta('p = personalizar (tirar, pôr ou juntar itens de outros pacotes) · Enter = seguir · 0 = cancelar').strip().lower()
+        t.dicas([('Enter', 'continuar'), ('p', 'mudar os itens'), ('0', 'cancelar')])
+        r = t.pergunta('o que fazer').strip().lower()
         if r in ('0', 'q'):
             t.nota('nada foi alterado.')
             return 0
@@ -6389,7 +6417,7 @@ def escolhe_atalhos(ctx, args):
                       f'{t.p(corta(desc, max(10, t.largura - 40)), "apagado")}')
         if getattr(args, 'sim', False) or not t.interativo:
             break
-        t.nota('Enter = criar · número = tira ou põe · 0 = cancelar', 2)
+        t.dicas([('Enter', 'criar'), ('número', 'marcar ou desmarcar'), ('0', 'cancelar')])
         r = t.pergunta(f'{len(marcados)} marcados').strip().lower()
         if r in ('', 'ok'):
             break
@@ -6691,6 +6719,8 @@ Feito ('«nome»: opcoes ajustadas (copia em ' + (Split-Path -Leaf $__a) + '.kat
         'mais leve fica como está. O jogo precisa estar fechado e o arquivo ganha uma cópia (.katharos.bak). Launchers com pasta própria '
         '(Prism, CurseForge, modpacks) não são tocados. Bedrock não entra: as chaves dele não foram confirmadas.')
 def itens_minecraft(ctx):
+    if WINDOWS and not os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt')):
+        return []   # sem o jogo, a tela diz que não achou (SEM_ITENS) em vez de oferecer itens que não fariam nada
     aberto = r"""if (@(Get-Process javaw, java -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match 'Minecraft' }).Count) { Aviso 'feche o Minecraft antes: ele regrava as opcoes ao sair'; return }"""
     caminho = r"(Join-Path $env:APPDATA '.minecraft\options.txt')"
     leve = '& {\n' + opcoes_txt_ps('Minecraft', 'minecraft-opcoes', caminho, aberto, MC_OPCOES) + '\n}'
@@ -7099,6 +7129,48 @@ def itens_unreal(ctx):
                           'sombras e longe do horizonte um pouco menos detalhados', 2,
                           '& {\n' + opcoes_txt_ps(nome, 'ue-' + id_, caminho, aberto, UE_REGRAS, sep='=') + '\n}'))
     return itens
+
+
+# ─────────────── quais jogos com pacote próprio estão neste PC ───────────────
+
+def _cs2_instalado():
+    """True/False se a Steam diz que o CS2 (app 730) está instalado; None se não deu para saber. Só lê o registro e a
+    lista de bibliotecas da Steam."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam') as ch:
+            raiz = Path(str(winreg.QueryValueEx(ch, 'SteamPath')[0]))
+    except (ImportError, OSError):
+        return False if WINDOWS else None
+    pastas = [raiz]
+    try:
+        vdf = (raiz / 'steamapps' / 'libraryfolders.vdf').read_text(encoding='utf-8', errors='replace')
+        pastas += [Path(p.replace('\\\\', '\\')) for p in re.findall(r'"path"\s+"([^"]+)"', vdf)]
+    except OSError:
+        pass
+    return any((p / 'steamapps' / 'appmanifest_730.acf').is_file() for p in pastas)
+
+
+def jogos_neste_pc():
+    """{comando: True/False} para os pacotes de um jogo só: se o jogo foi achado neste PC. Fora do Windows, vazio."""
+    if not WINDOWS:
+        return {}
+    out = {}
+    try:
+        out['cs2'] = _cs2_instalado()
+        out['minecraft'] = os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt'))
+        out['unreal'] = any(_ue_instalado(pasta) for _, _, pasta, _ in UE_JOGOS)
+    except Exception as e:
+        LOG.escreve(f'procurar jogos falhou: {e!r}')
+    return {c: v for c, v in out.items() if v is not None}
+
+
+# Pacote de um jogo sem nada a fazer: diz o que não foi achado, em vez de um "nada a fazer" seco.
+SEM_ITENS = {
+    'cs2': 'Não achei a Steam neste PC, então não há o que ajustar no CS2. Instale e abra o jogo uma vez, e volte aqui.',
+    'minecraft': 'Não achei o Minecraft Java neste PC (o options.txt fica em %APPDATA%\\.minecraft). Abra o jogo uma vez e volte aqui.',
+    'unreal': 'Não achei Satisfactory nem Stray neste PC. Abra o jogo uma vez (ele cria o arquivo de opções) e volte aqui.',
+}
 
 
 # ───────────────────────────── ícone do Katharos (ICO com 5 tamanhos, embutido) ─────────────────────────────
@@ -7529,7 +7601,7 @@ def ferramenta_turbo(ctx, args):
         # uma pergunta só: começar, revisar item por item ou desistir
         while True:
             t.escreve()
-            t.nota(f'Cada etapa aplica o que o modo {modo} marca. Enter = começar · r = revisar item por item antes · 0 = cancelar', 2)
+            t.dicas([('Enter', 'começar'), ('r', 'revisar item por item'), ('0', 'cancelar')])
             r = t.pergunta(f'começar o turbo no modo {modo}').strip().lower()
             if r in ('0', 'n', 'nao', 'não', 'q', 'v', 'cancelar'):
                 t.nota('nada foi alterado.')
@@ -10666,8 +10738,8 @@ GRUPOS = [
         ('disco', 'menos escrita, boot mais rápido', 'pacote'),
         ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
     ]),
-    ('jogos', 'o Windows para jogar e os ajustes de cada jogo', [
-        ('jogos', 'Modo de Jogo, prioridades, latência', 'pacote'),
+    ('jogos', 'Comece por "jogos", que ajusta o Windows. Depois abra o jogo que você joga, se ele estiver na lista.', [
+        ('jogos', 'o Windows para jogar: Modo de Jogo, prioridade, latência', 'pacote'),
         ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
         ('minecraft', 'Minecraft Java: distância e partículas', 'pacote'),
         ('unreal', 'Satisfactory e Stray: gráficos no arquivo do jogo', 'pacote'),
@@ -10706,21 +10778,26 @@ MENU = [
     ('raiox', 'nota do PC e o que fazer primeiro (só lê)'),
     ('turbo', 'otimiza tudo de uma vez, no modo que você escolher'),
     ('escolher', 'otimiza por área: você escolhe a área e os itens'),
+    ('jogar', 'otimiza para jogos: o Windows e cada jogo deste PC'),
     ('painel', 'gráficos do PC ao longo do tempo, no navegador'),
     ('desfazer', 'volta qualquer mudança'),
     ('mais', 'medir, acompanhar, segurança, preferências...'),
 ]
-TELAS = ('escolher', 'mais')
+TELAS = ('escolher', 'jogar', 'mais')
+GRUPO_JOGAR = 'jogos'   # a tela "jogar" é este grupo inteiro: o pacote do Windows, os de cada jogo e a conferência da Steam
 
 
 def grupos_da_tela(tela):
     """Os grupos de uma tela do menu: "escolher" = só as áreas com itens para marcar; "mais" = as ferramentas
     que não estão no menu de abertura. Grupo vazio some."""
     no_menu = {c for c, _ in MENU}
+    if tela == 'jogar':
+        return [(g, e, [(c, d) for c, d, _ in its]) for g, e, its in GRUPOS if g == GRUPO_JOGAR]
+    no_menu |= {c for g, _, its in GRUPOS if g == GRUPO_JOGAR for c, _, _ in its}   # o que é de jogo fica só em "jogar"
     out = []
     for titulo, expl, itens in GRUPOS:
         if tela == 'escolher':
-            fica = [(c, d) for c, d, f in itens if f == 'pacote']
+            fica = [(c, d) for c, d, f in itens if f == 'pacote' and c not in no_menu]
         else:
             fica = [(c, d) for c, d, f in itens if f != 'pacote' and c not in no_menu]
         if fica:
@@ -10911,7 +10988,11 @@ def _roda_do_menu(ctx, parser, args, cmd):
             continue
         t.escreve(guia=False)
         try:
-            if t.pergunta(f'próxima sugestão: {prox}. Enter = abrir, p = pular, v = voltar ao menu').strip().lower() in ('v', 'voltar'):
+            t.dicas([('Enter', 'abrir'), ('p', 'pular'), ('v', 'voltar ao menu')])
+            r = t.pergunta(f'próxima sugestão: {prox}').strip().lower()
+            if r in ('p', 'pular'):
+                continue
+            if r in ('v', 'voltar'):
                 ctx.proximos = []
                 break
         except KeyboardInterrupt:
@@ -10935,10 +11016,12 @@ def menu(ctx, parser, args, tela=None):
     primeira_vez(ctx)
     while True:
         usados = estado().get('usado', {})
+        if tela == 'jogar':
+            grupo = grupos_da_tela('jogar')[0]
         t.limpa()
         t.logo('KATHAROS')
         extra = ' · '.join(x for x in ((f'modo {config("modo")}' if config('modo') != PADROES['modo'] else ''), ('sem administrador' if WINDOWS and not eh_admin() else '')) if x)
-        t.cabecalho('início' if not tela else (tela if not grupo else f'{tela} › {grupo[0]}'), extra, app=APP)
+        t.cabecalho('início' if not tela else (tela if not grupo or tela == 'jogar' else f'{tela} › {grupo[0]}'), extra, app=APP)
         if not WINDOWS:
             t.aviso('Este computador não é Windows: dá para ver o menu, mas os comandos só funcionam no Windows.')
         quando = {c: ha_quanto_iso(q) for c, q in usados.items()}
@@ -10949,7 +11032,9 @@ def menu(ctx, parser, args, tela=None):
             if grupo[1]:
                 t.paragrafo(grupo[1], 2, 'apagado')
                 t.escreve()
-            por_numero = t.menu_itens([('', '', grupo[2])], quando, zero='voltar')
+            achados = jogos_neste_pc() if tela == 'jogar' else {}
+            por_numero = t.menu_itens([('', '', grupo[2])], {**quando, **{c: 'não achei neste PC' for c, v in achados.items() if v is False}},
+                                      destaque={c: 'neste PC' for c, v in achados.items() if v}, zero='voltar')
         else:
             t.paragrafo('Escolha uma área. Dentro dela os itens já vêm marcados pelo modo, e você tira ou põe o que quiser.'
                         if tela == 'escolher' else 'As outras ferramentas, por assunto.', 2, 'apagado')
@@ -10961,12 +11046,12 @@ def menu(ctx, parser, args, tela=None):
         if ctx.proximos:
             t.info('sugeridos pelo raio-x: ' + ' · '.join(ctx.proximos))
             t.escreve()
-        t.nota('número ou nome de um comando · 0 ' + ('sai' if not tela else 'volta'), 2)
         escolha = t.pergunta('o que fazer').strip().lower()
         if escolha in ('', '0', 'q', 'sair', 'v', 'voltar'):
-            if grupo:
+            if grupo and tela != 'jogar':
                 grupo = None
             elif tela:
+                grupo = None
                 tela = None
             else:
                 t.fim('até mais', 'nada')

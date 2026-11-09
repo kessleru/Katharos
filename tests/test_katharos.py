@@ -142,8 +142,8 @@ class _Grava:
 
 class TestMenuEnxuto(unittest.TestCase):
     """O menu de abertura tem poucas linhas e nada some: todo comando está no menu, em "escolher" ou em "mais"."""
-    def test_menu_de_abertura_tem_no_maximo_seis_linhas(self):
-        self.assertLessEqual(len(k.MENU), 6)
+    def test_menu_de_abertura_tem_no_maximo_sete_linhas(self):
+        self.assertLessEqual(len(k.MENU), 7)
         for cmd, desc in k.MENU:
             self.assertTrue(cmd in k.COMANDOS or cmd in k.TELAS, cmd)
             self.assertLessEqual(len(desc), 60, cmd)
@@ -163,6 +163,33 @@ class TestMenuEnxuto(unittest.TestCase):
         for _, _, itens in k.grupos_da_tela('mais'):
             for c, _ in itens:
                 self.assertNotEqual(k.COMANDOS[c][1], 'pacote', c)
+
+    def test_jogar_junta_tudo_de_jogo_num_lugar_so(self):
+        (titulo, expl, itens), = k.grupos_da_tela('jogar')
+        cmds = [c for c, _ in itens]
+        for c in ('jogos', 'cs2', 'minecraft', 'unreal', 'steam'):
+            self.assertIn(c, cmds)
+        self.assertEqual(cmds[0], 'jogos', 'o Windows vem primeiro')
+        self.assertTrue(expl)
+        for tela in ('escolher', 'mais'):
+            for _, _, its in k.grupos_da_tela(tela):
+                self.assertFalse({c for c, _ in its} & set(cmds), f'{tela} repete o que é de jogo')
+
+    def test_pacote_de_jogo_vazio_diz_o_que_nao_achou(self):
+        for c in ('cs2', 'minecraft', 'unreal'):
+            self.assertIn('Não achei', k.SEM_ITENS[c])
+        self.assertEqual(k.jogos_neste_pc(), {}, 'fora do Windows não afirma nada')
+
+    def test_dicas_mostram_poucas_teclas_separadas_por_bolinha(self):
+        import io, contextlib
+        t = k.Terminal(True, True)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            t.dicas(k.DICAS_ESCOLHA)
+        linha = buf.getvalue().strip()
+        self.assertLessEqual(len(k.DICAS_ESCOLHA), 3)
+        self.assertEqual(linha.count('  ·  ') + linha.count('  .  '), len(k.DICAS_ESCOLHA) - 1, linha)
+        self.assertNotIn('=', linha)
 
     def test_perfil_saiu_e_o_que_ele_fazia_virou_comando(self):
         self.assertNotIn('perfil', k.COMANDOS)
@@ -208,8 +235,11 @@ class TestEscolhaDeItens(unittest.TestCase):
         self.assertNotIn('explicação longa', t.texto)
         self.assertIn('item A', t.texto)
 
-    def test_dica_curta_cabe_em_duas_linhas(self):
-        self.assertLessEqual(len(k.AJUDA_CURTA), 120)
+    def test_ajuda_da_escolha_explica_cada_tecla_numa_linha(self):
+        t, _ = self.roda(['?', ''])
+        for tecla, faz in k.AJUDA_ESCOLHA:
+            self.assertIn(faz, t.texto)
+            self.assertLessEqual(len(faz), 60)
 
     def test_interrogacao_e_numero_explica_um_item(self):
         t, _ = self.roda(['? 2', ''])

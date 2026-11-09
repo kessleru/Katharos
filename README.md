@@ -28,7 +28,7 @@ Ou direto, num PowerShell aberto como administrador: `python programa\katharos.p
 
 ## Modos
 
-Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem seis linhas (`raiox`, `turbo`, `escolher`, `painel`, `desfazer`, `mais`); `escolher` mostra as áreas e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
+Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem sete linhas (`raiox`, `turbo`, `escolher`, `jogar`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas, `jogar` junta o que é de jogo (o Windows, cada jogo com pacote próprio e a conferência da Steam, dizendo quais achou neste PC) e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
 
 | Modo | O que marca |
 | --- | --- |
@@ -37,7 +37,7 @@ Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou ab
 | **extremo** | Tudo o que pode ajudar neste PC: sensores, área de trabalho remota, scanner, localização, hibernação no SSD, ajustes de jogos e de rede. Cada item diz o que se perde. |
 | *só se marcar* | Itens que nunca vêm marcados (esvaziar a Lixeira, trocar DNS, MPO, HAGS, remover o Office, preferências). |
 
-Na tela de escolha cada item ocupa uma linha, com o modo dele à direita (`!` = tem um aviso). Enter segue, um número tira ou põe (`3 5 8-10`), `? 3` explica o item 3 (o que faz, ganho e custo), `0` volta. `?` mostra o resto: `t` todos, `n` nenhum, `s` `e` `x` remarca pelo modo, `c` explicação de todos, `v 3` o código do item. `config explicacao completa` volta a mostrar tudo sempre.
+Na tela de escolha cada item ocupa uma linha, com o modo dele à direita (`!` = tem um aviso). A tela mostra só três teclas: Enter continua, um número marca ou desmarca (`3 5 8-10`) e `?` abre a ajuda com o resto (`? 3` explica o item 3, `t` todos, `n` nenhum, `s` `e` `x` remarca pelo modo, `c` explicação de todos, `v 3` o código do item, `0` volta). `config explicacao completa` volta a mostrar tudo sempre.
 
 ## Inteligente
 
