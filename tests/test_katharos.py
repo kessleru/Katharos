@@ -178,7 +178,12 @@ class TestMenuEnxuto(unittest.TestCase):
     def test_pacote_de_jogo_vazio_diz_o_que_nao_achou(self):
         for c in ('cs2', 'minecraft', 'unreal'):
             self.assertIn('Não achei', k.SEM_ITENS[c])
-        self.assertEqual(k.jogos_neste_pc(), {}, 'fora do Windows não afirma nada')
+        achados = k.jogos_neste_pc()
+        if k.WINDOWS:   # no Windows responde sim ou não para cada jogo; fora dele não afirma nada
+            self.assertEqual(set(achados), {'cs2', 'minecraft', 'unreal'})
+            self.assertTrue(all(isinstance(v, bool) for v in achados.values()))
+        else:
+            self.assertEqual(achados, {})
 
     def test_dicas_mostram_poucas_teclas_separadas_por_bolinha(self):
         import io, contextlib
