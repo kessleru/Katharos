@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime
 
-VERSAO = '1.3.0'
+VERSAO = '1.4.0'
 DATA_VERSAO = '9 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -4080,12 +4080,52 @@ GPU_PS = r'''foreach ($__c in @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Co
 # Prioridade alta só para jogos SEM anti-cheat de terceiros (VAC da Valve não conta: ele só procura programa injetado no jogo).
 # Jogos com Vanguard, EasyAntiCheat, BattlEye, Javelin, Ricochet, Hyperion, Warden etc. ficam de fora de propósito: nenhuma chave
 # do Katharos aponta para eles.
-JOGOS_EXE = ['cs2.exe', 'csgo.exe', 'dota2.exe', 'deadlock.exe', 'tf_win64.exe', 'left4dead2.exe',
-             'Minecraft.Windows.exe', 'Cyberpunk2077.exe', 'Diablo IV.exe', 'Hearthstone.exe', 'RDR2.exe', 'HogwartsLegacy.exe',
-             'Palworld-Win64-Shipping.exe', 'ForzaHorizon5.exe', 'ForzaHorizon4.exe', 'Starfield.exe', 'bg3.exe', 'bg3_dx11.exe',
-             'witcher3.exe', 'MonsterHunterWilds.exe', 'MonsterHunterWorld.exe', 'Warframe.x64.exe', 'Terraria.exe',
-             'Phasmophobia.exe', 'Among Us.exe', 'Lethal Company.exe', 'Stardew Valley.exe', 'PathOfExile_x64.exe', 'PathOfExileSteam.exe']
-JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Destiny 2, Call of Duty, Rust, Roblox, Genshin, EA FC e outros'
+# Catálogo: um jogo por linha, (nome, [executáveis]). Só entra jogo sem anti-cheat de terceiros (VAC, que só olha programa
+# injetado no jogo, e o anti-cheat próprio de um jogo, como o da Warframe, não impedem). Antes de incluir um jogo, confira
+# a página dele na Steam ou no site oficial. Se um nome de .exe estiver errado, a chave simplesmente não vale para nada.
+CATALOGO = [
+    ('Valve e competitivos', [
+        ('Counter-Strike 2', ['cs2.exe']), ('Dota 2', ['dota2.exe']), ('Deadlock', ['deadlock.exe']),
+        ('Team Fortress 2', ['tf_win64.exe']), ('Left 4 Dead 2', ['left4dead2.exe']), ('Portal 2 e jogos Source', ['portal2.exe', 'hl2.exe']),
+        ("Garry's Mod", ['gmod.exe'])]),
+    ('RPG e mundo aberto', [
+        ('Cyberpunk 2077', ['Cyberpunk2077.exe']), ('Red Dead Redemption 2', ['RDR2.exe']), ('Hogwarts Legacy', ['HogwartsLegacy.exe']),
+        ('Starfield', ['Starfield.exe']), ("Baldur's Gate 3", ['bg3.exe', 'bg3_dx11.exe']), ('The Witcher 3', ['witcher3.exe']),
+        ('Skyrim Special Edition', ['SkyrimSE.exe']), ('Fallout 4', ['Fallout4.exe']), ('Sekiro', ['sekiro.exe']),
+        ('God of War', ['GoW.exe']), ('Horizon Zero Dawn', ['HorizonZeroDawn.exe']),
+        ('Resident Evil 4', ['re4.exe']), ('Resident Evil Village', ['re8.exe']), ('Control', ['Control_DX12.exe', 'Control_DX11.exe']),
+        ('Divinity: Original Sin 2', ['EoCApp.exe']), ('Stray', ['Stray-Win64-Shipping.exe']),
+        ('Diablo IV', ['Diablo IV.exe']), ('Monster Hunter Wilds', ['MonsterHunterWilds.exe']), ('Monster Hunter World', ['MonsterHunterWorld.exe']),
+        ('Path of Exile', ['PathOfExile_x64.exe', 'PathOfExileSteam.exe'])]),
+    ('Corrida e simulação', [
+        ('Forza Horizon 5', ['ForzaHorizon5.exe']), ('Forza Horizon 4', ['ForzaHorizon4.exe']),
+        ('Euro Truck Simulator 2', ['eurotrucks2.exe']), ('American Truck Simulator', ['amtrucks.exe']),
+        ('Assetto Corsa', ['acs.exe']), ('Assetto Corsa Competizione', ['AC2-Win64-Shipping.exe']), ('BeamNG.drive', ['BeamNG.drive.x64.exe']),
+        ('Microsoft Flight Simulator', ['FlightSimulator.exe', 'FlightSimulator2024.exe'])]),
+    ('Estratégia e construção', [
+        ('Civilization VI', ['CivilizationVI.exe', 'CivilizationVI_DX12.exe']), ('Cities: Skylines', ['Cities.exe']),
+        ('Hearts of Iron IV', ['hoi4.exe']), ('Crusader Kings III', ['ck3.exe']), ('Stellaris', ['stellaris.exe']),
+        ('Total War: Warhammer III', ['Warhammer3.exe']), ('Factorio', ['factorio.exe']), ('Satisfactory', ['FactoryGame-Win64-Shipping.exe']),
+        ('Hearthstone', ['Hearthstone.exe'])]),
+    ('Sobrevivência e cooperativo', [
+        ('Minecraft (Bedrock)', ['Minecraft.Windows.exe']), ('Palworld', ['Palworld-Win64-Shipping.exe']), ('Valheim', ['valheim.exe']),
+        ('Subnautica', ['Subnautica.exe', 'SubnauticaZero.exe']), ('Terraria', ['Terraria.exe']), ('Stardew Valley', ['Stardew Valley.exe']),
+        ('Phasmophobia', ['Phasmophobia.exe']), ('Lethal Company', ['Lethal Company.exe']), ('Among Us', ['Among Us.exe']),
+        ('Risk of Rain 2', ['Risk of Rain 2.exe'])]),
+    ('Ação e independentes', [
+        ('Warframe', ['Warframe.x64.exe']), ('Hades', ['Hades.exe']), ('Hades II', ['Hades2.exe']),
+        ('Hollow Knight', ['hollow_knight.exe']), ('Celeste', ['Celeste.exe']), ('Cuphead', ['Cuphead.exe']),
+        ('Vampire Survivors', ['VampireSurvivors.exe'])]),
+]
+CATALOGO_JOGOS = [j for _, jogos in CATALOGO for j in jogos]
+JOGOS_EXE = [e for _, exes in CATALOGO_JOGOS for e in exes]
+# exemplos de executáveis de jogos COM anti-cheat de terceiros: o teste garante que nenhum deles entra no catálogo
+EXE_COM_ANTICHEAT = ['VALORANT-Win64-Shipping.exe', 'LeagueClient.exe', 'League of Legends.exe', 'FortniteClient-Win64-Shipping.exe',
+                     'r5apex.exe', 'RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'TslGame.exe', 'EscapeFromTarkov.exe', 'destiny2.exe',
+                     'RustClient.exe', 'RobloxPlayerBeta.exe', 'GenshinImpact.exe', 'eldenring.exe', 'RocketLeague.exe',
+                     'helldivers2.exe', 'DeadByDaylight-Win64-Shipping.exe', 'FallGuys_client_game.exe', 'ModernWarfare.exe',
+                     'cod.exe', 'BF2042.exe', 'bf1.exe', 'FIFA23.exe', 'FC25.exe', 'Overwatch.exe', 'Marvel-Win64-Shipping.exe']
+JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Destiny 2, Call of Duty, Rust, Roblox, Genshin, Elden Ring, Rocket League, Helldivers 2, EA FC e outros'
 
 
 @pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, prioridades e ajustes de latência',
@@ -4099,6 +4139,7 @@ def itens_jogos(ctx):
     gc = 'HKCU:\\System\\GameConfigStore'
     ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'
     prio = '\n'.join(R(f'{ifeo}\\{e}\\PerfOptions', 'CpuPriorityClass', 3) for e in JOGOS_EXE)
+    prio_ac = '\n'.join(R(f'{ifeo}\\{e}\\PerfOptions', 'CpuPriorityClass', 3) for e in EXE_COM_ANTICHEAT)
     nagle = r'''foreach ($__i in @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' -ErrorAction SilentlyContinue)) {
   $__v = Get-ItemProperty -LiteralPath $__i.PSPath -ErrorAction SilentlyContinue
   if ($__v.DhcpIPAddress -or ($__v.IPAddress -and [string]$__v.IPAddress -ne '0.0.0.0')) {
@@ -4114,11 +4155,18 @@ def itens_jogos(ctx):
              'minutos o tempo todo).', 'mais FPS e menos disco durante o jogo', 'Win+Alt+G e gravação pela Game Bar param', 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', 'AppCaptureEnabled', 0), R(gc, 'GameDVR_Enabled', 0),
                 R(f'{HKLM_POL}\\GameDVR', 'AllowGameDVR', 0))),
-        Item('prioridade-jogos', 'prioridade alta para jogos conhecidos', f'{len(JOGOS_EXE)} jogos (CS2, Dota 2, Minecraft, Cyberpunk, '
-             'Elden... sem anti-cheat de terceiros) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows. '
+        Item('prioridade-jogos', 'prioridade alta para jogos conhecidos', f'{len(CATALOGO_JOGOS)} jogos conhecidos (CS2, Dota 2, Minecraft, Cyberpunk, Baldur\'s Gate 3, Hades e outros, '
+             'todos sem anti-cheat de terceiros) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows. '
              f'Jogos com anti-cheat de terceiros ({JOGOS_ANTICHEAT}) ficam de fora de propósito.',
              'o jogo passa na frente de programas em segundo plano', 'em PC fraco, música e Discord podem engasgar durante o jogo',
              2 if j else 3, prio, minutos=4),
+        Item('prioridade-jogos-ac', 'prioridade alta também para jogos com anti-cheat (opcional)', 'Mesma opção oficial do Windows do item acima, para jogos '
+             f'que usam anti-cheat de terceiros ({JOGOS_ANTICHEAT}). É um valor de registro lido pelo Windows quando o jogo abre: nada abre, '
+             'injeta ou toca no processo do jogo, e é o método que o Process Lasso indica para jogos protegidos. Nenhum anti-cheat publica que '
+             'proíbe ou que aceita isso, então o risco não é zero. Fica desligado por padrão; quem marca assume a decisão.',
+             'o jogo passa na frente de programas em segundo plano', 'em PC fraco, música e Discord podem engasgar; sem garantia de que o anti-cheat aceite',
+             0, prio_ac, minutos=4,
+             alerta='anti-cheat rígido (Vanguard, FACEIT) pode reclamar de qualquer mudança no sistema; se o jogo reclamar, rode "desfazer"'),
         Item('mmcss', 'agendador multimídia favorecendo jogos', 'Jogos ganham prioridade de GPU e CPU no agendador multimídia '
              '(MMCSS) e o sistema reserva menos CPU para tarefas de fundo.', 'pequeno; ajuda jogos que usam o MMCSS',
              'tarefas de fundo ficam com menos CPU enquanto joga', 2 if j else 3,
@@ -5174,6 +5222,7 @@ ALERTA_ITEM = {
     ('jogos', 'hags'): 'mexe no agendador de GPU; se um jogo com anti-cheat reclamar ou a imagem falhar, desfaça este item',
     ('jogos', 'timer'): 'mexe no temporizador do sistema; se um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'mmcss'): 'mexe no agendador de multimídia; se um jogo com anti-cheat reclamar depois, desfaça este item',
+    ('jogos', 'prioridade-jogos-ac'): 'muda a prioridade de jogos com anti-cheat; se algum reclamar depois, desfaça este item',
     ('jogos', 'prioridade-jogos'): 'muda a prioridade de processos de jogos; se um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'fse'): 'muda como jogos em tela cheia são tratados; se um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'gpu-nvidia'): 'mexe na energia da placa de vídeo; se o driver ou um jogo com anti-cheat reclamar depois, desfaça este item',
@@ -6610,11 +6659,16 @@ $cs2 = ''
 foreach ($l in $libs) { $c = Join-Path $l 'steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe'; if (Test-Path -LiteralPath $c) { $cs2 = $c; break } }
 $pref = ''
 if ($cs2) { $pref = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction Stop).$cs2 } '' }
+$vid = @{}
+if ($sp) {
+  $vf = @(Get-ChildItem -Path (Join-Path $sp 'userdata\*\730\local\cfg\cs2_video.txt') -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1)
+  if ($vf.Count) { foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vf[0].FullName -Raw -ErrorAction SilentlyContinue), '"(setting\.[a-z_0-9]+)"\s+"([^"]*)"')) { $vid[$m.Groups[1].Value] = $m.Groups[2].Value } }
+}
 $run = Tenta { [bool]((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction Stop).PSObject.Properties.Name -contains 'Steam') } $false
 $hz = @(Tenta { Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.CurrentRefreshRate } | ForEach-Object { [pscustomobject]@{ placa = [string]$_.Name; hz = [int]$_.CurrentRefreshRate } } } @())
 $dvr = Tenta { [int](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' -ErrorAction Stop).AppCaptureEnabled } $null
 $plano = Tenta { [string](powercfg /getactivescheme) } ''
-Dado 'steam' @{ pasta = $sp; bibliotecas = (Lista $bib); jogos = (Lista $jogos); cs2 = $cs2; cs2_gpu = $pref; abre_com_windows = $run; telas = (Lista $hz); dvr = $dvr; plano = $plano }
+Dado 'steam' @{ pasta = $sp; bibliotecas = (Lista $bib); jogos = (Lista $jogos); cs2 = $cs2; cs2_gpu = $pref; abre_com_windows = $run; telas = (Lista $hz); dvr = $dvr; plano = $plano; video = $vid }
 '''
 
 CS2_APPID = '730'
@@ -6663,6 +6717,25 @@ def avalia_steam(d, p):
     if cs2 and len(lista(p.get('gpus'))) >= 2 and not str(d.get('cs2_gpu') or '').startswith('GpuPreference=2'):
         A.append((2, 'CS2 sem placa de vídeo definida', 'Neste PC há duas placas; o Windows pode abrir o jogo na integrada.',
                   'Configurações › Sistema › Tela › Gráficos › cs2.exe › Alto desempenho.'))
+    v = d.get('video') if isinstance(d.get('video'), dict) else {}
+
+    def num(chave):
+        try:
+            return int(float(str(v.get(chave))))
+        except (TypeError, ValueError):
+            return None
+    if num('setting.msaa_samples') in (4, 8):
+        A.append((3, 'CS2 com MSAA 4x ou 8x', 'É uma das opções de vídeo que mais pesam. O CMAA2 deixa a borda lisa com custo bem menor.',
+                  'cs2 (aplica o preset de FPS) ou Configurações › Vídeo › Modo de antisserrilhamento.'))
+    if num('setting.mat_vsync') == 1:
+        A.append((2, 'CS2 com V-Sync ligado', 'Aumenta o atraso entre o clique e a imagem.',
+                  'cs2 (desliga) ou Configurações › Vídeo › Sincronização vertical.'))
+    if num('setting.videocfg_ao_detail') not in (None, 0):
+        A.append((2, 'CS2 com oclusão de ambiente', 'Só acrescenta sombra de contato (visual) e custa FPS.',
+                  'cs2 (desliga) ou Configurações › Vídeo › Oclusão de ambiente.'))
+    if num('setting.r_low_latency') == 0 and pf(p, 'tem.nvidia'):
+        A.append((1, 'NVIDIA Reflex desligado no CS2', 'Não muda o visual e reduz o atraso entre o clique e a tela.',
+                  'cs2 (liga) ou Configurações › Vídeo › NVIDIA Reflex.'))
     return sorted(A, key=lambda a: -a[0]), jogos, libs
 
 
@@ -6678,9 +6751,10 @@ DICAS_CS2 = [
         'não fazem nada no CS2 ou já são o padrão. Pode deixar em branco.',
     ]),
     ('Dentro do CS2 (Configurações › Vídeo)', [
-        'Resolução e taxa de atualização iguais às do monitor.',
-        'NVIDIA Reflex ligado (placas NVIDIA): menos atraso entre o clique e a tela.',
-        'Sombras, oclusão de ambiente e MSAA são os que mais pesam. Baixe esses primeiro.',
+        'Resolução e taxa de atualização iguais às do monitor. Resolução menor é o maior ganho de FPS que existe, mas muda a imagem: o Katharos não mexe nisso.',
+        'NVIDIA Reflex ligado (placas NVIDIA) ou Anti-Lag 2 (placas AMD): menos atraso entre o clique e a tela.',
+        'MSAA, oclusão de ambiente, shader e partículas pesam e quase não ajudam a ver o inimigo: baixe esses primeiro.',
+        'Sombras globais em Média ou Alta: a sombra do inimigo aparece antes dele. Não baixe.',
         'V-Sync desligado. Se a tela "rasgar", limite os FPS um pouco acima da taxa do monitor.',
     ]),
     ('O que dá ban (e o Katharos não faz)', [
@@ -6767,20 +6841,63 @@ gameinstructor_enable 0  // sem lições para jogador novo
 '''
 
 
-# chaves do cs2_video.txt: só os valores de chaves que JÁ existem no arquivo são trocados; chave ausente fica como está.
-VIDEO_CS2 = {
-    'setting.msaa_samples': '0',
-    'setting.r_csgo_cmaa_enable': '1',
-    'setting.mat_vsync': '0',
-    'setting.r_aoproxy_enable': '0',
-    'setting.r_particle_max_detail_level': '0',
-    'setting.shaderquality': '0',
-    'setting.r_player_visibility_mode': '1',
+# Chaves do cs2_video.txt, conferidas em arquivos públicos de configuração (gucu112/cs2-config) e no menu Vídeo do jogo.
+# Só o valor de uma chave que JÁ existe no arquivo é trocado; chave ausente fica como está.
+# Fica de fora de propósito: resolução (muda a imagem), sombras globais e textura de modelo (ajudam a ver o inimigo).
+VIDEO_CS2 = {                                   # preset de FPS (equilibrado)
+    'setting.msaa_samples': '0',                # sem MSAA
+    'setting.r_csgo_cmaa_enable': '1',          # CMAA2 no lugar: borda lisa, custo baixo
+    'setting.mat_vsync': '0',                   # V-Sync desligado
+    'setting.videocfg_ao_detail': '0',          # oclusão de ambiente desligada
+    'setting.videocfg_particle_detail': '0',    # partículas baixas
+    'setting.shaderquality': '0',               # shader baixo
+    'setting.videocfg_dynamic_shadows': '0',    # sombras dinâmicas: só o sol
+    'setting.videocfg_fsr_detail': '0',         # sem upscaling FSR (borra a imagem)
 }
+VIDEO_CS2_FRACO = {                             # a mais, para PC fraco (pouca VRAM ou GPU antiga)
+    'setting.videocfg_texture_detail': '0',     # texturas baixas: menos VRAM
+    'setting.r_texturefilteringquality': '0',   # filtro bilinear
+    'setting.videocfg_shadow_quality': '1',     # sombras em Média (não vai abaixo disso)
+}
+VIDEO_CS2_REFLEX = {'setting.r_low_latency': '1'}   # NVIDIA Reflex ligado (sem o Boost, que gasta mais energia)
+
+CFG_CS2_MEDIR = '''// katharos-medir.cfg: criado pelo Katharos. Mostra o tempo entre quadros e o ping na tela (os mesmos do menu Jogo > Telemetria).
+// Para ligar: abra o console do CS2 e digite  exec katharos-medir
+// Para desligar: digite  exec katharos-medir-off
+cl_hud_telemetry_frametime_show 2
+cl_hud_telemetry_ping_show 2
+'''
+CFG_CS2_MEDIR_OFF = '''// katharos-medir-off.cfg: volta a telemetria ao padrão do jogo.
+cl_hud_telemetry_frametime_show 1
+cl_hud_telemetry_ping_show 1
+'''
+
+
+def video_cs2_ps(alvo):
+    """PowerShell que troca só chaves já existentes do cs2_video.txt, com cópia antes (a primeira cópia é a que o desfazer restaura)."""
+    return r"""
+if (Get-Process cs2 -ErrorAction SilentlyContinue) { Aviso 'feche o CS2 antes: ele regrava o arquivo de video ao sair'; return }
+$__sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
+if (-not $__sp) { Aviso 'Steam nao encontrada'; return }
+$__arqs = @(Get-ChildItem -Path (Join-Path ($__sp -replace '/', '\') 'userdata\*\730\local\cfg\cs2_video.txt') -ErrorAction SilentlyContinue)
+if (-not $__arqs.Count) { Aviso 'cs2_video.txt nao encontrado: abra o CS2 uma vez e feche'; return }
+$__alvo = «alvo»
+foreach ($__a in $__arqs) {
+  $__t = Get-Content -LiteralPath $__a.FullName -Raw
+  $__n = $__t
+  foreach ($__k in $__alvo.Keys) { $__n = [regex]::Replace($__n, '("' + [regex]::Escape($__k) + '"\s+")[^"]*(")', ('${1}' + $__alvo[$__k] + '${2}')) }
+  if ($__n -eq $__t) { Ok ('video do CS2 ja estava assim: ' + $__a.Directory.Parent.Parent.Parent.Name); continue }
+  if ($TESTE) { Plano ('ajustar ' + $__a.FullName); continue }
+  $__b = $__a.FullName + '.katharos.bak'
+  if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a.FullName -Destination $__b }
+  Set-Content -LiteralPath $__a.FullName -Value $__n -NoNewline -Encoding UTF8
+  Guarda-Desfazer ('cs2-video|' + $__a.FullName) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a.FullName -replace "'", "''") + "' -Force")
+  Feito ('video do CS2 ajustado: ' + $__a.Directory.Parent.Parent.Parent.Name)
+}""".replace('«alvo»', '@{ ' + '; '.join(f"'{k}' = '{v}'" for k, v in alvo.items()) + ' }')
 
 
 @pacote('cs2', 'CS2', 'Counter-Strike 2: vídeo para FPS, placa certa, tela cheia e um .cfg só com comandos do jogo',
-        'Ajustes para o CS2 que não arriscam VAC: configurações do Windows para o cs2.exe e um arquivo de configuração '
+        'Ajustes para o CS2 que não arriscam VAC: configurações do Windows para o cs2.exe e arquivos de configuração '
         'com comandos que o próprio jogo aceita. Os únicos arquivos tocados são os de configuração do seu usuário (vídeo e um .cfg à parte), '
         'com cópia antes. Arquivo do jogo, textura e memória ficam intocados. Céu preto não está aqui: no CS2 os comandos de céu exigem '
         'sv_cheats, e o caminho que sobra é trocar textura, que servidores oficiais bloqueiam e pode dar ban.')
@@ -6807,27 +6924,19 @@ if ($TESTE) { Plano ('criar ' + $__f); return }
 Set-Content -LiteralPath $__f -Value «cfg» -Encoding UTF8
 Guarda-Desfazer 'cs2-cfg' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "' -ErrorAction SilentlyContinue")
 Feito 'katharos.cfg criado; ponha +exec katharos nas opcoes de inicializacao do CS2' '''.replace('«cfg»', psq(CFG_CS2))
-    video = r"""
-if (Get-Process cs2 -ErrorAction SilentlyContinue) { Aviso 'feche o CS2 antes: ele regrava o arquivo de video ao sair'; return }
-$__sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
-if (-not $__sp) { Aviso 'Steam nao encontrada'; return }
-$__arqs = @(Get-ChildItem -Path (Join-Path ($__sp -replace '/', '\') 'userdata\*\730\local\cfg\cs2_video.txt') -ErrorAction SilentlyContinue)
-if (-not $__arqs.Count) { Aviso 'cs2_video.txt nao encontrado: abra o CS2 uma vez e feche'; return }
-$__alvo = «alvo»
-foreach ($__a in $__arqs) {
-  $__t = Get-Content -LiteralPath $__a.FullName -Raw
-  $__n = $__t
-  foreach ($__k in $__alvo.Keys) { $__n = [regex]::Replace($__n, '("' + [regex]::Escape($__k) + '"\s+")[^"]*(")', ('${1}' + $__alvo[$__k] + '${2}')) }
-  if ($__n -eq $__t) { continue }
-  if ($TESTE) { Plano ('ajustar ' + $__a.FullName); continue }
-  $__b = $__a.FullName + '.katharos.bak'
-  if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a.FullName -Destination $__b }
-  Set-Content -LiteralPath $__a.FullName -Value $__n -NoNewline -Encoding UTF8
-  Guarda-Desfazer ('cs2-video|' + $__a.FullName) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a.FullName -replace "'", "''") + "' -Force")
-  Feito ('video do CS2 ajustado: ' + $__a.Directory.Parent.Parent.Parent.Name)
-}""".replace('«alvo»', '@{ ' + '; '.join(f"'{k}' = '{v}'" for k, v in VIDEO_CS2.items()) + ' }')
+    video = video_cs2_ps(VIDEO_CS2)
+    video_fraco = video_cs2_ps({**VIDEO_CS2, **VIDEO_CS2_FRACO})
+    reflex = video_cs2_ps(VIDEO_CS2_REFLEX)
+    medir = ACHA_CS2 + r'''
+$__f = Join-Path $CS2CFG 'katharos-medir.cfg'; $__g = Join-Path $CS2CFG 'katharos-medir-off.cfg'
+if ((Test-Path -LiteralPath $__f) -and (Test-Path -LiteralPath $__g)) { Ok 'katharos-medir ja existe'; return }
+if ($TESTE) { Plano ('criar ' + $__f + ' e ' + $__g); return }
+Set-Content -LiteralPath $__f -Value «ligar» -Encoding UTF8
+Set-Content -LiteralPath $__g -Value «desligar» -Encoding UTF8
+Guarda-Desfazer 'cs2-medir' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "','" + ($__g -replace "'", "''") + "' -ErrorAction SilentlyContinue")
+Feito 'criados katharos-medir.cfg e katharos-medir-off.cfg; no console do CS2 digite: exec katharos-medir' '''.replace('«ligar»', psq(CFG_CS2_MEDIR)).replace('«desligar»', psq(CFG_CS2_MEDIR_OFF))
     # cada item roda num bloco próprio: o "return" do ACHA_CS2 sai só do item, não do script inteiro
-    gpu, janela, fso, cfg, video = ('& {\n' + x + '\n}' for x in (gpu, janela, fso, cfg, video))
+    gpu, janela, fso, cfg, video, video_fraco, reflex, medir = ('& {\n' + x + '\n}' for x in (gpu, janela, fso, cfg, video, video_fraco, reflex, medir))
     return [
         Item('gpu-cs2', 'CS2 na placa de vídeo dedicada', 'O mesmo que Configurações › Tela › Gráficos › cs2.exe › Alto desempenho. '
              'Em notebook com duas placas, o Windows às vezes abre o jogo na integrada.', 'muito mais FPS se ele estava na integrada',
@@ -6839,9 +6948,20 @@ foreach ($__a in $__arqs) {
              'atraso em tela cheia, em outros piora: teste uma partida e desfaça se não sentir diferença.', 'às vezes menos atraso',
              'às vezes Alt+Tab mais lento ou tela piscando', 0, fso),
         Item('video-cs2', 'vídeo do CS2 no preset de FPS', 'Ajusta o arquivo de vídeo do jogo (o mesmo que o menu Vídeo grava): '
-             'MSAA desligado com CMAA2 no lugar, oclusão de ambiente, partículas e shader no baixo, V-Sync desligado e contraste de '
-             'jogadores ligado. Sombras e resolução ficam como estão, porque ajudam a ver o inimigo. Faz cópia antes; o CS2 precisa estar fechado.',
-             'é onde mais se ganha FPS no CS2', 'o jogo fica menos bonito (fumaça e reflexos mais simples)', 2, video),
+             'MSAA desligado com CMAA2 no lugar, V-Sync desligado, oclusão de ambiente, partículas e shader no baixo, sombras dinâmicas só do sol '
+             'e sem upscaling FSR. Resolução, sombras globais e textura ficam como estão, porque ajudam a ver o inimigo. '
+             'Faz cópia antes; o CS2 precisa estar fechado.',
+             'é onde mais se ganha FPS no CS2', 'o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)', 2, video),
+        Item('video-cs2-fraco', 'vídeo do CS2 para PC fraco (a mais)', 'Tudo do preset de FPS, e também texturas baixas, filtro bilinear e sombras '
+             'em Média (nunca abaixo disso). Para placa antiga ou com pouca memória de vídeo. Faz cópia antes; o CS2 precisa estar fechado.',
+             'menos uso de memória de vídeo e mais FPS em placa antiga', 'texturas mais borradas de perto', 3, video_fraco,
+             conflita=('video-cs2',)),
+        Item('reflex-cs2', 'NVIDIA Reflex ligado no CS2', 'Liga o Reflex (sem o Boost) no arquivo de vídeo do jogo, o mesmo que Configurações › Vídeo › '
+             'NVIDIA Reflex. Não muda a imagem.', 'menos atraso entre o clique e a tela', 'um pouco mais de consumo da placa', 2, reflex)
+        if pf(p, 'tem.nvidia') else None,
+        Item('medir-cs2', 'tempo entre quadros e ping na tela do CS2', 'Cria dois arquivos de configuração: um liga o contador de tempo entre '
+             'quadros e o ping na tela (os mesmos do menu de telemetria do jogo) e outro desliga. Você digita no console: exec katharos-medir.',
+             'dá para ver se uma mudança ajudou, com número', 'nada; só vale se você digitar o comando no jogo', 0, medir),
         Item('cfg-cs2', 'katharos.cfg com comandos do próprio jogo', 'Cria um arquivo à parte (não mexe no seu autoexec) com '
              'menus a 60 FPS e sem dicas de ajuda. Para valer, você põe +exec katharos nas opções de inicialização.',
              'placa mais fria nos menus; tela mais limpa', 'nada; o arquivo só vale se você mandar o jogo carregar', 2, cfg),

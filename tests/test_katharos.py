@@ -137,6 +137,43 @@ class TestPerfis(unittest.TestCase):
                         self.assertIn((pac.nome, i.id), k.ALERTA_ITEM, f'{chave}/{i.id}: prioridade por exe sem alerta de anti-cheat')
 
 
+class TestJogosECS2(unittest.TestCase):
+    """O catálogo e o pacote do CS2 só mexem no que foi confirmado em fonte."""
+    def test_catalogo_nao_tem_exe_com_anticheat(self):
+        self.assertFalse(set(k.JOGOS_EXE) & set(k.EXE_COM_ANTICHEAT))
+
+    def test_catalogo_sem_repeticao_e_sem_jogo_que_nao_existe_mais(self):
+        nomes = [n for n, _ in k.CATALOGO_JOGOS]
+        self.assertEqual(len(nomes), len(set(nomes)))
+        self.assertEqual(len(k.JOGOS_EXE), len(set(k.JOGOS_EXE)))
+        self.assertNotIn('csgo.exe', k.JOGOS_EXE)
+
+    def test_item_de_prioridade_com_anticheat_e_opt_in(self):
+        its = {i.id: i for _, i in ITENS}
+        item = its['prioridade-jogos-ac']
+        self.assertEqual(item.nivel, 0)
+        self.assertTrue(item.alerta)
+        for chave in k.PERFIS:
+            for _, lista in k.itens_do_perfil(chave):
+                self.assertNotIn('prioridade-jogos-ac', [i.id for i in lista], chave)
+
+    def test_itens_novos_do_cs2_existem(self):
+        ids = {i.id for _, i in ITENS}
+        for novo in ('video-cs2', 'video-cs2-fraco', 'reflex-cs2', 'medir-cs2', 'prioridade-jogos-ac'):
+            self.assertIn(novo, ids)
+
+    def test_video_cs2_so_troca_chaves_conhecidas_e_nunca_a_resolucao(self):
+        todas = {**k.VIDEO_CS2, **k.VIDEO_CS2_FRACO, **k.VIDEO_CS2_REFLEX}
+        for chave in todas:
+            self.assertNotRegex(chave, r'defaultres|fullscreen|aspectratio|refreshrate|display')
+        self.assertFalse(set(k.VIDEO_CS2) & set(k.VIDEO_CS2_FRACO))
+
+    def test_video_cs2_faz_copia_antes_e_exige_jogo_fechado(self):
+        its = {i.id: i for _, i in ITENS}
+        self.assertIn('.katharos.bak', its['video-cs2'].ps)
+        self.assertIn('cs2', its['video-cs2'].ps.lower())
+
+
 class TestMenu(unittest.TestCase):
     def test_todo_comando_do_menu_existe_no_parser(self):
         p = k.monta_parser()

@@ -8,6 +8,17 @@ O número tem três partes: **MAIOR.MENOR.CORREÇÃO**.
 
 Cada versão tem uma tag no GitHub (`v1.2.0`) e o botão de download do site baixa exatamente essa tag. O arquivo `SHA256SUMS.txt` da tag traz os hashes para você conferir. O número também aparece em `katharos --versao`.
 
+## 1.4.0 · 9 de novembro de 2026
+
+Pacote do CS2 mais completo e catálogo de jogos maior.
+
+- **CS2**: o pacote agora ajusta o vídeo do jogo (`video-cs2`), só nas chaves confirmadas em fonte pública, com cópia `.katharos.bak` do arquivo antes e com o jogo fechado. Resolução, qualidade global de sombras e textura dos modelos não são tocadas. Há uma variante para PC fraco (`video-cs2-fraco`, modo extremo), o Reflex (`reflex-cs2`, só com NVIDIA) e `medir-cs2`, que cria um cfg para mostrar frametime e ping na tela (você digita `exec katharos-medir`).
+- **`cs2` e `steam` leem o vídeo atual** (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.
+- **Catálogo com 61 jogos em 6 categorias**, todos sem anti-cheat de terceiros, que recebem prioridade de CPU. O CS:GO saiu: virou CS2.
+- **Prioridade para jogos com anti-cheat** virou item à parte, desligado por padrão (`prioridade-jogos-ac`), com aviso. Nenhum perfil o marca.
+- **Landing**: catálogo em abas, cartão "Monte o seu" nos perfis, FAQ de ban reescrito.
+- **CI**: `.py` e `.txt` sempre com final de linha LF, para o hash bater no Windows.
+
 ## 1.3.0 · 9 de novembro de 2026
 
 Mais cuidado com o PC e com quem usa.
