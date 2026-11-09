@@ -4149,22 +4149,22 @@ def itens_jogos(ctx):
 }'''
     return [
         Item('modo-jogo', 'Modo de Jogo ligado', 'O Windows segura atualizações e tarefas de fundo enquanto um jogo está aberto.',
-             'menos engasgos causados pelo sistema', 'nenhum', 1,
+             'pequeno: segura atualizações e avisos durante o jogo', 'nenhum', 1,
              RR(R('HKCU:\\Software\\Microsoft\\GameBar', 'AutoGameModeEnabled', 1), R('HKCU:\\Software\\Microsoft\\GameBar', 'AllowAutoGameMode', 1))),
         Item('gamedvr', 'Game DVR e captura em segundo plano', 'Desliga a gravação contínua do Xbox Game Bar (ela grava os últimos '
-             'minutos o tempo todo).', 'mais FPS e menos disco durante o jogo', 'Win+Alt+G e gravação pela Game Bar param', 2,
+             'minutos o tempo todo).', 'pequeno em PC forte; mais perceptível em PC fraco', 'Win+Alt+G e gravação pela Game Bar param', 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', 'AppCaptureEnabled', 0), R(gc, 'GameDVR_Enabled', 0),
                 R(f'{HKLM_POL}\\GameDVR', 'AllowGameDVR', 0))),
         Item('prioridade-jogos', 'prioridade alta para jogos conhecidos', f'{len(CATALOGO_JOGOS)} jogos conhecidos (CS2, Dota 2, Minecraft, Cyberpunk, Baldur\'s Gate 3, Hades e outros, '
              'todos sem anti-cheat de terceiros) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows. '
              f'Jogos com anti-cheat de terceiros ({JOGOS_ANTICHEAT}) ficam de fora de propósito.',
-             'o jogo passa na frente de programas em segundo plano', 'em PC fraco, música e Discord podem engasgar durante o jogo',
+             'pequeno, e só quando algo disputa a CPU com o jogo', 'em PC fraco, música e Discord podem engasgar durante o jogo',
              2 if j else 3, prio, minutos=4),
         Item('prioridade-jogos-ac', 'prioridade alta também para jogos com anti-cheat (opcional)', 'Mesma opção oficial do Windows do item acima, para jogos '
              f'que usam anti-cheat de terceiros ({JOGOS_ANTICHEAT}). É um valor de registro lido pelo Windows quando o jogo abre: nada abre, '
              'injeta ou toca no processo do jogo, e é o método que o Process Lasso indica para jogos protegidos. Nenhum anti-cheat publica que '
              'proíbe ou que aceita isso, então o risco não é zero. Fica desligado por padrão; quem marca assume a decisão.',
-             'o jogo passa na frente de programas em segundo plano', 'em PC fraco, música e Discord podem engasgar; sem garantia de que o anti-cheat aceite',
+             'pequeno, e só quando algo disputa a CPU com o jogo', 'em PC fraco, música e Discord podem engasgar; sem garantia de que o anti-cheat aceite',
              0, prio_ac, minutos=4,
              alerta='anti-cheat rígido (Vanguard, FACEIT) pode reclamar de qualquer mudança no sistema; se o jogo reclamar, rode "desfazer"'),
         Item('mmcss', 'agendador multimídia favorecendo jogos', 'Jogos ganham prioridade de GPU e CPU no agendador multimídia '
@@ -6951,13 +6951,13 @@ Feito 'criados katharos-medir.cfg e katharos-medir-off.cfg; no console do CS2 di
              'MSAA desligado com CMAA2 no lugar, V-Sync desligado, oclusão de ambiente, partículas e shader no baixo, sombras dinâmicas só do sol '
              'e sem upscaling FSR. Resolução, sombras globais e textura ficam como estão, porque ajudam a ver o inimigo. '
              'Faz cópia antes; o CS2 precisa estar fechado.',
-             'é onde mais se ganha FPS no CS2', 'o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)', 2, video),
+             'o MSAA 4x sozinho pode custar 10 a 20% do FPS; o resto varia com o PC', 'o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)', 2, video),
         Item('video-cs2-fraco', 'vídeo do CS2 para PC fraco (a mais)', 'Tudo do preset de FPS, e também texturas baixas, filtro bilinear e sombras '
              'em Média (nunca abaixo disso). Para placa antiga ou com pouca memória de vídeo. Faz cópia antes; o CS2 precisa estar fechado.',
              'menos uso de memória de vídeo e mais FPS em placa antiga', 'texturas mais borradas de perto', 3, video_fraco,
              conflita=('video-cs2',)),
         Item('reflex-cs2', 'NVIDIA Reflex ligado no CS2', 'Liga o Reflex (sem o Boost) no arquivo de vídeo do jogo, o mesmo que Configurações › Vídeo › '
-             'NVIDIA Reflex. Não muda a imagem.', 'menos atraso entre o clique e a tela', 'um pouco mais de consumo da placa', 2, reflex)
+             'NVIDIA Reflex. Não muda a imagem.', 'menos atraso quando a placa é o gargalo; com FPS muito alto, pouca diferença', 'um pouco mais de consumo da placa', 2, reflex)
         if pf(p, 'tem.nvidia') else None,
         Item('medir-cs2', 'tempo entre quadros e ping na tela do CS2', 'Cria dois arquivos de configuração: um liga o contador de tempo entre '
              'quadros e o ping na tela (os mesmos do menu de telemetria do jogo) e outro desliga. Você digita no console: exec katharos-medir.',

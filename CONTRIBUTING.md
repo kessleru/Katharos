@@ -50,7 +50,7 @@ e, se mexeu em itens, perfis ou comandos, atualize o `CHANGELOG.md`.
 
 ## Versões
 
-O número tem três partes, MAIOR.MENOR.CORREÇÃO, explicadas no [CHANGELOG.md](CHANGELOG.md). Cada versão tem uma tag (`v1.2.0`).
+O número tem três partes, MAIOR.MENOR.CORREÇÃO, e as regras de quando cada uma sobe estão no [CHANGELOG.md](CHANGELOG.md). Uma versão é uma entrega com tag (`v1.2.0`), não um commit: mudanças de site, documentação, testes e CI não geram versão. Se a sua mudança altera o que o usuário vê, diga no pull request se é MENOR ou CORREÇÃO; quem publica a versão atualiza `VERSAO`, a data e o CHANGELOG juntos.
 
 ## Crédito
 

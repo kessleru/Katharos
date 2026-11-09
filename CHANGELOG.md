@@ -1,23 +1,30 @@
 # Versões do Katharos
 
-O número tem três partes: **MAIOR.MENOR.CORREÇÃO**.
+O número tem três partes: **MAIOR.MENOR.CORREÇÃO**. Quem decide qual sobe é o que o usuário sente, não o tamanho do trabalho.
 
-- **MAIOR** muda quando algo deixa de funcionar como antes: um comando some ou muda de nome, ou o formato do backup do `desfazer` muda de um jeito que a versão nova não lê mais. Esperar poucas vezes.
-- **MENOR** muda quando entra coisa nova sem quebrar o que já existia: comandos, ajustes, perfis, testes.
-- **CORREÇÃO** muda quando só se conserta algo: um texto errado, um ajuste que não pegava, um erro.
+| Mudou isto | Sobe | Exemplo |
+|---|---|---|
+| Um comando some ou muda de nome; o formato do backup do `desfazer` muda e a versão nova não lê o antigo | **MAIOR** | `limpar` vira `faxina` |
+| Entra algo que o usuário vê ou usa: comando, item, perfil, jogo no catálogo, medição | **MENOR** | item novo no pacote `cs2` |
+| Conserta algo que já existia: texto errado, ajuste que não pegava, erro | **CORREÇÃO** | o item não voltava no `desfazer` |
+| Só site, documentação, testes ou CI | **nada** | não vira versão, e não entra aqui |
 
-Cada versão tem uma tag no GitHub (`v1.2.0`) e o botão de download do site baixa exatamente essa tag. O arquivo `SHA256SUMS.txt` da tag traz os hashes para você conferir. O número também aparece em `katharos --versao`.
+Quando uma versão existe:
+
+- Uma versão é uma **entrega**: tem tag no GitHub (`v1.4.0`), nota de lançamento e `SHA256SUMS.txt`. Não é um commit nem um dia de trabalho. Várias mudanças pequenas esperam juntas pela próxima entrega.
+- Só se corta versão com os testes e o CI verdes e com o número e a data deste arquivo iguais aos do programa (`katharos --versao`). Um teste confere.
+- A data é a da tag. Duas entregas no mesmo dia só se a segunda for uma CORREÇÃO urgente da primeira.
+- O botão de download do site baixa exatamente a última tag.
+- Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
 ## 1.4.0 · 9 de novembro de 2026
 
 Pacote do CS2 mais completo e catálogo de jogos maior.
 
-- **CS2**: o pacote agora ajusta o vídeo do jogo (`video-cs2`), só nas chaves confirmadas em fonte pública, com cópia `.katharos.bak` do arquivo antes e com o jogo fechado. Resolução, qualidade global de sombras e textura dos modelos não são tocadas. Há uma variante para PC fraco (`video-cs2-fraco`, modo extremo), o Reflex (`reflex-cs2`, só com NVIDIA) e `medir-cs2`, que cria um cfg para mostrar frametime e ping na tela (você digita `exec katharos-medir`).
+- **CS2**: o pacote agora ajusta o vídeo do jogo, só nas chaves confirmadas em fonte pública, com cópia do arquivo antes (`.katharos.bak`) e o jogo fechado. Resolução, qualidade global de sombras e textura dos modelos não são tocadas. Há uma variante para PC fraco (`video-cs2-fraco`, modo extremo), o Reflex (`reflex-cs2`, só com NVIDIA) e `medir-cs2`, que cria um cfg para mostrar frametime e ping na tela (você digita `exec katharos-medir`).
 - **`cs2` e `steam` leem o vídeo atual** (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.
 - **Catálogo com 61 jogos em 6 categorias**, todos sem anti-cheat de terceiros, que recebem prioridade de CPU. O CS:GO saiu: virou CS2.
 - **Prioridade para jogos com anti-cheat** virou item à parte, desligado por padrão (`prioridade-jogos-ac`), com aviso. Nenhum perfil o marca.
-- **Landing**: catálogo em abas, cartão "Monte o seu" nos perfis, FAQ de ban reescrito.
-- **CI**: `.py` e `.txt` sempre com final de linha LF, para o hash bater no Windows.
 
 ## 1.3.0 · 9 de novembro de 2026
 

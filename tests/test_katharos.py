@@ -396,5 +396,21 @@ class TestEntrega(unittest.TestCase):
         self.assertIn(k.VERSAO, site, 'rode arte/gera_site.py')
         self.assertNotIn('{{', site)
 
+    def test_secao_novidades_mostra_a_versao_atual_do_changelog(self):
+        site = (RAIZ / 'docs' / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('id="novidades"', site)
+        self.assertIn(f'<b>v{k.VERSAO}</b>', site, 'a versão atual precisa estar no CHANGELOG.md e no site')
+        cl = (RAIZ / 'CHANGELOG.md').read_text(encoding='utf-8')
+        self.assertRegex(cl, rf'## {re.escape(k.VERSAO)} · ')
+
+    def test_changelog_tem_versoes_em_ordem_sem_repeticao_e_a_primeira_e_a_atual(self):
+        cl = (RAIZ / 'CHANGELOG.md').read_text(encoding='utf-8')
+        achados = re.findall(r'^## (\d+)\.(\d+)\.(\d+) · (\d{1,2} de \w+ de \d{4})$', cl, re.M)
+        self.assertGreaterEqual(len(achados), 2)
+        nums = [tuple(int(x) for x in a[:3]) for a in achados]
+        self.assertEqual(nums, sorted(set(nums), reverse=True), 'versões fora de ordem ou repetidas')
+        self.assertEqual('.'.join(map(str, nums[0])), k.VERSAO, 'a versão mais nova do CHANGELOG tem de ser a do programa')
+        self.assertTrue(achados[0][3].startswith(k.DATA_VERSAO.split()[0] + ' de'), 'a data do CHANGELOG tem de ser a do programa')
+
 if __name__ == '__main__':
     unittest.main()
