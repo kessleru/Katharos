@@ -186,21 +186,38 @@ class TestPacotesDeJogo(unittest.TestCase):
     def test_nenhum_script_de_jogo_grava_com_bom(self):
         """Set-Content -Encoding UTF8 grava BOM no PowerShell 5.1; arquivo de jogo (Java, cfg da Valve) pode não aceitar."""
         for pac, it in ITENS:
-            if pac in ('cs2', 'minecraft'):
+            if pac in ('cs2', 'minecraft', 'unreal'):
                 self.assertNotRegex(it.ps or '', r'Set-Content[^\n]*-Encoding\s+UTF8', f'{pac}/{it.id}')
                 self.assertNotRegex(it.ps or '', r'Out-File', f'{pac}/{it.id}')
 
     def test_pacote_de_jogo_faz_copia_e_exige_jogo_fechado(self):
         for pac, it in ITENS:
-            if pac == 'minecraft':
+            if pac in ('minecraft', 'unreal'):
                 self.assertIn('.katharos.bak', it.ps)
                 self.assertIn('Get-Process', it.ps)
                 self.assertIn('Guarda-Desfazer', it.ps)
-                self.assertIn('UTF8Encoding $false', it.ps)
+                self.assertIn('UTF8Encoding $__bom', it.ps)
+                self.assertIn('UTF-16', it.ps, 'não reescreve arquivo em codificação que não entende')
+
+    def test_unreal_so_usa_chaves_documentadas_so_baixa_e_so_jogo_com_fonte(self):
+        self.assertFalse(set(k.UE_REGRAS) - k.UE_CHAVES_DOCUMENTADAS)
+        self.assertTrue(all(como == 'max' for como, _ in k.UE_REGRAS.values()), 'só baixa')
+        self.assertTrue(all(valor <= 2 for _, valor in k.UE_REGRAS.values()), 'de Épico (3) para Alto (2), no máximo')
+        for id_, nome, pasta, fonte in k.UE_JOGOS:
+            self.assertTrue(fonte.startswith('https://'), nome)
+            self.assertNotIn(nome, k.JOGOS_ANTICHEAT, f'{nome} tem anti-cheat de terceiros')
+        ids = {i.id for p, i in ITENS if p == 'unreal'}
+        self.assertEqual(ids, {'ue-' + j[0] for j in k.UE_JOGOS})
+        for p, i in ITENS:
+            if p == 'unreal':
+                self.assertIn('^([^=]+)=(.*)$', i.ps)
+                self.assertNotIn('sg.TextureQuality', i.ps)
+                self.assertNotIn('sg.AntiAliasingQuality', i.ps)
 
     def test_pacote_de_jogo_esta_no_menu(self):
         cmds = [c for _, _, its in k.GRUPOS for c, _, _ in its]
         self.assertIn('minecraft', cmds)
+        self.assertIn('unreal', cmds)
 
 
 class TestMenu(unittest.TestCase):
@@ -357,6 +374,285 @@ class TestBenchmark(unittest.TestCase):
         self.assertEqual(set(r), {'cpu', 'cpu_multi', 'ram', 'disco_escrita', 'disco_4k'})
         self.assertTrue(all(v['mediana'] > 0 for v in r.values()))
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
+
+
+class TestSegundoPlano(unittest.TestCase):
+    def test_recente_h(self):
+        from datetime import datetime, timedelta
+        agora = datetime.now()
+        self.assertTrue(k.recente_h((agora - timedelta(hours=1)).isoformat(), 3))
+        self.assertFalse(k.recente_h((agora - timedelta(hours=5)).isoformat(), 3))
+        self.assertFalse(k.recente_h(None, 3))
+        self.assertFalse(k.recente_h('lixo', 3))
+
+    def test_cada_frequencia_gera_tarefa_com_gatilho_proprio_e_regras_leves(self):
+        corpos = {}
+        antigo = k.roda_ps
+        k.CASA_ANT = k.CASA
+        import tempfile
+        k.CASA = Path(tempfile.mkdtemp())
+        try:
+            for f in k.FREQ_FUNDO:
+                k.roda_ps = lambda t, corpo, *a, **kw: (corpos.__setitem__(f, corpo), type('S', (), {'ok': True, 'erros': []})())[1]
+                self.assertEqual(k.instala_manutencao(Ctx(), f), 0)
+                self.assertEqual(k.estado().get('manut_freq'), f)
+        finally:
+            k.roda_ps = antigo
+            k.CASA = k.CASA_ANT
+        self.assertIn('-Weekly', corpos['semanal'])
+        self.assertIn('-Daily', corpos['diaria'])
+        self.assertIn('-AtLogOn', corpos['continua'])
+        self.assertIn('-RepetitionInterval', corpos['continua'])
+        for c in corpos.values():
+            self.assertIn('-RunOnlyIfIdle', c)
+            self.assertIn('-MultipleInstances IgnoreNew', c)
+            self.assertIn('-Priority 7', c)
+            self.assertIn(k.TAREFA_MANUT_ANTIGA, c, 'a tarefa antiga é removida para não rodar duas vezes')
+            self.assertNotIn('«', c)
+
+    def test_frequencia_desconhecida_cai_em_semanal(self):
+        self.assertIn('semanal', k.FREQ_FUNDO)
+        self.assertTrue(k.INTERVALO_MINIMO_H >= 1)
+
+
+class TestTendencia(unittest.TestCase):
+    def _am(self, n, passo_h=12, **fn):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1)
+        out = []
+        for i in range(n):
+            d = {'_dt': base + timedelta(hours=passo_h * i)}
+            for chave, f in fn.items():
+                d[chave] = f(i)
+            out.append(d)
+        return out
+
+    def test_espaco_caindo_avisa_com_prazo(self):
+        am = self._am(20, livre_c=lambda i: 60 - i * 1.5)   # 3 GB/dia
+        ach = dict(k.analisa_tendencia(am))
+        self.assertIn('livre_c', ach)
+        self.assertIn('dias', ach['livre_c'])
+
+    def test_espaco_estavel_nao_avisa(self):
+        self.assertEqual(k.analisa_tendencia(self._am(20, livre_c=lambda i: 60 - (i % 3) * 0.2)), [])
+
+    def test_ruido_nao_vira_tendencia(self):
+        am = self._am(20, boot_s=lambda i: 30 + (5 if i % 2 else -5), ram_usada=lambda i: 8 + (0.3 if i % 2 else -0.3))
+        self.assertEqual(k.analisa_tendencia(am), [])
+
+    def test_boot_e_ram_subindo(self):
+        am = self._am(18, boot_s=lambda i: 30 + i * 2, ram_usada=lambda i: 6 + i * 0.3)
+        self.assertEqual({c for c, _ in k.analisa_tendencia(am)}, {'boot_s', 'ram_usada'})
+
+    def test_poucas_amostras_ou_poucos_dias_nao_afirmam_nada(self):
+        self.assertEqual(k.analisa_tendencia(self._am(4, livre_c=lambda i: 60 - i * 20)), [])
+        self.assertEqual(k.analisa_tendencia(self._am(10, passo_h=1, livre_c=lambda i: 60 - i * 5)), [])
+
+    def test_arquivo_tem_teto_e_aguenta_linha_quebrada(self):
+        import tempfile
+        d = Path(tempfile.mkdtemp()) / 'm.jsonl'
+        antigo = k.METRICAS_MAX
+        k.METRICAS_MAX = 5
+        try:
+            for i in range(9):
+                k.registra_metrica({'livre_c': 50 - i, 'lixo': 'x'}, quando=f'2026-01-0{i + 1}T12:00:00', arq=d)
+            with open(d, 'a', encoding='utf-8') as f:
+                f.write('{quebrada\n')
+            am = k.le_metricas(d)
+            self.assertEqual(len(am), 5)
+            self.assertEqual([a['livre_c'] for a in am], [46, 45, 44, 43, 42])
+            self.assertNotIn('lixo', am[0], 'só as chaves conhecidas são gravadas')
+        finally:
+            k.METRICAS_MAX = antigo
+
+    def test_sem_numero_nao_grava(self):
+        import tempfile
+        d = Path(tempfile.mkdtemp()) / 'm.jsonl'
+        self.assertIsNone(k.registra_metrica({'cpu': None, 'x': 'a'}, arq=d))
+        self.assertFalse(d.exists())
+
+
+class TestPainel(unittest.TestCase):
+    def _dados(self):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        am = [{'_dt': base + timedelta(hours=12 * i), 'livre_c': 80 - i, 'ram_usada': 6 + i * 0.1, 'boot_s': 30 + i, 'cpu': 3.0, 'inicializacao': 9, 'processos': 150} for i in range(14)]
+        return am, base
+
+    def test_painel_e_autocontido_e_tem_graficos(self):
+        am, base = self._dados()
+        h = k.monta_painel(am, [], [(base + __import__('datetime').timedelta(days=2), 'inicializacao')], k.analisa_tendencia(am), 'PC', '1.4.0')
+        self.assertIn('<svg', h)
+        self.assertNotIn('http://', h)
+        self.assertNotIn('https://', h)
+        self.assertNotIn('<script', h, 'sem scripts')
+        self.assertIn('aria-label', h)
+        self.assertIn('aplicou: inicializacao', h)
+
+    def test_painel_escapa_html_do_nome_do_pc_e_do_pacote(self):
+        am, base = self._dados()
+        h = k.monta_painel(am, [], [(base, '<img src=x onerror=1>')], [], '<script>alert(1)</script>', '1')
+        self.assertNotIn('<script>alert', h)
+        self.assertNotIn('<img src=x', h)
+
+    def test_painel_vazio_explica_como_ligar_o_segundo_plano(self):
+        h = k.monta_painel([], [], [], [], 'PC', '1')
+        self.assertIn('agendar --frequencia continua', h)
+        self.assertNotIn('<svg', h)
+
+    def test_serie_de_um_ponto_e_valor_constante_nao_quebram(self):
+        from datetime import datetime
+        self.assertIn('<circle', k.svg_linha([(datetime(2026, 1, 1), 5.0)], 't'))
+        s = [(datetime(2026, 1, i + 1), 7.0) for i in range(5)]
+        self.assertIn('<polyline', k.svg_linha(s, 't', tendencia=True))
+
+    def test_ticks_inteiros_nao_se_repetem(self):
+        t = k._ticks(9.0, 11.0, inteiro=True)
+        self.assertEqual(len(t), len(set(t)))
+        self.assertTrue(all(x == int(x) for x in t))
+
+    def test_sparkline(self):
+        self.assertEqual(k.sparkline_txt([1, 2, 3, 4, 5, 6, 7, 8])[0], '▁')
+        self.assertEqual(k.sparkline_txt([1, 8])[-1], '█')
+        self.assertTrue(k.sparkline_txt([1, 5, 9], ascii_=True).isascii())
+        self.assertEqual(k.sparkline_txt([]), '')
+        self.assertLessEqual(len(k.sparkline_txt(list(range(100)))), 24)
+
+
+class TestMotor(unittest.TestCase):
+    def _am(self, n=20, passo_h=12, **fn):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        return [{'_dt': base + timedelta(hours=passo_h * i), **{c: f(i) for c, f in fn.items()}} for i in range(n)]
+
+    def _ev(self, **kw):
+        from datetime import datetime
+        ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': True,
+              'agora': datetime(2026, 2, 1), 'perfil': {}}
+        ev.update(kw)
+        return ev
+
+    def test_sem_dados_so_propoe_ligar_o_segundo_plano(self):
+        ev = self._ev(fundo_ligado=False)
+        self.assertEqual([x['id'] for x in k.gera_sugestoes(ev)], ['ligar-fundo'])
+        self.assertEqual(k.gera_sugestoes(self._ev(fundo_ligado=True)), [])
+
+    def test_espaco_acabando_propoe_limpar_com_numero_e_prazo(self):
+        ev = self._ev(amostras=self._am(livre_c=lambda i: 60 - i * 1.5, ram_total=lambda i: 16.0, ram_usada=lambda i: 6.0))
+        s = k.gera_sugestoes(ev)
+        self.assertEqual(s[0]['id'], 'espaco')
+        self.assertEqual(s[0]['comando'], 'limpar')
+        self.assertEqual(s[0]['confianca'], 'alta')
+        self.assertRegex(s[0]['porque'], r'\d+ dias')
+
+    def test_pc_estavel_nao_gera_proposta_nenhuma(self):
+        ev = self._ev(amostras=self._am(livre_c=lambda i: 60.0, boot_s=lambda i: 30 + (i % 2), ram_total=lambda i: 16.0, ram_usada=lambda i: 6.0 + (i % 2) * 0.1, cpu=lambda i: 3.0))
+        self.assertEqual(k.gera_sugestoes(ev), [])
+
+    def test_dispensada_nao_volta_antes_de_30_dias(self):
+        ev = self._ev(amostras=self._am(livre_c=lambda i: 60 - i * 1.5))
+        self.assertTrue(k.gera_sugestoes(ev))
+        ev['dispensadas'] = {'espaco': k.agora_iso()}
+        self.assertFalse([x for x in k.gera_sugestoes(ev) if x['id'] == 'espaco'])
+        ev['dispensadas'] = {'espaco': '2020-01-01T00:00:00'}
+        self.assertTrue([x for x in k.gera_sugestoes(ev) if x['id'] == 'espaco'])
+
+    def test_nao_culpa_pacote_por_piora_que_ja_vinha_de_antes(self):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        am = self._am(30, boot_s=lambda i: 30 + i)   # sobe sempre, desde antes do pacote
+        ev = self._ev(amostras=am, pacotes=[(base + timedelta(days=7), 'servicos', 'serviços')])
+        self.assertFalse([x for x in k.gera_sugestoes(ev) if x['id'].startswith('efeito:')])
+
+    def test_propoe_desfazer_quando_piora_em_degrau_depois_do_pacote(self):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        am = self._am(30, boot_s=lambda i: 30 + (i % 2) if i < 14 else 50 + (i % 2))   # degrau no dia 7
+        ev = self._ev(amostras=am, pacotes=[(base + timedelta(days=7), 'servicos', 'serviços')])
+        s = [x for x in k.gera_sugestoes(ev) if x['id'] == 'efeito:servicos']
+        self.assertEqual(len(s), 1)
+        self.assertEqual(s[0]['comando'], 'desfazer servicos')
+        self.assertEqual(s[0]['confianca'], 'média')
+
+    def test_dois_pacotes_na_mesma_semana_baixam_a_confianca(self):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        am = self._am(30, boot_s=lambda i: 30 + (i % 2) if i < 14 else 50 + (i % 2))
+        ev = self._ev(amostras=am, pacotes=[(base + timedelta(days=7), 'servicos', 'serviços'), (base + timedelta(days=8), 'visual', 'visual')])
+        self.assertTrue(all(x['confianca'] == 'baixa' for x in k.gera_sugestoes(ev) if x['id'].startswith('efeito:')))
+
+    def test_mesmo_comando_de_varias_regras_vira_uma_proposta(self):
+        ev = self._ev(amostras=self._am(livre_c=lambda i: 60 - i * 1.5),
+                      raiox={'achados': [{'titulo': 'Disco quase cheio', 'impacto': 3, 'evidencia': '8% livre', 'faz': 'limpar', 'comando': 'limpar'}]})
+        s = [x for x in k.gera_sugestoes(ev) if x['comando'] == 'limpar']
+        self.assertEqual(len(s), 1)
+        self.assertEqual(s[0]['id'], 'espaco')
+        self.assertIn('Disco quase cheio', s[0].get('tambem', []))
+
+    def test_achado_do_raiox_ja_resolvido_nao_volta(self):
+        from datetime import datetime
+        ev = self._ev(raiox={'achados': [{'titulo': 'Muita coisa na inicialização', 'impacto': 3, 'evidencia': '30 programas', 'faz': 'x', 'comando': 'inicializacao'}]},
+                      pacotes=[(datetime(2026, 1, 1), 'inicializacao', 'inicialização')])
+        self.assertEqual(k.gera_sugestoes(ev), [])
+
+    def test_ajuste_que_nao_fica_repetido_propoe_verificar(self):
+        ev = self._ev(eventos=[{'tipo': 'nao-ficou', 'pacote': 'privacidade'}] * 3)
+        s = k.gera_sugestoes(ev)
+        self.assertEqual((s[0]['comando'], s[0]['confianca']), ('verificar', 'alta'))
+
+    def test_limpeza_que_nao_rende_diz_que_nao_adianta_repetir(self):
+        ev = self._ev(eventos=[{'tipo': 'espaco', 'pacote': 'limpar', 'livre_antes': 10 * 2 ** 30, 'livre_depois': 10 * 2 ** 30 + 1000}] * 3)
+        s = [x for x in k.gera_sugestoes(ev) if x['id'] == 'limpeza-rende-pouco']
+        self.assertEqual(s[0]['tipo'], 'info')
+
+    def test_regra_com_defeito_nao_derruba_as_outras(self):
+        @k.regra
+        def quebrada(ev):
+            raise RuntimeError('boom')
+        try:
+            self.assertEqual(k.gera_sugestoes(self._ev(fundo_ligado=False))[0]['id'], 'ligar-fundo')
+        finally:
+            k.REGRAS.remove(quebrada)
+
+    def test_pontuacao_ordena_por_confianca_e_depois_por_pontos(self):
+        s = [k._sug('a', 'a', '', 'x', 'média', pontos_impacto=5), k._sug('b', 'b', '', 'y', 'alta', pontos_impacto=2), k._sug('c', 'c', '', 'z', 'alta', pontos_impacto=4)]
+        antigo = list(k.REGRAS)
+        k.REGRAS[:] = [lambda ev: s]
+        try:
+            self.assertEqual([x['id'] for x in k.gera_sugestoes(self._ev())], ['c', 'b', 'a'])
+        finally:
+            k.REGRAS[:] = antigo
+
+    def test_aprendizado_mede_o_resultado_da_proposta_executada(self):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        am = self._am(40, livre_c=lambda i: 30.0 + (i % 2) if i < 14 else 60.0 + (i % 2))   # a limpeza no dia 7 liberou espaço
+        ev = self._ev(amostras=am, pacotes=[(base + timedelta(days=7), 'limpar', 'limpeza')], agora=base + timedelta(days=30),
+                      vistas={'espaco': {'quando': (base + timedelta(days=5)).isoformat(), 'comando': 'limpar', 'metrica': 'livre_c'}})
+        r = k.resultados_das_propostas(ev)
+        self.assertEqual((r[0][0], r[0][3]), ('limpeza', 'melhorou'))
+
+    def test_aprendizado_ignora_pacote_aplicado_antes_da_proposta(self):
+        from datetime import datetime, timedelta
+        base = datetime(2026, 1, 1, 12)
+        ev = self._ev(amostras=self._am(40, livre_c=lambda i: 30.0), pacotes=[(base, 'limpar', 'limpeza')], agora=base + timedelta(days=30),
+                      vistas={'espaco': {'quando': (base + timedelta(days=5)).isoformat(), 'comando': 'limpar', 'metrica': 'livre_c'}})
+        self.assertEqual(k.resultados_das_propostas(ev), [])
+
+    def test_registra_vistas_so_na_primeira_vez(self):
+        e = {}
+        s = [k._sug('espaco', 't', '', 'limpar', 'alta', metrica='livre_c')]
+        k.registra_vistas(e, s)
+        primeira = e['conselheiro_vistas']['espaco']['quando']
+        k.registra_vistas(e, s)
+        self.assertEqual(e['conselheiro_vistas']['espaco']['quando'], primeira)
+
+    def test_painel_mostra_propostas_e_efeitos(self):
+        am = self._am(20, livre_c=lambda i: 60 - i * 1.5)
+        h = k.monta_painel(am, [], [], k.analisa_tendencia(am), 'PC', '1', k.gera_sugestoes(self._ev(amostras=am)), [])
+        self.assertIn('O que eu proporia', h)
+        self.assertIn('katharos limpar', h)
+        self.assertIn('class="projecao"', h)
 
 
 class TestImpactoBoot(unittest.TestCase):

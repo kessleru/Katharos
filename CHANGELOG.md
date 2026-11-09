@@ -11,11 +11,28 @@ O número tem três partes: **MAIOR.MENOR.CORREÇÃO**. Quem decide qual sobe é
 
 Quando uma versão existe:
 
+- Dentro de uma série (1.4.x), as entregas seguintes podem subir só o terceiro número mesmo trazendo recurso novo, a pedido do mantenedor: o MENOR sobe quando a série fecha ou quando o recurso muda o jeito de usar o programa.
 - Uma versão é uma **entrega**: tem tag no GitHub (`v1.4.0`), nota de lançamento e `SHA256SUMS.txt`. Não é um commit nem um dia de trabalho. Várias mudanças pequenas esperam juntas pela próxima entrega.
 - Só se corta versão com os testes e o CI verdes e com o número e a data deste arquivo iguais aos do programa (`katharos --versao`). Um teste confere.
-- A data é a da tag. Duas entregas no mesmo dia só se a segunda for uma CORREÇÃO urgente da primeira.
+- A data é a da tag. Duas entregas no mesmo dia só se a segunda for uma CORREÇÃO urgente da primeira ou se o mantenedor pedir uma série curta (como a 1.4.x).
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
+
+## 1.4.1 · 9 de novembro de 2026
+
+Segundo plano com métricas e gráficos, mais um pacote de jogos.
+
+- **Segundo plano** (`agendar --frequencia semanal|diaria|continua`): a tarefa do Windows agora pode rodar ao iniciar o sistema e a cada 4 horas, só com o PC ocioso e na tomada, em prioridade baixa, sem programa aberto na memória. Cada execução grava uma medida pequena (teto de 1500 linhas).
+- **`conselheiro`**, o motor de inteligência: junta medidas, benchmarks, pacotes aplicados, erros do relatório e achados do raio-x e propõe o que mudar, cada proposta com o número que a justifica, a confiança e o comando. Nunca aplica sozinho; depois que você executa uma proposta, mede o resultado. Não culpa um pacote por piora que já vinha antes dele, e baixa a confiança quando vários pacotes foram aplicados na mesma semana.
+- **`tendencia`** mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo, e o segundo plano avisa. Poucas medidas não viram conclusão.
+- **`painel`** gera um arquivo HTML com gráficos que interpretam os dados: linha suavizada, pontos fora do normal, projeção de quando o disco enche, limite de temperatura, as datas de cada pacote e o efeito de cada um (antes e depois, só quando passa do ruído), mais as propostas do conselheiro. Funciona sem internet e sem scripts.
+- **`unreal`**: pacote para jogos da Unreal Engine (Satisfactory e Stray), baixa sombras, efeitos e distância de "Épico" para "Alto" no `GameUserSettings.ini`, com cópia, jogo fechado e BOM preservado.
+- **`dns-teste`** (pacote `rede`): consulta 6 sites 5 vezes em cada DNS direto no servidor e mostra mediana, faixa típica e falhas. Só diz que vale trocar se a diferença passar de 5 ms, de 25% e do ruído. Os itens de DNS saíram do modo equilibrado e não prometem mais "o mais rápido". O `ping` agora mostra mediana, oscilação e perda em 10 pacotes.
+- **`retomar`**: cada aplicação anota o que já fez; se o PC travar ou a janela fechar no meio, o programa avisa na próxima abertura e `retomar` refaz só os itens que faltaram.
+- **Benchmark** ganhou CPU em todos os núcleos e marca "medida instável" quando as rodadas variam mais de 15%.
+- **Inicialização com número**: cada programa que abre com o Windows mostra o atraso de boot que o próprio Windows mediu (log de diagnóstico, média dos últimos 60 dias), e a lista sai ordenada por esse atraso.
+- **Modo leve do benchmark** em PC com até 4 GB de RAM, pouca RAM livre ou HD. A transparência só vem marcada em placa integrada ou com 8 GB ou menos; "compressão de memória desligada" saiu dos modos (sem ganho medido).
+- **Textos honestos**: `mmcss`, `primeiro-plano` e `rede-jogos` deixaram de vir marcados no perfil de jogo. O MMCSS só mexe em `SystemResponsiveness` e na categoria da tarefa Games (a Microsoft documenta que "GPU Priority" e "SFIO Priority" não são usados), e o `primeiro-plano` diz que 0x26 já é o padrão do Windows de cliente.
 
 ## 1.4.0 · 9 de novembro de 2026
 
@@ -26,12 +43,6 @@ Pacote do CS2 mais completo e catálogo de jogos maior.
 - **`cs2` e `steam` leem o vídeo atual** (somente leitura) e apontam o que mais pesa: MSAA 4x/8x, V-Sync, oclusão ambiente.
 - **Catálogo com 61 jogos em 6 categorias**, todos sem anti-cheat de terceiros, que recebem prioridade de CPU. O CS:GO saiu: virou CS2.
 - **Prioridade para jogos com anti-cheat** virou item à parte, desligado por padrão (`prioridade-jogos-ac`), com aviso. Nenhum perfil o marca.
-- **`dns-teste`** (pacote `rede`): consulta 6 sites 5 vezes em cada DNS direto no servidor e mostra mediana, faixa típica e falhas. Só diz que vale trocar se a diferença passar de 5 ms, de 25% e do ruído. Os itens de DNS saíram do modo equilibrado e não prometem mais "o mais rápido". O `ping` agora mostra mediana, oscilação e perda em 10 pacotes.
-- **`retomar`**: cada aplicação anota o que já fez; se o PC travar ou a janela fechar no meio, o programa avisa na próxima abertura e `retomar` refaz só os itens que faltaram.
-- **Benchmark** ganhou CPU em todos os núcleos e marca "medida instável" quando as rodadas variam mais de 15%.
-- **Inicialização com número**: cada programa que abre com o Windows mostra o atraso de boot que o próprio Windows mediu (log de diagnóstico, média dos últimos 60 dias), e a lista sai ordenada por esse atraso.
-- **Modo leve do benchmark** em PC com até 4 GB de RAM, pouca RAM livre ou HD. A transparência só vem marcada em placa integrada ou com 8 GB ou menos; "compressão de memória desligada" saiu dos modos (sem ganho medido).
-- **Textos honestos**: `mmcss`, `primeiro-plano` e `rede-jogos` deixaram de vir marcados no perfil de jogo. O MMCSS só mexe em `SystemResponsiveness` e na categoria da tarefa Games (a Microsoft documenta que "GPU Priority" e "SFIO Priority" não são usados), e o `primeiro-plano` diz que 0x26 já é o padrão do Windows de cliente.
 
 ## 1.3.0 · 9 de novembro de 2026
 

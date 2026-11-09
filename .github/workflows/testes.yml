@@ -66,3 +66,6 @@ jobs:
       - name: ida e volta de arquivo de jogo (Minecraft)
         shell: pwsh
         run: ./tests/ci_minecraft.ps1
+      - name: ida e volta de arquivo de jogo (Unreal Engine)
+        shell: pwsh
+        run: ./tests/ci_unreal.ps1

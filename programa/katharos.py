@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime
 
-VERSAO = '1.4.0'
+VERSAO = '1.4.1'
 DATA_VERSAO = '9 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -6817,39 +6817,45 @@ MC_CHAVES_CONFIRMADAS = {'maxFps', 'renderDistance', 'simulationDistance', 'grap
                          'enableVsync', 'mipmapLevels', 'renderClouds', 'ao', 'entityDistanceScaling'}
 
 
-def opcoes_txt_ps(nome, id_desfazer, caminho_ps, aberto_ps, regras):
-    """PowerShell que ajusta um arquivo de opções 'chave:valor' sem BOM, só em linhas que existem, só para baixo, com cópia antes."""
+def opcoes_txt_ps(nome, id_desfazer, caminho_ps, aberto_ps, regras, sep=':'):
+    """PowerShell que ajusta um arquivo de opções 'chave«sep»valor' (sep ':' ou '='), só em linhas que existem, só para baixo, com cópia antes.
+    Mantém o BOM UTF-8 se o arquivo tinha; recusa UTF-16 (não reescreve o que não entende)."""
     alvo = '@{ ' + '; '.join(f"'{k}' = @('{m}', '{v}')" for k, (m, v) in regras.items()) + ' }'
     return r"""
 «aberto»
 $__a = «caminho»
 if (-not (Test-Path -LiteralPath $__a)) { Aviso '«nome»: arquivo de opcoes nao encontrado (abra o jogo uma vez e feche)'; return }
 $__r = «alvo»
+$__bytes = [IO.File]::ReadAllBytes($__a)
+if ($__bytes.Length -ge 2 -and (($__bytes[0] -eq 0xFF -and $__bytes[1] -eq 0xFE) -or ($__bytes[0] -eq 0xFE -and $__bytes[1] -eq 0xFF))) { Aviso '«nome»: o arquivo esta em UTF-16; nao mexi para nao estragar'; return }
+$__bom = ($__bytes.Length -ge 3 -and $__bytes[0] -eq 0xEF -and $__bytes[1] -eq 0xBB -and $__bytes[2] -eq 0xBF)
 $__t = [IO.File]::ReadAllText($__a)
+$__achou = $false
 $__fim = if ($__t -match "`r`n") { "`r`n" } else { "`n" }
 $__mudou = $false
 $__novo = foreach ($__l in ($__t -split "`r?`n")) {
-  if ($__l -match '^([^:]+):(.*)$' -and $__r.ContainsKey($Matches[1])) {
-    $__k = $Matches[1]; $__v = $Matches[2]; $__m = $__r[$__k][0]; $__x = $__r[$__k][1]
-    if ($__m -eq 'set') { if ($__v -ne $__x) { $__l = $__k + ':' + $__x; $__mudou = $true } }
+  if ($__l -match '^([^«sep»]+)«sep»(.*)$' -and $__r.ContainsKey($Matches[1])) {
+    $__k = $Matches[1]; $__v = $Matches[2]; $__m = $__r[$__k][0]; $__x = $__r[$__k][1]; $__achou = $true
+    if ($__m -eq 'set') { if ($__v -ne $__x) { $__l = $__k + '«sep»' + $__x; $__mudou = $true } }
     else {
       $__n = 0.0
       if ([double]::TryParse($__v, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$__n)) {
         $__lim = [double]::Parse($__x, [Globalization.CultureInfo]::InvariantCulture)
-        if (($__m -eq 'max' -and $__n -gt $__lim) -or ($__m -eq 'min' -and $__n -lt $__lim)) { $__l = $__k + ':' + $__x; $__mudou = $true }
+        if (($__m -eq 'max' -and $__n -gt $__lim) -or ($__m -eq 'min' -and $__n -lt $__lim)) { $__l = $__k + '«sep»' + $__x; $__mudou = $true }
       }
     }
   }
   $__l
 }
+if (-not $__achou) { Aviso '«nome»: nenhuma das opcoes esperadas esta no arquivo (nada foi mexido)'; return }
 if (-not $__mudou) { Ok '«nome»: as opcoes ja estavam leves'; return }
 if ($TESTE) { Plano ('ajustar ' + $__a); return }
 $__b = $__a + '.katharos.bak'
 if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a -Destination $__b }
-[IO.File]::WriteAllText($__a, ($__novo -join $__fim), (New-Object Text.UTF8Encoding $false))
+[IO.File]::WriteAllText($__a, ($__novo -join $__fim), (New-Object Text.UTF8Encoding $__bom))
 Guarda-Desfazer ('«id»|' + $__a) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a -replace "'", "''") + "' -Force")
-Feito '«nome»: opcoes ajustadas (copia em options.txt.katharos.bak)'""".replace('«aberto»', aberto_ps).replace('«caminho»', caminho_ps).replace(
-        '«alvo»', alvo).replace('«nome»', nome).replace('«id»', id_desfazer)
+Feito ('«nome»: opcoes ajustadas (copia em ' + (Split-Path -Leaf $__a) + '.katharos.bak)')""".replace('«aberto»', aberto_ps).replace('«caminho»', caminho_ps).replace(
+        '«alvo»', alvo).replace('«sep»', sep).replace('«nome»', nome).replace('«id»', id_desfazer)
 
 
 @pacote('minecraft', 'Minecraft', 'Minecraft Java: distância de renderização e partículas no options.txt',
@@ -7218,6 +7224,55 @@ Feito 'criados katharos-medir.cfg e katharos-medir-off.cfg; no console do CS2 di
              'placa mais fria nos menus; tela mais limpa', 'nada; o arquivo só vale se você mandar o jogo carregar', 2, cfg),
     ]
 
+# ═══════════════ Jogos Unreal Engine (GameUserSettings.ini) ═══════════════
+# Jogos feitos na Unreal Engine gravam a qualidade gráfica no GameUserSettings.ini, na seção [ScalabilityGroups], chaves "sg.*".
+# Cada chave vai de 0 (baixo) a 3 (épico) nos menus (a Epic lista 0 a 3 em
+# https://dev.epicgames.com/documentation/en-us/unreal-engine/scalability-reference-for-unreal-engine ; o 4 "cinematográfico" só aparece em console
+# ou em jogos que o oferecem). O PCGamingWiki confirma o arquivo e que o jogo grava "sg.*" nele (Satisfactory).
+# Mesmas regras do Minecraft: só chave que já existe no arquivo, só para BAIXAR (nunca sobe), jogo fechado, cópia .katharos.bak.
+# Só entra jogo sem anti-cheat de terceiros e com o caminho do arquivo confirmado em fonte pública.
+UE_REGRAS = {
+    'sg.ViewDistanceQuality': ('max', 2),
+    'sg.ShadowQuality': ('max', 2),
+    'sg.EffectsQuality': ('max', 2),
+    'sg.PostProcessQuality': ('max', 2),
+    'sg.FoliageQuality': ('max', 2),
+}
+UE_CHAVES_DOCUMENTADAS = {'sg.ViewDistanceQuality', 'sg.ShadowQuality', 'sg.EffectsQuality', 'sg.PostProcessQuality', 'sg.FoliageQuality',
+                          'sg.TextureQuality', 'sg.AntiAliasingQuality', 'sg.ResolutionQuality', 'sg.ShadingQuality'}
+# id, título, pasta em %LOCALAPPDATA% (a que o PCGamingWiki indica), fonte
+UE_JOGOS = [
+    ('satisfactory', 'Satisfactory', r'FactoryGame\Saved\Config\WindowsNoEditor', 'https://www.pcgamingwiki.com/wiki/Satisfactory'),
+    ('stray', 'Stray', r'Hk_project\Saved\Config\WindowsNoEditor', 'https://www.pcgamingwiki.com/wiki/Stray'),
+]
+
+
+def _ue_instalado(pasta):
+    """No Windows, só oferece o jogo que tem o arquivo de configuração; fora dele (testes, prévia) mostra todos."""
+    return (not WINDOWS) or os.path.exists(os.path.expandvars('%LOCALAPPDATA%\\' + pasta + '\\GameUserSettings.ini'))
+
+
+@pacote('unreal', 'jogos Unreal Engine', 'Satisfactory e Stray: qualidade gráfica no arquivo do jogo',
+        'Jogos feitos na Unreal Engine gravam a qualidade gráfica no GameUserSettings.ini. Para cada jogo instalado da lista, este pacote baixa '
+        'distância de visão, sombras, efeitos, pós-processamento e vegetação de "Épico" para "Alto", só se estiverem acima disso, só em linhas '
+        'que já existem no arquivo, com o jogo fechado e uma cópia (.katharos.bak). Texturas, resolução e suavização de bordas não são tocadas. '
+        'Só entram jogos sem anti-cheat de terceiros e com o local do arquivo confirmado em fonte pública.')
+def itens_unreal(ctx):
+    aberto = (r"""if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '-Win64-Shipping$|-WinGDK-Shipping$' }).Count) """
+              r"""{ Aviso 'feche o jogo antes: ele regrava as opcoes ao sair'; return }""")
+    itens = []
+    for id_, nome, pasta, _ in UE_JOGOS:
+        if not _ue_instalado(pasta):
+            continue
+        caminho = f"(Join-Path $env:LOCALAPPDATA {psq(pasta + chr(92) + 'GameUserSettings.ini')})"
+        itens.append(Item('ue-' + id_, f'{nome}: gráficos de "Épico" para "Alto"',
+                          f'Ajusta o GameUserSettings.ini do {nome}: distância de visão, sombras, efeitos, pós-processamento e vegetação '
+                          'no máximo "Alto" (2). O que já estava mais baixo fica. Texturas, resolução e suavização não mudam.',
+                          'sombras e efeitos em "Épico" pesam bastante; o ganho varia com o PC (meça com o contador de FPS do jogo)',
+                          'sombras e longe do horizonte um pouco menos detalhados', 2,
+                          '& {\n' + opcoes_txt_ps(nome, 'ue-' + id_, caminho, aberto, UE_REGRAS, sep='=') + '\n}'))
+    return itens
+
 
 # ───────────────────────────── ícone do Katharos (ICO com 5 tamanhos, embutido) ─────────────────────────────
 
@@ -7457,7 +7512,15 @@ ICONE_B64 = (
 
 ARQ_TURBO = CASA / 'turbo.json'
 TAREFA_CONTINUAR = 'Katharos - continuar depois de reiniciar'
-TAREFA_MANUT = 'Katharos - manutencao semanal'
+TAREFA_MANUT = 'Katharos - segundo plano'
+TAREFA_MANUT_ANTIGA = 'Katharos - manutencao semanal'   # nome até a 1.3: removida junto, para não rodar duas vezes
+# Como a tarefa de segundo plano dispara. 'continua' roda ao entrar no Windows e de novo a cada 4 h enquanto o PC estiver ligado.
+FREQ_FUNDO = {
+    'semanal': ('domingo ao meio-dia', "New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '12:00'"),
+    'diaria': ('todo dia ao meio-dia', "New-ScheduledTaskTrigger -Daily -At '12:00'"),
+    'continua': ('ao entrar no Windows e a cada 4 horas', "@((New-ScheduledTaskTrigger -AtLogOn), (New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Hours 4)))"),
+}
+INTERVALO_MINIMO_H = 3   # duas execuções agendadas nunca ficam mais perto que isso (o disparo ao entrar e o de 4 h não se atropelam)
 
 # ordem do turbo: o que libera recursos primeiro, depois reparo e atualização, limpeza, disco e o reinício
 ORDEM_TURBO = ['programas', 'apps', 'ia', 'inicializacao', 'servicos', 'privacidade', 'visual', 'jogos', 'energia',
@@ -7815,6 +7878,14 @@ try {
 '''
 
 
+def recente_h(iso, horas):
+    """True se o instante ISO é de menos de `horas` horas atrás (vazio ou ilegível = não é recente)."""
+    try:
+        return (datetime.now() - datetime.fromisoformat(iso)).total_seconds() < horas * 3600
+    except (TypeError, ValueError):
+        return False
+
+
 def ferramenta_manutencao(ctx, args):
     """A manutenção em si: roda pela tarefa agendada (ou pelo menu do agendar, para testar)."""
     t = ctx.t
@@ -7824,6 +7895,9 @@ def ferramenta_manutencao(ctx, args):
         return 1
     if getattr(args, 'agendada', False):
         prioridade_baixa()
+        if recente_h(estado().get('manut_ultima'), INTERVALO_MINIMO_H):
+            LOG.escreve('manutenção adiada: a última foi há menos de %d h' % INTERVALO_MINIMO_H)
+            return 0
         na_tomada, _ = energia_agora()
         if not na_tomada:
             LOG.escreve('manutenção adiada: na bateria')
@@ -7875,6 +7949,8 @@ def ferramenta_manutencao(ctx, args):
             cod, _ = roda_exe(['DISM.exe', '/Online', '/Cleanup-Image', '/StartComponentCleanup'], 35, pr)
             if cod != -1:
                 e['manut_mensal'] = agora_iso()
+    alertas += avisa_tendencia(ctx, e)
+    alertas += avisa_propostas(e, ctx)
     livre = s.dados.get('livre') or 0
     e['manut_ultima'] = agora_iso()
     salva_estado(e)
@@ -7892,7 +7968,10 @@ def ferramenta_manutencao(ctx, args):
     return 0
 
 
-def instala_manutencao(ctx):
+def instala_manutencao(ctx, freq='semanal'):
+    if freq not in FREQ_FUNDO:
+        freq = 'semanal'
+    quando, gatilho = FREQ_FUNDO[freq]
     script = CASA / 'katharos.py'
     shutil.copy2(Path(__file__).resolve(), script)
     py = sys.executable
@@ -7900,50 +7979,66 @@ def instala_manutencao(ctx):
         py = py[:-5] + '.exe'
     cmd = f"& {psq(py)} {psq(str(script))} manutencao --agendada --sem-cor"
     corpo = ps_monta(r'''
-$__a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command "' + «cmd» + '"')
-$__t = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '12:00'
+$__a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "' + «cmd» + '"')
+$__t = «gatilho»
 $__p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
 $__s = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration (New-TimeSpan -Minutes 10) -IdleWaitTimeout (New-TimeSpan -Hours 12) -RestartOnIdle -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1) -Priority 7 -MultipleInstances IgnoreNew
-if ($TESTE) { Plano 'criar a tarefa de manutencao semanal'; return }
-Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes. Criada pelo Katharos.' -Force | Out-Null
-Feito 'manutencao agendada: domingo ao meio-dia, ou na proxima vez que o PC ficar ocioso 10 min na tomada'
-''', cmd=psq(cmd.replace('"', '\\"')), nome=psq(TAREFA_MANUT))
+if ($TESTE) { Plano 'criar a tarefa de segundo plano'; return }
+Unregister-ScheduledTask -TaskName «antiga» -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes, em segundo plano. Criada pelo Katharos.' -Force | Out-Null
+Feito 'segundo plano ligado: «quando», com o PC ocioso por 10 min e na tomada'
+''', cmd=psq(cmd.replace('"', '\\"')), nome=psq(TAREFA_MANUT), antiga=psq(TAREFA_MANUT_ANTIGA), gatilho=gatilho, quando=quando)
     s = roda_ps(ctx.t, corpo, 'agendar', minutos=2)
-    return 0 if s.ok and not s.erros else 1
+    if s.ok and not s.erros:
+        marca_estado('manut_freq', freq)
+        return 0
+    return 1
 
 
 def ferramenta_agendar(ctx, args):
     t = ctx.t
-    t.aba('manutenção semanal automática, leve e silenciosa')
-    t.paragrafo('Roda no domingo ao meio-dia (ou na próxima chance), só com o PC ocioso há 10 min e na tomada, em prioridade '
-                'baixa, e para sozinha se você voltar a usar. Limpa temporários e caches antigos, reaplica o que grandes '
+    t.aba('segundo plano: o Katharos trabalha sozinho, leve e silencioso')
+    t.paragrafo('Não fica um programa aberto gastando RAM: é uma tarefa do próprio Windows que acorda quando o PC está ocioso há 10 min e na tomada, '
+                'em prioridade baixa, e para sozinha se você voltar a usar. Limpa temporários e caches antigos, reaplica o que grandes '
                 'atualizações desfazem (só dos pacotes que você aplicou e não desfez), atualiza o Defender, confere SMART, '
                 'erros de disco, telas azuis e espaço livre, e uma vez por mês cria um ponto de restauração. '
-                'Só avisa (notificação do Windows) quando há algo errado.', 2, 'sub')
+                'Só avisa (notificação do Windows) quando há algo errado. Escolha quando: semanal (domingo), diária ou '
+                'contínua (ao iniciar com o Windows e a cada 4 horas).', 2, 'sub')
     if not precisa_admin(ctx, args):
         return 1
-    s = roda_ps(t, f"$__x = Get-ScheduledTask -TaskName {psq(TAREFA_MANUT)} -ErrorAction SilentlyContinue; if ($__x) {{ Dado 'tarefa' @{{ estado = [string]$__x.State; ultima = (Tenta {{ ($__x | Get-ScheduledTaskInfo).LastRunTime.ToString('s') }} '') }} }}",
+    s = roda_ps(t, f"$__x = Get-ScheduledTask -TaskName {psq(TAREFA_MANUT)} -ErrorAction SilentlyContinue; if (-not $__x) {{ $__x = Get-ScheduledTask -TaskName {psq(TAREFA_MANUT_ANTIGA)} -ErrorAction SilentlyContinue }}; if ($__x) {{ Dado 'tarefa' @{{ estado = [string]$__x.State; ultima = (Tenta {{ ($__x | Get-ScheduledTaskInfo).LastRunTime.ToString('s') }} '') }} }}",
                 'tarefa', minutos=1, mostra=False)
     tk = s.dados.get('tarefa')
+    freq_atual = estado().get('manut_freq') or ('semanal' if tk else '')
     t.titulo('situação')
-    t.chaves([('tarefa', 'agendada (' + str(tk.get('estado')) + ')' if tk else 'não existe'),
+    t.chaves([('segundo plano', ('ligado (' + FREQ_FUNDO.get(freq_atual, ('', ''))[0] + ')') if tk else 'desligado'),
               ('última vez', ha_quanto_iso(estado().get('manut_ultima')) or '-')])
+    freq = getattr(args, 'frequencia', None)
     if getattr(args, 'remover', False):
         acao = 'r'
     elif getattr(args, 'agora', False):
         acao = 'a'
-    elif args.sim or not t.interativo:
+    elif freq:
         acao = 'c'
+    elif args.sim or not t.interativo:
+        acao, freq = 'c', freq_atual or 'semanal'
     else:
         t.escreve()
-        t.paragrafo('c = criar ou atualizar a tarefa · a = rodar a manutenção agora · r = remover a tarefa · Enter = voltar', 2, 'apagado')
-        acao = t.pergunta('fazer').strip().lower()[:1]
+        t.paragrafo('s = semanal · d = diária · c = contínua (inicia com o Windows e a cada 4 h) · a = rodar agora · r = desligar · Enter = voltar', 2, 'apagado')
+        r = t.pergunta('fazer').strip().lower()[:1]
+        acao = 'c' if r in ('s', 'd', 'c') else r
+        freq = {'s': 'semanal', 'd': 'diaria', 'c': 'continua'}.get(r)
     if acao == 'c':
-        return instala_manutencao(ctx)
+        return instala_manutencao(ctx, freq or 'semanal')
     if acao == 'a':
         return ferramenta_manutencao(ctx, args)
     if acao == 'r':
-        roda_ps(t, f"Unregister-ScheduledTask -TaskName {psq(TAREFA_MANUT)} -Confirm:$false -ErrorAction SilentlyContinue; Feito 'tarefa removida'", 'remover', minutos=1)
+        for nome in (TAREFA_MANUT, TAREFA_MANUT_ANTIGA):
+            roda_ps(t, f"Unregister-ScheduledTask -TaskName {psq(nome)} -Confirm:$false -ErrorAction SilentlyContinue", 'remover', minutos=1, mostra=False)
+        e = estado()
+        e.pop('manut_freq', None)
+        salva_estado(e)
+        t.ok('Segundo plano desligado.')
     return 0
 
 
@@ -8553,6 +8648,914 @@ def ferramenta_benchmark(ctx, args):
         LOG.escreve(f'benchmark não entrou no relatório: {e!r}')
     t.nota('  Rode de novo depois de aplicar algo: o programa compara com este resultado.')
     return 0
+# ─────────────── segundo plano: métricas ao longo do tempo e tendência ───────────────
+# A tarefa agendada acorda, mede o PC (leve, uns 5 s) e grava UMA linha em ~/.katharos/metricas.jsonl. Nada fica residente em memória:
+# o custo em RAM entre uma medida e outra é zero. O arquivo tem teto de linhas; passou do teto, as mais antigas saem.
+METRICAS_MAX = 1500          # uma medida a cada 4 h dá ~250 dias; ~300 bytes por linha = uns 450 KB no máximo
+METRICAS_CHAVES = ('cpu', 'desempenho', 'limite', 'ram_total', 'ram_usada', 'processos', 'servicos', 'inicializacao', 'livre_c', 'temperatura', 'boot_s')
+
+
+def metricas_arq():
+    return CASA / 'metricas.jsonl'
+
+
+def registra_metrica(m, quando=None, arq=None):
+    """Acrescenta uma amostra e apara o arquivo. Devolve a amostra gravada (ou None se não havia o que gravar)."""
+    amostra = {k: m[k] for k in METRICAS_CHAVES if isinstance(m.get(k), (int, float))}
+    if not amostra:
+        return None
+    amostra['t'] = quando or agora_iso()
+    arq = Path(arq or metricas_arq())
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    with open(arq, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(amostra, ensure_ascii=False, separators=(',', ':')) + '\n')
+    try:
+        linhas = arq.read_text(encoding='utf-8', errors='replace').splitlines()
+        if len(linhas) > METRICAS_MAX:
+            tmp = arq.with_suffix('.tmp')
+            tmp.write_text('\n'.join(linhas[-METRICAS_MAX:]) + '\n', encoding='utf-8')
+            os.replace(tmp, arq)
+    except OSError as e:
+        LOG.escreve(f'não consegui aparar as métricas: {e!r}')
+    return amostra
+
+
+def le_metricas(arq=None):
+    """Amostras em ordem de data. Linha ilegível é pulada (queda de energia no meio de uma escrita não estraga o resto)."""
+    arq = Path(arq or metricas_arq())
+    out = []
+    try:
+        for l in arq.read_text(encoding='utf-8', errors='replace').splitlines():
+            try:
+                d = json.loads(l)
+                d['_dt'] = datetime.fromisoformat(d['t'])
+                out.append(d)
+            except (ValueError, KeyError, TypeError):
+                continue
+    except OSError:
+        pass
+    return sorted(out, key=lambda d: d['_dt'])
+
+
+def _mediana(v):
+    v = sorted(v)
+    n = len(v)
+    return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+
+
+def _serie(amostras, chave):
+    return [(a['_dt'], float(a[chave])) for a in amostras if isinstance(a.get(chave), (int, float))]
+
+
+def _tercos(serie):
+    """Mediana do primeiro e do último terço da série (mais estável que comparar dois pontos soltos)."""
+    n = len(serie)
+    k = max(1, n // 3)
+    return _mediana([v for _, v in serie[:k]]), _mediana([v for _, v in serie[-k:]])
+
+
+def _inclinacao_por_dia(serie):
+    """Mínimos quadrados: variação por dia."""
+    t0 = serie[0][0]
+    xs = [(d - t0).total_seconds() / 86400 for d, _ in serie]
+    ys = [v for _, v in serie]
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    den = sum((x - mx) ** 2 for x in xs)
+    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den if den else 0.0
+
+
+def analisa_tendencia(amostras, minimo=6, dias_minimos=3):
+    """Lista de achados [(chave, texto)] só com o que piorou de forma clara. Poucas amostras ou poucos dias = nada (não é tendência, é ruído)."""
+    if len(amostras) < minimo or (amostras[-1]['_dt'] - amostras[0]['_dt']).days < dias_minimos:
+        return []
+    achados = []
+    s = _serie(amostras, 'livre_c')
+    if len(s) >= minimo:
+        por_dia = _inclinacao_por_dia(s)
+        atual = _tercos(s)[1]
+        if por_dia < -0.5 and atual / -por_dia < 30:
+            achados.append(('livre_c', f'o espaço livre em C: está caindo uns {br(-por_dia, 1)} GB por dia; no ritmo atual ({br(atual, 0)} GB livres) acaba em cerca de {int(atual / -por_dia)} dias'))
+    s = _serie(amostras, 'boot_s')
+    if len(s) >= minimo:
+        a, b = _tercos(s)
+        if b - a >= 8 and b >= a * 1.2:
+            achados.append(('boot_s', f'o boot passou de {br(a, 0)} s para {br(b, 0)} s (mediana do começo e do fim do período)'))
+    s = _serie(amostras, 'ram_usada')
+    if len(s) >= minimo:
+        a, b = _tercos(s)
+        if b - a >= 1.5 and b >= a * 1.25:
+            achados.append(('ram_usada', f'a RAM em uso subiu de {br(a, 1)} GB para {br(b, 1)} GB (pode ser um programa novo abrindo com o Windows ou um vazamento)'))
+    s = _serie(amostras, 'inicializacao')
+    if len(s) >= minimo:
+        a, b = _tercos(s)
+        if b - a >= 3:
+            achados.append(('inicializacao', f'os programas que abrem com o Windows passaram de {br(a, 0)} para {br(b, 0)}'))
+    s = _serie(amostras, 'temperatura')
+    if len(s) >= minimo and _tercos(s)[1] >= 85:
+        achados.append(('temperatura', f'a temperatura em repouso está em {br(_tercos(s)[1], 0)} °C: confira ventoinha, poeira e pasta térmica'))
+    s = _serie(amostras, 'cpu')
+    if len(s) >= minimo:
+        a, b = _tercos(s)
+        if b >= 20 and b >= a * 2:
+            achados.append(('cpu', f'o uso de CPU em repouso passou de {br(a, 0)}% para {br(b, 0)}%: algo novo está rodando sem parar'))
+    return achados
+
+
+def amostra_agora(ctx):
+    """Mede o PC (leve) e grava a amostra. Roda dentro da manutenção em segundo plano e no 'tendencia --agora'."""
+    if not WINDOWS:
+        return None
+    s = roda_ps(ctx.t, MEDIDAS_PS, 'metrica', minutos=2, mostra=False)
+    return registra_metrica(s.dados.get('medidas') or {})
+
+
+def ferramenta_tendencia(ctx, args):
+    t = ctx.t
+    t.aba('o PC está piorando com o tempo? (usa as medidas do segundo plano)')
+    t.paragrafo('Cada vez que o segundo plano roda, o Katharos grava uma medida pequena (RAM, CPU, espaço, boot, temperatura). Aqui você vê '
+                'se algo está mudando de forma clara. Pouca medida ou poucos dias não é tendência: o programa diz isso em vez de chutar.', 2, 'sub')
+    if getattr(args, 'agora', False) or (not le_metricas() and WINDOWS and not args.teste):
+        if amostra_agora(ctx):
+            t.nota('  medida de agora gravada.')
+    am = le_metricas()
+    if not am:
+        t.nota('Ainda não há medidas. Ligue o segundo plano com "agendar" (a opção contínua mede ao iniciar o Windows e a cada 4 h).')
+        return 0
+    dias = (am[-1]['_dt'] - am[0]['_dt']).days
+    t.chaves([('medidas', str(len(am))), ('período', f'{dias} dia(s), de {am[0]["_dt"]:%d/%m} a {am[-1]["_dt"]:%d/%m}')])
+    linhas = []
+    for chave, rot, un, _ in LINHAS_MEDIDA:
+        s = _serie(am, chave)
+        if len(s) >= 2:
+            a, b = _tercos(s)
+            linhas.append([rot, _fmt_medida(a, un), _fmt_medida(b, un), sparkline_txt([v for _, v in s], getattr(args, 'ascii', False))])
+    if linhas:
+        t.titulo('começo e fim do período (mediana)')
+        t.tabela(['medida', 'começo', 'fim', 'evolução'], linhas, alinha='eddd')
+        t.nota('  O painel com gráficos de verdade: comando "painel".')
+    achados = analisa_tendencia(am)
+    t.titulo('o que está mudando')
+    if achados:
+        for _, txt in achados:
+            t.aviso(txt[0].upper() + txt[1:] + '.')
+    elif len(am) < 6 or dias < 3:
+        t.nota('  Poucas medidas ainda (preciso de pelo menos 6, espalhadas por 3 dias ou mais).')
+    else:
+        t.ok('Nada piorando de forma clara.')
+    return 0
+
+
+def avisa_tendencia(ctx, e):
+    """Dentro da manutenção: grava a amostra e devolve os alertas novos (cada achado só volta a avisar depois de 7 dias)."""
+    try:
+        amostra_agora(ctx)
+        vistos = e.setdefault('tendencia_avisos', {})
+        novos = []
+        for chave, txt in analisa_tendencia(le_metricas()):
+            if not recente_h(vistos.get(chave), 24 * 7):
+                novos.append(txt[0].upper() + txt[1:])
+                vistos[chave] = agora_iso()
+        return novos
+    except Exception as ex:  # métrica nunca derruba a manutenção
+        LOG.escreve(f'tendência falhou: {ex!r}')
+        return []
+
+
+# ─────────────── análise "inteligente" das séries (usada pelo painel e testável sem desenhar nada) ───────────────
+
+def mediana_movel(serie, janela=7):
+    """Suaviza uma série [(t, v)] com a mediana dos últimos `janela` pontos (resistente a picos, ao contrário da média)."""
+    out = []
+    for i, (d, _) in enumerate(serie):
+        trecho = [v for _, v in serie[max(0, i - janela + 1):i + 1]]
+        out.append((d, _mediana(trecho)))
+    return out
+
+
+def anomalias(serie, limite=3.5, minimo=12):
+    """Pontos muito fora do normal da própria série (escore robusto por MAD). Poucos pontos ou série sem variação = nenhum."""
+    if len(serie) < minimo:
+        return []
+    v = [x for _, x in serie]
+    med = _mediana(v)
+    mad = _mediana([abs(x - med) for x in v])
+    if mad < 1e-9:
+        return []
+    return [(d, x) for d, x in serie if 0.6745 * abs(x - med) / mad > limite]
+
+
+def efeito_antes_depois(serie, quando, melhor='menor', janela_dias=7, minimo=4):
+    """Compara a série nos `janela_dias` antes e depois de `quando`. Devolve (veredito, antes, depois):
+    'melhorou' / 'piorou' só se a mudança for maior que o ruído das duas janelas (MAD) e passar de 5%;
+    'já vinha mudando' se a série já andava nessa direção ANTES (então não dá para atribuir ao que foi feito);
+    'sem diferença mensurável' se for oscilação; 'poucas medidas' se faltar amostra de um dos lados."""
+    from datetime import timedelta
+    pares_antes = [(d, v) for d, v in serie if quando - timedelta(days=janela_dias) <= d < quando]
+    antes = [v for _, v in pares_antes]
+    depois = [v for d, v in serie if quando <= d < quando + timedelta(days=janela_dias)]
+    if len(antes) < minimo or len(depois) < minimo:
+        return 'poucas medidas', None, None
+    a, b = _mediana(antes), _mediana(depois)
+    ruido = max(_mediana([abs(x - a) for x in antes]), _mediana([abs(x - b) for x in depois]))
+    dif = b - a
+    if abs(dif) <= 2 * ruido or abs(dif) < 0.05 * max(abs(a), 1e-9):
+        return 'sem diferença mensurável', a, b
+    previa = _inclinacao_por_dia(pares_antes) * janela_dias   # quanto a série já mudaria em 7 dias só pela inclinação de antes
+    if previa * dif > 0 and abs(previa) >= 0.5 * abs(dif):
+        return 'já vinha mudando', a, b
+    bom = (dif < 0) == (melhor == 'menor')
+    return ('melhorou' if bom else 'piorou'), a, b
+
+
+def projecao_enchimento(serie, minimo=6):
+    """(dias até chegar a 0, data) se o espaço livre vem caindo de forma consistente; None caso contrário."""
+    from datetime import timedelta
+    if len(serie) < minimo:
+        return None
+    por_dia = _inclinacao_por_dia(serie)
+    atual = _tercos(serie)[1]
+    if por_dia >= -0.3 or atual <= 0:
+        return None
+    dias = atual / -por_dia
+    return (dias, serie[-1][0] + timedelta(days=dias)) if dias < 120 else None
+# ─────────────── painel: gráficos em HTML autocontido (SVG feito aqui, sem internet, sem biblioteca) ───────────────
+import html as _html
+import math
+
+PAINEL_SERIES = [   # chave, título, unidade, melhor, casas
+    ('livre_c', 'Espaço livre em C:', 'GB', 'maior', 0),
+    ('ram_usada', 'RAM em uso', 'GB', 'menor', 1),
+    ('boot_s', 'Tempo de boot', 's', 'menor', 0),
+    ('cpu', 'CPU em repouso', '%', 'menor', 0),
+    ('temperatura', 'Temperatura', '°C', 'menor', 0),
+    ('inicializacao', 'Abrem com o Windows', '', 'menor', 0),
+    ('processos', 'Processos', '', 'menor', 0),
+]
+PAINEL_BENCH = [('disco_escrita', 'Disco: escrita sequencial', 'MB/s'), ('disco_4k', 'Disco: escritas pequenas', 'ops/s'),
+                ('cpu', 'CPU: um núcleo', 'MB/s'), ('cpu_multi', 'CPU: todos os núcleos', 'MB/s'), ('ram', 'RAM: cópia', 'MB/s')]
+
+
+def _e(x):
+    return _html.escape(str(x), quote=True)
+
+
+def _num(v, casas):
+    return br(v, casas)
+
+
+def _escala(lo, hi):
+    """Limites 'redondos' para o eixo y, sem esticar um valor constante até virar uma reta no meio do nada."""
+    if hi - lo < 1e-9:
+        folga = max(abs(hi) * 0.1, 1.0)
+        return lo - folga, hi + folga
+    folga = (hi - lo) * 0.12
+    return lo - folga, hi + folga
+
+
+def _passo_bonito(intervalo, alvo=4):
+    """Passo 1, 2, 2.5, 5 x 10^n que dá perto de `alvo` divisões."""
+    bruto = intervalo / alvo
+    mag = 10 ** math.floor(math.log10(bruto))
+    for m in (1, 2, 2.5, 5, 10):
+        if bruto <= m * mag:
+            return m * mag
+    return 10 * mag
+
+
+def _ticks(lo, hi, inteiro=False):
+    passo = _passo_bonito(hi - lo)
+    if inteiro:
+        passo = max(1.0, round(passo))
+    t = math.ceil(lo / passo - 1e-9) * passo
+    out = []
+    while t <= hi + 1e-9 and len(out) < 8:
+        out.append(round(t, 6))
+        t += passo
+    return out
+
+
+def svg_linha(serie, titulo, un='', casas=0, marcas=(), tendencia=None, largura=560, altura=190, zero=False, suave=False, destaque=False, projecao=None, limite=None):
+    """serie: [(datetime, valor)]; marcas: [(datetime, rótulo)] (ex.: quando um pacote foi aplicado); tendencia: True mostra a reta de ajuste."""
+    ml, mr, mt, mb = 46, 14, 14, 26
+    w, h = largura - ml - mr, altura - mt - mb
+    if not serie:
+        return f'<svg viewBox="0 0 {largura} {altura}" role="img" aria-label="{_e(titulo)}: sem dados"></svg>'
+    t0, t1 = serie[0][0], serie[-1][0]
+    span = max((t1 - t0).total_seconds(), 1.0)
+    lo, hi = _escala(min(v for _, v in serie), max(v for _, v in serie))
+    if limite and limite[0] > hi:   # a linha de limite precisa caber no gráfico, senão ela some e o aviso perde o sentido
+        hi = limite[0] + (hi - lo) * 0.08
+    if projecao:
+        t1p = projecao[1]
+        span_p = max((t1p - t0).total_seconds(), span)
+    else:
+        span_p = span
+    if zero:   # percentuais: começar em 0 evita transformar ruído em montanha
+        lo, hi = 0.0, max(hi, 10.0)
+
+    def x(d):
+        return ml + (w / 2 if len(serie) == 1 else (d - t0).total_seconds() / span_p * w)
+
+    def y(v):
+        return mt + h - (v - lo) / (hi - lo) * h
+    partes = [f'<svg viewBox="0 0 {largura} {altura}" role="img" aria-label="{_e(titulo)}: de {_num(serie[0][1], casas)} a {_num(serie[-1][1], casas)} {_e(un)}" class="grafico">']
+    for v in _ticks(lo, hi, inteiro=casas == 0):
+        partes.append(f'<line x1="{ml}" x2="{ml + w}" y1="{y(v):.1f}" y2="{y(v):.1f}" class="grade"/>'
+                      f'<text x="{ml - 6}" y="{y(v) + 4:.1f}" class="eixo" text-anchor="end">{_num(v, casas)}</text>')
+    partes.append(f'<text x="{ml}" y="{altura - 6}" class="eixo">{t0:%d/%m}</text><text x="{ml + w}" y="{altura - 6}" class="eixo" text-anchor="end">{t1:%d/%m}</text>')
+    if limite and lo <= limite[0] <= hi:
+        partes.append(f'<line x1="{ml}" x2="{ml + w}" y1="{y(limite[0]):.1f}" y2="{y(limite[0]):.1f}" class="limite"/>'
+                      f'<text x="{ml + w}" y="{y(limite[0]) - 4:.1f}" class="rotulo-limite" text-anchor="end">{_e(limite[1])}</text>')
+    for d, rot in marcas:
+        if t0 <= d <= t1 and len(serie) > 1:
+            partes.append(f'<line x1="{x(d):.1f}" x2="{x(d):.1f}" y1="{mt}" y2="{mt + h}" class="marca"><title>{_e(rot)} ({d:%d/%m})</title></line>')
+    if len(serie) > 1:
+        pts = ' '.join(f'{x(d):.1f},{y(v):.1f}' for d, v in serie)
+        partes.append(f'<polygon points="{x(t0):.1f},{mt + h} {pts} {x(t1):.1f},{mt + h}" class="area"/>')
+        partes.append(f'<polyline points="{pts}" class="{"linha fraca" if suave else "linha"}"/>')
+        if suave:
+            sm = mediana_movel(serie)
+            partes.append('<polyline points="' + ' '.join(f'{x(d):.1f},{y(v):.1f}' for d, v in sm) + '" class="linha"/>')
+        if tendencia:
+            xs = [(d - t0).total_seconds() / 86400 for d, _ in serie]
+            ys = [v for _, v in serie]
+            mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+            den = sum((a - mx) ** 2 for a in xs)
+            if den:
+                b = sum((a - mx) * (c - my) for a, c in zip(xs, ys)) / den
+                a0 = my - b * mx
+                dias = span / 86400
+                partes.append(f'<line x1="{x(t0):.1f}" y1="{y(min(max(a0, lo), hi)):.1f}" x2="{x(t1):.1f}" y2="{y(min(max(a0 + b * dias, lo), hi)):.1f}" class="tendencia"/>')
+    if projecao and len(serie) > 1:
+        d_fim, v_fim = serie[-1][0], mediana_movel(serie)[-1][1]
+        partes.append(f'<line x1="{x(d_fim):.1f}" y1="{y(v_fim):.1f}" x2="{x(projecao[1]):.1f}" y2="{y(max(lo, 0)):.1f}" class="projecao"/>'
+                      f'<text x="{x(projecao[1]) - 4:.1f}" y="{y(max(lo, 0)) - 6:.1f}" class="rotulo-proj" text-anchor="end">{_e(projecao[2])}</text>')
+    if destaque:
+        for dd, vv in anomalias(serie):
+            partes.append(f'<circle cx="{x(dd):.1f}" cy="{y(vv):.1f}" r="4" class="anomalia"><title>fora do normal: {dd:%d/%m %H:%M}, {_num(vv, casas)} {_e(un)}</title></circle>')
+    d, v = serie[-1]
+    partes.append(f'<circle cx="{x(d):.1f}" cy="{y(v):.1f}" r="3.5" class="ponto"/>')
+    for dd, vv in serie:   # tooltips: passar o mouse mostra o valor de cada medida
+        partes.append(f'<circle cx="{x(dd):.1f}" cy="{y(vv):.1f}" r="7" class="alvo"><title>{dd:%d/%m %H:%M}: {_num(vv, casas)} {_e(un)}</title></circle>')
+    partes.append('</svg>')
+    return ''.join(partes)
+
+
+def sparkline_txt(valores, ascii_=False):
+    """Mini gráfico de uma linha para o terminal."""
+    v = [float(x) for x in valores if isinstance(x, (int, float))]
+    if not v:
+        return ''
+    blocos = ' .:-=+*#' if ascii_ else '▁▂▃▄▅▆▇█'
+    lo, hi = min(v), max(v)
+    if hi - lo < 1e-9:
+        return blocos[len(blocos) // 2] * min(len(v), 24)
+    if len(v) > 24:   # reamostra para caber na linha
+        v = [v[int(i * (len(v) - 1) / 23)] for i in range(24)]
+    return ''.join(blocos[min(len(blocos) - 1, int((x - lo) / (hi - lo) * (len(blocos) - 1) + 0.5))] for x in v)
+
+
+PAINEL_CSS = '''
+:root{--fundo:#0c0c0d;--painel:#131315;--linha:#26262b;--forte:#3a3a41;--apagado:#8a877f;--texto:#d2cdc2;--osso:#f1ebe0;--ambar:#e2a85c;--verde:#9ccf8c;--verm:#e5737a;--mono:ui-monospace,Consolas,"Cascadia Mono",monospace;--sans:"Segoe UI",system-ui,-apple-system,sans-serif}
+@media (prefers-color-scheme:light){:root{--fundo:#f6f3ec;--painel:#fffdf8;--linha:#e2ddd1;--forte:#c9c2b2;--apagado:#6d6a63;--texto:#2b2a27;--osso:#161512;--ambar:#a8650f;--verde:#3d7a2e;--verm:#b3262f}}
+*{box-sizing:border-box;margin:0;padding:0}html{background:var(--fundo);color:var(--texto);font:15px/1.55 var(--sans)}
+body{max-width:1180px;margin:0 auto;padding:32px 16px 64px}
+h1{font:600 30px/1.1 var(--sans);color:var(--osso);letter-spacing:-.01em}h1 small{font:400 14px var(--mono);color:var(--apagado);margin-left:10px}
+.sub{color:var(--apagado);margin:6px 0 28px;max-width:70ch}
+h2{font:600 17px var(--sans);color:var(--osso);margin:36px 0 12px}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
+.cartao{background:var(--painel);border:1px solid var(--linha);padding:14px 14px 10px}.cartao b{display:block;font:500 12px var(--sans);color:var(--apagado)}
+.cartao .n{font:600 26px/1.2 var(--mono);color:var(--osso)}.cartao .n i{font:400 13px var(--mono);color:var(--apagado);font-style:normal;margin-left:3px}
+.cartao .d{font:12px var(--mono);margin-top:2px}.bom{color:var(--verde)}.mau{color:var(--verm)}.neutro{color:var(--apagado)}
+.graficos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+figure{background:var(--painel);border:1px solid var(--linha);padding:14px 14px 6px}figcaption{font:600 14px var(--sans);color:var(--osso);display:flex;justify-content:space-between;gap:8px}
+figcaption span{font:400 12px var(--mono);color:var(--apagado)}
+.grafico{width:100%;height:auto;display:block;margin-top:6px}.grade{stroke:var(--linha);stroke-width:1}.eixo{fill:var(--apagado);font:11px var(--mono)}
+.linha{fill:none;stroke:var(--ambar);stroke-width:2;stroke-linejoin:round}.area{fill:var(--ambar);opacity:.1}.tendencia{stroke:var(--apagado);stroke-width:1.5;stroke-dasharray:5 4}
+.linha.fraca{opacity:.35;stroke-width:1.2}.limite{stroke:var(--verm);stroke-width:1.2;stroke-dasharray:6 4}.rotulo-limite,.rotulo-proj{fill:var(--verm);font:11px var(--mono)}.projecao{stroke:var(--verm);stroke-width:1.8;stroke-dasharray:3 4}.anomalia{fill:var(--verm);stroke:var(--painel);stroke-width:1.5}.ponto{fill:var(--ambar)}.marca{stroke:var(--verde);stroke-width:1.5;stroke-dasharray:2 3}.alvo{fill:transparent}.alvo:hover{fill:var(--ambar);opacity:.35}
+.legenda{font:12px var(--mono);color:var(--apagado);margin-top:10px}.legenda .m{color:var(--verde)}
+.achados{list-style:none;border:1px solid var(--linha);background:var(--painel)}.achados li{padding:12px 14px;border-bottom:1px solid var(--linha)}.achados li:last-child{border:0}
+.achados .mau{font-weight:600}.vazio{border:1px dashed var(--forte);padding:22px;color:var(--apagado)}code{font:13px var(--mono);color:var(--osso)}
+details{margin-top:28px}summary{cursor:pointer;color:var(--apagado)}table{border-collapse:collapse;margin-top:10px;font:12px var(--mono)}td,th{padding:3px 12px 3px 0;text-align:left;border-bottom:1px solid var(--linha)}
+@media (max-width:620px){.eixo{font-size:16px}.graficos{gap:12px}h1{font-size:26px}}
+ul.propostas{list-style:none;display:grid;gap:12px}.propostas li{background:var(--painel);border:1px solid var(--linha);border-left:3px solid var(--forte);padding:12px 14px}
+.propostas .c-alta{border-left-color:var(--verm)}.propostas .c-media{border-left-color:var(--ambar)}.propostas b{color:var(--osso)}.propostas p{margin-top:4px}.propostas .det{font:12px var(--mono);color:var(--apagado)}
+.rolagem{overflow-x:auto}table.efeito{width:100%;font:13px var(--sans)}table.efeito td,table.efeito th{padding:8px 12px 8px 0;vertical-align:top;border-bottom:1px solid var(--linha)}table.efeito th{color:var(--osso);white-space:nowrap}
+footer{margin-top:44px;color:var(--apagado);font:12px var(--mono)}
+'''
+
+
+def _proj_painel(chave, s):
+    if chave != 'livre_c':
+        return None
+    pr = projecao_enchimento(s)
+    return (pr[0], pr[1], f'cheio ~{pr[1]:%d/%m}') if pr else None
+
+
+def _tabela_efeito_html(efeitos):
+    """efeitos: de tabela_efeito(). Só colore o que passou do ruído; o resto é 'sem diferença mensurável' (honestidade)."""
+    cls = {'melhorou': 'bom', 'piorou': 'mau'}
+    linhas = []
+    for titulo, quando, cel in efeitos:
+        tds = []
+        for rot, ver, a, b, casas, un in cel:
+            if ver in ('melhorou', 'piorou'):
+                tds.append(f'<td class="{cls[ver]}">{_e(rot)}: {_num(a, casas)} → {_num(b, casas)}{(" " + _e(un)) if un else ""}</td>')
+            else:
+                tds.append(f'<td class="neutro">{_e(rot)}: {_e(ver)}</td>')
+        linhas.append(f'<tr><th>{_e(titulo)}<br><span class="neutro">{quando:%d/%m/%Y}</span></th>' + ''.join(tds) + '</tr>')
+    return ('<div class="rolagem"><table class="efeito">' + ''.join(linhas) + '</table></div>'
+            '<p class="legenda">Compara a mediana dos 7 dias antes e dos 7 dias depois. Só mostra melhora ou piora quando a mudança passa da oscilação normal; '
+            'com vários pacotes na mesma semana, não dá para saber qual deles causou.</p>')
+
+
+def _delta_cartao(serie, melhor, casas, un):
+    if len(serie) < 4:
+        return '<span class="neutro">poucas medidas</span>'
+    a, b = _tercos(serie)
+    d = b - a
+    if abs(d) < 10 ** -casas / 2:
+        return '<span class="neutro">estável</span>'
+    bom = (d < 0) == (melhor == 'menor')
+    return f'<span class="{"bom" if bom else "mau"}">{"+" if d > 0 else ""}{_num(d, casas)}{(" " + _e(un)) if un else ""} no período</span>'
+
+
+def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=()):
+    """HTML completo do painel. amostras: de le_metricas(); benchs: [(datetime, {chave: mediana})]; pacotes: [(datetime, título)]."""
+    marcas = [(d, f'aplicou: {t}') for d, t in pacotes]
+    corpo = []
+    periodo = ''
+    if amostras:
+        periodo = f'{len(amostras)} medidas, de {amostras[0]["_dt"]:%d/%m/%Y} a {amostras[-1]["_dt"]:%d/%m/%Y}'
+    if not amostras:
+        corpo.append('<div class="vazio">Ainda não há medidas. Ligue o segundo plano com <code>katharos agendar --frequencia continua</code>: '
+                     'ele mede ao iniciar o Windows e a cada 4 horas, sem programa aberto, e este painel passa a mostrar a evolução do PC.</div>')
+    else:
+        cartoes, figuras = [], []
+        for chave, titulo, un, melhor, casas in PAINEL_SERIES:
+            s = [(d['_dt'], float(d[chave])) for d in amostras if isinstance(d.get(chave), (int, float))]
+            if not s:
+                continue
+            cartoes.append(f'<div class="cartao"><b>{_e(titulo)}</b><div class="n">{_num(s[-1][1], casas)}<i>{_e(un)}</i></div>'
+                           f'<div class="d">{_delta_cartao(s, melhor, casas, un)}</div></div>')
+            if len(s) >= 2:
+                figuras.append(f'<figure><figcaption>{_e(titulo)}<span>{_num(min(v for _, v in s), casas)} a {_num(max(v for _, v in s), casas)} {_e(un)}</span></figcaption>'
+                               + svg_linha(s, titulo, un, casas, marcas, tendencia=len(s) >= 6 and len(s) < 12, zero=(chave == 'cpu'), suave=len(s) >= 12, destaque=True,
+                                           projecao=_proj_painel(chave, s), limite=(85, '85 °C') if chave == 'temperatura' else None) + '</figure>')
+        corpo.append('<h2>Agora</h2><div class="cartoes">' + ''.join(cartoes) + '</div>')
+        if sugestoes:
+            corpo.append('<h2>O que eu proporia</h2><ul class="propostas">' + ''.join(
+                f'<li class="{"c-" + {"média": "media"}.get(x["confianca"], x["confianca"])}"><b>{_e(x["titulo"])}</b><p>{_e(x["porque"])}</p>'
+                f'<p class="det">Confiança {_e(x["confianca"])} · comando <code>katharos {_e(x["comando"])}</code>'
+                + (f' · {_e(x["impacto"])}' if x['impacto'] else '') + '</p></li>' for x in sugestoes) + '</ul>'
+                '<p class="legenda">Só proponho; nada é aplicado sem você pedir. Cada proposta tem o número que a justifica.</p>')
+        corpo.append('<h2>O que está mudando</h2>')
+        if achados:
+            corpo.append('<ul class="achados">' + ''.join(f'<li><span class="mau">{_e(t[0].upper() + t[1:])}.</span></li>' for _, t in achados) + '</ul>')
+        elif len(amostras) < 6 or (amostras[-1]['_dt'] - amostras[0]['_dt']).days < 3:
+            corpo.append('<div class="vazio">Poucas medidas ainda: preciso de pelo menos 6, espalhadas por 3 dias ou mais, para dizer se algo está mudando. Menos que isso seria chute.</div>')
+        else:
+            corpo.append('<div class="vazio">Nada piorando de forma clara neste período.</div>')
+        if resultados:
+            corpo.append('<h2>O que aconteceu depois das propostas que você executou</h2><ul class="achados">' + ''.join(
+                f'<li><b>{_e(t)}</b> ({q:%d/%m}): {_e(rot)} ' + (f'<span class="{"bom" if ver == "melhorou" else "mau"}">{_num(a, c)} → {_num(b, c)}{(" " + _e(u)) if u else ""}</span>' if ver in ('melhorou', 'piorou')
+                                                          else f'<span class="neutro">{_e(ver)}</span>') + '</li>' for t, q, rot, ver, a, b, c, u in resultados) + '</ul>')
+        if efeitos:
+            corpo.append('<h2>Efeito de cada pacote que você aplicou</h2>' + _tabela_efeito_html(efeitos))
+        if figuras:
+            corpo.append('<h2>Evolução</h2><div class="graficos">' + ''.join(figuras) + '</div>')
+            leg = ('Linha forte: mediana móvel (tira o ruído); linha clara: cada medida; <span class="mau">pontos vermelhos</span>: valores muito fora do normal desta série; '
+                   'linha tracejada: tendência; <span class="mau">linha vermelha pontilhada</span>: projeção ou limite.')
+            if marcas:
+                leg += ' <span class="m">Linhas verdes pontilhadas</span>: quando você aplicou um pacote do Katharos (passe o mouse).'
+            corpo.append(f'<p class="legenda">{leg}</p>')
+    figs_b = []
+    for chave, titulo, un in PAINEL_BENCH:
+        s = [(d, float(m[chave])) for d, m in benchs if isinstance(m.get(chave), (int, float))]
+        if len(s) >= 2:
+            figs_b.append(f'<figure><figcaption>{_e(titulo)}<span>{_e(un)}</span></figcaption>' + svg_linha(s, titulo, un, 0, marcas) + '</figure>')
+    if figs_b:
+        corpo.append('<h2>Benchmark ao longo do tempo</h2><div class="graficos">' + ''.join(figs_b) + '</div>'
+                     '<p class="legenda">Cada ponto é uma rodada do comando <code>benchmark</code>. Oscilação pequena é normal: só vale diferença maior que a variação.</p>')
+    if amostras:
+        linhas = ''.join('<tr><td>' + f'{d["_dt"]:%d/%m/%Y %H:%M}</td>' + ''.join(f'<td>{_num(d[c], 1) if isinstance(d.get(c), (int, float)) else "-"}</td>' for c, *_ in PAINEL_SERIES) + '</tr>'
+                         for d in reversed(amostras[-60:]))
+        corpo.append('<details><summary>Ver as medidas em tabela (últimas 60)</summary><table><tr><th>quando</th>'
+                     + ''.join(f'<th>{_e(t)}</th>' for _, t, *_ in PAINEL_SERIES) + '</tr>' + linhas + '</table></details>')
+    return ('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Katharos · painel do PC</title><style>' + PAINEL_CSS + '</style></head><body>'
+            f'<h1>Painel do PC<small>{_e(pc)}</small></h1>'
+            f'<p class="sub">{_e(periodo) if periodo else "Gráficos gerados pelo Katharos, neste computador. Nada sai do PC."}</p>'
+            + ''.join(corpo) +
+            f'<footer>Katharos {_e(versao)} · arquivo gerado aqui, sem internet e sem scripts: pode apagar quando quiser.</footer></body></html>')
+
+
+def benchs_para_painel():
+    out = []
+    for arq in bench_salvos():
+        d = le_json(arq, {})
+        try:
+            quando = datetime.fromisoformat(d.get('quando') or '')
+        except (TypeError, ValueError):
+            continue
+        out.append((quando, {c: v.get('mediana') for c, v in (d.get('medidas') or {}).items() if isinstance(v, dict)}))
+    return sorted(out, key=lambda x: x[0])
+
+
+def pacotes_para_painel():
+    out = []
+    for nome, reg in (estado().get('pacotes') or {}).items():
+        try:
+            if nome in PACOTES and not reg.get('revertido'):
+                out.append((datetime.fromisoformat(reg['quando']), PACOTES[nome].titulo))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return sorted(out)
+
+
+def ferramenta_painel(ctx, args):
+    t = ctx.t
+    t.aba('gráficos do PC ao longo do tempo, num painel que abre no navegador')
+    t.paragrafo('Gera um arquivo HTML neste computador, com gráficos das medidas do segundo plano (espaço, RAM, boot, CPU, temperatura), '
+                'dos benchmarks e de quando você aplicou cada pacote. Sem internet, sem programa extra e sem scripts: é só um arquivo que você pode apagar.', 2, 'sub')
+    if not le_metricas() and WINDOWS and not args.teste:
+        amostra_agora(ctx)
+    am = le_metricas()
+    ev = coleta_evidencias(ctx)
+    ev['amostras'] = am
+    html_ = monta_painel(am, ev['benchs'], pacotes_para_painel(), analisa_tendencia(am), nome_do_pc(), VERSAO, gera_sugestoes(ev),
+                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev))
+    destino = CASA / 'painel.html'
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(html_, encoding='utf-8')
+    t.ok(f'Painel gerado: {destino}')
+    if not am:
+        t.nota('Ainda sem medidas: ligue o segundo plano com "agendar" para o painel ter o que mostrar.')
+    if args.teste or getattr(args, 'nao_abrir', False):
+        return 0
+    try:
+        if WINDOWS:
+            os.startfile(str(destino))
+        else:
+            import webbrowser
+            webbrowser.open(destino.as_uri())
+    except Exception as e:
+        t.aviso(f'Não consegui abrir o navegador ({e}). Abra o arquivo acima.')
+    return 0
+# ─────────────── motor de inteligência: junta tudo o que o Katharos sabe e propõe, com prova, o que mudar ───────────────
+# Pipeline:  coletor de evidências → regras independentes → pontuação → memória → aprendizado.
+#  1. COLETOR     medidas do segundo plano, benchmarks, pacotes aplicados, eventos/erros do relatório, achados do raio-x, perfil do PC.
+#  2. REGRAS      cada regra olha as evidências e devolve propostas (ou nada). Regra nova = uma função com @regra.
+#  3. PONTUAÇÃO   pontos = impacto × confiança ÷ (1 + risco). A ordem de exibição vem daqui.
+#  4. MEMÓRIA     o que a pessoa dispensa não volta por 30 dias; o que já foi mostrado fica registrado com a data.
+#  5. APRENDIZADO quando a pessoa executa uma proposta, o motor mede 7 dias depois se a métrica visada mudou além do ruído
+#                 e mostra o resultado (inclusive "sem diferença mensurável"): a confiança nas propostas vem de resultado, não de promessa.
+# Princípios: só propõe o que a evidência mostra; toda proposta carrega o número que a justifica; nunca aplica sozinho;
+# quando não sabe, diz que não sabe; não culpa um pacote por algo que já vinha piorando antes dele.
+ORDEM_CONF = {'alta': 0, 'média': 1, 'baixa': 2}
+PESO_CONF = {'alta': 1.0, 'média': 0.6, 'baixa': 0.3}
+DISPENSA_DIAS = 30
+ALVO_METRICA = {'espaco': 'livre_c', 'boot': 'boot_s', 'ram': 'ram_usada', 'cpu': 'cpu'}
+METRICAS_EFEITO = [('boot_s', 'o tempo de boot', 'menor', 0, 's'), ('ram_usada', 'a RAM em uso', 'menor', 1, 'GB'),
+                   ('livre_c', 'o espaço livre em C:', 'maior', 0, 'GB'), ('cpu', 'a CPU em repouso', 'menor', 0, '%'),
+                   ('inicializacao', 'os programas que abrem com o Windows', 'menor', 0, ''), ('processos', 'o número de processos', 'menor', 0, '')]
+REGRAS = []
+
+
+def regra(f):
+    REGRAS.append(f)
+    return f
+
+
+def _sug(id_, titulo, porque, comando, conf, impacto='', risco='', pontos_impacto=3, risco_n=0, metrica='', tipo='acao'):
+    return {'id': id_, 'titulo': titulo, 'porque': porque, 'comando': comando, 'confianca': conf, 'impacto': impacto, 'risco': risco,
+            'impacto_n': pontos_impacto, 'risco_n': risco_n, 'metrica': metrica, 'tipo': tipo,
+            'pontos': round(pontos_impacto * PESO_CONF[conf] / (1 + risco_n), 2)}
+
+
+def pacotes_aplicados_dt():
+    """[(datetime, nome, título)] dos pacotes aplicados e não revertidos."""
+    out = []
+    for nome, reg in (estado().get('pacotes') or {}).items():
+        try:
+            if nome in PACOTES and not reg.get('revertido'):
+                out.append((datetime.fromisoformat(reg['quando']), nome, PACOTES[nome].titulo))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return sorted(out)
+
+
+def coleta_evidencias(ctx=None, agora=None):
+    """Tudo o que o Katharos sabe, num dicionário só. Fonte que falhar vira vazio: o motor trabalha com o que tem."""
+    e = estado()
+    try:
+        rel = rel_carrega()
+    except Exception as ex:  # relatório corrompido não pode derrubar o conselheiro
+        LOG.escreve(f'conselheiro sem relatório: {ex!r}')
+        rel = {'eventos': [], 'secoes': {}}
+    return {'amostras': le_metricas(), 'benchs': benchs_para_painel(), 'pacotes': pacotes_aplicados_dt(),
+            'eventos': rel.get('eventos') or [], 'raiox': ((rel.get('secoes') or {}).get('raiox') or {}).get('dados') or {},
+            'dispensadas': e.get('conselheiro_dispensadas') or {}, 'vistas': e.get('conselheiro_vistas') or {},
+            'fundo_ligado': bool(e.get('manut_freq')), 'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {}}
+
+
+# ───────── regras ─────────
+
+@regra
+def r_ligar_fundo(ev):
+    if ev['amostras'] or ev['fundo_ligado']:
+        return []
+    return [_sug('ligar-fundo', 'Ligar o segundo plano para eu poder aconselhar com dados',
+                 'Ainda não há nenhuma medida deste PC. Sem medidas eu só chutaria.', 'agendar --frequencia continua', 'alta',
+                 'o painel, a tendência e as propostas passam a existir', 'nenhum: é uma tarefa leve do Windows, que você desliga quando quiser', 4, 0)]
+
+
+def _achados_tendencia(ev):
+    return dict(analisa_tendencia(ev['amostras'])) if ev['amostras'] else {}
+
+
+@regra
+def r_espaco(ev):
+    ach = _achados_tendencia(ev)
+    proj = projecao_enchimento(_serie(ev['amostras'], 'livre_c'))
+    if 'livre_c' not in ach or not proj:
+        return []
+    return [_sug('espaco', 'Liberar espaço antes que o disco encha', ach['livre_c'][0].upper() + ach['livre_c'][1:] + f'. Projeção: cheio por volta de {proj[1]:%d/%m}.',
+                 'limpar', 'alta' if proj[0] < 30 else 'média', 'recupera o que é lixo (temporários, caches, instaladores); para o que é seu use "grandes"',
+                 'baixo: arquivos pessoais vão para a Lixeira', 5 if proj[0] < 30 else 4, 1, 'livre_c')]
+
+
+@regra
+def r_boot(ev):
+    ach = _achados_tendencia(ev)
+    if 'boot_s' not in ach:
+        return []
+    extra = ' Também subiu a quantidade de programas na inicialização.' if 'inicializacao' in ach else ''
+    return [_sug('boot', 'Rever o que abre junto com o Windows', ach['boot_s'][0].upper() + ach['boot_s'][1:] + '.' + extra, 'inicializacao',
+                 'alta' if 'inicializacao' in ach else 'média', 'o próprio Windows mede quanto cada programa atrasa o boot e o item mostra esse número',
+                 'baixo: o programa continua instalado e você reabre quando quiser', 4, 1, 'boot_s')]
+
+
+@regra
+def r_ram(ev):
+    am = ev['amostras']
+    ultimo = am[-1] if am else {}
+    if not ultimo.get('ram_total'):
+        return []
+    usado = ultimo.get('ram_usada', 0) / ultimo['ram_total']
+    ach = _achados_tendencia(ev)
+    if 'ram_usada' in ach:
+        return [_sug('ram', 'A RAM em uso cresceu: ver quem está gastando', ach['ram_usada'][0].upper() + ach['ram_usada'][1:] + f' (agora {int(usado * 100)}% do total).',
+                     'memoria', 'alta' if usado >= 0.8 else 'média', 'mostra os processos que mais ocupam e o que dá para fechar', 'nenhum: só leitura', 4 if usado >= 0.8 else 3, 0, 'ram_usada')]
+    if usado >= 0.85 and len(am) >= 6:
+        return [_sug('ram', 'RAM quase cheia', f'{int(usado * 100)}% de {br(ultimo["ram_total"], 0)} GB em uso na última medida. O Windows começa a usar o disco no lugar da memória.',
+                     'memoria', 'média', 'ver quem gasta e fechar o que não precisa', 'nenhum: só leitura', 4, 0, 'ram_usada')]
+    return []
+
+
+@regra
+def r_cpu(ev):
+    ach = _achados_tendencia(ev)
+    if 'cpu' not in ach:
+        return []
+    return [_sug('cpu', 'Algo novo mantém a CPU ocupada em repouso', ach['cpu'][0].upper() + ach['cpu'][1:] + '.', 'raiox', 'média',
+                 'o raio-x lista os processos que mais gastam e o que chama o WMI', 'nenhum: só leitura', 3, 0, 'cpu')]
+
+
+@regra
+def r_temperatura(ev):
+    ach = _achados_tendencia(ev)
+    if 'temperatura' not in ach:
+        return []
+    return [_sug('temperatura', 'Temperatura alta em repouso', ach['temperatura'][0].upper() + ach['temperatura'][1:] + '.', 'energia', 'média',
+                 'limpeza física e pasta térmica resolvem de verdade; no notebook, o plano "fresco" do pacote energia ajuda', 'nenhum', 3, 0)]
+
+
+@regra
+def r_efeito_dos_pacotes(ev):
+    """Aprende com o resultado: depois de aplicar um pacote, o que piorou além do ruído e que NÃO já vinha piorando antes."""
+    out = []
+    am = ev['amostras']
+    for quando, nome, titulo in ev['pacotes']:
+        piores = []
+        for chave, rot, melhor, casas, un in METRICAS_EFEITO:
+            s = _serie(am, chave)
+            if s:
+                ver, a, b = efeito_antes_depois(s, quando, melhor)
+                if ver == 'piorou':
+                    piores.append(f'{rot} foi de {br(a, casas)} para {br(b, casas)}{(" " + un) if un else ""}')
+        if not piores:
+            continue
+        vizinhos = [n for q, n, _ in ev['pacotes'] if n != nome and abs((q - quando).days) <= 7]
+        aviso = ' Outros pacotes foram aplicados na mesma semana, então não dá para saber qual causou.' if vizinhos else ''
+        out.append(_sug(f'efeito:{nome}', f'Conferir o pacote {titulo}: algo piorou depois dele',
+                        'Mediana de 7 dias antes e depois de ' + f'{quando:%d/%m}: ' + '; '.join(piores) + f', mais que a oscilação normal e sem já vir nessa direção antes.{aviso}',
+                        f'desfazer {nome}', 'baixa' if vizinhos else 'média', 'volta ao valor exato de antes; se a medida melhorar, o pacote era o motivo',
+                        'baixo: o desfazer guarda e devolve cada valor', 4, 0))
+    return out
+
+
+@regra
+def r_benchmark(ev):
+    out = []
+    for chave, titulo, un in PAINEL_BENCH:
+        s = [(d, float(m[chave])) for d, m in ev['benchs'] if isinstance(m.get(chave), (int, float))]
+        if len(s) >= 3:
+            ant = _mediana([v for _, v in s[:-1]])
+            atual = s[-1][1]
+            if ant > 0 and atual < 0.75 * max(v for _, v in s) and atual < 0.8 * ant:
+                out.append(_sug(f'bench:{chave}', f'{titulo} caiu em relação ao normal', f'Última rodada: {br(atual, 0)} {un}; a mediana das anteriores é {br(ant, 0)} {un}.',
+                                'reparar' if 'disco' in chave else 'raiox', 'baixa', 'descartar problema de disco, driver ou calor', 'nenhum: só leitura', 2, 0))
+    return out
+
+
+@regra
+def r_ajustes_que_nao_ficam(ev):
+    """O relatório registra 'nao-ficou' quando a conferência depois de aplicar mostra algo que não pegou. Repetido = algo desfaz os ajustes."""
+    cont = {}
+    for x in ev['eventos']:
+        if x.get('tipo') == 'nao-ficou' and x.get('pacote'):
+            cont[x['pacote']] = cont.get(x['pacote'], 0) + 1
+    return [_sug(f'nao-fica:{p}', f'Os ajustes de {PACOTES[p].titulo if p in PACOTES else p} não estão ficando',
+                 f'A conferência depois de aplicar encontrou ajuste desfeito {n} vezes. Costuma ser política da empresa, ferramenta do fabricante ou o Windows Update reaplicando.',
+                 'verificar', 'alta' if n >= 3 else 'média', 'mostra exatamente quais ajustes voltaram e o que pode estar segurando', 'nenhum: só leitura', 3, 0)
+            for p, n in cont.items() if n >= 2]
+
+
+@regra
+def r_itens_que_falham(ev):
+    cont = {}
+    for x in ev['eventos']:
+        if x.get('tipo') == 'itens' and x.get('erros'):
+            for i in x.get('ids') or []:
+                cont[(x.get('pacote'), i)] = cont.get((x.get('pacote'), i), 0) + 1
+    return [_sug(f'falha:{p}:{i}', f'O item {i} de {p} falhou {n} vezes', 'Um item que erra sempre só atrapalha. Se não for essencial, deixe de fora.',
+                 'config protegidos', 'baixa', 'o item deixa de aparecer nas listas', 'nenhum', 1, 0)
+            for (p, i), n in cont.items() if n >= 3 and p]
+
+
+@regra
+def r_limpeza_que_nao_rende(ev):
+    """Honestidade: se a limpeza já não libera quase nada, dizer que repetir não ajuda."""
+    sobras = [(x.get('livre_depois', 0) - x.get('livre_antes', 0)) for x in ev['eventos'] if x.get('tipo') == 'espaco' and x.get('pacote') in ('limpar', 'disco')]
+    if len(sobras) >= 3 and all(v < 500 * 2 ** 20 for v in sobras[-3:]):
+        return [_sug('limpeza-rende-pouco', 'A limpeza já não rende: o PC está limpo', 'As últimas 3 limpezas liberaram menos de 0,5 GB cada. Repetir não ajuda; '
+                     'se falta espaço, o que ocupa é arquivo seu: use "grandes".', 'grandes', 'média', 'mostra os arquivos grandes e duplicados', 'baixo: vão para a Lixeira', 2, 1, tipo='info')]
+    return []
+
+
+@regra
+def r_achados_do_raiox(ev):
+    """O raio-x aponta o que fazer, mas só uma vez. Aqui o que ele apontou e ainda não foi feito entra na fila, ordenado pelo impacto."""
+    aplicados = {n for _, n, _ in ev['pacotes']}
+    out = []
+    for a in (ev['raiox'].get('achados') or [])[:12]:
+        cmd = (a.get('comando') or '').strip()
+        if not cmd or cmd in aplicados or int(a.get('impacto') or 0) < 2:
+            continue
+        out.append(_sug('raiox:' + re.sub(r'[^a-z0-9]+', '-', str(a.get('titulo', '')).lower())[:40], str(a.get('titulo')), str(a.get('evidencia') or ''), cmd,
+                        'média' if int(a.get('impacto') or 0) >= 3 else 'baixa', str(a.get('faz') or ''), '', int(a.get('impacto') or 2), 1))
+    return out[:3]
+
+
+# ───────── pontuação, memória e aprendizado ─────────
+
+def gera_sugestoes(ev):
+    """Roda todas as regras, tira repetidas (mesmo comando) e dispensadas, e ordena por confiança e pontos."""
+    out = []
+    for r in REGRAS:
+        try:
+            out += r(ev) or []
+        except Exception as ex:  # uma regra com defeito não derruba as outras
+            LOG.escreve(f'regra {r.__name__} falhou: {ex!r}')
+    dis = ev.get('dispensadas') or {}
+    out = [x for x in out if not recente_h(dis.get(x['id']), 24 * DISPENSA_DIAS)]
+    por_cmd = {}
+    for x in sorted(out, key=lambda x: (ORDEM_CONF[x['confianca']], -x['pontos'], x['id'])):
+        chave = x['comando'] or x['id']
+        # várias regras podem chegar ao mesmo comando: fica a de maior confiança (as outras viram "também:")
+        if chave in por_cmd and x['tipo'] == 'acao':
+            por_cmd[chave].setdefault('tambem', []).append(x['titulo'])
+            continue
+        por_cmd[chave] = x
+    return sorted(por_cmd.values(), key=lambda x: (ORDEM_CONF[x['confianca']], -x['pontos'], x['id']))
+
+
+def registra_vistas(e, sugestoes, agora=None):
+    """Memória: guarda quando cada proposta foi mostrada pela primeira vez (com o comando e a métrica que ela visa)."""
+    v = e.setdefault('conselheiro_vistas', {})
+    for x in sugestoes:
+        if x['tipo'] == 'acao' and x['id'] not in v:
+            v[x['id']] = {'quando': (agora or datetime.now()).replace(microsecond=0).isoformat(), 'comando': x['comando'], 'metrica': x['metrica'] or ALVO_METRICA.get(x['id'], '')}
+
+
+def resultados_das_propostas(ev):
+    """Aprendizado: para cada proposta mostrada cujo comando virou pacote aplicado DEPOIS, mede o efeito na métrica visada (7 dias antes e depois).
+    Devolve [(título do pacote, quando aplicou, métrica, veredito, antes, depois, casas, unidade)]."""
+    out = []
+    por_nome = {n: (q, t) for q, n, t in ev['pacotes']}
+    for id_, v in (ev.get('vistas') or {}).items():
+        try:
+            visto = datetime.fromisoformat(v['quando'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        cmd, chave = (v.get('comando') or '').split(' ')[0], v.get('metrica')
+        if cmd not in por_nome or not chave:
+            continue
+        quando, titulo = por_nome[cmd]
+        if quando < visto or (ev['agora'] - quando).days < 7:
+            continue
+        s = _serie(ev['amostras'], chave)
+        meta = next((m for m in METRICAS_EFEITO if m[0] == chave), None)
+        if s and meta:
+            ver, a, b = efeito_antes_depois(s, quando, meta[2])
+            out.append((titulo, quando, meta[1], ver, a, b, meta[3], meta[4]))
+    return out
+
+
+def tabela_efeito(amostras, pacotes):
+    """Linhas [(título, quando, [(rótulo, veredito, antes, depois, casas, unidade)])] para o painel."""
+    linhas = []
+    for quando, nome, titulo in pacotes:
+        cel = []
+        for chave, rot, melhor, casas, un in METRICAS_EFEITO:
+            s = _serie(amostras, chave)
+            if s:
+                ver, a, b = efeito_antes_depois(s, quando, melhor)
+                cel.append((rot, ver, a, b, casas, un))
+        linhas.append((titulo, quando, cel))
+    return linhas
+
+
+def ferramenta_conselheiro(ctx, args):
+    t = ctx.t
+    t.aba('o motor de inteligência: propõe mudanças com base em tudo que o Katharos sabe (você decide)')
+    t.paragrafo('Junta as medidas do segundo plano, os benchmarks, os pacotes que você aplicou, os erros do relatório e o que o raio-x apontou, e diz o que mudaria, '
+                'com o número que justifica, a confiança e o comando. Não aplica nada sozinho. Depois que você executa uma proposta, ele mede o resultado.', 2, 'sub')
+    e = estado()
+    alvo = getattr(args, 'dispensar', None)
+    if alvo:
+        dis = e.get('conselheiro_dispensadas') or {}
+        dis[alvo] = agora_iso()
+        e['conselheiro_dispensadas'] = dis
+        salva_estado(e)
+        t.ok(f'Proposta "{alvo}" dispensada por {DISPENSA_DIAS} dias.')
+        return 0
+    ev = coleta_evidencias(ctx)
+    t.chaves([('medidas', str(len(ev['amostras']))), ('pacotes aplicados', str(len(ev['pacotes']))), ('eventos no relatório', str(len(ev['eventos']))),
+              ('achados do raio-x', str(len(ev['raiox'].get('achados') or [])))])
+    res = resultados_das_propostas(ev)
+    if res:
+        t.titulo('resultado das propostas que você executou')
+        for titulo, quando, rot, ver, a, b, casas, un in res:
+            if ver in ('melhorou', 'piorou'):
+                t.item('●', 'verde' if ver == 'melhorou' else 'amarelo', f'{titulo} ({quando:%d/%m})', f'{rot}: {br(a, casas)} → {br(b, casas)}{(" " + un) if un else ""} ({ver})')
+            else:
+                t.item('○', 'apagado', f'{titulo} ({quando:%d/%m})', f'{rot}: {ver}')
+    sug = gera_sugestoes(ev)
+    registra_vistas(e, sug)
+    salva_estado(e)
+    if not sug:
+        if len(ev['amostras']) < 6:
+            t.nota('Poucas medidas ainda para propor algo (preciso de pelo menos 6, em 3 dias ou mais).')
+        else:
+            t.ok('Nada a propor: nenhuma evidência de algo piorando.')
+        return 0
+    cor = {'alta': 'verde', 'média': 'amarelo', 'baixa': 'apagado'}
+    for i, x in enumerate(sug, 1):
+        t.titulo(f'{i}. {x["titulo"]}')
+        t.paragrafo(x['porque'], 4, 'texto')
+        linhas = [('confiança', t.p(x['confianca'], cor[x['confianca']]))]
+        if x['comando']:
+            linhas.append(('comando', t.p('katharos ' + x['comando'], 'destaque')))
+        if x['impacto']:
+            linhas.append(('o que muda', x['impacto']))
+        if x['risco']:
+            linhas.append(('risco', x['risco']))
+        if x.get('tambem'):
+            linhas.append(('também aponta', '; '.join(x['tambem'])))
+        t.chaves(linhas, recuo=4)
+        t.nota(f'    não quer? "katharos conselheiro --dispensar {x["id"]}" esconde por {DISPENSA_DIAS} dias.', 4)
+    return 0
+
+
+def avisa_propostas(e, ctx=None):
+    """No segundo plano: só propostas de confiança alta e ainda não avisadas nos últimos 7 dias viram notificação."""
+    try:
+        ev = coleta_evidencias(ctx)
+        ev['fundo_ligado'] = True
+        sug = gera_sugestoes(ev)
+        registra_vistas(e, sug)
+        vistos = e.setdefault('conselheiro_avisadas', {})
+        novas = []
+        for x in sug:
+            if x['confianca'] == 'alta' and x['tipo'] == 'acao' and not recente_h(vistos.get(x['id']), 24 * 7):
+                novas.append(f'{x["titulo"]} (katharos {x["comando"]})')
+                vistos[x['id']] = agora_iso()
+        return novas
+    except Exception as ex:
+        LOG.escreve(f'conselheiro falhou: {ex!r}')
+        return []
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -8624,6 +9627,9 @@ GRUPOS = [
         ('medir', 'CPU, RAM, disco e temperatura agora', 'ferramenta_medir'),
         ('benchmark', 'velocidade de disco, CPU e RAM, antes e depois', 'ferramenta_benchmark'),
         ('memoria', 'quem usa a RAM e o que liberar', 'ferramenta_memoria'),
+        ('tendencia', 'o PC está piorando com o tempo? (segundo plano)', 'ferramenta_tendencia'),
+        ('painel', 'gráficos do PC ao longo do tempo, no navegador', 'ferramenta_painel'),
+        ('conselheiro', 'propõe mudanças com base nas medidas', 'ferramenta_conselheiro'),
         ('seguranca', 'auditoria: o que está fraco na segurança', 'ferramenta_seguranca'),
         ('portas', 'quem escuta em cada porta, e para quem', 'ferramenta_portas'),
         ('segredos', 'chaves esquecidas nos seus projetos', 'ferramenta_segredos'),
@@ -8653,11 +9659,12 @@ GRUPOS = [
         ('steam', 'Steam: disco, tela e o que atrapalha (só lê)', 'ferramenta_steam'),
         ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
         ('minecraft', 'Minecraft Java: distância e partículas', 'pacote'),
+        ('unreal', 'Satisfactory e Stray: gráficos no arquivo do jogo', 'pacote'),
     ]),
     ('consertar e manter em dia', 'quando algo quebra ou envelhece', [
         ('reparar', 'DISM, SFC, chkdsk, rede e Update', 'pacote'),
         ('atualizar', 'Windows, drivers e programas', 'pacote'),
-        ('agendar', 'manutenção semanal automática', 'ferramenta_agendar'),
+        ('agendar', 'segundo plano: manutenção sozinha, com o Windows', 'ferramenta_agendar'),
     ]),
     ('gosto pessoal', 'aparência e atalhos; nada aqui vem marcado', [
         ('ajustes', 'barra, relógio, Num Lock, atualizações', 'pacote'),
@@ -8680,7 +9687,7 @@ GRUPOS = [
 ]
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
-SEM_ESTADO = {'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -8750,6 +9757,12 @@ def monta_parser():
     sub.add_parser('medir', parents=[depois], help='medidas agora, comparadas com a primeira')
     pb = sub.add_parser('benchmark', parents=[depois], help='disco, CPU e RAM com repetição, comparado com o anterior')
     pb.add_argument('--completo', action='store_true', help='mais rodadas (leva alguns minutos); o padrão é o rápido, cerca de 1 minuto')
+    td = sub.add_parser('tendencia', parents=[depois], help='mostra se algo está piorando com o tempo, pelas medidas do segundo plano')
+    td.add_argument('--agora', action='store_true', help='grava uma medida agora antes de mostrar')
+    cs = sub.add_parser('conselheiro', parents=[depois], help='propõe mudanças com base nas medidas do segundo plano (não aplica nada)')
+    cs.add_argument('--dispensar', metavar='ID', help='esconde uma proposta por 30 dias')
+    pn = sub.add_parser('painel', parents=[depois], help='gera o painel de gráficos (HTML) e abre no navegador')
+    pn.add_argument('--nao-abrir', action='store_true', help='só gera o arquivo')
     sub.add_parser('ajuda', parents=[depois], help='os passos mais comuns')
     rt = sub.add_parser('retomar', parents=[depois], help='termina o que ficou pela metade se o PC travou no meio de uma aplicação')
     rt.add_argument('--descartar', action='store_true', help='esquece a anotação do que ficou pela metade')
@@ -8764,7 +9777,8 @@ def monta_parser():
     g = sub.add_parser('grandes', parents=[depois], help='arquivos grandes, duplicados e instaladores velhos (vão para a Lixeira)')
     g.add_argument('pastas', nargs='*', help='onde procurar (padrão: suas pastas pessoais)')
     g.add_argument('--mb', type=int, help='tamanho mínimo em MB (padrão 500 ou o da config)')
-    a = sub.add_parser('agendar', parents=[depois], help='manutenção semanal: cria, roda agora ou remove')
+    a = sub.add_parser('agendar', parents=[depois], help='segundo plano: liga a manutenção sozinha (semanal, diária ou contínua), roda agora ou desliga')
+    a.add_argument('--frequencia', choices=['semanal', 'diaria', 'continua'], help='quando o segundo plano roda: semanal (domingo), diaria ou continua (ao iniciar com o Windows e a cada 4 h)')
     a.add_argument('--agora', action='store_true', help='roda a manutenção agora')
     a.add_argument('--remover', action='store_true', help='remove a tarefa agendada')
     sub.add_parser('restaurar', parents=[depois], help='pontos de restauração do Windows')

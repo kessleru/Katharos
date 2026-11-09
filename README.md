@@ -84,10 +84,13 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | Atalhos | `perfil` | Perfis prontos (jogos, notebook na bateria, PC fraco, privacidade, programador, PC de trabalho). Antes de aplicar, `p` deixa tirar, pôr ou juntar itens de outros pacotes; `perfil montar` começa sem perfil nenhum e a escolha pode ser salva com um nome (fica em `~/.katharos/perfis` e aparece na lista). Cada um mostra barras de 0 a 5 do que ataca (desempenho, leveza, espaço, bateria, privacidade, conforto), o que você perde e o risco, com prévia e confirmação. `perfil atalhos` cria a pasta **Katharos** na área de trabalho, com o ícone, um atalho por perfil à sua escolha. `perfil exportar` e `perfil importar` repetem a configuração em outro PC |
 | | `organizar` | Separa os arquivos soltos da área de trabalho em pastas por tipo (prévia, confirmação e `--desfazer`). Pastas, atalhos, ocultos e o que você mexeu hoje ficam |
 | Resultado | `cartao` · `relatorio` | O antes e depois num cartão · o **relatório único** (copiar para a IA, salvar numa pasta ou apagar) |
-| Manutenção | `agendar` | Tarefa semanal: só ocioso e na tomada, prioridade baixa, limpa, reaplica o que atualizações desfazem, Defender, SMART, avisos por notificação; uma vez por mês, ponto de restauração e limpeza de componentes |
+| Manutenção | `agendar` | Segundo plano (semanal, diária ou contínua: ao iniciar com o Windows e a cada 4 h): tarefa do Windows, sem programa aberto; só ocioso e na tomada, prioridade baixa, limpa, reaplica o que atualizações desfazem, Defender, SMART, avisos por notificação; uma vez por mês, ponto de restauração e limpeza de componentes |
 | | `restaurar` | Pontos de restauração: lista, cria, abre a Restauração do Sistema |
 | | `desfazer` | `desfazer servicos privacidade` ou `desfazer tudo`: volta cada valor ao que era antes |
 | | `socorro` | O PC ficou estranho: desfaz tudo o que o Katharos mudou e explica o ponto de restauração do Windows |
+| Conhecer | `tendencia` | Mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo (usa as medidas do segundo plano) |
+| | `conselheiro` | O motor de inteligência: propõe mudanças com o número que as justifica, a confiança e o comando; não aplica nada sozinho e mede o resultado depois |
+| | `painel` | Gera um painel HTML com gráficos das medidas, dos benchmarks e das datas de cada pacote; sem internet e sem scripts |
 | | `retomar` | Se o PC travou ou a janela fechou no meio de uma aplicação, termina só o que faltou (`--descartar` esquece a anotação) |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 
