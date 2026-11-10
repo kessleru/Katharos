@@ -2607,6 +2607,35 @@ class TestSegundoPlano(_CasaTemporaria):
             self.assertFalse(k.garante_segundo_plano(mock.Mock()))
             self.assertFalse(k.abre_segundo_plano())
 
+    def test_temperatura_de_quem_tem_driver_de_sensor(self):
+        """O Windows não mostra a CPU de muitos PCs: o Katharos.exe lê de Afterburner, HWiNFO, Core Temp e AIDA64 (memória compartilhada, só leitura)."""
+        for nome in ('"HWiNFO_SENS_SM2"', '"MAHMSharedMemory"', '"CoreTempMappingObjectEx"', '"AIDA64_SensorValues"', 'MemoryMappedFileRights.Read'):
+            self.assertIn(nome, self.CS)
+        self.assertNotIn('MemoryMappedFileAccess.ReadWrite', self.CS)
+        self.assertNotIn('WinRing0', self.CS)   # driver de sensor: o que anti-cheat bloqueia e o Defender marca
+        m = {'temperatura': 41, 'temp_fonte': 'zona térmica', 'temperatura_gpu': None}
+        with mock.patch.object(k, 'temperaturas_externas', return_value={'cpu': 63, 'cpu_fonte': 'MSI Afterburner', 'gpu': 58, 'gpu_fonte': 'driver de vídeo'}):
+            k.completa_temperaturas(m)
+        self.assertEqual((m['temperatura'], m['temp_fonte'], m['temperatura_gpu']), (63, 'MSI Afterburner', 58))
+        m = {'temperatura': 70, 'temp_fonte': 'LibreHardwareMonitor', 'temperatura_gpu': 60}
+        with mock.patch.object(k, 'temperaturas_externas') as ext:
+            k.completa_temperaturas(m)
+            ext.assert_not_called()   # já tem leitura boa: nem chama o executável
+        a = {'temp': None}
+        with mock.patch.object(k, 'temperaturas_externas', return_value={'cpu': 55, 'cpu_fonte': 'HWiNFO', 'gpu': None}):
+            k.completa_temperaturas(a, 'temp', 'temp_fonte', 'gpu_temp', 'gpu_fonte')
+        self.assertEqual((a['temp'], a['temp_fonte']), (55, 'HWiNFO'))
+
+    def test_sair_pelo_icone_vale(self):
+        """Quem sai pelo ícone não vê ele voltar sozinho em 15 min; volta no próximo início do Windows ou ao ligar de novo."""
+        (self.casa / 'segundo-plano-fechado.txt').write_text('x', encoding='ascii')
+        (self.casa / k.EXE_NOME).write_bytes(b'MZ')
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'estado', return_value={'segundo_plano': 'sim'}), \
+             mock.patch.object(k, 'sp_rodando', return_value=False), mock.patch.object(k.subprocess, 'Popen') as p:
+            self.assertFalse(k.garante_segundo_plano(mock.Mock()))
+            p.assert_not_called()
+        self.assertIn('"segundo-plano-fechado.txt"', self.CS)
+
     def test_aovivo_mostra_a_leitura_do_executavel(self):
         import json as _j
         agora = {'quando': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'cpu': 42.5, 'gpu': 97, 'ram_pct': 61, 'ram_gb': 9.8, 'ram_total_gb': 16, 'nucleo_max': 70,

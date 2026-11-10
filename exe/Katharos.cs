@@ -19,7 +19,7 @@
 // Compilar em qualquer Windows 10 ou 11, sem instalar nada (é o que a publicação faz):
 //   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /optimize+ /out:Katharos.exe
 //     /win32icon:katharos.ico /win32manifest:katharos.manifest /resource:katharos.ico,katharos.ico
-//     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll Katharos.cs
+//     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll /r:System.Core.dll Katharos.cs
 // O código é C# 5 de propósito: é a versão do compilador que vem dentro do Windows.
 
 using System;
@@ -30,6 +30,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
+using System.IO.MemoryMappedFiles;
 using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -44,14 +45,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Katharos: abre o otimizador e acompanha o PC em segundo plano")]
 [assembly: AssemblyCompany("Katharos, código aberto (github.com/kessleru/Katharos)")]
 [assembly: AssemblyCopyright("Licença MIT")]
-[assembly: AssemblyVersion("3.1.0.0")]
-[assembly: AssemblyFileVersion("3.1.0.0")]
+[assembly: AssemblyVersion("3.1.1.0")]
+[assembly: AssemblyFileVersion("3.1.1.0")]
 
 namespace KatharosApp
 {
     static class K
     {
-        public const string VERSAO = "3.1.0";
+        public const string VERSAO = "3.1.1";
         public const string MUTEX = "Local\\KatharosSegundoPlano";
         public const string EV_SAIR = "Local\\KatharosSegundoPlanoSair";
         public const string EV_MOSTRAR = "Local\\KatharosSegundoPlanoMostrar";
@@ -374,6 +375,151 @@ namespace KatharosApp
         }
     }
 
+    // ───────── temperatura dos programas de monitoramento que já estão abertos ─────────
+    // A CPU só mostra a temperatura para quem tem driver no kernel. MSI Afterburner, HWiNFO, Core Temp e AIDA64 têm esse driver e publicam
+    // as leituras numa memória compartilhada, só de leitura, para outros programas (o overlay do RivaTuner usa a mesma durante os jogos).
+    // O Katharos lê dali: não instala driver nenhum (driver de sensor é o que anti-cheat bloqueia e o Defender marca).
+    static class Externos
+    {
+        public class Leitura { public double? Cpu, Gpu; public string CpuFonte, GpuFonte; }
+
+        static byte[] Abre(string nome, int maximo)
+        {
+            foreach (var n in new[] { nome, "Global\\" + nome })
+            {
+                try
+                {
+                    using (var m = MemoryMappedFile.OpenExisting(n, MemoryMappedFileRights.Read))
+                    using (var v = m.CreateViewStream(0, 0, MemoryMappedFileAccess.Read))
+                    {
+                        int tam = (int)Math.Min(maximo, v.Length);
+                        var b = new byte[tam]; int lido = 0;
+                        while (lido < tam) { int r = v.Read(b, lido, tam - lido); if (r <= 0) break; lido += r; }
+                        if (lido >= 64) { if (lido < tam) Array.Resize(ref b, lido); return b; }
+                    }
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        static string Txt(byte[] b, int ini, int max)
+        {
+            int fim = ini; while (fim < ini + max && fim < b.Length && b[fim] != 0) fim++;
+            return Encoding.Default.GetString(b, ini, fim - ini);
+        }
+
+        static bool Valida(double t) { return t > 5 && t < 125; }
+
+        public static Leitura Le()
+        {
+            var r = new Leitura();
+            try { HwInfo(r); } catch { }
+            try { if (!r.Cpu.HasValue || !r.Gpu.HasValue) Afterburner(r); } catch { }
+            try { if (!r.Cpu.HasValue) CoreTemp(r); } catch { }
+            try { if (!r.Cpu.HasValue || !r.Gpu.HasValue) Aida(r); } catch { }
+            return r;
+        }
+
+        // HWiNFO (com "Shared Memory Support" ligado nas configurações)
+        static void HwInfo(Leitura r)
+        {
+            var b = Abre("HWiNFO_SENS_SM2", 4 * 1024 * 1024);
+            if (b == null || BitConverter.ToUInt32(b, 0) != 0x53695748) return;   // "HWiS"; "DEAD" = HWiNFO fechou
+            uint offR = BitConverter.ToUInt32(b, 32), tamR = BitConverter.ToUInt32(b, 36), nR = BitConverter.ToUInt32(b, 40);
+            uint offS = BitConverter.ToUInt32(b, 20), tamS = BitConverter.ToUInt32(b, 24), nS = BitConverter.ToUInt32(b, 28);
+            double cpuPac = -1, cpuMax = -1, gpu = -1;
+            for (uint i = 0; i < nR && i < 4096; i++)
+            {
+                long o = offR + i * tamR;
+                if (o + 316 > b.Length) break;
+                if (BitConverter.ToUInt32(b, (int)o) != 1) continue;   // 1 = temperatura
+                uint si = BitConverter.ToUInt32(b, (int)o + 4);
+                string rot = Txt(b, (int)o + 12, 128);
+                string un = Txt(b, (int)o + 268, 16);
+                double v = BitConverter.ToDouble(b, (int)o + 284);
+                if (un.Contains("F")) v = (v - 32) * 5 / 9;
+                if (!Valida(v)) continue;
+                string sensor = (si < nS && offS + si * tamS + 136 <= b.Length) ? Txt(b, (int)(offS + si * tamS + 8), 128) : "";
+                bool ehCpu = sensor.StartsWith("CPU") || rot.StartsWith("CPU") || rot.StartsWith("Core");
+                if (ehCpu && (rot == "CPU Package" || rot.StartsWith("CPU (Tctl") || rot == "CPU (Tdie)" || rot == "Core Max")) cpuPac = Math.Max(cpuPac, v);
+                else if (ehCpu && rot.StartsWith("Core")) cpuMax = Math.Max(cpuMax, v);
+                if (sensor.StartsWith("GPU") && rot == "GPU Temperature") gpu = Math.Max(gpu, v);
+            }
+            double c = cpuPac > 0 ? cpuPac : cpuMax;
+            if (c > 0 && !r.Cpu.HasValue) { r.Cpu = Math.Round(c, 0); r.CpuFonte = "HWiNFO"; }
+            if (gpu > 0 && !r.Gpu.HasValue) { r.Gpu = Math.Round(gpu, 0); r.GpuFonte = "HWiNFO"; }
+        }
+
+        // MSI Afterburner (a temperatura da CPU aparece se estiver marcada no monitoramento dele)
+        static void Afterburner(Leitura r)
+        {
+            var b = Abre("MAHMSharedMemory", 2 * 1024 * 1024);
+            if (b == null || BitConverter.ToUInt32(b, 0) != 0x4D41484D) return;   // 'MAHM'; 0xDEAD = fechou
+            uint tamH = BitConverter.ToUInt32(b, 8), n = BitConverter.ToUInt32(b, 12), tamE = BitConverter.ToUInt32(b, 16);
+            double cpu = -1, gpu = -1;
+            for (uint i = 0; i < n && i < 1024; i++)
+            {
+                long o = tamH + i * tamE;
+                if (o + 1304 > b.Length) break;
+                string nome = Txt(b, (int)o, 260);
+                double v = BitConverter.ToSingle(b, (int)o + 1300);
+                if (!Valida(v) || nome.IndexOf("temperature", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (nome.StartsWith("CPU")) cpu = Math.Max(cpu, v);
+                else if (nome.StartsWith("GPU")) gpu = Math.Max(gpu, v);
+            }
+            if (cpu > 0 && !r.Cpu.HasValue) { r.Cpu = Math.Round(cpu, 0); r.CpuFonte = "MSI Afterburner"; }
+            if (gpu > 0 && !r.Gpu.HasValue) { r.Gpu = Math.Round(gpu, 0); r.GpuFonte = "MSI Afterburner"; }
+        }
+
+        // Core Temp
+        static void CoreTemp(Leitura r)
+        {
+            var b = Abre("CoreTempMappingObjectEx", 8192) ?? Abre("CoreTempMappingObject", 8192);
+            if (b == null || b.Length < 2686) return;
+            uint nucleos = BitConverter.ToUInt32(b, 1536), cpus = BitConverter.ToUInt32(b, 1540);
+            bool fahr = b[2684] != 0, delta = b[2685] != 0;
+            double max = -1;
+            for (uint c = 0; c < Math.Max(1, cpus) && c < 128; c++)
+                for (uint i = 0; i < nucleos && c * nucleos + i < 256; i++)
+                {
+                    double v = BitConverter.ToSingle(b, (int)(1544 + (c * nucleos + i) * 4));
+                    if (delta) v = BitConverter.ToUInt32(b, (int)(1024 + c * 4)) - v;
+                    if (fahr) v = (v - 32) * 5 / 9;
+                    if (Valida(v)) max = Math.Max(max, v);
+                }
+            if (max > 0) { r.Cpu = Math.Round(max, 0); r.CpuFonte = "Core Temp"; }
+        }
+
+        // AIDA64 (com "Shared Memory" ligado nas preferências de comunicação externa)
+        static void Aida(Leitura r)
+        {
+            var b = Abre("AIDA64_SensorValues", 256 * 1024);
+            if (b == null) return;
+            string x = Txt(b, 0, b.Length);
+            double cpu = -1, gpu = -1;
+            int i = 0;
+            while ((i = x.IndexOf("<temp>", i, StringComparison.Ordinal)) >= 0)
+            {
+                int f = x.IndexOf("</temp>", i, StringComparison.Ordinal); if (f < 0) break;
+                string bloco = x.Substring(i, f - i); i = f;
+                string id = Tag(bloco, "id"); double v;
+                if (!double.TryParse(Tag(bloco, "value"), NumberStyles.Float, K.INV, out v) || !Valida(v)) continue;
+                if (id == "TCPUPKG" || id == "TCPU" || id == "TCPUDIO") cpu = Math.Max(cpu, v);
+                if (id == "TGPU1DIO" || id == "TGPU1") gpu = Math.Max(gpu, v);
+            }
+            if (cpu > 0 && !r.Cpu.HasValue) { r.Cpu = Math.Round(cpu, 0); r.CpuFonte = "AIDA64"; }
+            if (gpu > 0 && !r.Gpu.HasValue) { r.Gpu = Math.Round(gpu, 0); r.GpuFonte = "AIDA64"; }
+        }
+
+        static string Tag(string x, string t)
+        {
+            int a = x.IndexOf("<" + t + ">", StringComparison.Ordinal); if (a < 0) return "";
+            a += t.Length + 2; int f = x.IndexOf("</" + t + ">", a, StringComparison.Ordinal);
+            return f < 0 ? "" : x.Substring(a, f - a);
+        }
+    }
+
     class Amostra
     {
         public DateTime Quando;
@@ -400,6 +546,7 @@ namespace KatharosApp
         DateTime proxLhm = DateTime.MinValue, proxD3d = DateTime.MinValue, proxSmi = DateTime.MinValue, proxProc = DateTime.MinValue, proxUltima = DateTime.MinValue;
         double? lhmCpu, lhmGpu, d3dGpu, smiGpu, ultCpu, ultGpu; string lhmFonte, ultQuando;
         bool lhmExiste = true, d3dExiste = true, smiExiste = true;
+        DateTime proxExt = DateTime.MinValue; Externos.Leitura ext;
         public Dictionary<int, string> Nomes = new Dictionary<int, string>();
         public HashSet<string> NomesVistos = new HashSet<string>();
 
@@ -532,8 +679,11 @@ namespace KatharosApp
             // temperatura: do mais certo para o mais pobre, e diz de onde veio
             if (lhmExiste && agora >= proxLhm) { proxLhm = agora.AddSeconds(3); LeLhm(); }
             if (d3dExiste && agora >= proxD3d) { proxD3d = agora.AddSeconds(2); d3dGpu = Nat.TemperaturaGpu(); if (!d3dGpu.HasValue) { d3dExiste = false; } }
+            if (agora >= proxExt) { proxExt = agora.AddSeconds(2); ext = Externos.Le(); }
             if (lhmCpu.HasValue) { a.TempCpu = lhmCpu; a.TempCpuFonte = lhmFonte; }
+            else if (ext != null && ext.Cpu.HasValue) { a.TempCpu = ext.Cpu; a.TempCpuFonte = ext.CpuFonte; }
             if (lhmGpu.HasValue) { a.TempGpu = lhmGpu; a.TempGpuFonte = lhmFonte; }
+            else if (ext != null && ext.Gpu.HasValue) { a.TempGpu = ext.Gpu; a.TempGpuFonte = ext.GpuFonte; }
             else if (d3dGpu.HasValue) { a.TempGpu = d3dGpu; a.TempGpuFonte = "driver de vídeo"; }
             else if (smiExiste && !emJogo && agora >= proxSmi) { proxSmi = agora.AddSeconds(15); LeSmi(); }
             if (!a.TempGpu.HasValue && smiGpu.HasValue) { a.TempGpu = smiGpu; a.TempGpuFonte = "nvidia-smi"; }
@@ -895,6 +1045,8 @@ namespace KatharosApp
             if (agora >= proxRotacao) { proxRotacao = agora.AddHours(6); Rotaciona("minutos.jsonl", 14); Rotaciona("sessoes.jsonl", 400); }
             Pausado = LeituraPausada();
             if (Pausado) { if (Atualizou != null) Atualizou(); return; }
+            // o PC dormiu ou hibernou: o que estava aberto fecha no momento em que parou, não conta o tempo dormindo
+            if (Ultima != null && (agora - Ultima.Quando).TotalSeconds > 60) { FechaSessao(); FechaMinuto(); lock (Trava) { Janela.Clear(); Historico.Clear(); } }
             bool emJogo = Sessao != null;
             if (emJogo && Cfg.PausarEmJogo)
             {
@@ -1086,12 +1238,20 @@ namespace KatharosApp
             FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual;
             BackColor = Cor.Fundo; DoubleBuffered = true; KeyPreview = true; Text = "Katharos";
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Deactivate += delegate { Hide(); };
+            Deactivate += delegate { Hide(); Escondido = DateTime.Now; };
             KeyDown += delegate (object o, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) Hide(); };
             MouseMove += delegate (object o, MouseEventArgs e) { int i = Botao(e.Location); if (i != sobre) { sobre = i; Cursor = i >= 0 ? Cursors.Hand : Cursors.Default; Invalidate(); } };
             MouseLeave += delegate { if (sobre != -1) { sobre = -1; Invalidate(); } };
-            MouseClick += delegate (object o, MouseEventArgs e) { int i = Botao(e.Location); if (i >= 0) { Hide(); abre(botoes[i].Value); } };
+            MouseClick += delegate (object o, MouseEventArgs e)
+            {
+                int i = Botao(e.Location);
+                if (i < 0) return;
+                Hide();
+                if (botoes[i].Value != null) abre(botoes[i].Value);   // null = o X: só fecha
+            };
         }
+
+        public DateTime Escondido = DateTime.MinValue;
 
         int Botao(Point p) { for (int i = 0; i < botoes.Count; i++) if (botoes[i].Key.Contains(p)) return i; return -1; }
 
@@ -1208,8 +1368,20 @@ namespace KatharosApp
                 else if (ses != null) { st = "jogando"; cs = Cor.Verde; }
                 else if (concl.Count > 0 && concl[0].Nivel == 1) { st = "atenção"; cs = Cor.Ambar; }
                 else { st = "tudo certo"; cs = Cor.Verde; }
+                // o X que fecha o painel (o segundo plano continua)
+                float tx = 22 * s, xx = W - pad - tx + 4 * s, xy = y - 2 * s;
+                var rx = new RectangleF(xx, xy, tx, tx);
+                bool hx = sobre == botoes.Count;
+                if (hx) using (var b = new SolidBrush(Cor.Linha)) g.FillRectangle(b, rx);
+                using (var pn = new Pen(hx ? Cor.Osso : Cor.Apagado, 1.5f * s))
+                {
+                    float m = 7 * s;
+                    g.DrawLine(pn, rx.Left + m, rx.Top + m, rx.Right - m, rx.Bottom - m);
+                    g.DrawLine(pn, rx.Right - m, rx.Top + m, rx.Left + m, rx.Bottom - m);
+                }
+                botoes.Add(new KeyValuePair<RectangleF, string[]>(rx, null));
                 var tam = g.MeasureString(st, fRotulo);
-                float xs = W - pad - tam.Width;
+                float xs = xx - 12 * s - tam.Width;
                 using (var b = new SolidBrush(cs)) g.FillEllipse(b, xs - 12 * s, y + 6 * s, 7 * s, 7 * s);
                 Texto(g, st, fRotulo, cs, xs, y + 2 * s);
             }
@@ -1239,8 +1411,10 @@ namespace KatharosApp
                                        fRede = x => (x.RedeBaixa ?? 0) + (x.RedeSobe ?? 0);
                 string subCpu = (a.CpuGhz.HasValue ? K.Num(a.CpuGhz, 1) + " GHz · " : "") + "núcleo máx. " + K.Num(a.NucleoMax, 0) + " %";
                 string subGpu = a.VramGb.HasValue ? "memória " + K.Num(a.VramGb, 1) + (a.VramTotalGb.HasValue ? " de " + K.Num(a.VramTotalGb, 0) : "") + " GB" : "uso do motor 3D e vídeo";
-                string valTemp = a.TempCpu.HasValue ? K.Num(a.TempCpu, 0) + " °C" : "-";
-                string subTemp = (a.TempCpu.HasValue ? "CPU" : "CPU sem sensor") + " · GPU " + (a.TempGpu.HasValue ? K.Num(a.TempGpu, 0) + " °C" : "-") + (a.TempCpu.HasValue ? " · " + Curta(a.TempCpuFonte) : "");
+                string valTemp, subTemp;
+                if (a.TempCpu.HasValue) { valTemp = K.Num(a.TempCpu, 0) + " °C"; subTemp = "CPU · GPU " + (a.TempGpu.HasValue ? K.Num(a.TempGpu, 0) + " °C" : "-") + " · " + Curta(a.TempCpuFonte); }
+                else if (a.TempGpu.HasValue) { valTemp = K.Num(a.TempGpu, 0) + " °C"; subTemp = "placa de vídeo · CPU: abra Afterburner ou HWiNFO"; }
+                else { valTemp = "-"; subTemp = "abra MSI Afterburner, HWiNFO ou Core Temp"; }
                 y = Linha(g, pinta, y, pad, "cpu", K.Num(a.Cpu, 0) + " %", subCpu, hist, fCpu, 100, a.Cpu >= 90);
                 y = Linha(g, pinta, y, pad, "placa de vídeo", a.Gpu.HasValue ? K.Num(a.Gpu, 0) + " %" : "-", subGpu, hist, fGpu, 100, a.Gpu >= 95);
                 y = Linha(g, pinta, y, pad, "memória", K.Num(a.RamPct, 0) + " %", K.Num(a.RamGb, 1) + " de " + K.Num(a.RamTotalGb, 0) + " GB", hist, fRam, 100, a.RamPct >= 90);
@@ -1299,7 +1473,7 @@ namespace KatharosApp
                 var r = new RectangleF(pad + i * (bw + gap), y, bw, bh);
                 if (pinta)
                 {
-                    bool h = sobre == i;
+                    bool h = sobre == botoes.Count;
                     using (var b = new SolidBrush(h ? Cor.Linha : Cor.Painel)) g.FillRectangle(b, r);
                     using (var pn = new Pen(h ? Cor.Ambar : Cor.LinhaForte)) g.DrawRectangle(pn, r.X, r.Y, r.Width, r.Height);
                     var tm = g.MeasureString(bs[i][0], fRotulo);
@@ -1361,6 +1535,7 @@ namespace KatharosApp
             if (fonte == null) return "";
             if (fonte.StartsWith("LibreHardware")) return "LHM";
             if (fonte.StartsWith("OpenHardware")) return "OHM";
+            if (fonte.StartsWith("MSI ")) return "Afterburner";
             return fonte;
         }
 
@@ -1410,6 +1585,7 @@ namespace KatharosApp
             fio = new Thread(motor.Roda); fio.IsBackground = true; fio.Name = "leitura"; fio.Start();
             new Thread(EsperaSinais) { IsBackground = true }.Start();
             if (mostrar) ui.BeginInvoke(new Action(delegate { painel.Mostra(); }));
+            try { File.Delete(K.Arq("segundo-plano-fechado.txt")); } catch { }
             Log.Escreve("segundo plano ligado (" + K.VERSAO + ")");
         }
 
@@ -1423,7 +1599,7 @@ namespace KatharosApp
                     while (true)
                     {
                         int i = WaitHandle.WaitAny(new WaitHandle[] { sair, mostrar });
-                        if (i == 0) { ui.BeginInvoke(new Action(Sai)); return; }
+                        if (i == 0) { ui.BeginInvoke(new Action(delegate { Sai(false); })); return; }
                         ui.BeginInvoke(new Action(delegate { painel.Mostra(); }));
                     }
                 }
@@ -1431,7 +1607,13 @@ namespace KatharosApp
             catch (Exception e) { Log.Escreve("sinais: " + e.Message); }
         }
 
-        void AlternaPainel() { if (painel.Visible) painel.Hide(); else painel.Mostra(); }
+        // clicar no ícone com o painel aberto: o painel some ao perder o foco (antes do clique chegar), então não reabre logo em seguida
+        void AlternaPainel()
+        {
+            if (painel.Visible) { painel.Hide(); return; }
+            if ((DateTime.Now - painel.Escondido).TotalMilliseconds < 400) return;
+            painel.Mostra();
+        }
 
         ToolStripMenuItem Item(string texto, EventHandler acao)
         {
@@ -1575,8 +1757,12 @@ namespace KatharosApp
             if (iconeAtual != IntPtr.Zero) { Nat.DestroyIcon(iconeAtual); iconeAtual = IntPtr.Zero; }
         }
 
-        void Sai()
+        void Sai() { Sai(true); }
+
+        void Sai(bool peloUsuario)
         {
+            if (peloUsuario)
+                try { File.WriteAllText(K.Arq("segundo-plano-fechado.txt"), K.Iso(DateTime.Now), Encoding.ASCII); } catch { }
             Log.Escreve("segundo plano desligado");
             motor.Para();
             ni.Visible = false; ni.Dispose();
@@ -1611,6 +1797,83 @@ namespace KatharosApp
             { try { cats[c] = PerformanceCounterCategory.Exists(c); } catch (Exception e) { cats[c] = "erro: " + e.Message; } }
             r["categorias"] = cats; r["leituras"] = lista;
             K.GravaAtomico(destino, new JavaScriptSerializer().Serialize(r));
+            return 0;
+        }
+
+        // cria um bloco falso de cada programa, no layout que cada um publica, e confere se a leitura sai certa
+        public static int TesteExternos(string destino)
+        {
+            var res = new List<string>(); bool ok = true;
+            var mapas = new List<MemoryMappedFile>();
+            Func<string, byte[], bool> cria = delegate (string nome, byte[] b)
+            {
+                try { var m = MemoryMappedFile.CreateNew(nome, b.Length); using (var v = m.CreateViewStream()) v.Write(b, 0, b.Length); mapas.Add(m); return true; }
+                catch (Exception e) { res.Add(nome + ": não criei (" + e.Message + ")"); return false; }
+            };
+            Action<byte[], int, string> txt = delegate (byte[] b, int o, string t) { var x = Encoding.ASCII.GetBytes(t); Array.Copy(x, 0, b, o, x.Length); };
+            // MSI Afterburner: CPU 67, GPU 71
+            var ab = new byte[32 + 3 * 1324];
+            BitConverter.GetBytes(0x4D41484Du).CopyTo(ab, 0); BitConverter.GetBytes(0x20000u).CopyTo(ab, 4); BitConverter.GetBytes(32u).CopyTo(ab, 8);
+            BitConverter.GetBytes(3u).CopyTo(ab, 12); BitConverter.GetBytes(1324u).CopyTo(ab, 16);
+            string[] nomes = { "GPU temperature", "CPU usage", "CPU temperature" }; float[] vals = { 71, 33, 67 };
+            for (int i = 0; i < 3; i++) { txt(ab, 32 + i * 1324, nomes[i]); BitConverter.GetBytes(vals[i]).CopyTo(ab, 32 + i * 1324 + 1300); }
+            bool temAb = cria("MAHMSharedMemory", ab);
+            var r = new Externos.Leitura();
+            if (temAb)
+            {
+                typeof(Externos).GetMethod("Afterburner", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { r });
+                bool b1 = r.Cpu == 67 && r.Gpu == 71; ok &= b1; res.Add("Afterburner: CPU " + r.Cpu + ", GPU " + r.Gpu + (b1 ? " ok" : " ERRADO"));
+            }
+            // HWiNFO: sensor 0 CPU, sensor 1 GPU; leituras CPU Package 58, Core #0 61 (não é a do pacote), GPU Temperature 64
+            int offS = 44, tamS = 264, offR = offS + 2 * tamS, tamR = 316;
+            var hw = new byte[offR + 3 * tamR];
+            BitConverter.GetBytes(0x53695748u).CopyTo(hw, 0);
+            BitConverter.GetBytes((uint)offS).CopyTo(hw, 20); BitConverter.GetBytes((uint)tamS).CopyTo(hw, 24); BitConverter.GetBytes(2u).CopyTo(hw, 28);
+            BitConverter.GetBytes((uint)offR).CopyTo(hw, 32); BitConverter.GetBytes((uint)tamR).CopyTo(hw, 36); BitConverter.GetBytes(3u).CopyTo(hw, 40);
+            txt(hw, offS + 8, "CPU [#0]: Intel Core i7: DTS"); txt(hw, offS + tamS + 8, "GPU [#0]: NVIDIA GeForce");
+            object[][] lr = { new object[] { 0u, "CPU Package", 58.0 }, new object[] { 0u, "Core #0", 61.0 }, new object[] { 1u, "GPU Temperature", 64.0 } };
+            for (int i = 0; i < 3; i++)
+            {
+                int o = offR + i * tamR;
+                BitConverter.GetBytes(1u).CopyTo(hw, o); BitConverter.GetBytes((uint)lr[i][0]).CopyTo(hw, o + 4);
+                txt(hw, o + 12, (string)lr[i][1]); txt(hw, o + 268, "°C".Replace("°", "")); BitConverter.GetBytes((double)lr[i][2]).CopyTo(hw, o + 284);
+            }
+            if (cria("HWiNFO_SENS_SM2", hw))
+            {
+                r = new Externos.Leitura();
+                typeof(Externos).GetMethod("HwInfo", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { r });
+                bool b2 = r.Cpu == 58 && r.Gpu == 64; ok &= b2; res.Add("HWiNFO: CPU " + r.Cpu + ", GPU " + r.Gpu + (b2 ? " ok" : " ERRADO"));
+            }
+            // Core Temp: 2 núcleos, 52 e 57
+            var ct = new byte[2700];
+            BitConverter.GetBytes(2u).CopyTo(ct, 1536); BitConverter.GetBytes(1u).CopyTo(ct, 1540);
+            BitConverter.GetBytes(52f).CopyTo(ct, 1544); BitConverter.GetBytes(57f).CopyTo(ct, 1548);
+            if (cria("CoreTempMappingObjectEx", ct))
+            {
+                r = new Externos.Leitura();
+                typeof(Externos).GetMethod("CoreTemp", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { r });
+                bool b3 = r.Cpu == 57; ok &= b3; res.Add("Core Temp: CPU " + r.Cpu + (b3 ? " ok" : " ERRADO"));
+            }
+            // AIDA64
+            var ai = Encoding.ASCII.GetBytes("<sys><id>SCPUCLK</id><label>CPU Clock</label><value>4300</value></sys><temp><id>TCPU</id><label>CPU</label><value>49</value></temp>" +
+                                             "<temp><id>TGPU1DIO</id><label>GPU</label><value>66</value></temp>\0");
+            if (cria("AIDA64_SensorValues", ai))
+            {
+                r = new Externos.Leitura();
+                typeof(Externos).GetMethod("Aida", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { r });
+                bool b4 = r.Cpu == 49 && r.Gpu == 66; ok &= b4; res.Add("AIDA64: CPU " + r.Cpu + ", GPU " + r.Gpu + (b4 ? " ok" : " ERRADO"));
+            }
+            foreach (var m in mapas) m.Dispose();
+            File.WriteAllText(Path.GetFullPath(destino), string.Join("\n", res.ToArray()) + "\n", new UTF8Encoding(false));
+            return ok && res.Count == 4 ? 0 : 4;
+        }
+
+        public static int Sensores(string destino)
+        {
+            var a = new Leitor().Le(Config.Le(), false);
+            var d = new Dictionary<string, object>();
+            d["quando"] = K.Iso(DateTime.Now); d["cpu"] = a.TempCpu; d["cpu_fonte"] = a.TempCpuFonte; d["gpu"] = a.TempGpu; d["gpu_fonte"] = a.TempGpuFonte;
+            K.GravaAtomico(destino, new JavaScriptSerializer().Serialize(d));
             return 0;
         }
 
@@ -1652,6 +1915,20 @@ namespace KatharosApp
         static int Main(string[] args)
         {
             var lista = new List<string>(args);
+            if (lista.Contains("--teste-externos"))
+            {
+                try { int i = lista.IndexOf("--teste-externos"); return Testes.TesteExternos(i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-externos.txt")); }
+                catch (Exception e) { Log.Escreve("teste externos: " + e); return 3; }
+            }
+            if (lista.Contains("--sensores"))
+            {   // só a temperatura, rápido, para o Katharos (Python) usar no raio-x e no medir
+                try
+                {
+                    int i = lista.IndexOf("--sensores");
+                    return Testes.Sensores(i + 1 < lista.Count ? lista[i + 1] : K.Arq("sensores.json"));
+                }
+                catch (Exception e) { Log.Escreve("sensores: " + e); return 3; }
+            }
             if (lista.Contains("--foto") || lista.Contains("--diagnostico"))
             {   // modos de conferência: nunca abrem janela (num servidor de testes ela travaria esperando um clique)
                 try

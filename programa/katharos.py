@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '3.1.0'
+VERSAO = '3.1.1'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -2593,7 +2593,12 @@ def mede(ctx, rotulo='medindo'):
         return {}
     with Progresso(ctx.t, None, rotulo) as pr:
         s = roda_ps(ctx.t, MEDIDAS_PS, 'medidas', minutos=2, mostra=False, pr=pr)
-    return s.dados.get('medidas') or {}
+    m = s.dados.get('medidas') or {}
+    try:
+        completa_temperaturas(m)
+    except Exception as e:
+        LOG.escreve(f'temperatura pelo executável: {e!r}')
+    return m
 
 
 def salva_medida(m, nome):
@@ -10320,7 +10325,8 @@ Dado 'amostra' $a
 '''
 
 
-SEM_SENSOR_CPU = ('o Windows não mostra o sensor deste processador. Abra o LibreHardwareMonitor (winget install LibreHardwareMonitor.LibreHardwareMonitor) '
+SEM_SENSOR_CPU = ('o Windows não mostra o sensor deste processador. Deixe aberto o MSI Afterburner, o HWiNFO (com "Shared Memory Support"), o Core Temp '
+                  'ou o LibreHardwareMonitor: o Katharos lê deles. Ou instale o LibreHardwareMonitor (winget install LibreHardwareMonitor.LibreHardwareMonitor) '
                   'e deixe aberto: o Katharos passa a ler dele')
 
 
@@ -10491,6 +10497,11 @@ def amostra_leve(ctx, args=None):
     corpo = ps_monta(AMOSTRA_PS, pausar='$true' if pausar else '$false', jogos=', '.join(psq(n) for n in nomes_de_jogo()), gpu=str(GPU_EM_JOGO))
     s = roda_ps(ctx.t, corpo, 'amostra', minutos=1, mostra=False)
     a = s.dados.get('amostra')
+    if isinstance(a, dict) and not a.get('pausado'):
+        try:
+            completa_temperaturas(a, 'temp', 'temp_fonte', 'gpu_temp', 'gpu_fonte')
+        except Exception as e:
+            LOG.escreve(f'temperatura pelo executável: {e!r}')
     if isinstance(a, dict):
         registra_hora(a)
         if not a.get('pausado'):
@@ -10782,9 +10793,20 @@ def instala_segundo_plano(ctx, mostrar=True, quieto=False):
     e['segundo_plano'] = 'sim'
     e['bandeja'] = 'executavel'
     salva_estado(e)
+    try:
+        (CASA / 'segundo-plano-fechado.txt').unlink()   # ligar de novo vale mais que o "sair" de antes
+    except OSError:
+        pass
     if not sp_rodando():
         abre_segundo_plano(ctx, mostrar=mostrar)
     return True
+
+
+def _sha(arq):
+    try:
+        return hashlib.sha256(Path(arq).read_bytes()).hexdigest()
+    except OSError:
+        return ''
 
 
 def remove_segundo_plano(ctx):
@@ -10796,6 +10818,8 @@ def remove_segundo_plano(ctx):
 def garante_segundo_plano(ctx):
     """Na leitura de 15 min: se o segundo plano está ligado e caiu, abre de novo (como o seu usuário: a tarefa já roda assim)."""
     if not WINDOWS or estado().get('segundo_plano') != 'sim' or not exe_instalado().is_file() or sp_rodando():
+        return False
+    if (CASA / 'segundo-plano-fechado.txt').exists():   # você saiu pelo ícone: volta só no próximo início do Windows ou quando ligar de novo
         return False
     try:
         subprocess.Popen([str(exe_instalado()), '--segundo-plano'], creationflags=0x00000008 | 0x00000200, close_fds=True)
@@ -10813,7 +10837,7 @@ def migra_segundo_plano(ctx):
     if e.get('segundo_plano') in ('sim', 'nao') or not exe_do_pacote():
         if e.get('segundo_plano') == 'sim':
             escreve_config_sp()   # caminho do programa e do Python podem ter mudado
-            if exe_do_pacote() and exe_instalado().is_file() and exe_do_pacote().stat().st_size != exe_instalado().stat().st_size:
+            if exe_do_pacote() and exe_instalado().is_file() and _sha(exe_do_pacote()) != _sha(exe_instalado()):
                 instala_segundo_plano(ctx, mostrar=False, quieto=True)   # versão nova do executável
         return False
     if e.get('manut_freq') == 'continua' or e.get('bandeja') == 'sim':
@@ -10821,6 +10845,44 @@ def migra_segundo_plano(ctx):
             ctx.t.ok('O acompanhamento contínuo agora roda pelo Katharos.exe: o ícone está perto do relógio, com as métricas ao vivo.')
             return True
     return False
+
+
+# ───────── temperatura de quem tem driver de sensor ─────────
+
+def temperaturas_externas(espera_s=8):
+    """Temperatura de CPU e GPU pelo Katharos.exe: a leitura de agora do segundo plano, ou uma leitura avulsa (--sensores). Ele lê do
+    LibreHardwareMonitor, HWiNFO, MSI Afterburner, Core Temp ou AIDA64 abertos (memória compartilhada, só leitura) e do driver de vídeo.
+    Devolve {'cpu', 'cpu_fonte', 'gpu', 'gpu_fonte'} ou None."""
+    a = le_agora()
+    if a and (a.get('temp_cpu') is not None or a.get('temp_gpu') is not None):
+        return {'cpu': a.get('temp_cpu'), 'cpu_fonte': a.get('temp_cpu_fonte'), 'gpu': a.get('temp_gpu'), 'gpu_fonte': a.get('temp_gpu_fonte')}
+    exe = exe_disponivel() if WINDOWS else None
+    if not exe:
+        return None
+    destino = CASA / 'sensores.json'
+    try:
+        CASA.mkdir(parents=True, exist_ok=True)
+        subprocess.run([str(exe), '--sensores', str(destino)], timeout=espera_s, creationflags=0x08000000, close_fds=True)
+    except (OSError, subprocess.SubprocessError) as e:
+        LOG.escreve(f'sensores: {e!r}')
+        return None
+    d = le_json(destino, None)
+    return d if isinstance(d, dict) and (d.get('cpu') is not None or d.get('gpu') is not None) else None
+
+
+def completa_temperaturas(m, cpu='temperatura', cpu_fonte='temp_fonte', gpu='temperatura_gpu', gpu_fonte='temp_gpu_fonte'):
+    """Preenche o que o PowerShell não achou (o Windows não mostra a CPU de muitos PCs) com a leitura do Katharos.exe. Sobrescreve a zona
+    térmica do ACPI, que é da placa-mãe e não da CPU."""
+    if not isinstance(m, dict) or (m.get(cpu) is not None and m.get(cpu_fonte) not in (None, 'zona térmica') and m.get(gpu) is not None):
+        return m
+    x = temperaturas_externas()
+    if not x:
+        return m
+    if x.get('cpu') is not None and (m.get(cpu) is None or m.get(cpu_fonte) in (None, 'zona térmica')) and x.get('cpu_fonte') != 'zona térmica':
+        m[cpu], m[cpu_fonte] = x['cpu'], x.get('cpu_fonte')
+    if x.get('gpu') is not None and m.get(gpu) is None:
+        m[gpu], m[gpu_fonte] = x['gpu'], x.get('gpu_fonte')
+    return m
 
 
 # ───────── os dados que o executável grava ─────────
@@ -14107,7 +14169,8 @@ def main(argv=None):
         elif not args.sim:   # sem terminal, quem usa --sim já está escolhendo seguir sem perguntar
             t.aviso('Leia o aviso de uso antes (katharos aviso) e aceite no menu, ou use --sim para seguir sem perguntar.')
             return 1
-    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'segundo-plano', 'bandeja') and not args.teste:
+    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'segundo-plano', 'bandeja') and not args.teste \
+            and not getattr(args, 'exportar', False):
         try:   # quem tinha o acompanhamento contínuo passa para o Katharos.exe; quem já usa, fica com a config atualizada
             migra_segundo_plano(ctx)
         except Exception as e:

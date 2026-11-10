@@ -35,7 +35,7 @@ jobs:
           $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           Push-Location exe
           & $csc /nologo /target:winexe /optimize+ /out:..\Katharos.exe /win32icon:katharos.ico /win32manifest:katharos.manifest /resource:katharos.ico,katharos.ico `
-            /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll Katharos.cs
+            /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll /r:System.Core.dll Katharos.cs
           if ($LASTEXITCODE) { exit 1 }
           Pop-Location
           (Get-Item .\Katharos.exe).VersionInfo | Format-List FileVersion, ProductName, FileDescription
@@ -47,6 +47,12 @@ jobs:
           $p = Start-Process .\Katharos.exe -ArgumentList '--diagnostico', "$d\diagnostico.json" -Wait -PassThru
           if ($p.ExitCode) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
           Get-Content "$d\diagnostico.json"
+          $p = Start-Process .\Katharos.exe -ArgumentList '--sensores', "$d\sensores.json" -Wait -PassThru
+          if ($p.ExitCode) { exit 1 }
+          Get-Content "$d\sensores.json"
+          $p = Start-Process .\Katharos.exe -ArgumentList '--teste-externos', "$d\teste-externos.txt" -Wait -PassThru
+          Get-Content "$d\teste-externos.txt"
+          if ($p.ExitCode) { exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--foto', "$d\painel.png" -Wait -PassThru
           if ($p.ExitCode -or -not (Test-Path "$d\painel.png")) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
       - uses: actions/upload-artifact@v4

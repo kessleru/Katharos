@@ -18,6 +18,16 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.1.1 · 10 de novembro de 2026
+
+Temperatura da CPU onde o Windows não mostra, e o painel do ícone com X.
+
+- **Temperatura da CPU pelos programas de monitoramento**: o Windows só mostra a temperatura da CPU para quem tem driver no kernel, por isso muitos PCs davam "sem sensor". Agora o Katharos lê do MSI Afterburner, do HWiNFO (com "Shared Memory Support" ligado), do Core Temp e do AIDA64 quando estão abertos, pela memória compartilhada que eles publicam (a mesma que o overlay do RivaTuner usa durante os jogos). Só leitura, sem instalar driver nenhum: driver de sensor é o que anti-cheat bloqueia e o Defender marca. Vale no ícone, no `medir`, no raio-x e na leitura de 15 minutos.
+- **X no painel do ícone**: fecha o painel; o segundo plano continua. Clicar no ícone com o painel aberto também fecha (antes ele fechava e abria de novo).
+- **Sair pelo ícone vale**: o segundo plano não volta sozinho em 15 minutos; volta no próximo início do Windows ou quando você ligar de novo.
+- **PC que dormiu com jogo aberto**: a sessão fecha quando o PC parou, sem contar o tempo dormindo.
+- O executável novo é instalado quando o conteúdo muda (antes, só quando o tamanho mudava).
+
 ## 3.1.0 · 10 de novembro de 2026
 
 O Katharos ganha um executável e um acompanhamento em segundo plano de verdade, que lê o PC sem parar e pensa em cima disso.
