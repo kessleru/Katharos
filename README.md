@@ -110,6 +110,8 @@ O `raiox` não só lista: ele mede e explica. Além de CPU, RAM e disco, olha a 
 | | `painel` | Gera um painel HTML com gráficos das medidas, dos benchmarks, das datas de cada pacote e da saúde do Windows; sem internet e sem scripts. `--ativar-cliques` liga botões "Corrigir" que abrem o Katharos já no comando (você confirma lá) |
 | | `amostrar` | Uma leitura leve do sistema (CPU, RAM, disco, temperatura), somada ao histórico por hora; a tarefa de 15 min do modo contínuo chama. `config coleta-em-jogo pausar` para não coletar com jogo aberto |
 | | `retomar` | Se o PC travou ou a janela fechou no meio de uma aplicação, termina só o que faltou (`--descartar` esquece a anotação) |
+| | `provas` | O que cada item rendeu de verdade neste PC: na hora (disco, RAM, processos e serviços, item por item) e depois de reiniciar (boot, CPU e RAM em repouso, por rodada). O painel mostra o mesmo com barras |
+| | `versoes` | As versões que já rodaram neste PC, o que está guardado e as cópias feitas a cada troca. Para atualizar, basta abrir a versão nova: os dados ficam em `~/.katharos` e são reconhecidos e convertidos sozinhos |
 | | `buscar` | Acha um item ou comando pelo que você digitar (`buscar telemetria`, `buscar ventoinha`): sem acento, com palavras do dia a dia e erro de digitação; abre a área só com o item achado marcado |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 
@@ -121,6 +123,7 @@ O `raiox` não só lista: ele mede e explica. Além de CPU, RAM e disco, olha a 
 | `--sim` | Não pergunta: aplica o que o modo marca |
 | `--modo seguro\|equilibrado\|extremo` | Modo desta execução |
 | `--copiar` · `--salvar PASTA` | No fim de qualquer comando: copia o relatório único para a área de transferência · salva uma cópia dele numa pasta (ex.: o cofre) |
+| `--abrir` | No fim de qualquer comando: abre a pasta com o relatório único selecionado (sem precisar procurar). `config abrir-relatorio sempre` faz isso sozinho |
 | `--codigo` | Mostra o PowerShell de cada item escolhido e não aplica nada (na tela de escolha, `v 3` mostra o do item 3) |
 | `--ascii` · `--sem-cor` | Para terminais que mostram quadradinhos · sem cores (`NO_COLOR` também vale) |
 

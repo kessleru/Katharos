@@ -1095,7 +1095,7 @@ class TestHoras(unittest.TestCase):
 
     def test_painel_com_horas_tem_temperatura_consumo_calor_e_nenhum_script(self):
         h = k.monta_painel([], [], [], [], 'PC', '1', horas=self._horas(40, repouso_sobe=0.3))
-        for texto in ('<h2>Temperatura</h2>', '<h2>Consumo</h2>', 'Em repouso e sob carga', 'Quando esquenta', 'Temperatura por dia', 'Quem mais pesou na CPU', 'jogo'):
+        for texto in ('>Temperatura</h2>', '>Consumo</h2>', 'Em repouso e sob carga', 'Quando esquenta', 'Temperatura por dia', 'Quem mais pesou na CPU', 'jogo'):
             self.assertIn(texto, h)
         self.assertIn('class="celula', h)
         self.assertNotIn('<script', h)
@@ -1119,11 +1119,11 @@ class TestHoras(unittest.TestCase):
         h = k.monta_painel([], [], [], [], 'PC', '1', horas=horas)
         self.assertIn('não entrega a temperatura', h)
         self.assertNotIn('Quando esquenta', h)
-        self.assertIn('<h2>Consumo</h2>', h)
+        self.assertIn('>Consumo</h2>', h)
 
     def test_painel_com_poucas_horas_nao_mostra_secoes(self):
         h = k.monta_painel([], [], [], [], 'PC', '1', horas=self._horas(1)[:2])
-        self.assertNotIn('<h2>Temperatura</h2>', h)
+        self.assertNotIn('>Temperatura</h2>', h)
 
     def test_descarga_da_bateria_so_com_horas_inteiras_na_bateria(self):
         from datetime import datetime
@@ -1872,6 +1872,315 @@ class TestDicionarioEFluxo(unittest.TestCase):
             k.menu(ctx, k.monta_parser(), type('A', (), {})())
         self.assertEqual(rodou, ['raiox'])
         self.assertIn('ximo passo', buf.getvalue())
+
+
+class _CasaTemporaria(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.casa = Path(self._tmp.name)
+        self._casa0, k.CASA = k.CASA, self.casa
+
+    def tearDown(self):
+        k.CASA = self._casa0
+        self._tmp.cleanup()
+
+
+class TestProvaDeGanho(_CasaTemporaria):
+    def test_delta_no_sentido_do_ganho_e_ruido_vira_zero(self):
+        a = {'livre': 1000, 'ram': 4000, 'proc': 180, 'svc': 90}
+        d = k.delta_retrato(a, {'livre': 2500, 'ram': 4030, 'proc': 175, 'svc': 88})
+        self.assertEqual(d, {'livre': 1500, 'ram': 0, 'proc': 5, 'svc': 2})
+        self.assertEqual(k.delta_retrato(a, {'livre': 1004, 'ram': 4000, 'proc': 181, 'svc': 90}), {'livre': 0, 'ram': 0, 'proc': 0, 'svc': 0})
+        self.assertIsNone(k.delta_retrato({'livre': None}, {'livre': 5})['livre'])
+        self.assertIsNone(k.delta_retrato(None, None)['svc'])
+
+    def test_texto_do_ganho(self):
+        self.assertEqual(k.texto_ganho({'livre': 2048, 'svc': 2, 'proc': 0, 'ram': 0}), 'liberou 2,0 GB em disco · 2 serviços a menos')
+        self.assertEqual(k.texto_ganho({'livre': 0, 'svc': 0, 'proc': None, 'ram': None}), '')
+        self.assertIn('MB', k.texto_ganho({'livre': 300}))
+
+    def test_retrato_le_o_disco_em_qualquer_sistema(self):
+        self.assertIsInstance(k.retrato()['livre'], int)
+
+    def _itens(self):
+        return [k.Item('a', 'limpa cache', 'x', ps='A'), k.Item('b', 'para servico', 'x', ps='B'), k.Item('c', 'ajuste', 'x', ps='C')]
+
+    def _aplica(self, dados):
+        import io, contextlib
+        pac = k.Pacote('limpar', 'limpeza', 'r', 'e', lambda c: [])
+        t = k.Terminal(True, True)
+        ctx = k.Ctx(type('A', (), {'teste': False, 'sim': True, 'modo': None})(), t)
+        ctx.perfil = {'disco': {'tipo': 'SSD'}, 'ram': {'total': 16}, 'pc': {'notebook': False}}
+        S = type('S', (), {'feitos': ['x'], 'planos': [], 'avisos': [], 'erros': [], 'tempo': 1, 'estourou': False, 'dados': dados})
+        corpos = []
+        buf = io.StringIO()
+
+        class Pr:
+            atual = ''
+
+            def __init__(self, *a, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def avanca(self, *a, **kw):
+                pass
+        with contextlib.redirect_stdout(buf), mock.patch.object(k, 'Progresso', Pr), mock.patch.object(k, 'roda_ps', lambda t_, corpo, *a, **kw: corpos.append(corpo) or S), \
+                mock.patch.object(k, 'rel_eventos', lambda x: None), mock.patch.object(k, '_andamento_marca', lambda *a: None), \
+                mock.patch.object(k, '_andamento_avanca', lambda *a: None), mock.patch.object(k, 'estado', lambda: {}), mock.patch.object(k, 'salva_estado', lambda e: None):
+            k.executa_itens(ctx, pac, self._itens())
+        return corpos, buf.getvalue()
+
+    def test_cada_item_e_comparado_com_o_retrato_de_antes_dele(self):
+        dados = {'prova:antes': {'livre': 1000, 'ram': 4000, 'proc': 100, 'svc': 80},
+                 'prova:0': {'livre': 3048, 'ram': 4000, 'proc': 100, 'svc': 80, 'm': 1},
+                 'prova:1': {'livre': 3048, 'ram': 4010, 'proc': 97, 'svc': 78, 'm': 2},
+                 'prova:2': {'livre': 3048, 'ram': 4010, 'proc': 97, 'svc': 78, 'm': 3}}
+        corpos, tela = self._aplica(dados)
+        self.assertIn("Dado 'prova:antes' (Retrato)", corpos[0])
+        self.assertIn("Dado 'prova:2' (Retrato ($script:MUDOU - $__a))", corpos[0])
+        pv = k.le_provas()
+        self.assertEqual([p['id'] for p in pv], ['a', 'b', 'c'])
+        self.assertEqual(pv[0]['d']['livre'], 2048)
+        self.assertEqual((pv[1]['d']['livre'], pv[1]['d']['svc'], pv[1]['d']['proc']), (0, 2, 3))
+        self.assertEqual(pv[2]['d'], {'livre': 0, 'ram': 0, 'proc': 0, 'svc': 0})
+        self.assertEqual(pv[0]['hw'], 'ssd-16gb-desktop')
+        self.assertIn('o que rendeu agora', tela)
+        self.assertIn('liberou 2,0 GB', tela)
+        self.assertIn('1 item mudou o Windows sem ganho imediato', tela)
+        self.assertEqual(len(k.le_ensaios()), 1)
+        self.assertIn('liberou 2,0 GB', k.prova_do_item('limpar', 'a'))
+        self.assertIn('sem ganho imediato', k.prova_do_item('limpar', 'c'))
+        self.assertEqual(k.prova_do_item('limpar', 'nao-existe'), '')
+
+    def test_sem_retrato_do_powershell_a_aplicacao_segue_normal(self):
+        corpos, tela = self._aplica({})
+        self.assertEqual(k.le_provas(), [])
+        self.assertNotIn('o que rendeu agora', tela)
+
+    def test_simulacao_nao_tira_retrato(self):
+        self.assertIn('if (-not $TESTE)', k._envolve(self._itens()[0], 0))
+        self.assertNotIn('prova:', k._envolve(self._itens()[0]))
+
+    def _ensaio(self, quando, antes, pacote='inicializacao'):
+        return {'id': quando + pacote, 't': quando, 'pacote': pacote, 'itens': ['x', 'y'], 'antes': antes, 'depois': None, 'fechado': None, 'reiniciou': None}
+
+    def test_ensaio_so_fecha_depois_de_reiniciar_e_com_o_pc_ja_assentado(self):
+        k.grava_json(k.ensaios_arq(), [self._ensaio('2026-11-09T10:00:00', {'boot_s': 60, 'ram_usada': 6.0, 'cpu': 10})])
+        m = {'boot_s': 41, 'ram_usada': 5.2, 'cpu': 9, 'uptime_h': 3.0}
+        self.assertEqual(k.fecha_ensaios(m, datetime(2026, 11, 9, 12, 0)), 0, 'ligado desde antes da aplicação: não reiniciou')
+        self.assertEqual(k.fecha_ensaios(dict(m, uptime_h=0.05), datetime(2026, 11, 9, 13, 0)), 0, 'acabou de ligar: ainda não vale')
+        self.assertEqual(k.fecha_ensaios(dict(m, uptime_h=0.5), datetime(2026, 11, 9, 13, 0)), 1)
+        self.assertEqual(k.fecha_ensaios(dict(m, uptime_h=0.5), datetime(2026, 11, 9, 14, 0)), 0, 'já fechado')
+        r = k.rodadas(k.le_ensaios())[0]
+        ver = {rot: v for rot, v, *_ in r['metricas']}
+        self.assertEqual((ver['tempo de boot'], ver['RAM em repouso'], ver['CPU em repouso']), ('melhorou', 'melhorou', 'igual'))
+        self.assertTrue(r['reiniciou'])
+
+    def test_sem_reinicio_fecha_em_14_dias_e_o_boot_fica_de_fora(self):
+        k.grava_json(k.ensaios_arq(), [self._ensaio('2026-11-01T10:00:00', {'boot_s': 60, 'livre_c': 20})])
+        self.assertEqual(k.fecha_ensaios({'boot_s': 60, 'livre_c': 31, 'uptime_h': 400}, datetime(2026, 11, 16, 10, 0)), 1)
+        r = k.rodadas(k.le_ensaios())[0]
+        self.assertFalse(r['reiniciou'])
+        self.assertEqual([m[0] for m in r['metricas']], ['livre em C:'])
+
+    def test_pacotes_fechados_pela_mesma_medida_viram_uma_rodada_so(self):
+        k.grava_json(k.ensaios_arq(), [self._ensaio('2026-11-09T10:00:00', {'boot_s': 60}, 'privacidade'), self._ensaio('2026-11-09T10:20:00', {'boot_s': 58}, 'inicializacao')])
+        self.assertEqual(k.fecha_ensaios({'boot_s': 40, 'uptime_h': 1}, datetime(2026, 11, 9, 15, 0)), 2)
+        rs = k.rodadas(k.le_ensaios())
+        self.assertEqual(len(rs), 1)
+        self.assertEqual((rs[0]['pacotes'], rs[0]['itens']), (['privacidade', 'inicializacao'], 4))
+        self.assertEqual(rs[0]['metricas'][0][2:4], (60, 40), 'compara com a medida de antes da primeira aplicação')
+
+    def test_veredito_respeita_o_ruido(self):
+        self.assertEqual(k.veredito_ensaio(60, 59, 'menor', 2, 0.10), 'igual')
+        self.assertEqual(k.veredito_ensaio(60, 50, 'menor', 2, 0.10), 'melhorou')
+        self.assertEqual(k.veredito_ensaio(20, 31, 'maior', 0.5), 'melhorou')
+        self.assertEqual(k.veredito_ensaio(5, 9, 'menor', 2), 'piorou')
+
+    def test_resumo_por_item_soma_disco_e_ordena_pelo_ganho(self):
+        pv = [{'pacote': 'limpar', 'id': 'a', 'titulo': 'A', 'mudou': 1, 'd': {'livre': 500, 'ram': 0, 'proc': 0, 'svc': 0}},
+              {'pacote': 'limpar', 'id': 'a', 'titulo': 'A', 'mudou': 1, 'd': {'livre': 700, 'ram': 0, 'proc': 0, 'svc': 0}},
+              {'pacote': 'servicos', 'id': 'b', 'titulo': 'B', 'mudou': 3, 'd': {'livre': 0, 'ram': 80, 'proc': 3, 'svc': 3}},
+              {'pacote': 'visual', 'id': 'c', 'titulo': 'C', 'mudou': 0, 'd': {'livre': 0, 'ram': 0, 'proc': 0, 'svc': 0}}]
+        r = k.resumo_itens(pv)
+        self.assertEqual([x['id'] for x in r], ['a', 'b', 'c'])
+        self.assertEqual((r[0]['livre'], r[0]['vezes']), (1200, 2))
+        self.assertEqual(r[2]['pontos'], 0)
+
+    def test_painel_mostra_a_prova_e_o_indice(self):
+        k.grava_json(k.ensaios_arq(), [self._ensaio('2026-11-09T10:00:00', {'boot_s': 60, 'ram_usada': 6.0}), self._ensaio('2026-11-09T18:00:00', None, 'disco')])
+        k.fecha_ensaios({'boot_s': 41, 'ram_usada': 5.9, 'uptime_h': 1}, datetime(2026, 11, 9, 15, 0))
+        k.registra_provas([{'t': '2026-11-09T10:00:00', 'pacote': 'limpar', 'id': 'a', 'titulo': '<b>cache</b>', 'mudou': 1, 'd': {'livre': 2048, 'ram': 0, 'proc': 0, 'svc': 0}}])
+        am = [{'_dt': datetime(2026, 11, d), 'livre_c': 50 + d, 'boot_s': 60 - d} for d in range(1, 9)]
+        h = k.monta_painel(am, [], [], [], 'PC', '1', provas=k.provas_para_painel())
+        for txt in ('id="prova-de-ganho"', 'Depois de reiniciar', 'Na hora, item por item', 'liberou 2,0 GB', 'Esperando o próximo reinício', '<nav class="indice"', 'href="#evolucao"', '&lt;b&gt;cache'):
+            self.assertIn(txt, h)
+        self.assertNotIn('<b>cache</b>', h)
+        self.assertNotIn('<script', h)
+        self.assertNotIn('Prova de ganho', k.monta_painel(am, [], [], [], 'PC', '1'))
+
+    def test_comando_provas_vazio_e_cheio(self):
+        import io, contextlib
+        t = k.Terminal(True, True)
+        ctx = k.Ctx(type('A', (), {'teste': False, 'sim': True})(), t)
+        with contextlib.redirect_stdout(io.StringIO()) as b:
+            self.assertEqual(k.ferramenta_provas(ctx, ctx.args), 0)
+        self.assertIn('Ainda nao ha provas', b.getvalue())
+        k.grava_json(k.ensaios_arq(), [self._ensaio('2026-11-09T10:00:00', {'boot_s': 60})])
+        k.fecha_ensaios({'boot_s': 41, 'uptime_h': 1}, datetime(2026, 11, 9, 15, 0))
+        k.registra_provas([{'t': '2026-11-09T10:00:00', 'pacote': 'limpar', 'id': 'a', 'titulo': 'cache', 'mudou': 1, 'd': {'livre': 2048, 'ram': 0, 'proc': 0, 'svc': 0}}])
+        with contextlib.redirect_stdout(io.StringIO()) as b, mock.patch.object(k, 'rel_secao', lambda *a: None):
+            self.assertEqual(k.ferramenta_provas(ctx, ctx.args), 0)
+        for txt in ('depois de reiniciar', 'tempo de boot', '60 s', '41 s', 'na hora, item por item', '2,0 GB'):
+            self.assertIn(txt, b.getvalue())
+
+
+class TestTrocaDeVersao(_CasaTemporaria):
+    def test_primeira_vez_so_carimba(self):
+        r = k.confere_versao()
+        self.assertIsNone(r['de'])
+        self.assertEqual(r['passos'], [])
+        e = k.estado()
+        self.assertEqual((e['versao_programa'], e['versao_dados']), (k.VERSAO, k.VERSAO_DADOS))
+        self.assertFalse((self.casa / 'versoes').exists(), 'sem dados antigos não há o que copiar')
+        self.assertIsNone(k.confere_versao(), 'na segunda abertura não há nada a fazer')
+
+    def test_reconhece_dados_de_versao_que_nao_carimbava(self):
+        k.grava_json(self.casa / 'estado.json', {'usado': {'raiox': '2026-10-01T10:00:00', 'perfil': '2026-10-01T10:00:00'},
+                                                  'pacotes': {'privacidade': {'quando': '2026-10-01T11:00:00', 'itens': ['a']}}, 'coisa_que_nao_conheco': 7})
+        k.grava_json(self.casa / 'relatorio.json', {'katharos': '1.4.1', 'secoes': {'raiox': {'quando': '2026-10-01T10:00:00', 'dados': {'nota': 72}}}})
+        (self.casa / 'metricas.jsonl').write_text('{}\n{}\n{}\n', encoding='utf-8')
+        import io, contextlib
+        t = k.Terminal(True, True)
+        with contextlib.redirect_stdout(io.StringIO()) as b:
+            r = k.confere_versao(t)
+        self.assertEqual((r['de'], r['para'], r['erro']), ('1.4.1', k.VERSAO, ''))
+        self.assertEqual(len(r['passos']), len(k.MIGRACOES))
+        e = k.estado()
+        self.assertNotIn('perfil', e['usado'])
+        self.assertIn('raiox', e['usado'])
+        self.assertEqual(e['coisa_que_nao_conheco'], 7, 'o que a conversão não conhece fica')
+        self.assertEqual(e['pacotes']['privacidade']['itens'], ['a'])
+        self.assertEqual([h['versao'] for h in e['versoes']], ['1.4.1', k.VERSAO])
+        copia = next((self.casa / 'versoes').iterdir())
+        self.assertTrue(copia.name.startswith('1.4.1_'))
+        self.assertIn('perfil', k.le_json(copia / 'estado.json', {})['usado'], 'a cópia é de antes da conversão')
+        tela = b.getvalue()
+        for txt in ('Katharos atualizado: 1.4.1', 'continua valendo', '1 pacote', '3 medidas', 'nota 72/100'):
+            self.assertIn(txt, tela)
+
+    def test_sem_relatorio_a_versao_antiga_e_so_anterior(self):
+        k.grava_json(self.casa / 'estado.json', {'usado': {'raiox': 'x'}})
+        self.assertEqual(k.confere_versao()['de'], 'anterior')
+
+    def test_dados_de_versao_mais_nova_nao_sao_tocados(self):
+        antes = {'versao_programa': '99.0.0', 'versao_dados': k.VERSAO_DADOS + 5, 'usado': {'perfil': 'x'}, 'novidade': [1, 2]}
+        k.grava_json(self.casa / 'estado.json', antes)
+        import io, contextlib
+        with contextlib.redirect_stdout(io.StringIO()) as b:
+            r = k.confere_versao(k.Terminal(True, True))
+        self.assertTrue(r['antiga'])
+        e = k.estado()
+        self.assertEqual((e['versao_programa'], e['versao_dados'], e['usado'], e['novidade']), ('99.0.0', k.VERSAO_DADOS + 5, {'perfil': 'x'}, [1, 2]))
+        self.assertIn('99.0.0', b.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()) as b:
+            k.confere_versao(k.Terminal(True, True))
+        self.assertEqual(b.getvalue(), '', 'o aviso aparece uma vez só')
+
+    def test_passo_que_falha_para_ali_e_nao_carimba_a_versao(self):
+        k.grava_json(self.casa / 'estado.json', {'versao_programa': '1.0.0', 'versao_dados': 0, 'usado': {'perfil': 'x'}})
+        def quebra(e, casa):
+            raise RuntimeError('boom')
+        with mock.patch.object(k, 'MIGRACOES', [(1, 'um', lambda e, c: e.update(um=True)), (2, 'dois', quebra), (3, 'tres', lambda e, c: e.update(tres=True))]):
+            r = k.confere_versao()
+        self.assertIn('boom', r['erro'])
+        e = k.estado()
+        self.assertEqual((e['versao_dados'], e['versao_programa'], e.get('um'), e.get('tres')), (1, '1.0.0', True, None))
+        self.assertTrue(any((self.casa / 'versoes').iterdir()))
+
+    def test_migracoes_em_ordem_sem_buraco_e_repetiveis(self):
+        self.assertEqual([n for n, _, _ in k.MIGRACOES], list(range(1, k.VERSAO_DADOS + 1)))
+        e = {'usado': {'perfil': 'x', 'raiox': 'y'}}
+        for _ in range(2):
+            for _, _, f in k.MIGRACOES:
+                f(e, self.casa)
+        self.assertEqual(e['usado'], {'raiox': 'y'})
+
+    def test_guarda_no_maximo_cinco_copias(self):
+        k.grava_json(self.casa / 'estado.json', {'a': 1})
+        for i in range(8):
+            (self.casa / 'versoes' / f'0.{i}.0_20260101-00000{i}').mkdir(parents=True)
+        k.guarda_copia_de_versao('1.4.1')
+        self.assertEqual(len(list((self.casa / 'versoes').iterdir())), k.COPIAS_DE_VERSAO)
+
+    def test_compara_versoes_por_numero(self):
+        self.assertGreater(k._v('2.10.0'), k._v('2.9.9'))
+        self.assertEqual(k._v('anterior'), (0,))
+
+    def test_traz_relatorios_da_pasta_antiga(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            velha, nova = Path(d) / 'velha', Path(d) / 'nova'
+            (velha / 'relatorios').mkdir(parents=True)
+            (nova / 'programa').mkdir(parents=True)
+            (velha / 'relatorios' / '2026-10-01_10-00-00_pc_raiox.md').write_text('x', encoding='utf-8')
+            (velha / 'relatorios' / 'ultimo.md').write_text('y', encoding='utf-8')
+            with mock.patch.object(k, '__file__', str(nova / 'programa' / 'katharos.py')):
+                self.assertEqual(k.traz_relatorios({'pasta_katharos': str(velha)}), 1)
+                self.assertEqual(k.traz_relatorios({'pasta_katharos': str(velha)}), 0, 'não copia de novo')
+                self.assertEqual(k.traz_relatorios({'pasta_katharos': str(nova)}), 0)
+            self.assertEqual([a.name for a in (nova / 'relatorios').iterdir()], ['2026-10-01_10-00-00_pc_raiox.md'])
+            self.assertTrue((velha / 'relatorios' / 'ultimo.md').exists(), 'a pasta antiga fica como estava')
+
+
+class TestAbrirRelatorio(_CasaTemporaria):
+    def _roda(self, comando, resposta=None, **kw):
+        import io, contextlib
+        t = k.Terminal(True, True)
+        t.interativo = kw.pop('interativo', True)
+        ctx = k.Ctx(type('A', (), {})(), t)
+        args = type('A', (), dict({'comando': comando, 'teste': False, 'sim': False}, **kw))()
+        arq = self.casa / 'ultimo.md'
+        arq.write_text('x', encoding='utf-8')
+        abertos = []
+        with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(k, 'rel_md_path', lambda: arq), \
+                mock.patch.object(k, 'mostra_no_explorador', lambda a: abertos.append(('pasta', a)) or True), \
+                mock.patch.object(k, 'abre_arquivo', lambda a: abertos.append(('arquivo', a)) or True), \
+                mock.patch('builtins.input', side_effect=[resposta] if resposta is not None else AssertionError('não devia perguntar')):
+            k.oferece_abrir_relatorio(ctx, args)
+        return [x[0] for x in abertos]
+
+    def test_raiox_pergunta_e_a_abre_a_pasta(self):
+        self.assertEqual(self._roda('raiox', 'a'), ['pasta'])
+        self.assertEqual(self._roda('raiox', 'v'), ['arquivo'])
+        self.assertEqual(self._roda('raiox', ''), [])
+
+    def test_comando_comum_nao_pergunta_mas_obedece_a_opcao(self):
+        self.assertEqual(self._roda('privacidade'), [])
+        self.assertEqual(self._roda('privacidade', abrir=True), ['pasta'])
+
+    def test_sem_terminal_ou_agendada_nunca_abre_sozinho(self):
+        self.assertEqual(self._roda('raiox', interativo=False), [])
+        self.assertEqual(self._roda('raiox', agendada=True), [])
+        self.assertEqual(self._roda('raiox', sim=True), [])
+        self.assertEqual(self._roda('raiox', interativo=False, abrir=True), ['pasta'], '--abrir vale mesmo sem terminal')
+
+    def test_config_sempre_e_nunca(self):
+        with mock.patch.object(k, 'config', lambda ch, p=None: 'sempre' if ch == 'abrir-relatorio' else None):
+            self.assertEqual(self._roda('privacidade'), ['pasta'])
+        with mock.patch.object(k, 'config', lambda ch, p=None: 'nunca' if ch == 'abrir-relatorio' else None):
+            self.assertEqual(self._roda('raiox'), [])
+
+    def test_fora_do_windows_nao_tenta_abrir(self):
+        if not k.WINDOWS:
+            self.assertFalse(k.mostra_no_explorador(self.casa))
+            self.assertFalse(k.abre_arquivo(self.casa))
 
 
 if __name__ == '__main__':

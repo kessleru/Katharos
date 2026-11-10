@@ -73,6 +73,18 @@ jobs:
         run: |
           python programa/katharos.py amostrar --sem-cor
           python -c "import pathlib,json; p=pathlib.Path.home()/'.katharos'/'horas.jsonl'; l=p.read_text(encoding='utf-8').splitlines(); b=json.loads(l[-1]); print(b); assert b['n']>=1 and 'rn' in b, 'sem leitura de RAM'"
+      - name: prova de ganho (o item aplicado acima foi medido) e troca de versão
+        run: |
+          python programa/katharos.py provas --sem-cor
+          python programa/katharos.py versoes --sem-cor
+          python -c "import pathlib,json; c=pathlib.Path.home()/'.katharos'; l=[json.loads(x) for x in (c/'provas.jsonl').read_text(encoding='utf-8').splitlines()]; print(len(l), l[0]); assert l and all(isinstance(x['d'].get('livre'), int) for x in l), 'retrato sem leitura de disco'; assert any(isinstance(x['d'].get('svc'), int) for x in l), 'retrato sem servicos'; e=json.loads((c/'ensaios.json').read_text(encoding='utf-8')); print(e[0]['antes']); assert e and e[0]['antes'], 'ensaio sem medida de antes'; s=json.loads((c/'estado.json').read_text(encoding='utf-8')); assert s.get('versao_programa') and s.get('versao_dados'), 'estado sem carimbo de versao'"
+      - name: processo criado pelo WMI nasce sem janela (Python da Microsoft Store)
+        shell: powershell
+        run: |
+          $si = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }
+          $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = 'cmd.exe /c exit 0'; ProcessStartupInformation = $si }
+          Write-Host "retorno $($r.ReturnValue), pid $($r.ProcessId)"
+          if ($r.ReturnValue -ne 0) { throw "o WMI recusou criar o processo escondido: $($r.ReturnValue)" }
       - name: raio-x no Windows real (só leitura) e busca
         run: |
           python programa/katharos.py raiox --sim --sem-cor

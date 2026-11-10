@@ -1052,7 +1052,7 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1062,6 +1062,7 @@ DESCR_CONFIG = {
     'navegador': ('navegador leve', 'brave ou nenhum: se o turbo instala o Brave enxuto'),
     'confirmar': ('"manter alterações?"', 'risco (padrão): depois de mudar serviços, jogos, energia, disco ou visual, pergunta se está tudo bem e desfaz '
                   'sozinho se você não responder; sempre; ou nunca'),
+    'abrir-relatorio': ('abrir o relatório', 'perguntar (padrão: uma tecla no fim do raio-x, da segurança e do turbo), sempre (abre a pasta sozinho) ou nunca'),
     'coleta-em-jogo': ('coleta com jogo aberto', 'segura (padrão): só lê CPU, RAM, disco e temperatura do sistema, sem olhar processos nem a placa de vídeo; ou pausar: não coleta nada enquanto houver jogo aberto'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
@@ -1749,8 +1750,11 @@ class _Filho:
             return
         self.saida = Path(str(arq) + '.saida.txt')
         linha = f'cmd.exe /c ""{ps}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{arq}" > "{self.saida}" 2>&1"'
-        cria = ("$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = " + psq(linha) +
-                " }; [Console]::Out.Write([string]$r.ProcessId + '|' + [string]$r.ReturnValue)")
+        # ShowWindow = 0: o processo criado pelo WMI nasce com a janela escondida. Sem isto, cada etapa abria uma janela
+        # preta do cmd que ficava parada na tela até a etapa terminar.
+        cria = ("$si = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }; "
+                "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = " + psq(linha) +
+                "; ProcessStartupInformation = $si }; [Console]::Out.Write([string]$r.ProcessId + '|' + [string]$r.ReturnValue)")
         r = subprocess.run([ps, '-NoProfile', '-NonInteractive', '-Command', cria], capture_output=True, text=True, timeout=90)
         pid, _, rv = r.stdout.strip().partition('|')
         if not pid.isdigit() or rv.strip() != '0':
@@ -1821,7 +1825,7 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
     cabeca = (f"$env:OTM_TESTE = '{'1' if teste else '0'}'\n$env:OTM_CASA = {psq(CASA)}\n$env:OTM_MULT = '{mult:.2f}'\n"
               f"$env:OTM_BK = {psq(pasta('backup', pacote) if pacote else '')}\n")
     with open(arq, 'w', encoding='utf-8-sig', newline='\r\n') as f:  # BOM: o PowerShell 5.1 lê como UTF-8
-        f.write(cabeca + PRELUDIO_PS + '\n' + (DESFAZ_PS if desfaz else corpo) + '\n')
+        f.write(cabeca + PRELUDIO_PS + '\n' + RETRATO_PS + '\n' + (DESFAZ_PS if desfaz else corpo) + '\n')
     ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
     LOG.escreve(f'--- {rotulo} (limite {minutos * mult:.0f} min{", teste" if teste else ""})')
     inicio = time.time()
@@ -2202,6 +2206,7 @@ foreach ($par in @(@("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup
 }
 Dado 'medidas' @{
     data = (Get-Date).ToString('s')
+    uptime_h = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalHours, 2)
     cpu = (Media 'cpu'); kernel = (Media 'kernel'); desempenho = (Media 'perf'); limite = (Media 'limite')
     dpc = (Media 'dpc'); interrupcoes = (Media 'irq'); disco_ativo = (Media 'disco'); fila_disco = (Media 'fila'); paginas_s = (Media 'pag')
     ram_disponivel = $(if ($mem) { [math]::Round([double]$mem.AvailableMBytes / 1024, 2) } else { $null })
@@ -2304,6 +2309,11 @@ def mede(ctx, rotulo='medindo'):
 def salva_medida(m, nome):
     if m:
         grava_json(pasta('medidas') / f'{carimbo()}-{nome}.json', m)
+        if not nome.startswith('antes-'):   # toda medida completa tenta fechar os ensaios da prova de ganho
+            try:
+                fecha_ensaios(m)
+            except Exception as e:
+                LOG.escreve(f'ensaios não fecharam: {e!r}')
 
 
 def medidas_salvas():
@@ -3489,6 +3499,9 @@ def _detalhe_item(t, it):
             t.paragrafo(f'{rot}: {resto}', 8, 'verde' if rot == 'ganho' else 'amarelo')
     if it.nota:
         t.paragrafo('neste PC: ' + it.nota, 8, 'azul')
+    medido = prova_do_item(getattr(it, 'pacote', None), it.id) if getattr(it, 'pacote', None) else ''
+    if medido:
+        t.paragrafo(medido, 8, 'verde' if 'liberou' in medido or 'a menos' in medido or 'a mais' in medido else 'apagado')
     if it.alerta:
         t.paragrafo('atenção: ' + it.alerta, 8, 'amarelo')
     if not it.reverte:
@@ -3643,14 +3656,16 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
 
 # ─────────────── executar ───────────────
 
-def _envolve(it):
-    # cada item diz o próprio nome, roda protegido e, no fim, diz se mudou algo ou se já estava assim
+def _envolve(it, prova=None):
+    # cada item diz o próprio nome, roda protegido e, no fim, diz se mudou algo ou se já estava assim.
+    # prova=N: depois do item sai um retrato (espaço, RAM, processos, serviços) para a prova de ganho item por item
+    fim = f"if (-not $TESTE) {{ Dado 'prova:{prova}' (Retrato ($script:MUDOU - $__a)) }}\n" if prova is not None else ''
     return ('Diz "secao" ' + psq(it.titulo) + '\n'
             '$__a = $script:MUDOU; $__p = $script:PLANOS\n'
             'try {\n' + it.ps + '\n} catch { Aviso (' + psq(it.titulo + ': ') + ' + $_.Exception.Message) }\n'
             'if ($TESTE) { if ($script:PLANOS -eq $__p) { Diz "nada" "ja esta assim" } }\n'
             'elseif ($script:MUDOU -gt $__a) { Feito ("feito ({0} {1})" -f ($script:MUDOU - $__a), $(if (($script:MUDOU - $__a) -eq 1) { "mudanca" } else { "mudancas" })) }\n'
-            'else { Diz "nada" "ja estava assim" }\n')
+            'else { Diz "nada" "ja estava assim" }\n' + fim)
 
 
 def _andamento_marca(ctx, pac, itens):
@@ -3696,16 +3711,29 @@ def executa_itens(ctx, pac, itens, teste=False):
     feitos, avisos, erros = 0, 0, 0
     eventos = []
     nome_bk = pac.nome if pac.reversivel else None
+    provas, ensaio, hw = [], None, ''
     if not teste:
         _andamento_marca(ctx, pac, itens)
+        try:   # a prova de ganho nunca pode impedir a aplicação
+            ensaio = abre_ensaio(ctx, pac, itens)
+            hw = classe_hw(ctx.perfil or {})
+        except Exception as e:
+            LOG.escreve(f'ensaio não abriu: {e!r}')
+
+    def anota(it, antes, depois, mudou):
+        provas.append({'t': agora_iso(), 'pacote': pac.nome, 'id': it.id, 'titulo': it.titulo, 'mudou': int(mudou or 0),
+                       'd': delta_retrato(antes, depois), 'ensaio': ensaio, 'hw': hw})
     with Progresso(t, len(itens), 'aplicando' if not teste else 'simulando') as pr:
         for bloco in blocos:
             it0 = bloco[0]
             if it0.py:
                 t.escreve('  ' + t.p('◆', 'destaque') + ' ' + t.p(it0.titulo, 'texto', True))
                 pr.atual = it0.titulo
+                foto = None if teste else retrato()
                 try:
                     r = it0.py(ctx, it0, pr, teste) or (0, 0)
+                    if foto is not None:
+                        anota(it0, foto, retrato(), r[0])
                     feitos += r[0]
                     avisos += r[1] if len(r) > 1 else 0
                     eventos.append({'tipo': 'itens', 'pacote': pac.nome, 'ids': [it0.id], 'feitos': r[0], 'avisos': [], 'erros': []})
@@ -3719,7 +3747,7 @@ def executa_itens(ctx, pac, itens, teste=False):
                 if not teste:
                     _andamento_avanca([it0.id])
                 continue
-            corpo = '\n'.join(_envolve(i) for i in bloco)
+            corpo = "if (-not $TESTE) { Dado 'prova:antes' (Retrato) }\n" + '\n'.join(_envolve(i, n) for n, i in enumerate(bloco))
             minutos = sum(i.minutos for i in bloco)
             pr.atual = it0.titulo
             s = roda_ps(t, corpo, f'{pac.nome}-{it0.id}', minutos=minutos, pacote=nome_bk, teste=teste, pr=pr,
@@ -3730,6 +3758,12 @@ def executa_itens(ctx, pac, itens, teste=False):
             eventos.append({'tipo': 'itens', 'pacote': pac.nome, 'ids': [i.id for i in bloco], 'feitos': len(s.feitos) + len(s.planos),
                             'avisos': [x + (f' → {dica_erro(x)}' if dica_erro(x) else '') for x in s.avisos[:4]],
                             'erros': [x + (f' → {dica_erro(x)}' if dica_erro(x) else '') for x in s.erros[:4]], 'tempo_s': round(s.tempo)})
+            foto = s.dados.get('prova:antes')
+            for n, i in enumerate(bloco):   # cada item é comparado com o retrato tirado logo antes dele
+                depois = s.dados.get(f'prova:{n}')
+                if isinstance(foto, dict) and isinstance(depois, dict):
+                    anota(i, foto, depois, depois.get('m'))
+                    foto = depois
             if s.estourou:
                 eventos[-1]['erros'].append('passou do limite de tempo e foi encerrado → demorou demais: tente de novo com o PC parado')
                 erros += 1
@@ -3746,6 +3780,12 @@ def executa_itens(ctx, pac, itens, teste=False):
         pacs[pac.nome] = {'quando': agora_iso(), 'itens': sorted(ids), 'revertido': False}
         salva_estado(e)
         rel_eventos([ev for ev in eventos if ev['feitos'] or ev['avisos'] or ev['erros']])
+        try:
+            registra_provas(provas)
+            if provas:
+                mostra_provas_da_aplicacao(t, provas)
+        except Exception as e:
+            LOG.escreve(f'provas não gravaram: {e!r}')
     return feitos, avisos, erros
 
 
@@ -3844,6 +3884,8 @@ def ferramenta_pacote(ctx, args, nome=None):
     if pac.admin and not confere_conta(ctx) and not args.teste:
         return 1
     itens = [i for i in (pac.itens(ctx) or []) if i]
+    for i in itens:
+        i.pacote = pac.nome
     itens, fora = aplica_protegidos(pac.nome, itens)
     if fora:
         t.nota(f'  {pl(fora, "item protegido", "itens protegidos")} (config protegidos): fora desta lista.')
@@ -3915,6 +3957,386 @@ def ferramenta_pacote(ctx, args, nome=None):
         if feitos:
             manter_ou_desfazer(ctx, args, [pac.nome])
     return 1 if erros else 0
+# ███████████████████████████████████████████████████████████████████████████
+#
+#   PROVA DE GANHO · o que cada item rendeu de verdade, medido neste PC
+#
+#   Duas provas, porque há dois tipos de ganho:
+#   1. NA HORA, item por item: um retrato barato (espaço livre, RAM disponível, processos, serviços rodando) antes
+#      e depois de cada item. Disco liberado e serviço parado aparecem aqui, com o nome do item ao lado.
+#   2. DEPOIS DE REINICIAR, por rodada: boot, CPU e RAM em repouso só mudam depois do próximo boot, e aí não dá
+#      para separar um item do outro. Cada aplicação abre um "ensaio" com a medida de antes; a primeira medida
+#      feita depois de reiniciar (pelo "medir", pelo "raiox" ou pelo segundo plano) fecha o ensaio.
+#   O que fica abaixo do ruído normal do PC é dito como "sem diferença mensurável", nunca como ganho.
+#
+# ███████████████████████████████████████████████████████████████████████████
+
+PROVAS_MAX = 3000       # linhas guardadas em provas.jsonl (uma por item aplicado)
+ENSAIOS_MAX = 80
+# abaixo disto é oscilação normal entre dois retratos seguidos: não conta como ganho nem como perda
+RUIDO_RETRATO = {'livre': 10, 'ram': 60, 'proc': 2, 'svc': 1}   # MB, MB, processos, serviços
+# métricas do ensaio: chave, rótulo, melhor, casas, unidade, mínimo absoluto, mínimo relativo, só vale com reinício
+METRICAS_ENSAIO = [
+    ('boot_s', 'tempo de boot', 'menor', 0, 's', 2, 0.10, True),
+    ('inicializacao', 'abrem com o Windows', 'menor', 0, '', 1, 0, False),
+    ('ram_usada', 'RAM em repouso', 'menor', 1, 'GB', 0.3, 0.05, False),
+    ('cpu', 'CPU em repouso', 'menor', 0, '%', 2, 0, False),
+    ('processos', 'processos', 'menor', 0, '', 5, 0, False),
+    ('servicos', 'serviços rodando', 'menor', 0, '', 2, 0, False),
+    ('livre_c', 'livre em C:', 'maior', 1, 'GB', 0.5, 0, False),
+]
+
+RETRATO_PS = r'''
+function Retrato([int]$Mudou = 0) {
+    $r = @{ livre = $null; ram = $null; proc = $null; svc = $null; m = $Mudou }
+    try { $r.livre = [math]::Round(([System.IO.DriveInfo]::new($env:SystemDrive.Substring(0, 1))).AvailableFreeSpace / 1MB) } catch {}
+    try { $r.ram = [math]::Round((Get-CimInstance Win32_OperatingSystem -Property FreePhysicalMemory -ErrorAction Stop).FreePhysicalMemory / 1KB) } catch {}
+    try { $r.proc = [System.Diagnostics.Process]::GetProcesses().Count } catch {}
+    try { $r.svc = @(Get-Service -ErrorAction Stop | Where-Object { $_.Status -eq 'Running' }).Count } catch {}
+    return $r
+}
+'''
+
+
+def provas_arq():
+    return CASA / 'provas.jsonl'
+
+
+def ensaios_arq():
+    return CASA / 'ensaios.json'
+
+
+def retrato():
+    """O retrato barato, pelo Python (para os itens que não são PowerShell): MB livres em C:, MB de RAM disponível
+    e número de processos. O que não der para ler fica None."""
+    r = {'livre': None, 'ram': None, 'proc': None, 'svc': None}
+    try:
+        r['livre'] = round(shutil.disk_usage(os.environ.get('SystemDrive', 'C:') + '\\' if WINDOWS else '/').free / 1048576)
+    except OSError:
+        pass
+    if WINDOWS:
+        try:
+            import ctypes
+
+            class _Mem(ctypes.Structure):
+                _fields_ = [('tam', ctypes.c_ulong), ('carga', ctypes.c_ulong)] + [(n, ctypes.c_ulonglong) for n in
+                            ('total', 'disp', 'pag_total', 'pag_disp', 'virt_total', 'virt_disp', 'ext')]
+            m = _Mem()
+            m.tam = ctypes.sizeof(_Mem)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)):
+                r['ram'] = round(m.disp / 1048576)
+            ids = (ctypes.c_ulong * 4096)()
+            usados = ctypes.c_ulong()
+            if ctypes.windll.psapi.EnumProcesses(ctypes.byref(ids), ctypes.sizeof(ids), ctypes.byref(usados)):
+                r['proc'] = usados.value // ctypes.sizeof(ctypes.c_ulong)
+        except Exception as e:
+            LOG.escreve(f'retrato: {e!r}')
+    return r
+
+
+def delta_retrato(antes, depois):
+    """O que mudou entre dois retratos, já no sentido do ganho (positivo é bom): MB liberados em disco, MB de RAM
+    a mais disponível, processos a menos, serviços a menos. O que está dentro do ruído vira 0; sem leitura, None."""
+    d = {}
+    for ch, sinal in (('livre', 1), ('ram', 1), ('proc', -1), ('svc', -1)):
+        a, b = (antes or {}).get(ch), (depois or {}).get(ch)
+        if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+            d[ch] = None
+            continue
+        v = sinal * (b - a)
+        d[ch] = round(v) if abs(v) >= RUIDO_RETRATO[ch] else 0
+    return d
+
+
+def classe_hw(p):
+    """'ssd-16gb-desktop': o tipo de máquina, para comparar provas entre PCs parecidos."""
+    disco = 'hd' if eh_hd(p) else ('ssd' if eh_ssd(p) else 'disco')
+    ram = pf(p, 'ram.total', 0) or 0
+    faixa = '4gb' if ram <= 4.5 else ('8gb' if ram <= 9 else ('16gb' if ram <= 17 else '32gb'))
+    return f'{disco}-{faixa}-{"notebook" if pf(p, "pc.notebook") else "desktop"}'
+
+
+def registra_provas(linhas, arq=None):
+    """Acrescenta as provas (uma por item aplicado) e apara o arquivo."""
+    if not linhas:
+        return
+    arq = Path(arq or provas_arq())
+    try:
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        with open(arq, 'a', encoding='utf-8') as f:
+            for l in linhas:
+                f.write(json.dumps(l, ensure_ascii=False, separators=(',', ':')) + '\n')
+        todas = arq.read_text(encoding='utf-8', errors='replace').splitlines()
+        if len(todas) > PROVAS_MAX:
+            arq.write_text('\n'.join(todas[-PROVAS_MAX:]) + '\n', encoding='utf-8')
+    except OSError as e:
+        LOG.escreve(f'provas: não gravou: {e!r}')
+
+
+def le_provas(arq=None):
+    out = []
+    try:
+        for l in Path(arq or provas_arq()).read_text(encoding='utf-8', errors='replace').splitlines():
+            try:
+                d = json.loads(l)
+                if isinstance(d, dict) and d.get('id') and isinstance(d.get('d'), dict):
+                    out.append(d)
+            except ValueError:
+                continue
+    except OSError:
+        pass
+    return out
+
+
+def le_ensaios(arq=None):
+    d = le_json(Path(arq or ensaios_arq()), [])
+    return [x for x in d if isinstance(x, dict) and x.get('id')] if isinstance(d, list) else []
+
+
+def _medida_recente(horas=2, agora=None):
+    """A última medida completa salva, se tiver menos de N horas. Evita medir de novo a cada pacote."""
+    agora = agora or datetime.now()
+    for arq in reversed(medidas_salvas()):
+        m = le_json(arq, {})
+        try:
+            if 0 <= (agora - datetime.fromisoformat(str(m.get('data'))[:19])).total_seconds() <= horas * 3600:
+                return m
+        except (TypeError, ValueError):
+            continue
+        break
+    return None
+
+
+def abre_ensaio(ctx, pac, itens, agora=None):
+    """Começa um ensaio: guarda a medida de antes e o que vai ser aplicado. Devolve o id do ensaio."""
+    agora = agora or datetime.now()
+    antes = _medida_recente(agora=agora)
+    if antes is None and WINDOWS:
+        try:
+            antes = mede(ctx, 'medindo antes, para provar o ganho depois')
+            salva_medida(antes, 'antes-' + pac.nome)
+        except Exception as e:
+            LOG.escreve(f'ensaio sem medida de antes: {e!r}')
+    ens = {'id': f'{agora:%Y%m%d%H%M%S}-{pac.nome}', 't': agora.replace(microsecond=0).isoformat(), 'pacote': pac.nome,
+           'itens': [i.id for i in itens], 'antes': antes or None, 'depois': None, 'fechado': None, 'reiniciou': None}
+    try:
+        todos = le_ensaios() + [ens]
+        grava_json(ensaios_arq(), todos[-ENSAIOS_MAX:])
+    except OSError as e:
+        LOG.escreve(f'ensaio não gravou: {e!r}')
+    return ens['id']
+
+
+def fecha_ensaios(m, agora=None, arq=None):
+    """Chamada a cada medida completa: fecha os ensaios abertos que já podem ser comparados. Um ensaio fecha na
+    primeira medida feita depois de reiniciar (com o PC ligado há pelo menos 10 minutos), ou, sem reinício, depois
+    de 14 dias. Devolve quantos fechou."""
+    if not isinstance(m, dict) or not m:
+        return 0
+    agora = agora or datetime.now()
+    ens = le_ensaios(arq)
+    up = m.get('uptime_h')
+    ligou = agora - timedelta(hours=up) if isinstance(up, (int, float)) else None
+    n = 0
+    for e in ens:
+        if e.get('fechado'):
+            continue
+        try:
+            t0 = datetime.fromisoformat(e['t'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        reiniciou = ligou is not None and ligou > t0
+        if (reiniciou and up * 60 >= 10) or (agora - t0).days >= 14:
+            e['depois'] = {k: v for k, v in m.items() if isinstance(v, (int, float))}
+            e['fechado'] = agora.replace(microsecond=0).isoformat()
+            e['reiniciou'] = bool(reiniciou)
+            n += 1
+    if n:
+        try:
+            grava_json(Path(arq or ensaios_arq()), ens)
+        except OSError as ex:
+            LOG.escreve(f'ensaios não gravaram: {ex!r}')
+    return n
+
+
+def veredito_ensaio(a, b, melhor, minimo, relativo=0):
+    """'melhorou', 'piorou' ou 'igual' entre uma medida de antes e uma de depois, descontado o ruído."""
+    d = b - a
+    if abs(d) < max(minimo, relativo * abs(a)):
+        return 'igual'
+    return 'melhorou' if (d < 0) == (melhor == 'menor') else 'piorou'
+
+
+def rodadas(ensaios):
+    """Junta os ensaios fechados pela mesma medida (tudo o que foi aplicado entre dois reinícios é uma rodada só,
+    porque não dá para separar o efeito). Mais novas primeiro. Cada rodada:
+    {quando, fechado, reiniciou, pacotes, itens, metricas: [(rótulo, veredito, antes, depois, casas, unidade)]}"""
+    grupos = {}
+    for e in ensaios:
+        if e.get('fechado') and isinstance(e.get('depois'), dict):
+            grupos.setdefault(e['fechado'], []).append(e)
+    out = []
+    for fechado, es in grupos.items():
+        es.sort(key=lambda e: e.get('t', ''))
+        antes = next((e['antes'] for e in es if isinstance(e.get('antes'), dict)), None)
+        depois = es[-1]['depois']
+        reiniciou = any(e.get('reiniciou') for e in es)
+        mets = []
+        for ch, rot, melhor, casas, un, minimo, rel, so_boot in METRICAS_ENSAIO:
+            a, b = (antes or {}).get(ch), depois.get(ch)
+            if not isinstance(a, (int, float)) or not isinstance(b, (int, float)) or (so_boot and not reiniciou):
+                continue
+            mets.append((rot, veredito_ensaio(a, b, melhor, minimo, rel), a, b, casas, un))
+        pacotes = []
+        for e in es:
+            if e.get('pacote') not in pacotes:
+                pacotes.append(e.get('pacote'))
+        out.append({'quando': es[0].get('t'), 'fechado': fechado, 'reiniciou': reiniciou, 'pacotes': pacotes,
+                    'itens': sum(len(e.get('itens') or []) for e in es), 'metricas': mets})
+    return sorted(out, key=lambda r: r['fechado'], reverse=True)
+
+
+def ensaios_abertos(ensaios):
+    return [e for e in ensaios if not e.get('fechado')]
+
+
+def resumo_itens(provas):
+    """Junta as provas por item: [{pacote, id, titulo, vezes, livre, ram, proc, svc, mudou, quando}], o maior ganho primeiro.
+    Disco e serviços somam (cada aplicação liberou de novo); RAM e processos ficam com a mediana (oscilam)."""
+    por = {}
+    for p in provas:
+        por.setdefault((p.get('pacote'), p['id']), []).append(p)
+    out = []
+    for (pacote, id_), ps in por.items():
+        def vals(ch):
+            return [x['d'].get(ch) for x in ps if isinstance(x['d'].get(ch), (int, float))]
+        def mediana(v):
+            v = sorted(v)
+            return v[len(v) // 2] if v else None
+        r = {'pacote': pacote, 'id': id_, 'titulo': ps[-1].get('titulo') or id_, 'vezes': len(ps),
+             'livre': sum(vals('livre')) if vals('livre') else None, 'svc': max(vals('svc')) if vals('svc') else None,
+             'ram': mediana(vals('ram')), 'proc': mediana(vals('proc')),
+             'mudou': sum(x.get('mudou') or 0 for x in ps), 'quando': ps[-1].get('t')}
+        r['pontos'] = max(0, r['livre'] or 0) / 100 + max(0, r['ram'] or 0) / 50 + max(0, r['proc'] or 0) + 2 * max(0, r['svc'] or 0)
+        out.append(r)
+    return sorted(out, key=lambda r: (-r['pontos'], str(r['titulo']).lower()))
+
+
+def texto_ganho(d):
+    """'liberou 1,2 GB · 2 serviços a menos', ou '' se nada passou do ruído. d: um delta (ou um resumo de item)."""
+    partes = []
+    livre = d.get('livre') or 0
+    if livre >= RUIDO_RETRATO['livre']:
+        partes.append('liberou ' + (f'{br(livre / 1024, 1)} GB' if livre >= 1024 else f'{br(livre, 0)} MB') + ' em disco')
+    if (d.get('svc') or 0) >= 1:
+        partes.append(pl(d['svc'], 'serviço a menos', 'serviços a menos'))
+    if (d.get('proc') or 0) >= RUIDO_RETRATO['proc']:
+        partes.append(pl(d['proc'], 'processo a menos', 'processos a menos'))
+    if (d.get('ram') or 0) >= RUIDO_RETRATO['ram']:
+        partes.append(f'cerca de {br(d["ram"], 0)} MB de RAM a mais')
+    return ' · '.join(partes)
+
+
+def prova_do_item(pacote, id_, provas=None):
+    """A frase que entra na explicação de um item: o que ele rendeu neste PC da última vez, ou ''."""
+    try:
+        ps = [p for p in (le_provas() if provas is None else provas) if p.get('pacote') == pacote and p.get('id') == id_]
+    except Exception:
+        return ''
+    if not ps:
+        return ''
+    u = ps[-1]
+    quando = ha_quanto_iso(u.get('t')) or ''
+    g = texto_ganho(u['d'])
+    if g:
+        return f'medido aqui ({quando}): {g}'
+    if not u.get('mudou'):
+        return f'medido aqui ({quando}): já estava assim, não mudou nada'
+    return f'medido aqui ({quando}): mudou {pl(u["mudou"], "ajuste", "ajustes")}, sem ganho imediato mensurável (o efeito vem depois de reiniciar)'
+
+
+def mostra_provas_da_aplicacao(t, linhas):
+    """Logo depois de aplicar: o que cada item rendeu agora, em uma tabela curta. Só entram itens com ganho medido."""
+    com = [l for l in linhas if texto_ganho(l['d'])]
+    mudaram = sum(1 for l in linhas if l.get('mudou'))
+    t.titulo('o que rendeu agora')
+    if com:
+        com.sort(key=lambda l: -(max(0, l['d'].get('livre') or 0) / 100 + 2 * max(0, l['d'].get('svc') or 0) + max(0, l['d'].get('proc') or 0)))
+        for l in com[:8]:
+            t.item('✓', 'verde', corta(l['titulo'], 44), t.p(texto_ganho(l['d']), 'verde'))
+        if len(com) > 8:
+            t.nota(f'  e mais {len(com) - 8}: veja todos em "provas".')
+    resto = mudaram - len([l for l in com if l.get('mudou')])
+    if resto > 0 or not com:
+        t.paragrafo((f'{pl(resto, "item mudou", "itens mudaram")} o Windows sem ganho imediato mensurável. ' if resto > 0 else 'Nenhum ganho imediato mensurável. ')
+                    + 'Boot, CPU e RAM em repouso só mudam depois de reiniciar: a medida de antes ficou guardada e o Katharos compara '
+                    'sozinho na próxima medição (comando "provas").', 2, 'apagado')
+
+
+def ferramenta_provas(ctx, args):
+    t = ctx.t
+    t.aba('o que cada item rendeu de verdade, medido neste PC')
+    provas, ens = le_provas(), le_ensaios()
+    if not provas and not ens:
+        t.paragrafo('Ainda não há provas. A partir de agora, cada item que você aplicar é medido antes e depois (espaço, RAM, processos e '
+                    'serviços), e cada aplicação guarda a medida de antes para comparar boot, CPU e RAM depois que você reiniciar.', 2, 'sub')
+        return 0
+    rs = rodadas(ens)
+    if rs:
+        t.titulo('depois de reiniciar')
+        nomes_ver = {'melhorou': ('verde', 'melhorou'), 'piorou': ('vermelho', 'piorou'), 'igual': ('apagado', 'sem diferença mensurável')}
+        for r in rs[:4]:
+            dq = _dt_prova(r['quando'])
+            t.escreve('  ' + t.p(f'{dq:%d/%m/%Y}' if dq else '', 'destaque', True) + '  '
+                      + t.p(' + '.join(PACOTES[p].titulo if p in PACOTES else str(p) for p in r['pacotes']) + f' · {pl(r["itens"], "item", "itens")}', 'texto'))
+            if not r['metricas']:
+                t.paragrafo('Sem medida de antes para comparar.', 4, 'apagado')
+            for rot, ver, a, b, casas, un in r['metricas']:
+                cor, nome = nomes_ver[ver]
+                un_ = (' ' + un) if un else ''
+                t.item('·', cor, rot, t.p(f'{br(a, casas)}{un_} → {br(b, casas)}{un_}' if ver != 'igual' else nome, cor), recuo=4)
+            if not r['reiniciou']:
+                t.paragrafo('O PC não foi reiniciado neste período: o tempo de boot não entra.', 4, 'apagado')
+            t.escreve()
+        t.paragrafo('Uma medida antes e uma depois: vale como indício. Tudo o que foi aplicado entre dois reinícios entra na mesma rodada, '
+                    'porque não dá para separar o efeito de cada pacote. O painel mostra também a mediana de 7 dias.', 2, 'apagado')
+    ab = ensaios_abertos(ens)
+    if ab:
+        t.titulo('esperando o próximo reinício')
+        t.paragrafo(', '.join(f'{e.get("pacote")} ({ha_quanto_iso(e.get("t")) or "agora"})' for e in ab[-6:])
+                    + '. Reinicie, espere 10 minutos e rode "medir" (ou deixe o segundo plano medir): a comparação aparece aqui.', 2, 'sub')
+    its = resumo_itens(provas)
+    com = [r for r in its if r['pontos'] > 0]
+    if its:
+        t.titulo('na hora, item por item')
+        if com:
+            def cel(v, un, div=1, casas=0):
+                return '-' if not v or v <= 0 else br(v / div, casas) + un
+            t.tabela(['item', 'área', 'disco', 'RAM', 'processos', 'serviços'],
+                     [[corta(str(r['titulo']), 38), str(r['pacote']), cel(r['livre'], ' GB', 1024, 1) if (r['livre'] or 0) >= 1024 else cel(r['livre'], ' MB'),
+                       cel(r['ram'], ' MB'), cel(r['proc'], ''), cel(r['svc'], '')] for r in com[:15]], alinha='eedddd', flex=0)
+        total = sum(max(0, r['livre'] or 0) for r in its)
+        sem = [r for r in its if r['pontos'] <= 0 and r['mudou']]
+        nada = [r for r in its if not r['mudou'] and r['pontos'] <= 0]
+        t.escreve()
+        t.chaves([('itens medidos', str(len(its))), ('com ganho na hora', t.p(str(len(com)), 'verde')),
+                  ('disco liberado', gb(total / 1024) if total >= 1024 else f'{br(total, 0)} MB'),
+                  ('mudaram sem ganho imediato', str(len(sem))), ('já estavam assim', str(len(nada)))])
+        t.paragrafo('RAM e processos oscilam sozinhos: só entram quando a diferença passa do ruído normal, e são aproximados. '
+                    'Disco liberado e serviços parados são exatos.', 2, 'apagado')
+    rel_secao('provas', {'rodadas': [{'quando': r['quando'], 'pacotes': r['pacotes'], 'itens': r['itens'], 'reiniciou': r['reiniciou'],
+                                      'metricas': [[rot, ver, a, b, un] for rot, ver, a, b, _, un in r['metricas']]} for r in rs[:6]],
+                         'itens': [{'titulo': r['titulo'], 'pacote': r['pacote'], 'ganho': texto_ganho(r) or ('mudou sem ganho imediato' if r['mudou'] else 'já estava assim'),
+                                    'vezes': r['vezes']} for r in its[:60]],
+                         'hardware': next((p.get('hw') for p in reversed(provas) if p.get('hw')), '')})
+    return 0
+
+
+def _dt_prova(txt):
+    try:
+        return datetime.fromisoformat(str(txt))
+    except (TypeError, ValueError):
+        return None
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -6004,6 +6426,16 @@ def rel_md(r):
             else:
                 linhas.append([_q(e.get('quando', '')), e.get('tipo', ''), e.get('texto', ''), '', ''])
         L += _tab(['Quando', 'Pacote', 'Resultado', 'Avisos e erros (com dica)', 'Espaço'], linhas)
+    if S.get('provas'):
+        pv = S['provas']
+        L += [f'## Prova de ganho ({_q(Q.get("provas", ""))})', '', f'Tipo de máquina: {_q(pv.get("hardware") or "?")}.', '']
+        for rd in pv.get('rodadas') or []:
+            L += [f'### Rodada de {_q(str(rd.get("quando") or "")[:10])}: {_q(" + ".join(str(x) for x in rd.get("pacotes") or []))} '
+                  f'({rd.get("itens")} itens{"" if rd.get("reiniciou") else ", sem reinício"})', '']
+            L += _tab(['Medida', 'Veredito', 'Antes', 'Depois'], [[m[0], m[1], f'{m[2]} {m[4]}'.strip(), f'{m[3]} {m[4]}'.strip()] for m in rd.get('metricas') or []])
+        if pv.get('itens'):
+            L += ['### Item por item (medido na hora)', '']
+            L += _tab(['Item', 'Área', 'Ganho medido', 'Vezes'], [[x.get('titulo', ''), x.get('pacote', ''), x.get('ganho', ''), x.get('vezes', '')] for x in pv['itens']])
     if 'desconhecidos' in S:
         L += ['## O que o Katharos não reconheceu (candidatos para a base de dados)', '']
         for tipo, lst in S['desconhecidos'].items():
@@ -6049,11 +6481,82 @@ def salva_relatorio_em(destino):
     return alvo
 
 
-def rel_fim(ctx, args):
-    """Depois de qualquer ferramenta: --copiar e --salvar PASTA agem sobre o relatório único."""
+def mostra_no_explorador(arq):
+    """Abre o Explorador de Arquivos na pasta do arquivo, com ele selecionado: a pessoa não precisa procurar.
+    True se conseguiu pedir ao Windows."""
+    arq = Path(arq)
+    if not WINDOWS:
+        return False
+    try:
+        if arq.is_file():
+            subprocess.Popen(f'explorer.exe /select,"{arq}"')
+        else:
+            os.startfile(str(arq if arq.is_dir() else arq.parent))
+        return True
+    except OSError as e:
+        LOG.escreve(f'explorador não abriu: {e!r}')
+        return False
+
+
+def abre_arquivo(arq):
+    """Abre o arquivo no programa padrão do Windows (o .md abre no editor de texto). True se conseguiu."""
+    if not WINDOWS:
+        return False
+    try:
+        os.startfile(str(arq))
+        return True
+    except OSError as e:
+        LOG.escreve(f'arquivo não abriu: {e!r}')
+        return False
+
+
+# comandos cujo resultado principal é o relatório: no fim deles o Katharos oferece abrir a pasta
+PRODUZEM_RELATORIO = {'raiox', 'seguranca', 'turbo', 'saude', 'provas', 'cartao'}
+
+
+def oferece_abrir_relatorio(ctx, args, desde=None):
+    """No fim de uma ferramenta que atualizou o relatório: abre a pasta com ele selecionado (--abrir, ou config
+    abrir-relatorio = sempre) ou pergunta com uma tecla (padrão, só nos comandos que existem para gerar relatório)."""
+    t = ctx.t
+    arq = rel_md_path()
+    try:
+        if not arq.exists() or (desde and arq.stat().st_mtime < desde - 2):
+            return False
+    except OSError:
+        return False
+    quer = getattr(args, 'abrir', False)
+    modo = config('abrir-relatorio')
+    if not quer and (getattr(args, 'agendada', False) or getattr(args, 'teste', False) or not t.interativo or getattr(args, 'sim', False) or modo == 'nunca'):
+        return False
+    if not quer and modo != 'sempre':
+        if getattr(args, 'comando', '') not in PRODUZEM_RELATORIO:
+            return False
+        t.escreve()
+        t.dicas([('a', 'abre a pasta do relatório'), ('v', 'abre o relatório'), ('Enter', 'segue')])
+        r = t.pergunta('relatório').strip().lower()[:1]
+        if r == 'v':
+            if not abre_arquivo(arq):
+                t.aviso(f'Não consegui abrir. O arquivo está em {caminho_curto(arq)}.')
+            return True
+        if r != 'a':
+            return False
+    if mostra_no_explorador(arq):
+        t.ok('Abri a pasta com o relatório selecionado.')
+        return True
+    t.aviso(f'Não consegui abrir a pasta. O arquivo está em {caminho_curto(arq)}.')
+    return False
+
+
+def rel_fim(ctx, args, desde=None):
+    """Depois de qualquer ferramenta: --copiar e --salvar PASTA agem sobre o relatório único, e --abrir (ou a pergunta
+    de uma tecla) mostra onde ele está."""
     t = ctx.t
     if getattr(args, 'comando', '') in ('relatorio', 'config'):
         return
+    try:
+        oferece_abrir_relatorio(ctx, args, desde)
+    except Exception as e:   # abrir a pasta é conforto: nunca derruba o fim de uma ferramenta
+        LOG.escreve(f'oferecer o relatório falhou: {e!r}')
     if not (getattr(args, 'copiar', False) or getattr(args, 'salvar', None)):
         return
     if not rel_md_path().exists():
@@ -6100,15 +6603,26 @@ def ferramenta_relatorio(ctx, args):
     n_rel = len(list(pasta_rel.glob('????-??-??_??-??-??_*.md')))
     t.paragrafo(f'Cada execução também deixa uma cópia com data e hora em {caminho_curto(pasta_rel)} ({n_rel} guardadas; as {MAX_RELATORIOS} mais '
                 'recentes ficam, as antigas são apagadas sozinhas).', 2, 'apagado')
+    if getattr(args, 'abrir', False):
+        mostra_no_explorador(rel_md_path())
     if getattr(args, 'copiar', False) or getattr(args, 'salvar', None):
         rel_fim(ctx, type('A', (), {'comando': '', 'copiar': getattr(args, 'copiar', False), 'salvar': getattr(args, 'salvar', None)})())
         return 0
     if not t.interativo or args.sim:
         return 0
     t.escreve()
-    t.paragrafo('c = copiar tudo para colar na IA · s = salvar uma cópia numa pasta (ex.: o cofre) · z = apagar e recomeçar · Enter = voltar', 2, 'apagado')
+    t.paragrafo('a = abrir a pasta com o relatório · v = abrir o relatório · c = copiar tudo para colar na IA · '
+                's = salvar uma cópia numa pasta (ex.: o cofre) · z = apagar e recomeçar · Enter = voltar', 2, 'apagado')
     a = t.pergunta('fazer').strip().lower()[:1]
-    if a == 'c':
+    if a == 'a':
+        if mostra_no_explorador(rel_md_path()):
+            t.ok('Abri a pasta com o relatório selecionado.')
+        else:
+            t.aviso(f'Não consegui abrir a pasta. O arquivo está em {caminho_curto(rel_md_path())}.')
+    elif a == 'v':
+        if not abre_arquivo(rel_md_path()):
+            t.aviso(f'Não consegui abrir. O arquivo está em {caminho_curto(rel_md_path())}.')
+    elif a == 'c':
         rel_fim(ctx, type('A', (), {'comando': '', 'copiar': True, 'salvar': None})())
     elif a == 's':
         d = t.pergunta('pasta (Enter = Documentos)').strip().strip('"')
@@ -6754,7 +7268,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
@@ -9505,6 +10019,11 @@ def registra_metrica(m, quando=None, arq=None):
     amostra = {k: m[k] for k in METRICAS_CHAVES if isinstance(m.get(k), (int, float))}
     if not amostra:
         return None
+    if arq is None:   # a medida do segundo plano também fecha os ensaios da prova de ganho (é ela que roda depois do reinício)
+        try:
+            fecha_ensaios(m)
+        except Exception as e:
+            LOG.escreve(f'ensaios não fecharam: {e!r}')
     amostra['t'] = quando or agora_iso()
     arq = Path(arq or metricas_arq())
     arq.parent.mkdir(parents=True, exist_ok=True)
@@ -10187,6 +10706,18 @@ ul.propostas{list-style:none;display:grid;gap:12px}.propostas li{background:var(
 .agir{display:inline-block;margin-top:10px;font:600 13px var(--sans);color:var(--fundo);background:var(--ambar);padding:6px 14px;border-radius:4px;text-decoration:none}.agir:hover,.agir:focus-visible{background:var(--osso);outline:2px solid var(--ambar);outline-offset:2px}
 .propostas .c-alta{border-left-color:var(--verm)}.propostas .c-media{border-left-color:var(--ambar)}.propostas b{color:var(--osso)}.propostas p{margin-top:4px}.propostas .det{font:12px var(--mono);color:var(--apagado)}
 .rolagem{overflow-x:auto}table.efeito{width:100%;font:13px var(--sans)}table.efeito td,table.efeito th{padding:8px 12px 8px 0;vertical-align:top;border-bottom:1px solid var(--linha)}table.efeito th{color:var(--osso);white-space:nowrap}
+.indice{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:4px 18px;padding:10px 0;margin:0 0 8px;background:var(--fundo);border-bottom:1px solid var(--linha);font:13px var(--sans)}
+.indice a{color:var(--apagado);text-decoration:none;padding:2px 0;border-bottom:2px solid transparent}.indice a:hover,.indice a:focus-visible{color:var(--osso);border-bottom-color:var(--ambar);outline:0}
+h2{scroll-margin-top:56px}.cartao svg{display:block;width:100%;height:26px;margin-top:6px}.cartao svg polyline{fill:none;stroke:var(--forte);stroke-width:1.5}
+.rodada{background:var(--painel);border:1px solid var(--linha);padding:14px;margin-bottom:12px}.rodada header{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:8px}
+.rodada header b{color:var(--osso);font:600 14px var(--sans)}.rodada header span{color:var(--apagado);font:12px var(--mono)}
+.par{display:grid;grid-template-columns:minmax(120px,190px) 1fr minmax(120px,auto);gap:4px 14px;align-items:center;padding:5px 0;border-top:1px solid var(--linha);font:13px var(--sans)}
+.par .barras{display:grid;gap:3px}.par .barras i{display:block;height:7px;background:var(--forte);min-width:2px}.par .barras i.dep.bom{background:var(--verde)}.par .barras i.dep.mau{background:var(--verm)}.par .barras i.dep.neutro{background:var(--apagado)}
+.par .v{font:12px var(--mono);text-align:right;white-space:nowrap}
+.itens-prova{list-style:none;background:var(--painel);border:1px solid var(--linha)}.itens-prova li{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,30%);gap:4px 14px;padding:9px 14px;border-bottom:1px solid var(--linha);align-items:center}
+.itens-prova li:last-child{border:0}.itens-prova b{color:var(--osso);font-weight:600}.itens-prova small{display:block;color:var(--apagado);font:12px var(--mono)}.itens-prova .g{color:var(--verde);font:12px var(--mono)}
+.itens-prova .barra{height:7px;background:var(--linha)}.itens-prova .barra i{display:block;height:7px;background:var(--verde);min-width:2px}
+@media (max-width:620px){.par{grid-template-columns:1fr}.par .v{text-align:left}.itens-prova li{grid-template-columns:1fr}}
 footer{margin-top:44px;color:var(--apagado);font:12px var(--mono)}
 '''
 
@@ -10213,6 +10744,98 @@ def _tabela_efeito_html(efeitos):
     return ('<div class="rolagem"><table class="efeito">' + ''.join(linhas) + '</table></div>'
             '<p class="legenda">Compara a mediana dos 7 dias antes e dos 7 dias depois. Só mostra melhora ou piora quando a mudança passa da oscilação normal; '
             'com vários pacotes na mesma semana, não dá para saber qual deles causou.</p>')
+
+
+def _faisca(serie):
+    """Um risco pequeno com os últimos valores, para o cartão mostrar para onde a medida está indo."""
+    vals = [v for _, v in serie[-40:]]
+    if len(vals) < 3:
+        return ''
+    lo, hi = min(vals), max(vals)
+    faixa = (hi - lo) or 1
+    pts = ' '.join(f'{i * 120 / (len(vals) - 1):.1f},{24 - (v - lo) / faixa * 22:.1f}' for i, v in enumerate(vals))
+    return f'<svg viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"><polyline points="{pts}"/></svg>'
+
+
+def _mb(v):
+    return f'{_num(v / 1024, 1)} GB' if v >= 1024 else f'{_num(v, 0)} MB'
+
+
+def _secao_provas(pv, efeitos=()):
+    """Prova de ganho: o que foi medido na hora (item por item), depois de reiniciar (por rodada) e na semana (mediana)."""
+    pv = pv or {}
+    rs, its, abertos = pv.get('rodadas') or [], pv.get('itens') or [], pv.get('abertos') or []
+    if not (rs or its or abertos or efeitos):
+        return ''
+    com = [r for r in its if r.get('pontos', 0) > 0]
+    total = sum(max(0, r.get('livre') or 0) for r in its)
+    svc = sum(max(0, r.get('svc') or 0) for r in its)
+    melhoras = sum(1 for r in rs for m in r['metricas'] if m[1] == 'melhorou')
+    out = ['<h2>Prova de ganho</h2><p class="sub">O que cada mudança rendeu de verdade neste PC. Cada item é medido antes e depois na hora; '
+           'boot, CPU e RAM em repouso são comparados depois que você reinicia. O que fica dentro da oscilação normal aparece como sem diferença.</p>']
+    cart = [('Disco liberado', _mb(total) if total else '0', 'somando todas as aplicações'), ('Itens com ganho na hora', str(len(com)), f'de {len(its)} medidos'),
+            ('Serviços a menos', str(svc), 'parados na hora'), ('Medidas que melhoraram', str(melhoras), f'em {len(rs)} rodada{"s" if len(rs) != 1 else ""} depois de reiniciar')]
+    out.append('<div class="cartoes">' + ''.join(f'<div class="cartao"><b>{_e(a)}</b><div class="n">{_e(b)}</div><div class="d neutro">{_e(c)}</div></div>' for a, b, c in cart) + '</div>')
+    if rs:
+        out.append('<h3>Depois de reiniciar</h3>')
+        cls = {'melhorou': 'bom', 'piorou': 'mau', 'igual': 'neutro'}
+        for r in rs[:6]:
+            linhas = []
+            for rot, ver, a, b, casas, un in r['metricas']:
+                topo = max(abs(a), abs(b)) or 1
+                un_ = (' ' + _e(un)) if un else ''
+                valor = (f'{_num(a, casas)}{un_} → <span class="{cls[ver]}">{_num(b, casas)}{un_}</span>' if ver != 'igual'
+                         else f'<span class="neutro">sem diferença ({_num(b, casas)}{un_})</span>')
+                linhas.append(f'<div class="par"><span>{_e(rot)}</span><div class="barras"><i style="width:{abs(a) / topo * 100:.0f}%"></i>'
+                              f'<i class="dep {cls[ver]}" style="width:{abs(b) / topo * 100:.0f}%"></i></div><span class="v">{valor}</span></div>')
+            if not linhas:
+                linhas.append('<div class="par"><span class="neutro">Sem medida de antes para comparar.</span></div>')
+            quando = str(r.get('quando') or '')[:10]
+            try:
+                quando = f'{datetime.fromisoformat(str(r["quando"])):%d/%m/%Y}'
+            except (TypeError, ValueError):
+                pass
+            out.append(f'<div class="rodada"><header><b>{_e(" + ".join(PACOTES[p].titulo if p in PACOTES else str(p) for p in r["pacotes"]))}</b><span>{_e(quando)} · {r["itens"]} iten{"s" if r["itens"] != 1 else ""}'
+                       + ('' if r['reiniciou'] else ' · sem reinício: o boot não entra') + '</span></header>' + ''.join(linhas) + '</div>')
+        out.append('<p class="legenda">Barra de cima: antes. Barra de baixo: depois. Tudo o que foi aplicado entre dois reinícios entra na mesma rodada, '
+                   'porque não dá para separar o efeito de cada pacote. É uma medida antes e uma depois: vale como indício.</p>')
+    if abertos:
+        out.append('<div class="vazio" style="margin:12px 0">Esperando o próximo reinício para comparar: <b>' + _e(', '.join(dict.fromkeys(PACOTES[e.get('pacote')].titulo if e.get('pacote') in PACOTES else str(e.get('pacote')) for e in abertos[-8:])))
+                   + '</b>. Reinicie o PC; a primeira medida depois disso (do segundo plano ou do comando <code>medir</code>) fecha a comparação.</div>')
+    if com:
+        topo = max(max(0, r.get('livre') or 0) for r in com) or 1
+        lis = []
+        for r in com[:20]:
+            ganho = texto_ganho(r)
+            lis.append(f'<li><div><b>{_e(r["titulo"])}</b><small>{_e(r["pacote"])}' + (f' · aplicado {r["vezes"]}x' if r['vezes'] > 1 else '') + '</small>'
+                       f'<span class="g">{_e(ganho)}</span></div><div class="barra"><i style="width:{max(0, r.get("livre") or 0) / topo * 100:.0f}%"></i></div></li>')
+        out.append('<h3>Na hora, item por item</h3><ul class="itens-prova">' + ''.join(lis) + '</ul>'
+                   '<p class="legenda">A barra é o espaço em disco liberado. Disco e serviços parados são exatos; RAM e processos oscilam sozinhos e só entram '
+                   'quando passam do ruído. ' + (f'{len(its) - len(com)} itens mudaram o Windows sem ganho imediato: o efeito deles é o da rodada acima.' if len(its) > len(com) else '') + '</p>')
+    elif its:
+        out.append('<h3>Na hora, item por item</h3><div class="vazio">' + f'{len(its)} itens medidos, nenhum com ganho imediato acima do ruído. '
+                   'É o normal para ajustes de registro e de inicialização: o efeito aparece depois de reiniciar.</div>')
+    if efeitos:
+        out.append('<h3>Na semana: efeito de cada pacote que você aplicou</h3>' + _tabela_efeito_html(efeitos))
+    return ''.join(out)
+
+
+NOMES_INDICE = {'O que eu proporia': 'Propostas', 'O que está mudando': 'Tendências', 'O que aconteceu depois das propostas que você executou': 'Resultados',
+                'Benchmark ao longo do tempo': 'Benchmark', 'Saúde do Windows': 'Saúde', 'Prova de ganho': 'Prova de ganho'}
+
+
+def _com_indice(corpo_html):
+    """Dá uma âncora a cada seção e devolve (índice no topo, corpo). Sem script: são só links para dentro da página."""
+    secoes = []
+
+    def ancora(m):
+        slug = re.sub(r'[^a-z0-9]+', '-', unicodedata.normalize('NFKD', _html.unescape(m.group(1)).lower()).encode('ascii', 'ignore').decode()).strip('-')
+        secoes.append((slug, m.group(1)))
+        return f'<h2 id="{slug}">{m.group(1)}</h2>'
+    corpo_html = re.sub(r'<h2>([^<]+)</h2>', ancora, corpo_html)
+    if len(secoes) < 3:
+        return '', corpo_html
+    return ('<nav class="indice" aria-label="Seções do painel">' + ''.join(f'<a href="#{s}">{NOMES_INDICE.get(_html.unescape(t), t)}</a>' for s, t in secoes) + '</nav>'), corpo_html
 
 
 def _delta_cartao(serie, melhor, casas, un):
@@ -10275,7 +10898,7 @@ def _secao_saude(sa, cliques=False):
     return cab + fig + ''.join(blocos)
 
 
-def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False, horas=()):
+def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False, horas=(), provas=None):
     """HTML completo do painel. amostras: de le_metricas(); benchs: [(datetime, {chave: mediana})]; pacotes: [(datetime, título)]."""
     marcas = [(d, f'aplicou: {t}') for d, t in pacotes]
     corpo = []
@@ -10292,7 +10915,7 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             if not s:
                 continue
             cartoes.append(f'<div class="cartao"><b>{_e(titulo)}</b><div class="n">{_num(s[-1][1], casas)}<i>{_e(un)}</i></div>'
-                           f'<div class="d">{_delta_cartao(s, melhor, casas, un)}</div></div>')
+                           f'<div class="d">{_delta_cartao(s, melhor, casas, un)}</div>{_faisca(s)}</div>')
             if len(s) >= 2:
                 figuras.append(f'<figure><figcaption>{_e(titulo)}<span>{_num(min(v for _, v in s), casas)} a {_num(max(v for _, v in s), casas)} {_e(un)}</span></figcaption>'
                                + svg_linha(s, titulo, un, casas, marcas, tendencia=len(s) >= 6 and len(s) < 12, zero=(chave == 'cpu'), suave=len(s) >= 12, destaque=True,
@@ -10317,8 +10940,7 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             corpo.append('<h2>O que aconteceu depois das propostas que você executou</h2><ul class="achados">' + ''.join(
                 f'<li><b>{_e(t)}</b> ({q:%d/%m}): {_e(rot)} ' + (f'<span class="{"bom" if ver == "melhorou" else "mau"}">{_num(a, c)} → {_num(b, c)}{(" " + _e(u)) if u else ""}</span>' if ver in ('melhorou', 'piorou')
                                                           else f'<span class="neutro">{_e(ver)}</span>') + '</li>' for t, q, rot, ver, a, b, c, u in resultados) + '</ul>')
-        if efeitos:
-            corpo.append('<h2>Efeito de cada pacote que você aplicou</h2>' + _tabela_efeito_html(efeitos))
+        corpo.append(_secao_provas(provas, efeitos))
         if figuras:
             corpo.append('<h2>Evolução</h2><div class="graficos">' + ''.join(figuras) + '</div>')
             leg = ('Linha forte: mediana móvel (tira o ruído); linha clara: cada medida; <span class="mau">pontos vermelhos</span>: valores muito fora do normal desta série; '
@@ -10326,6 +10948,8 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             if marcas:
                 leg += ' <span class="m">Linhas verdes pontilhadas</span>: quando você aplicou um pacote do Katharos (passe o mouse).'
             corpo.append(f'<p class="legenda">{leg}</p>')
+    if not amostras:
+        corpo.append(_secao_provas(provas))
     if horas:
         corpo.append(_secao_termica(horas, marcas))
         corpo.append(_secao_consumo(horas, marcas))
@@ -10348,7 +10972,7 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             '<title>Katharos · painel do PC</title><style>' + PAINEL_CSS + CSS_HORAS + '</style></head><body>'
             f'<h1>Painel do PC<small>{_e(pc)}</small></h1>'
             f'<p class="sub">{_e(periodo) if periodo else "Gráficos gerados pelo Katharos, neste computador. Nada sai do PC."}</p>'
-            + ''.join(corpo) +
+            + ''.join(_com_indice(''.join(corpo))) +
             f'<footer>Katharos {_e(versao)} · arquivo gerado aqui, sem internet e sem scripts: pode apagar quando quiser.</footer></body></html>')
 
 
@@ -10362,6 +10986,16 @@ def benchs_para_painel():
             continue
         out.append((quando, {c: v.get('mediana') for c, v in (d.get('medidas') or {}).items() if isinstance(v, dict)}))
     return sorted(out, key=lambda x: x[0])
+
+
+def provas_para_painel():
+    """O que a seção Prova de ganho do painel mostra. Se a leitura falhar, a seção só não aparece."""
+    try:
+        ens = le_ensaios()
+        return {'rodadas': rodadas(ens), 'abertos': ensaios_abertos(ens), 'itens': resumo_itens(le_provas())}
+    except Exception as e:
+        LOG.escreve(f'provas para o painel: {e!r}')
+        return None
 
 
 def pacotes_para_painel():
@@ -10390,7 +11024,8 @@ def ferramenta_painel(ctx, args):
     ev = coleta_evidencias(ctx)
     ev['amostras'] = am
     html_ = monta_painel(am, ev['benchs'], pacotes_para_painel(), analisa_tendencia(am), nome_do_pc(), VERSAO, gera_sugestoes(ev),
-                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude(), cliques=cliques_ativos(), horas=le_horas())
+                         tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude(), cliques=cliques_ativos(), horas=le_horas(),
+                         provas=provas_para_painel())
     destino = CASA / 'painel.html'
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(html_, encoding='utf-8')
@@ -11531,7 +12166,7 @@ AVISO_PONTOS = [
 ]
 
 # Comandos que só leem ou que protegem (desfazer nunca pode ficar atrás de um aviso): não pedem o aceite.
-SEM_ACEITE = {'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
+SEM_ACEITE = {'versoes', 'provas', 'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
               'benchmark', 'verificar', 'config', 'desfazer', 'socorro', 'retomar', 'restaurar', 'amostrar', 'manutencao'}
 
 
@@ -11566,6 +12201,322 @@ def ferramenta_aviso(ctx, args):
     t = ctx.t
     mostra_aviso(t)
     t.nota('  A licença e o aviso completo estão no arquivo LICENSE e na seção "Antes de usar" do README.', 2)
+    return 0
+# ███████████████████████████████████████████████████████████████████████████
+#
+#   VERSÕES · trocar o Katharos por um mais novo sem perder nada
+#
+#   Tudo o que o Katharos sabe do PC fica em ~/.katharos (fora da pasta do programa): medidas, raio-x, pacotes
+#   aplicados, backups do desfazer, provas de ganho, preferências. Trocar a pasta do programa não apaga nada disso.
+#   O que este arquivo garante, na primeira vez que uma versão nova roda:
+#     1. reconhece de qual versão os dados vieram (mesmo de versões que ainda não anotavam isso);
+#     2. guarda uma cópia dos arquivos pequenos de estado antes de tocar em qualquer coisa;
+#     3. converte o formato dos dados, um passo de cada vez (MIGRACOES), sem nunca jogar fora o que não conhece;
+#     4. atualiza as cópias do programa que ficam fora da pasta (atalhos, tarefa agendada, link do painel),
+#        que senão continuariam rodando a versão antiga;
+#     5. traz os relatórios da pasta antiga para a nova;
+#     6. diz à pessoa, em poucas linhas, o que continua valendo.
+#   Se os dados foram gravados por uma versão MAIS NOVA que esta, nada é convertido nem carimbado: só um aviso.
+#
+# ███████████████████████████████████████████████████████████████████████████
+
+VERSAO_DADOS = 2          # sobe quando o formato do que fica em ~/.katharos muda (e ganha um passo em MIGRACOES)
+COPIAS_DE_VERSAO = 5      # quantas cópias de segurança de troca de versão ficam guardadas
+ARQUIVOS_DE_ESTADO = ('estado.json', 'config.json', 'relatorio.json', 'ensaios.json')
+MIGRACOES = []            # [(número, descrição, função(estado, casa))], em ordem
+
+
+def migracao(numero, descricao):
+    """Registra um passo de conversão dos dados. Cada passo recebe o estado (dicionário, para alterar no lugar) e a
+    pasta dos dados; precisa poder rodar duas vezes sem estragar nada e nunca apagar chave que não conhece."""
+    def reg(f):
+        MIGRACOES.append((numero, descricao, f))
+        MIGRACOES.sort(key=lambda m: m[0])
+        return f
+    return reg
+
+
+@migracao(1, 'carimbo de versão nos dados')
+def _m_carimbo(e, casa):
+    # versões até a 1.4.1 não anotavam a própria versão; o histórico começa com o que dá para saber
+    e.setdefault('versoes', [])
+
+
+@migracao(2, 'os perfis saíram: o uso do comando "perfil" sai da lista de usados')
+def _m_sem_perfil(e, casa):
+    usado = e.get('usado')
+    if isinstance(usado, dict):
+        usado.pop('perfil', None)
+    cfg = casa / 'config.json'
+    c = le_json(cfg, {})
+    if isinstance(c, dict) and c.get('explicacao') not in (None, '', 'curta', 'completa'):
+        c.pop('explicacao')   # valor que a versão nova não entende volta para o padrão
+        grava_json(cfg, c)
+
+
+def _v(txt):
+    """'2.0.0' → (2, 0, 0), para comparar versões. O que não for número vira 0."""
+    return tuple(int(x) if x.isdigit() else 0 for x in re.findall(r'\d+', str(txt or '')))[:3] or (0,)
+
+
+def versao_anterior(e, casa=None):
+    """A versão que gravou os dados que estão aqui, ou None se é a primeira vez do Katharos neste PC.
+    Versões antigas não carimbavam o estado: aí vale a versão anotada no relatório único, e, sem ele, 'anterior'."""
+    if e.get('versao_programa'):
+        return str(e['versao_programa'])
+    if not e:
+        return None
+    try:
+        r = json.loads((Path(casa or CASA) / 'relatorio.json').read_text(encoding='utf-8-sig'))
+        if isinstance(r, dict) and r.get('katharos'):
+            return str(r['katharos'])
+    except (OSError, ValueError):
+        pass
+    return 'anterior'
+
+
+def guarda_copia_de_versao(de, casa=None):
+    """Antes de converter: copia os arquivos pequenos de estado para ~/.katharos/versoes/<versão>_<data>. Devolve a pasta."""
+    casa = Path(casa or CASA)
+    destino = casa / 'versoes' / f'{re.sub(r"[^0-9A-Za-z.]", "", str(de)) or "anterior"}_{datetime.now():%Y%m%d-%H%M%S}'
+    try:
+        destino.mkdir(parents=True, exist_ok=True)
+        for nome in ARQUIVOS_DE_ESTADO:
+            if (casa / nome).is_file():
+                shutil.copy2(casa / nome, destino / nome)
+        antigas = sorted(p for p in (casa / 'versoes').iterdir() if p.is_dir())
+        for p in antigas[:-COPIAS_DE_VERSAO]:
+            shutil.rmtree(p, ignore_errors=True)
+    except OSError as ex:
+        LOG.escreve(f'cópia de versão não gravou: {ex!r}')
+        return None
+    return destino
+
+
+def o_que_ficou(e=None, casa=None):
+    """O que a versão anterior deixou e continua valendo: [(rótulo, texto)]. Só conta; não abre nada pesado."""
+    casa = Path(casa or CASA)
+    e = estado() if e is None else e
+    out = []
+    pacs = [n for n, r in (e.get('pacotes') or {}).items() if isinstance(r, dict) and not r.get('revertido')]
+    if pacs:
+        out.append(('aplicado', pl(len(pacs), 'pacote', 'pacotes') + ' (o "desfazer" continua valendo): ' + ', '.join(sorted(pacs)[:8]) + ('…' if len(pacs) > 8 else '')))
+
+    def linhas(nome):
+        try:
+            with open(casa / nome, 'rb') as f:
+                return sum(1 for _ in f)
+        except OSError:
+            return 0
+    def arquivos(sub, padrao='*'):
+        try:
+            return sum(1 for _ in (casa / sub).glob(padrao))
+        except OSError:
+            return 0
+    n = linhas('metricas.jsonl')
+    if n:
+        out.append(('segundo plano', pl(n, 'medida', 'medidas') + ' para os gráficos do painel'))
+    n = arquivos('medidas', '*.json')
+    if n:
+        out.append(('medidas', pl(n, 'medida completa', 'medidas completas') + ' (antes e depois)'))
+    n = arquivos('bench', '*.json')
+    if n:
+        out.append(('benchmark', pl(n, 'rodada', 'rodadas')))
+    n = linhas('provas.jsonl')
+    if n:
+        out.append(('provas de ganho', pl(n, 'item medido', 'itens medidos')))
+    try:
+        rx = ((json.loads((casa / 'relatorio.json').read_text(encoding='utf-8-sig')).get('secoes') or {}).get('raiox') or {})
+        if rx.get('dados', {}).get('nota') is not None:
+            out.append(('último raio-x', f'nota {rx["dados"]["nota"]}/100' + (f', {ha_quanto_iso(rx.get("quando"))}' if ha_quanto_iso(rx.get('quando')) else '')))
+    except (OSError, ValueError, AttributeError):
+        pass
+    if e.get('manut_freq'):
+        out.append(('manutenção agendada', str(e['manut_freq'])))
+    if e.get('aviso_aceito'):
+        out.append(('aviso de uso', 'já aceito'))
+    return out
+
+
+def _iguais(a, b):
+    try:
+        import filecmp
+        return filecmp.cmp(str(a), str(b), shallow=False)
+    except OSError:
+        return False
+
+
+def atualiza_copias(mudou_versao=True):
+    """As cópias do programa que vivem fora da pasta baixada: a dos atalhos (~/.katharos/app), a da tarefa agendada
+    (ProgramData, só administrador grava) e o link katharos:// do painel. Sem isto, os atalhos e a manutenção
+    continuariam rodando a versão antiga. Devolve [(o que, 'ok' | 'pendente', frase)]. Só age rodando da pasta "programa"."""
+    eu = Path(__file__).resolve()
+    out = []
+    if eu.parent.name.lower() != 'programa':
+        return out
+    app = CASA / 'app' / 'katharos.py'
+    try:
+        if app.is_file() and not _iguais(eu, app):
+            instala_app()
+            out.append(('atalhos', 'ok', 'os atalhos da área de trabalho passaram a abrir esta versão'))
+    except Exception as ex:
+        LOG.escreve(f'cópia dos atalhos não atualizou: {ex!r}')
+    try:
+        tarefa = pasta_da_tarefa() / 'katharos.py'
+        if tarefa.is_file() and tarefa.resolve() != eu and not _iguais(eu, tarefa):
+            try:
+                shutil.copy2(eu, tarefa)
+                out.append(('manutenção agendada', 'ok', 'a manutenção em segundo plano passou a usar esta versão'))
+            except OSError:
+                if mudou_versao:
+                    out.append(('manutenção agendada', 'pendente', 'a manutenção em segundo plano ainda roda a versão anterior: abra o Katharos '
+                                                                    'como administrador uma vez (ou rode "agendar") para ela passar a usar esta'))
+    except Exception as ex:
+        LOG.escreve(f'cópia da tarefa não atualizou: {ex!r}')
+    try:
+        if WINDOWS and cliques_ativos():
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, URI_CHAVE + r'\shell\open\command') as k:
+                atual = str(winreg.QueryValueEx(k, '')[0])
+            nova = linha_de_comando_clique()
+            if atual != nova:
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, URI_CHAVE + r'\shell\open\command') as k:
+                    winreg.SetValueEx(k, '', 0, winreg.REG_SZ, nova)
+                out.append(('botões do painel', 'ok', 'os botões Corrigir do painel passaram a abrir esta versão'))
+    except Exception as ex:
+        LOG.escreve(f'link do painel não atualizou: {ex!r}')
+    return out
+
+
+def traz_relatorios(e, limite=60):
+    """Se o programa agora roda de outra pasta, copia os relatórios da pasta antiga para a nova (não apaga os antigos).
+    Devolve quantos copiou."""
+    eu = Path(__file__).resolve()
+    antiga = e.get('pasta_katharos')
+    if eu.parent.name.lower() != 'programa' or not antiga:
+        return 0
+    de, para = Path(antiga) / 'relatorios', eu.parent.parent / 'relatorios'
+    try:
+        if de.resolve() == para.resolve() or not de.is_dir():
+            return 0
+        arqs = sorted((a for a in de.glob('*.md') if a.name != 'ultimo.md' and a.stat().st_size < 4 * 1048576), key=lambda a: a.name)[-limite:]
+        if not arqs:
+            return 0
+        para.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for a in arqs:
+            if not (para / a.name).exists():
+                shutil.copy2(a, para / a.name)
+                n += 1
+        return n
+    except OSError as ex:
+        LOG.escreve(f'relatórios antigos não vieram: {ex!r}')
+        return 0
+
+
+def confere_versao(t=None, silencioso=False):
+    """Roda a cada abertura. Na primeira vez de uma versão nova: guarda cópia, converte os dados, atualiza as cópias
+    do programa e conta o que continua valendo. Devolve um resumo (dicionário) do que fez, ou None se não havia nada a fazer."""
+    e = estado()
+    de = versao_anterior(e)
+    dados = e.get('versao_dados')
+    dados = int(dados) if isinstance(dados, int) else (0 if e else VERSAO_DADOS)
+    if de is not None and de != 'anterior' and _v(de) > _v(VERSAO) or dados > VERSAO_DADOS:
+        # os dados são de uma versão mais nova que este programa (uma cópia antiga rodando): não converte, não carimba
+        if t and not silencioso and e.get('aviso_versao_nova') != VERSAO:
+            t.aviso(f'Os dados deste PC foram gravados pelo Katharos {de or "mais novo"}, e este é o {VERSAO}. Funciona, mas o que a versão '
+                    'nova guardou a mais fica de fora. Use a pasta da versão mais nova.')
+            marca_estado('aviso_versao_nova', VERSAO)
+        return {'antiga': True, 'de': de}
+    if de == VERSAO and dados == VERSAO_DADOS:
+        try:   # mesma versão: só mantém em dia as cópias de fora, em silêncio (ex.: agora há administrador para a da tarefa)
+            atualiza_copias(mudou_versao=False)
+        except Exception as ex:
+            LOG.escreve(f'cópias não conferidas: {ex!r}')
+        return None
+    resumo = {'de': de, 'para': VERSAO, 'passos': [], 'copia': None, 'copias': [], 'relatorios': 0, 'erro': ''}
+    if de is not None:
+        resumo['copia'] = guarda_copia_de_versao(de)
+    for numero, descricao, f in MIGRACOES:
+        if numero <= dados:
+            continue
+        try:
+            f(e, CASA)
+            resumo['passos'].append(descricao)
+            dados = numero
+        except Exception as ex:   # um passo que falha para a conversão ali: os dados ficam como estavam, com a cópia guardada
+            LOG.escreve(f'migração {numero} falhou: {ex!r}')
+            resumo['erro'] = f'{descricao}: {ex}'
+            break
+    if de is not None:
+        resumo['relatorios'] = traz_relatorios(e)
+    e['versao_dados'] = dados
+    if not resumo['erro']:
+        e['versao_programa'] = VERSAO
+        hist = e.setdefault('versoes', [])
+        if not hist and de not in (None, VERSAO):
+            hist.append({'versao': de, 'desde': None})
+        hist.append({'versao': VERSAO, 'desde': agora_iso(), 'de': de})
+        del hist[:-30]
+    salva_estado(e)
+    if de is not None:
+        try:
+            resumo['copias'] = atualiza_copias()
+        except Exception as ex:
+            LOG.escreve(f'cópias não atualizadas: {ex!r}')
+    LOG.escreve(f'versão: {de} -> {VERSAO}, dados {dados}, passos {resumo["passos"]}, erro {resumo["erro"]!r}')
+    if t and not silencioso and de is not None and de != VERSAO:
+        mostra_troca_de_versao(t, resumo, e)
+    return resumo
+
+
+def mostra_troca_de_versao(t, resumo, e):
+    de = resumo['de']
+    t.titulo(f'Katharos atualizado: {"versão anterior" if de == "anterior" else de} → {VERSAO}')
+    ficou = o_que_ficou(e)
+    if ficou:
+        t.paragrafo('Tudo o que a versão anterior guardou neste PC continua valendo:', 2, 'sub')
+        t.chaves(ficou)
+    else:
+        t.paragrafo('Suas preferências continuam valendo.', 2, 'sub')
+    for _, estado_, frase in resumo['copias']:
+        t.item('✓' if estado_ == 'ok' else '!', 'verde' if estado_ == 'ok' else 'amarelo', frase[0].upper() + frase[1:] + '.')
+    if resumo['relatorios']:
+        t.item('✓', 'verde', f'{pl(resumo["relatorios"], "relatório antigo veio", "relatórios antigos vieram")} para a pasta "relatorios" desta versão.')
+    if resumo['erro']:
+        t.aviso(f'Um passo da conversão dos dados falhou ({corta(resumo["erro"], 90)}). Nada foi perdido: os dados ficaram como estavam'
+                + (f' e há uma cópia em {resumo["copia"]}.' if resumo['copia'] else '.'))
+    elif resumo['copia']:
+        t.nota(f'  Cópia do estado anterior guardada em {caminho_curto(str(resumo["copia"]))}.')
+    t.escreve()
+
+
+def ferramenta_versoes(ctx, args):
+    t = ctx.t
+    t.aba('as versões do Katharos que já rodaram neste PC e o que está guardado')
+    e = estado()
+    t.chaves([('esta versão', f'{VERSAO} ({DATA_VERSAO})'), ('formato dos dados', f'{e.get("versao_dados", VERSAO_DADOS)} (esta versão usa o {VERSAO_DADOS})'),
+              ('onde ficam os dados', caminho_curto(str(CASA)))])
+    hist = [h for h in (e.get('versoes') or []) if isinstance(h, dict)]
+    if hist:
+        t.titulo('histórico')
+        t.tabela(['versão', 'desde', 'veio de'], [[str(h.get('versao')), (str(h.get('desde'))[:16].replace('T', ' ') if h.get('desde') else 'antes do registro'),
+                                                   str(h.get('de') or '-')] for h in reversed(hist[-12:])], alinha='eee')
+    ficou = o_que_ficou(e)
+    if ficou:
+        t.titulo('o que está guardado')
+        t.chaves(ficou)
+    try:
+        copias = sorted(p.name for p in (CASA / 'versoes').iterdir() if p.is_dir())
+    except OSError:
+        copias = []
+    if copias:
+        t.titulo('cópias de segurança das trocas de versão')
+        for c in copias[-COPIAS_DE_VERSAO:]:
+            t.escreve('  ' + t.p(c, 'sub'))
+        t.nota(f'  Ficam em {caminho_curto(str(CASA / "versoes"))}: são os arquivos de estado como estavam antes de cada troca.')
+    t.paragrafo('Para atualizar: baixe a versão nova e abra o KATHAROS.bat dela. Pode ser em outra pasta; os dados, o desfazer, os gráficos '
+                'e as provas ficam em ' + caminho_curto(str(CASA)) + ' e são reconhecidos sozinhos.', 2, 'apagado')
     return 0
 # ──────────────────────────────────────────────────────────────────────────────
 # Buscar: acha um item ou um comando pelo que a pessoa digitou, sem precisar saber em que área ele mora.
@@ -11830,6 +12781,7 @@ GRUPOS = [
     ('medir', 'só olha, não muda nada', [
         ('medir', 'CPU, RAM, disco e temperatura agora', 'ferramenta_medir'),
         ('benchmark', 'velocidade de disco, CPU e RAM, antes e depois', 'ferramenta_benchmark'),
+        ('provas', 'o que cada item rendeu de verdade neste PC', 'ferramenta_provas'),
         ('memoria', 'quem usa a RAM e o que liberar', 'ferramenta_memoria'),
     ]),
     ('acompanhar', 'o PC ao longo do tempo, com o segundo plano', [
@@ -11899,6 +12851,7 @@ GRUPOS = [
         ('atalhos', 'pasta Katharos na área de trabalho, com ícone', 'ferramenta_atalhos'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
         ('buscar', 'acha um ajuste ou comando pelo nome', 'ferramenta_buscar'),
+        ('versoes', 'versões que já rodaram aqui e o que está guardado', 'ferramenta_versoes'),
         ('aviso', 'leia antes de usar: riscos e responsabilidade', 'ferramenta_aviso'),
         ('ajuda', 'os passos mais comuns, em poucas linhas', 'ferramenta_ajuda'),
     ]),
@@ -11938,7 +12891,7 @@ def grupos_da_tela(tela):
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -11976,7 +12929,7 @@ def roda_ferramenta(ctx, args, abre=True):
         if not cod and gasto > 5:
             e.setdefault('duracoes', {})[args.comando] = round(gasto)
         salva_estado(e)
-    rel_fim(ctx, args)
+    rel_fim(ctx, args, inicio)
     t.fim(('concluído em ' if not cod else 'terminou com pendências · ') + duracao(time.time() - inicio), 'ok' if not cod else 'aviso')
     return cod or 0
 
@@ -11990,9 +12943,10 @@ def monta_parser():
     comum.add_argument('--modo', choices=MODOS, help='seguro, equilibrado ou extremo (padrão: o da config)')
     comum.add_argument('--copiar', action='store_true', help='no fim, copia o relatório único para colar numa conversa com a IA')
     comum.add_argument('--salvar', metavar='PASTA', help='no fim, salva uma cópia do relatório único nesta pasta (ex.: o cofre)')
+    comum.add_argument('--abrir', action='store_true', help='no fim, abre a pasta com o relatório selecionado')
     comum.add_argument('--codigo', action='store_true', help='mostra o PowerShell de cada item escolhido e não aplica nada')
     depois = argparse.ArgumentParser(add_help=False)
-    for nome in ('--ascii', '--sem-cor', '--teste', '--sim', '--copiar', '--codigo'):
+    for nome in ('--ascii', '--sem-cor', '--teste', '--sim', '--copiar', '--codigo', '--abrir'):
         depois.add_argument(nome, action='store_true', default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     depois.add_argument('--modo', choices=MODOS, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     depois.add_argument('--salvar', metavar='PASTA', default=argparse.SUPPRESS, help=argparse.SUPPRESS)
@@ -12019,6 +12973,8 @@ def monta_parser():
     pn.add_argument('--ativar-cliques', action='store_true', help='liga os botões Corrigir/Abrir do painel (registra katharos:// só para você)')
     pn.add_argument('--desativar-cliques', action='store_true', help='remove o link katharos:// do registro')
     sub.add_parser('ajuda', parents=[depois], help='os passos mais comuns')
+    sub.add_parser('versoes', parents=[depois], help='as versões do Katharos que já rodaram neste PC e o que cada troca preservou')
+    sub.add_parser('provas', parents=[depois], help='o que cada item rendeu, medido neste PC: na hora e depois de reiniciar')
     sub.add_parser('aviso', parents=[depois], help='o aviso de uso: riscos e responsabilidade')
     rt = sub.add_parser('retomar', parents=[depois], help='termina o que ficou pela metade se o PC travou no meio de uma aplicação')
     rt.add_argument('--descartar', action='store_true', help='esquece a anotação do que ficou pela metade')
@@ -12347,6 +13303,10 @@ def main(argv=None):
         t.aviso(msg)
     AVISOS_INICIO.clear()
     globals()['AVISO_VIVO'] = t.aviso
+    try:   # versão nova rodando pela primeira vez: reconhece os dados da anterior, converte e atualiza as cópias
+        confere_versao(t, silencioso=bool(getattr(args, 'agendada', False)) or args.comando in ('amostrar', 'manutencao'))
+    except Exception as e:
+        LOG.escreve(f'conferência de versão falhou: {e!r}')
     precisa = (args.comando or 'menu') not in SEM_ACEITE and not args.teste and not getattr(args, 'codigo', False)
     if precisa and not aviso_aceito():
         if t.interativo:
