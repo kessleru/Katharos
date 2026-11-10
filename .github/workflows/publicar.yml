@@ -61,6 +61,24 @@ jobs:
           if ($p.ExitCode) { exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--foto', "$d\painel.png" -Wait -PassThru
           if ($p.ExitCode -or -not (Test-Path "$d\painel.png")) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
+      - name: antivírus do Windows (Defender) no executável e no programa
+        # O mesmo antivírus que vem em todo Windows: se ele marcar algo, a versão não sai. Sem Defender neste Windows do CI, só avisa.
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $mp = Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe'
+          if (-not (Test-Path $mp)) { Write-Host '::warning::Defender indisponível neste Windows do CI'; exit 0 }
+          $st = Get-MpComputerStatus -ErrorAction SilentlyContinue
+          if ($st) { Write-Host "Defender: motor $($st.AMEngineVersion), assinaturas $($st.AntivirusSignatureVersion) de $($st.AntivirusSignatureLastUpdated)" }
+          $ruim = $false
+          foreach ($f in 'Katharos.exe', 'programa\katharos.py', 'programa\katharos.ps1', 'KATHAROS.bat') {
+            $o = & $mp -Scan -ScanType 3 -File (Resolve-Path $f).Path -DisableRemediation 2>&1 | Out-String
+            $c = $LASTEXITCODE
+            Write-Host "$f -> código $c"; Write-Host $o.Trim()
+            if ($c -eq 2) { Write-Host "::error::o Defender marcou $f"; $ruim = $true }
+            elseif ($c -ne 0) { Write-Host "::warning::o Defender não conseguiu verificar $f (código $c)" }
+          }
+          if ($ruim) { exit 1 }
       - uses: actions/upload-artifact@v4
         with: { name: executavel, path: Katharos.exe }
       - uses: actions/upload-artifact@v4
@@ -87,6 +105,10 @@ jobs:
           mv "saida/pm/$NOME" saida/pm/PresentMon.exe
           curl -sSfL "https://raw.githubusercontent.com/GameTechDev/PresentMon/$PM_VERSAO/LICENSE.txt" -o saida/pm/PresentMon-LICENSE.txt
           echo "PresentMon $PM_VERSAO ($NOME):"; sha256sum saida/pm/*
+          # a impressão digital tem de ser a que o Katharos.exe confere antes de rodar (PRESENTMON_SHA256 em exe/Katharos.cs)
+          ESPERADO=$(grep -oP 'PRESENTMON_SHA256 = "\K[0-9a-f]{64}' exe/Katharos.cs)
+          ACHADO=$(sha256sum saida/pm/PresentMon.exe | cut -d' ' -f1)
+          if [ "$ESPERADO" != "$ACHADO" ]; then echo "::error::PresentMon baixado ($ACHADO) não é o esperado ($ESPERADO)"; exit 1; fi
       - name: versão, changelog e tag
         id: v
         run: |

@@ -2768,6 +2768,44 @@ GUID do Esquema de Energia: a1841308-3541-4fab-bc81-f71556f20b4a  (Economia de e
         self.assertIn('conferido às 10:15', k.estado_da_energia({'energia': {'estado': 'Na bateria: Equilibrado', 'conferida': '2026-11-10T10:15:00'}}))
 
 
+class TestAProvaDeInvasores(unittest.TestCase):
+    """Nada abre porta de rede (o firewall não tem o que barrar), nada roda um programa trocado, e o que roda como administrador lê só da
+    pasta protegida."""
+    CS = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+    PY = (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8')
+
+    def test_nenhuma_porta_aberta(self):
+        self.assertEqual(re.findall(r'TcpListener|HttpListener|UdpClient|new Socket\(|\.Bind\(|NamedPipeServerStream', self.CS), [])
+        self.assertEqual(re.findall(r'^\s*(?:import|from)\s+(?:socket|socketserver|http\.server|xmlrpc)\b', self.PY, re.M), [])
+        self.assertNotIn('New-NetFirewallRule', self.PY)
+        self.assertNotIn('netsh advfirewall', self.PY.lower())
+
+    def test_executavel_sem_rede(self):
+        # o Katharos.exe não fala com a internet (a conferência de versão e a atualização ficam no programa, com hash conferido)
+        self.assertEqual(re.findall(r'WebClient|HttpWebRequest|HttpClient|WebRequest\.Create', self.CS), [])
+
+    def test_powershell_pelo_caminho_completo(self):
+        self.assertNotIn('Inicia("powershell.exe"', self.CS)
+        self.assertIn('WindowsPowerShell\\v1.0\\powershell.exe', self.CS)
+
+    def test_presentmon_conferido_antes_de_rodar(self):
+        self.assertRegex(self.CS, r'PRESENTMON_SHA256 = "[0-9a-f]{64}"')
+        i = self.CS.index('public void Inicia(int pid)')
+        corpo = self.CS[i:i + 600]
+        self.assertLess(corpo.index('Confere(exe)'), corpo.index('Process.Start') if 'Process.Start' in corpo else len(corpo))
+        wf = (RAIZ / '.github' / 'workflows' / 'publicar.yml').read_text(encoding='utf-8')
+        self.assertIn('PRESENTMON_SHA256', wf)
+
+    def test_defender_no_ci(self):
+        wf = (RAIZ / '.github' / 'workflows' / 'publicar.yml').read_text(encoding='utf-8')
+        self.assertIn('MpCmdRun.exe', wf)
+        self.assertIn("if ($c -eq 2)", wf)
+
+    def test_desfazer_le_da_pasta_protegida(self):
+        # o desfazer roda como administrador e executa o que está guardado: o backup fica onde só administrador grava
+        self.assertIn("novo = pasta_da_tarefa() / 'backup'", self.PY)
+
+
 class TestFonte(unittest.TestCase):
     """A fonte está no repositório: o katharos.py publicado é exatamente a soma das partes, na ordem do nome."""
 

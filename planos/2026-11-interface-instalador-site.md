@@ -284,6 +284,11 @@ O que o motor faz na interface (liga com a fase 2):
   IA externo.
 
 ### Fase 2: o aplicativo com janelas (Katharos.App)
+**Design igual ao da landing page** (pedido de 10 nov, 20:10): as mesmas cores (escuro, osso, âmbar), as mesmas fontes, a gravura, as
+linhas divisórias horizontais e os "+" nos cantos dos containers, sem cara de app genérico. Os tokens do site viram os recursos do
+Avalonia (um lugar só para os dois). Bem feita: cada tela desenhada antes de codar, com crítica (skills de design do cofre) e foto no CI.
+- [ ] **2.0** Protótipo visual da casca e de 3 telas (Início, Otimizar, Ao vivo) no estilo do site, aprovado pelo dono antes das outras.
+
 Telas, na ordem do uso real (o raio-x primeiro, como na CLI):
 - [ ] **2.1** Casca: janela, navegação lateral, tema do site, ícone da marca, fontes, escala de DPI, teclado (tudo alcançável sem mouse).
 - [ ] **2.2** **Início**: nota do PC, o próximo passo recomendado (o mesmo da abertura da CLI), atalhos para raio-x e otimizar.
@@ -562,6 +567,13 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
   serviços antes e depois.
 - [x] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
   teste.
+- [ ] **S5** À prova de invasores e sem alarme do antivírus e do firewall (pedido de 10 nov, 20:09). Feito: nenhuma porta de rede aberta
+  (o firewall não tem o que barrar; teste), o Katharos.exe não fala com a internet, PowerShell sempre pelo caminho completo, PresentMon
+  com impressão digital (SHA-256) conferida antes de rodar e no download, Defender passando no exe e no programa a cada ensaio (versão
+  não sai se ele marcar), backup do desfazer e scripts de administrador só na pasta protegida. Falta: na fase 4, o motor que roda
+  como administrador sai de uma cópia em `%ProgramData%\Katharos` (só administrador grava) conferida por hash, nunca da pasta do
+  usuário; assinatura (5.3, 5.4); se algum antivírus marcar por engano, enviar para análise da Microsoft (o dono envia; o texto fica
+  pronto aqui) e conferir no VirusTotal antes da 4.0.0.
 - [ ] **S4** Sem falso positivo (pedido de 10 nov, 20:07): toda ação que muda o PC lê de volta e só diz "feito" quando o Windows mostra
   que ficou; se não ficou, diz o erro e o motivo provável ("não dá neste PC" é resposta válida). Já valem: pacotes (conferência depois
   de aplicar, `nao-ficou`), energia no notebook (prova ao ligar, leitura na hora e 15 s depois, erro no ícone mesmo com avisos
@@ -618,3 +630,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | site: vídeos do programa em uso, editados, e pesquisa de sites de produto excelentes (6.R, 6.V) | 3.1.2 | ramo v4 | pedido do usuário |
 | 10 nov 2026 | 2c.12 a 2c.15: notebook troca o plano de energia na tomada e na bateria, desligado até ligar (`segundo-plano` opção e, `config energia-automatica`); só troca o plano ativo (sem administrador); "manter desempenho 1 h" no ícone; desligar volta o plano de antes | 3.1.2 | ramo v4 | testes |
 | 10 nov 2026 | S4 começado: sem falso positivo na energia (prova ao ligar, leitura de volta na hora e 15 s depois) e na permissão de FPS | 3.1.2 | ramo v4 | testes 310 |
+| 10 nov 2026 | S5 começado: sem porta de rede, PowerShell pelo caminho completo, PresentMon conferido por SHA-256, Defender no CI; interface no design da landing (2.0) | 3.1.2 | ramo v4 | testes 316 |

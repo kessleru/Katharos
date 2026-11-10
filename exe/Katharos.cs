@@ -205,7 +205,7 @@ namespace KatharosApp
             {
                 if (ps1 != null)
                 {
-                    Inicia("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File " + K.Q(ps1) + (args.Count > 0 ? " " + K.Junta(args) : ""),
+                    Inicia(PowerShell(), "-NoProfile -ExecutionPolicy Bypass -File " + K.Q(ps1) + (args.Count > 0 ? " " + K.Junta(args) : ""),
                            Path.GetDirectoryName(Path.GetDirectoryName(ps1)));
                     return 0;
                 }
@@ -222,6 +222,12 @@ namespace KatharosApp
             MessageBox.Show("Não achei o Katharos. Extraia o Katharos.zip inteiro numa pasta e abra o Katharos.exe de dentro dela.",
                             "Katharos", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
+        }
+
+        // sempre o PowerShell do Windows, pelo caminho completo: um "powershell.exe" plantado na pasta do download nunca é o que roda
+        public static string PowerShell()
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
         }
 
         static void Inicia(string exe, string args, string pasta)
@@ -1176,9 +1182,31 @@ namespace KatharosApp
         readonly Queue<KeyValuePair<DateTime, double>> recentes = new Queue<KeyValuePair<DateTime, double>>();
         readonly Queue<double> janela = new Queue<double>();   // últimos 60 quadros, para achar travada
         double somaJanela; long frames; double somaMs; int travadas; DateTime inicio;
-        public string Estado = "";   // "" | "medindo" | "sem permissão" | "sem PresentMon" | "erro"
+        public string Estado = "";   // "" | "medindo" | "sem permissão" | "sem PresentMon" | "PresentMon alterado" | "erro"
         // por minuto
         long framesMin; double somaMsMin; double piorSegMin = double.MaxValue;
+
+        // A impressão digital do PresentMon que vem no zip (v2.6.0 da Intel). Antes de rodar, o Katharos confere: um PresentMon trocado
+        // (por um programa malicioso ou arquivo corrompido) não roda. O workflow confere o download contra este mesmo valor.
+        public const string PRESENTMON_SHA256 = "b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af";
+        static string conferido;   // "caminho|tamanho|data" do arquivo já conferido (não recalcula a cada jogo)
+
+        public static bool Confere(string exe)
+        {
+            try
+            {
+                var fi = new FileInfo(exe);
+                string chave = fi.FullName + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks;
+                if (chave == conferido) return true;
+                string h;
+                using (var f = File.OpenRead(exe)) using (var sha = System.Security.Cryptography.SHA256.Create())
+                    h = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant();
+                if (h != PRESENTMON_SHA256) { Log.Escreve("PresentMon com impressão digital diferente da esperada (" + h + "): não vou rodar"); return false; }
+                conferido = chave;
+                return true;
+            }
+            catch (Exception e) { Log.Escreve("PresentMon: não consegui conferir: " + e.Message); return false; }
+        }
 
         public static string Caminho()
         {
@@ -1193,6 +1221,7 @@ namespace KatharosApp
             Para();
             string exe = Caminho();
             if (exe == null) { Estado = "sem PresentMon"; return; }
+            if (!Confere(exe)) { Estado = "PresentMon alterado"; return; }
             lock (trava)
             {
                 Array.Clear(hist, 0, hist.Length); recentes.Clear(); janela.Clear(); somaJanela = 0; frames = 0; somaMs = 0; travadas = 0;
@@ -2063,7 +2092,7 @@ namespace KatharosApp
                     var fr = motor.Fps.Resumo();
                     string est = motor.Fps.Estado;
                     string subFps = fr != null ? "média " + K.Num(Convert.ToDouble(fr["fps_med"]), 0) + " · 1% low " + K.Num(Convert.ToDouble(fr["fps_1low"]), 0)
-                                  : est == "sem permissão" ? "ligue a medida de FPS no Katharos" : est == "sem PresentMon" ? "medida de FPS não instalada" : "medindo...";
+                                  : est == "sem permissão" ? "ligue a medida de FPS no Katharos" : est == "sem PresentMon" ? "medida de FPS não instalada" : est == "PresentMon alterado" ? "PresentMon alterado: baixe o Katharos de novo" : "medindo...";
                     Func<Amostra, double?> fFps = x => x.Fps;
                     y = Linha(g, pinta, y, pad, "fps", a.Fps.HasValue ? K.Num(a.Fps, 0) : "-", subFps, hist, fFps, 0, false);
                 }
