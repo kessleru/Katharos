@@ -31,7 +31,7 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -44,6 +44,8 @@ DESCR_CONFIG = {
     'abrir-relatorio': ('abrir o relatório', 'perguntar (padrão: uma tecla no fim do raio-x, da segurança e do turbo), sempre (abre a pasta sozinho) ou nunca'),
     'coleta-em-jogo': ('acompanhamento com jogo aberto', 'segura (padrão): continua lendo tudo, como o Gerenciador de Tarefas (sem abrir o processo do jogo); ou pausar: não lê nada enquanto houver jogo aberto'),
     'tempo-real': ('ritmo do segundo plano', 'de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10'),
+    'energia-automatica': ('notebook: plano de energia sozinho na tomada e na bateria', 'nao (padrão) ou sim: o segundo plano troca o plano de '
+                           'energia quando você liga ou tira o carregador (escolhe os planos ao ligar; desligar volta o plano de antes)'),
     'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),

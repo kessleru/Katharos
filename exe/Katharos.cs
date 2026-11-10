@@ -140,6 +140,8 @@ namespace KatharosApp
         public double AvisoCpu = Lim.G("calor_cpu"), AvisoGpu = Lim.G("calor_gpu");
         public bool Notificar = true;
         public bool Fps = true;
+        // notebook: plano de energia sozinho na tomada e na bateria (só se a pessoa ligou; os planos ela escolheu no Katharos)
+        public bool EnergiaAuto; public Guid? EnergiaTomada, EnergiaBateria; public string EnergiaTomadaNome, EnergiaBateriaNome;
         public List<string> NomesJogo = new List<string>();
 
         public static Config Le()
@@ -159,6 +161,12 @@ namespace KatharosApp
                 c.PausarEmJogo = Txt(d, "em_jogo") == "pausar";
                 c.Notificar = Txt(d, "notificar") != "nao";
                 c.Fps = Txt(d, "fps") != "nao";
+                c.EnergiaAuto = Txt(d, "energia_auto") == "True" || Txt(d, "energia_auto") == "true";
+                Guid g;
+                if (Guid.TryParse(Txt(d, "energia_tomada") ?? "", out g)) c.EnergiaTomada = g;
+                if (Guid.TryParse(Txt(d, "energia_bateria") ?? "", out g)) c.EnergiaBateria = g;
+                c.EnergiaTomadaNome = Txt(d, "energia_tomada_nome"); c.EnergiaBateriaNome = Txt(d, "energia_bateria_nome");
+                if (c.EnergiaTomada == null || c.EnergiaBateria == null) c.EnergiaAuto = false;
                 object n;
                 if (d.TryGetValue("nomes_de_jogo", out n) && n is object[])
                     foreach (var x in (object[])n) if (x != null) c.NomesJogo.Add(x.ToString().ToLowerInvariant());
@@ -384,6 +392,30 @@ namespace KatharosApp
                 ant[nomeC] = novo;
             }
             return res;
+        }
+    }
+
+    // ───────── plano de energia ativo (o mesmo que escolher o plano no Painel de Controle) ─────────
+    // Só troca qual plano está ativo; não muda nenhum valor dentro dos planos e não precisa de administrador.
+    static class Energia
+    {
+        [DllImport("powrprof.dll")] static extern uint PowerGetActiveScheme(IntPtr raiz, out IntPtr guid);
+        [DllImport("powrprof.dll")] static extern uint PowerSetActiveScheme(IntPtr raiz, ref Guid guid);
+        [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr h);
+        public static Guid? Ativo()
+        {
+            try
+            {
+                IntPtr p;
+                if (PowerGetActiveScheme(IntPtr.Zero, out p) != 0 || p == IntPtr.Zero) return null;
+                try { return (Guid)Marshal.PtrToStructure(p, typeof(Guid)); } finally { LocalFree(p); }
+            }
+            catch { return null; }
+        }
+        // devolve o código do Windows: 0 = feito; 2 = o plano não existe mais; outro = recusado (política, por exemplo)
+        public static uint Ativa(Guid g)
+        {
+            try { return PowerSetActiveScheme(IntPtr.Zero, ref g); } catch { return 0xFFFFFFFF; }
         }
     }
 
@@ -1423,6 +1455,11 @@ namespace KatharosApp
         public double PassoMedioMs, PassoMaiorMs; int nPassos;
         public double EuCpuPct, EuRamMb; TimeSpan euCpuAntes; DateTime euAntes = DateTime.MinValue, proxEu = DateTime.MinValue;
         bool avisouLento; DateTime proxPausa = DateTime.MinValue;
+        // energia: o último lado visto (tomada ou bateria) e se o "manter desempenho" estava valendo; o aviso vai para o ícone
+        string energiaLado; public string EnergiaAviso; public bool EnergiaAvisoErro;
+        // o que foi pedido e se o Windows ficou mesmo assim: nunca dizer "feito" sem ler de volta (sem falso positivo)
+        Guid? energiaAlvo; string energiaAlvoNome; DateTime energiaConfere = DateTime.MaxValue; string energiaParou;
+        public string EnergiaEstado = "", EnergiaErro; public DateTime? EnergiaConferidaEm;
         readonly JavaScriptSerializer json = new JavaScriptSerializer();
         public Leitor Leitor { get { return leitor; } }
         public event Action Atualizou;
@@ -1475,6 +1512,7 @@ namespace KatharosApp
             if (agora >= proxCfg) { proxCfg = agora.AddSeconds(30); Cfg = Config.Le(); }
             if (agora >= proxRotacao) { proxRotacao = agora.AddHours(6); Rotaciona("minutos.jsonl", 14); Rotaciona("sessoes.jsonl", 400); }
             if (agora >= proxPausa) { proxPausa = agora.AddSeconds(5); Pausado = LeituraPausada(); }
+            CuidaEnergia();   // vale mesmo com a leitura pausada: é a pessoa que pediu
             if (agora >= proxEu) { proxEu = agora.AddSeconds(10); MedeEu(agora); }
             if (Pausado) { if (Atualizou != null) Atualizou(); return; }
             // o PC dormiu ou hibernou: o que estava aberto fecha no momento em que parou, não conta o tempo dormindo
@@ -1503,6 +1541,84 @@ namespace KatharosApp
             GravaAgora(a);
             if (Atualizou != null) Atualizou();
         }
+
+        public static DateTime? EnergiaTravadaAte()
+        {
+            try
+            {
+                string arq = K.Arq("energia-travada-ate.txt");
+                DateTime ate;
+                if (File.Exists(arq) && DateTime.TryParse(File.ReadAllText(arq).Trim(), K.INV, DateTimeStyles.AssumeLocal, out ate) && ate > DateTime.Now) return ate;
+            }
+            catch { }
+            return null;
+        }
+
+        // Notebook com a troca ligada: quando o carregador entra ou sai (e ao abrir), ativa o plano daquele lado. Só na mudança de lado:
+        // se a pessoa trocar o plano à mão depois, o Katharos respeita até a próxima vez que o carregador entrar ou sair.
+        bool travadaCache; DateTime proxTrava = DateTime.MinValue;
+        void CuidaEnergia()
+        {
+            if (!Cfg.EnergiaAuto) { energiaLado = null; energiaParou = null; EnergiaEstado = ""; EnergiaErro = null; return; }
+            string cfgChave = Cfg.EnergiaTomada + "|" + Cfg.EnergiaBateria;
+            if (energiaParou != null && energiaParou != cfgChave) energiaParou = null;   // escolheu planos novos: tenta de novo
+            if (energiaParou != null) return;   // o plano escolhido não existe mais: espera a pessoa escolher de novo
+            ConfereEnergia();
+            PowerStatus ps;
+            try { ps = SystemInformation.PowerStatus; } catch { return; }
+            if (ps.BatteryChargeStatus == BatteryChargeStatus.NoSystemBattery || ps.PowerLineStatus == PowerLineStatus.Unknown) return;
+            if (DateTime.Now >= proxTrava) { proxTrava = DateTime.Now.AddSeconds(5); travadaCache = EnergiaTravadaAte().HasValue; }
+            bool naBateria = ps.PowerLineStatus == PowerLineStatus.Offline;
+            bool desempenho = !naBateria || travadaCache;
+            string lado = naBateria ? (travadaCache ? "bateria-mantida" : "bateria") : "tomada";
+            Guid alvo = (desempenho ? Cfg.EnergiaTomada : Cfg.EnergiaBateria).Value;
+            string chave = lado + alvo;   // trocar os planos escolhidos também conta como mudança
+            if (chave == energiaLado) return;
+            energiaLado = chave;
+            string nome = (desempenho ? Cfg.EnergiaTomadaNome : Cfg.EnergiaBateriaNome) ?? "plano escolhido";
+            string onde = lado == "tomada" ? "Na tomada" : lado == "bateria" ? "Na bateria" : "Na bateria, mantendo o desempenho";
+            var atual = Energia.Ativo();
+            if (atual.HasValue && atual.Value == alvo) { EnergiaEstado = onde + ": " + nome; EnergiaErro = null; EnergiaConferidaEm = DateTime.Now; return; }
+            uint cod = Energia.Ativa(alvo);
+            if (cod == 2)
+            {   // apagaram o plano: para de tentar e diz o que fazer
+                energiaParou = cfgChave;
+                Erro("o plano \"" + nome + "\" não existe mais neste PC. Escolha os planos de novo no Katharos (segundo plano, opção e).");
+                return;
+            }
+            // lê de volta na hora e de novo daqui a 15 s (programa do fabricante às vezes troca de volta logo depois)
+            energiaAlvo = alvo; energiaAlvoNome = onde + ": " + nome; energiaConfere = DateTime.Now.AddSeconds(15);
+            var depois = Energia.Ativo();
+            if (cod != 0 || !depois.HasValue || depois.Value != alvo)
+            {
+                Erro("não consegui pôr o plano \"" + nome + "\" (" + onde.ToLowerInvariant() + "): o Windows " +
+                     (cod != 0 ? "recusou (código " + cod + ", talvez política da empresa)" : "continua no plano de antes") + ".");
+                energiaConfere = DateTime.MaxValue;
+                return;
+            }
+            EnergiaEstado = energiaAlvoNome; EnergiaErro = null; EnergiaConferidaEm = DateTime.Now;
+            EnergiaAviso = energiaAlvoNome; EnergiaAvisoErro = false;
+            Log.Escreve("energia: " + energiaAlvoNome + " (conferido)");
+        }
+
+        void Erro(string texto)
+        {
+            EnergiaErro = texto; EnergiaEstado = "erro";
+            EnergiaAviso = "Energia: " + texto; EnergiaAvisoErro = true;
+            Log.Escreve("energia: " + texto);
+        }
+
+        // a segunda leitura, 15 s depois: se algo trocou o plano de volta, avisa com o nome do culpado provável, sem insistir
+        void ConfereEnergia()
+        {
+            if (DateTime.Now < energiaConfere || !energiaAlvo.HasValue) return;
+            energiaConfere = DateTime.MaxValue;
+            var agora = Energia.Ativo();
+            if (agora.HasValue && agora.Value == energiaAlvo.Value) { EnergiaConferidaEm = DateTime.Now; return; }
+            Erro("pus \"" + energiaAlvoNome + "\", mas algo trocou o plano de volta em seguida (costuma ser o programa de energia do " +
+                 "fabricante do notebook). Desligue a troca de planos dele ou a do Katharos, para as duas não brigarem.");
+        }
+        public void ReleEnergia() { proxTrava = DateTime.MinValue; }
 
         // CPU e RAM do próprio Katharos.exe (o processo dele mesmo, nunca o de outro)
         void MedeEu(DateTime agora)
@@ -1634,6 +1750,12 @@ namespace KatharosApp
             p["leitura_ms"] = Math.Round(PassoMedioMs, 1); p["leitura_maior_ms"] = Math.Round(PassoMaiorMs, 1);
             p["custo"] = leitor.Custo.Json();
             d["segundo_plano"] = p;
+            if (Cfg.EnergiaAuto)
+            {
+                var en = new Dictionary<string, object>();
+                en["estado"] = EnergiaEstado; en["erro"] = EnergiaErro; en["conferida"] = EnergiaConferidaEm.HasValue ? K.Iso(EnergiaConferidaEm.Value) : null;
+                d["energia"] = en;
+            }
             try { K.GravaAtomico(K.Arq("agora.json"), json.Serialize(d)); } catch { }
         }
     }
@@ -2133,7 +2255,7 @@ namespace KatharosApp
         readonly PainelAoVivo painel;
         readonly Icon marca, marcaPequena;
         readonly Control ui = new Control();
-        ToolStripMenuItem iStatus, iPausa, iInicio, iAvisos, iRitmo;
+        ToolStripMenuItem iStatus, iPausa, iInicio, iAvisos, iRitmo, iEnergia;
         IntPtr iconeAtual = IntPtr.Zero; string estadoIcone = "";
         readonly Dictionary<string, DateTime> avisado = new Dictionary<string, DateTime>();
         DateTime proxPropostas = DateTime.Now.AddMinutes(2);
@@ -2213,6 +2335,7 @@ namespace KatharosApp
             iRitmo.DropDown.Renderer = new Desenho();
             menu.Items.Add(iRitmo);
             iAvisos = Item("Avisar quando algo ficar no limite", delegate { MudaConfig("avisos", motor.Cfg.Notificar ? "nao" : "sim"); });
+            iEnergia = Item("Manter desempenho por 1 hora na bateria", delegate { AlternaEnergia(); });
             iInicio = Item("Iniciar com o Windows", delegate { AlternaInicio(); });
             menu.Items.Add(new ToolStripSeparator());
             Item("Sair do segundo plano", delegate { Sai(); });
@@ -2223,6 +2346,11 @@ namespace KatharosApp
         {
             iPausa.Text = Motor.LeituraPausada() ? "Retomar agora" : "Pausar por 1 hora";
             iInicio.Checked = IniciaComWindows();
+            // só em notebook com a troca de energia ligada
+            bool bateria = false;
+            try { bateria = SystemInformation.PowerStatus.BatteryChargeStatus != BatteryChargeStatus.NoSystemBattery; } catch { }
+            iEnergia.Visible = motor.Cfg.EnergiaAuto && bateria;
+            iEnergia.Text = Motor.EnergiaTravadaAte().HasValue ? "Voltar à economia na bateria agora" : "Manter desempenho por 1 hora na bateria";
             iAvisos.Checked = motor.Cfg.Notificar;
             string atual = (motor.Cfg.IntervaloMs / 1000).ToString(K.INV);
             iRitmo.Text = "Ler a cada " + atual + " s";
@@ -2270,6 +2398,18 @@ namespace KatharosApp
             catch (Exception e) { Log.Escreve("início: " + e.Message); }
         }
 
+        void AlternaEnergia()
+        {
+            string arq = K.Arq("energia-travada-ate.txt");
+            try
+            {
+                if (Motor.EnergiaTravadaAte().HasValue) File.Delete(arq);
+                else File.WriteAllText(arq, DateTime.Now.AddHours(1).ToString("yyyy-MM-ddTHH:mm:ss", K.INV), Encoding.ASCII);
+            }
+            catch { }
+            motor.ReleEnergia();
+        }
+
         void AlternaPausa()
         {
             string arq = K.Arq("leitura-pausada-ate.txt");
@@ -2315,6 +2455,10 @@ namespace KatharosApp
             if (iStatus != null) iStatus.Text = a == null ? (motor.Pausado ? "pausado" : "lendo...") :
                 ("CPU " + K.Num(a.Cpu, 0) + " %   GPU " + K.Num(a.Gpu, 0) + " %   RAM " + K.Num(a.RamPct, 0) + " %" + (a.TempCpu.HasValue ? "   " + K.Num(a.TempCpu, 0) + " °C" : ""));
             painel.Atualiza();
+            // troca de energia (notebook): aviso discreto, uma vez por troca
+            string ea = motor.EnergiaAviso;
+            // erro sempre aparece (mesmo com avisos desligados): a pessoa precisa saber que não ficou como pediu
+            if (ea != null) { motor.EnergiaAviso = null; if (motor.Cfg.Notificar || motor.EnergiaAvisoErro) ni.ShowBalloonTip(motor.EnergiaAvisoErro ? 10000 : 4000, "Katharos", ea, motor.EnergiaAvisoErro ? ToolTipIcon.Warning : ToolTipIcon.None); }
             // avisos que valem uma notificação: calor sempre; o resto só fora de jogo; cada um no máximo a cada 30 min
             if (motor.Cfg.Notificar)
                 foreach (var c in concl)

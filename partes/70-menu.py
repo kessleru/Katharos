@@ -30,6 +30,8 @@ def ferramenta_config(ctx, args):
         if chave == 'grandes-mb' and valor and not valor.isdigit():
             t.erro('use um número de MB.')
             return 1
+        if chave == 'energia-automatica' and valor:   # escolhe os planos e guarda o de antes: não é só gravar a preferência
+            return liga_energia_automatica(ctx, args) if valor == 'sim' else desliga_energia_automatica(ctx)
         salva_config(chave, valor)
         if exe_instalado().is_file():
             escreve_config_sp()
@@ -51,6 +53,9 @@ def ferramenta_config(ctx, args):
         if not r.isdigit() or not 0 < int(r) <= len(DESCR_CONFIG):
             return 0
         k = list(DESCR_CONFIG)[int(r) - 1]
+        if k == 'energia-automatica':
+            (desliga_energia_automatica(ctx) if config(k, 'nao') == 'sim' else liga_energia_automatica(ctx, args))
+            continue
         if k in validos:
             ops = validos[k]
             atual = config(k)

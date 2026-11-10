@@ -2706,6 +2706,68 @@ class TestSegundoPlanoLeve(unittest.TestCase):
             self.assertIn("'--teste-custo'", (RAIZ / '.github' / 'workflows' / wf).read_text(encoding='utf-8'), wf)
 
 
+class TestEnergiaNoNotebook(_CasaTemporaria):
+    """Notebook: plano de energia sozinho na tomada e na bateria. Desligado até a pessoa ligar; só troca qual plano está ativo."""
+    LISTA_PT = """
+Esquemas de Energia Existentes (* Ativo)
+-----------------------------------
+GUID do Esquema de Energia: 381b4222-f694-41f0-9685-ff5bb260df2e  (Equilibrado)
+GUID do Esquema de Energia: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Alto desempenho) *
+GUID do Esquema de Energia: a1841308-3541-4fab-bc81-f71556f20b4a  (Economia de energia)
+"""
+    LISTA_EN = """Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *
+"""
+    CS = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+
+    def test_desligado_por_padrao(self):
+        self.assertEqual(k.config('energia-automatica'), 'nao')
+        self.assertIs(k.config_segundo_plano()['energia_auto'], False)
+
+    def test_le_os_planos_em_qualquer_idioma(self):
+        p = k.planos_de_energia(self.LISTA_PT)
+        self.assertEqual([x['nome'] for x in p], ['Equilibrado', 'Alto desempenho', 'Economia de energia'])
+        self.assertEqual([x['ativo'] for x in p], [False, True, False])
+        self.assertEqual(k.planos_de_energia(self.LISTA_EN), [{'guid': k.PLANO_EQUILIBRADO, 'nome': 'Balanced', 'ativo': True}])
+
+    def test_sugestao(self):
+        tomada, bateria = k.sugestao_de_energia(k.planos_de_energia(self.LISTA_PT))
+        self.assertEqual((tomada['nome'], bateria['nome']), ('Alto desempenho', 'Equilibrado'))
+        so_dois = k.planos_de_energia(self.LISTA_PT.replace('(Alto desempenho) *', '(Alto desempenho)').replace('(Equilibrado)', '(Equilibrado) *'))
+        tomada, bateria = k.sugestao_de_energia(so_dois)
+        self.assertEqual((tomada['nome'], bateria['nome']), ('Equilibrado', 'Economia de energia'))
+        # notebook moderno com um plano só: o Windows já separa o modo por tomada e bateria; não há o que trocar
+        self.assertIsNone(k.sugestao_de_energia(k.planos_de_energia(self.LISTA_EN)))
+
+    def test_ligado_vai_para_o_executavel(self):
+        for c, v in (('energia-automatica', 'sim'), ('energia-tomada', '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'), ('energia-bateria', k.PLANO_EQUILIBRADO)):
+            k.salva_config(c, v)
+        d = k.config_segundo_plano()
+        self.assertIs(d['energia_auto'], True)
+        self.assertEqual(d['energia_bateria'], k.PLANO_EQUILIBRADO)
+
+    def test_executavel_so_troca_o_plano_ativo(self):
+        # PowerSetActiveScheme é a única chamada que muda energia; nada de powercfg, de valores dentro do plano ou de administrador
+        self.assertEqual(self.CS.count('PowerSetActiveScheme('), 2)   # a declaração e o uso
+        self.assertNotIn('powercfg', self.CS.lower())
+        self.assertNotIn('PowerWriteACValueIndex', self.CS)
+        self.assertIn('if (c.EnergiaTomada == null || c.EnergiaBateria == null) c.EnergiaAuto = false;', self.CS)
+        self.assertIn('if (!Cfg.EnergiaAuto) { energiaLado = null;', self.CS)
+
+    def test_sem_falso_positivo(self):
+        # o executável só diz "feito" depois de ler o plano de volta, na hora e 15 s depois; senão avisa o erro (mesmo com avisos desligados)
+        self.assertIn('if (cod != 0 || !depois.HasValue || depois.Value != alvo)', self.CS)
+        self.assertIn('energiaConfere = DateTime.Now.AddSeconds(15)', self.CS)
+        self.assertIn('motor.Cfg.Notificar || motor.EnergiaAvisoErro', self.CS)
+        # o Python só liga depois de provar que a troca pega neste PC; a situação mostra o que foi conferido, não o que foi pedido
+        src = (RAIZ / 'partes' / '63-segundoplano.py').read_text(encoding='utf-8')
+        self.assertIn("v = confere_troca_de_energia(ctx, tomada['guid'], bat['guid'])", src)
+        self.assertLess(src.index("confere_troca_de_energia(ctx, tomada"), src.index("salva_config('energia-automatica', 'sim')"))
+        k.salva_config('energia-automatica', 'sim')
+        self.assertTrue(k.estado_da_energia({'energia': {'erro': 'não pegou'}}).startswith('ERRO'))
+        self.assertIn('ainda não conferido', k.estado_da_energia({}))
+        self.assertIn('conferido às 10:15', k.estado_da_energia({'energia': {'estado': 'Na bateria: Equilibrado', 'conferida': '2026-11-10T10:15:00'}}))
+
+
 class TestFonte(unittest.TestCase):
     """A fonte está no repositório: o katharos.py publicado é exatamente a soma das partes, na ordem do nome."""
 

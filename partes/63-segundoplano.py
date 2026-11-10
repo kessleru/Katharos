@@ -118,6 +118,9 @@ def config_segundo_plano():
     return {'versao': VERSAO, 'ps1': str(ps1), 'py': str(py if not py.name.lower().startswith('pythonw') else py.with_name('python.exe')),
             'pyw': str(pyw) if pyw.exists() else '', 'kpy': str(CASA / 'katharos.py'), 'intervalo_s': intervalo,
             'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'), 'fps': config('fps', 'sim'),
+            'energia_auto': config('energia-automatica', 'nao') == 'sim', 'energia_tomada': config('energia-tomada', ''),
+            'energia_bateria': config('energia-bateria', ''), 'energia_tomada_nome': config('energia-tomada-nome', ''),
+            'energia_bateria_nome': config('energia-bateria-nome', ''),
             'aviso_cpu': REGRAS_MOTOR['calor_cpu'], 'aviso_gpu': REGRAS_MOTOR['calor_gpu'],
             'nomes_de_jogo': nomes_de_jogo()}
 
@@ -463,6 +466,7 @@ def ferramenta_segundo_plano(ctx, args):
               ('ritmo', f'a cada {config("tempo-real", "1")} s'),
               ('com jogo aberto', 'continua lendo' if config('coleta-em-jogo', 'segura') != 'pausar' else 'pausa'),
               ('avisos', config('avisos', 'sim')),
+              *([('notebook: energia sozinha', estado_da_energia(a))] if a and a.get('bateria') is not None else []),
               ('FPS nos jogos', {'sim': 'ligado' + ('' if estado().get('fps_grupo') == 'sim' else ' (falta liberar: f)'), 'nao': 'desligado'}.get(config('fps', 'sim'), '-')),
               ('agora', (f'CPU {br(a.get("cpu"), 0)} % · GPU {br(a.get("gpu"), 0)} % · RAM {br(a.get("ram_pct"), 0)} %'
                          + (f' · {br(a.get("temp_cpu"), 0)} °C' if a.get('temp_cpu') is not None else '')) if a else '-'),
@@ -471,7 +475,7 @@ def ferramenta_segundo_plano(ctx, args):
         return 0
     t.escreve()
     t.paragrafo('l = ligar (e abrir o painel) · d = desligar · r = ritmo (1, 2, 5 ou 10 s) · j = com jogo aberto (continuar ou pausar) · '
-                'a = avisos (sim ou não) · f = medir FPS nos jogos · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
+                'a = avisos (sim ou não) · f = medir FPS nos jogos · e = notebook: energia sozinha na tomada e na bateria · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
     r = t.pergunta('fazer').strip().lower()[:1]
     if r == 'l':
         return 0 if instala_segundo_plano(ctx, mostrar=True) else 1
@@ -494,6 +498,8 @@ def ferramenta_segundo_plano(ctx, args):
         t.ok('Avisos: ' + config('avisos'))
     elif r == 'f':
         return liga_fps(ctx, args)
+    elif r == 'e':
+        return desliga_energia_automatica(ctx) if config('energia-automatica', 'nao') == 'sim' else liga_energia_automatica(ctx, args)
     elif r == 'v':
         return ferramenta_aovivo(ctx, args)
     return 0
@@ -519,11 +525,167 @@ def liga_fps(ctx, args):
     if not precisa_admin(ctx, args):
         return 1
     if fps_permissao(ctx, ligar=True):
+        # confere lendo o grupo de volta: só diz "pronto" se o Windows mostra o seu usuário lá
+        if fps_no_grupo(ctx) is False:
+            marca_estado('fps_grupo', 'nao')
+            t.erro('O Windows não mostra o seu usuário no grupo "Usuários de log de desempenho": a medida de FPS não foi liberada. '
+                   'Em PC de empresa, uma política pode impedir.')
+            return 1
         salva_config('fps', 'sim')
         escreve_config_sp()
-        t.ok('Pronto. Saia e entre de novo na sua conta do Windows (ou reinicie) para começar a medir.')
+        t.ok('Pronto (conferido no Windows). Saia e entre de novo na sua conta do Windows (ou reinicie) para começar a medir.')
         return 0
     return 1
+
+
+# ───────── notebook: plano de energia sozinho na tomada e na bateria (desligado até a pessoa ligar) ─────────
+# O Katharos.exe percebe quando o carregador entra ou sai e ativa o plano escolhido para cada lado (PowerSetActiveScheme: o mesmo que
+# escolher o plano no Painel de Controle; não precisa de administrador e não muda nenhum valor dentro dos planos). Desligar volta o
+# plano que estava ativo antes de ligar.
+PLANO_EQUILIBRADO = '381b4222-f694-41f0-9685-ff5bb260df2e'
+PLANO_ECONOMIA = 'a1841308-3541-4fab-bc81-f71556f20b4a'
+_RE_PLANO = re.compile(r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\s+\((.+?)\)(\s*\*)?')
+
+
+def planos_de_energia(texto):
+    """A saída do `powercfg /list` (em qualquer idioma) vira [{guid, nome, ativo}]."""
+    out, vistos = [], set()
+    for m in _RE_PLANO.finditer(texto or ''):
+        g = m.group(1).lower()
+        if g in vistos:
+            continue
+        vistos.add(g)
+        out.append({'guid': g, 'nome': m.group(2).strip(), 'ativo': bool(m.group(3))})
+    return out
+
+
+def sugestao_de_energia(planos):
+    """Na tomada: o plano que está ativo agora (o que a pessoa já usa). Na bateria: Equilibrado, ou Economia de energia se o Equilibrado
+    já é o da tomada. None quando o PC só tem um plano (notebook moderno: o Windows 11 já separa o modo de energia por tomada e bateria)."""
+    if len(planos) < 2:
+        return None
+    ativo = next((p for p in planos if p['ativo']), planos[0])
+    por = {p['guid']: p for p in planos}
+    bateria = por.get(PLANO_EQUILIBRADO) if ativo['guid'] != PLANO_EQUILIBRADO else por.get(PLANO_ECONOMIA)
+    if not bateria:
+        bateria = next(p for p in planos if p['guid'] != ativo['guid'])
+    return ativo, bateria
+
+
+def estado_da_energia(a):
+    """O que o segundo plano conferiu de verdade (não o que foi pedido): erro, se a última troca não pegou."""
+    if config('energia-automatica', 'nao') != 'sim':
+        return 'desligada (e)'
+    pedido = config('energia-tomada-nome', '?') + ' na tomada, ' + config('energia-bateria-nome', '?') + ' na bateria'
+    en = (a or {}).get('energia') or {}
+    if en.get('erro'):
+        return 'ERRO: ' + en['erro']
+    if en.get('estado') and en.get('conferida'):
+        return f'{pedido} · agora {en["estado"]} (conferido às {en["conferida"][11:16]})'
+    return pedido + ' · ainda não conferido'
+
+
+def le_planos_de_energia(ctx):
+    s = roda_ps(ctx.t, "Dado 'planos' ((powercfg /list | Out-String)); Dado 'bateria' ([bool](Tenta { Get-CimInstance Win32_Battery -ErrorAction Stop } $null))",
+                'planos-de-energia', minutos=1, mostra=False)
+    return planos_de_energia(s.dados.get('planos') or ''), bool(s.dados.get('bateria'))
+
+
+def liga_energia_automatica(ctx, args=None):
+    """Mostra os planos, sugere um para a tomada e outro para a bateria, pergunta e liga. Nada muda sem o sim da pessoa."""
+    t = ctx.t
+    if not WINDOWS:
+        t.erro('só funciona no Windows.')
+        return 1
+    planos, bateria = le_planos_de_energia(ctx)
+    if not bateria:
+        t.nota('Este PC não tem bateria: a troca automática é só para notebook.')
+        return 0
+    sug = sugestao_de_energia(planos)
+    if not sug:
+        t.paragrafo('Este notebook só tem um plano de energia (o Equilibrado), como a maioria dos notebooks novos. Nele, o próprio Windows '
+                    'já guarda um modo para a tomada e outro para a bateria: Configurações > Sistema > Energia e bateria > Modo de energia. '
+                    'Não há o que o Katharos trocar.', 2, 'sub')
+        return 0
+    t.paragrafo('Quando você ligar ou tirar o carregador, o segundo plano ativa o plano de energia escolhido para cada lado, na hora. '
+                'Não muda nada dentro dos planos e não precisa de administrador. No ícone dá para manter o desempenho por 1 hora na bateria. '
+                'Desligar isto volta o plano que está ativo agora.', 2, 'sub')
+    for i, p in enumerate(planos, 1):
+        t.item(t.p(f'{i:>2}', 'destaque', True), None, p['nome'], t.p('ativo agora' if p['ativo'] else '', 'apagado'))
+    tomada, bat = sug
+
+    def escolhe(rotulo, padrao):
+        r = t.pergunta(f'{rotulo} (número; Enter = {padrao["nome"]})').strip() if t.interativo else ''
+        return planos[int(r) - 1] if r.isdigit() and 0 < int(r) <= len(planos) else padrao
+    tomada = escolhe('na tomada', tomada)
+    bat = escolhe('na bateria', bat)
+    if tomada['guid'] == bat['guid']:
+        t.nota('O mesmo plano nos dois lados: não há o que trocar. Nada foi ligado.')
+        return 0
+    if not t.confirma(f'Ligar: {tomada["nome"]} na tomada e {bat["nome"]} na bateria?', sim=False):
+        return 0
+    antes = next((p for p in planos if p['ativo']), None)
+    # prova antes de dizer que ligou: ativa o plano do lado de agora e lê de volta 3 s depois. Se o Windows não ficar assim, não liga.
+    v = confere_troca_de_energia(ctx, tomada['guid'], bat['guid'])
+    if not v['ok']:
+        t.erro('Não deu para ligar neste PC: ' + v['motivo'])
+        if antes and v.get('mudou'):
+            roda_ps(ctx.t, f"powercfg /setactive {antes['guid']} | Out-Null", 'energia-de-volta', minutos=1, mostra=False)
+        return 1
+    if antes:
+        salva_config('energia-antes', antes['guid'])
+    salva_config('energia-tomada', tomada['guid'])
+    salva_config('energia-tomada-nome', tomada['nome'])
+    salva_config('energia-bateria', bat['guid'])
+    salva_config('energia-bateria-nome', bat['nome'])
+    salva_config('energia-automatica', 'sim')
+    escreve_config_sp()
+    t.ok(f'Ligado e conferido: {v["lado"]}, o Windows ficou no plano certo. A troca vale em até 30 s, sem reiniciar'
+         + ('' if sp_rodando() else ' (quando o segundo plano estiver rodando)') + '; cada troca é conferida de novo, e se não pegar o ícone avisa.')
+    return 0
+
+
+def confere_troca_de_energia(ctx, tomada, bateria):
+    """Ativa o plano do lado de agora (tomada ou bateria) e confere, lendo de volta, se o Windows ficou nele. Sem falso positivo:
+    só devolve ok quando a leitura bate."""
+    for g in (tomada, bateria):
+        if not re.fullmatch(r'[0-9a-f-]{36}', g or ''):
+            return {'ok': False, 'motivo': 'plano inválido.'}
+    corpo = f'''
+Add-Type -AssemblyName System.Windows.Forms
+$__l = "$([System.Windows.Forms.SystemInformation]::PowerStatus.PowerLineStatus)"
+$__alvo = if ($__l -eq 'Offline') {{ '{bateria}' }} else {{ '{tomada}' }}
+$__antes = (powercfg /getactivescheme | Out-String)
+powercfg /setactive $__alvo 2>&1 | Out-Null
+$__cod = $LASTEXITCODE
+Start-Sleep -Seconds 3
+$__depois = (powercfg /getactivescheme | Out-String)
+Dado 'lado' $__l; Dado 'codigo' $__cod; Dado 'ok' ($__depois -match $__alvo); Dado 'mudou' ($__antes -notmatch $__alvo)
+'''
+    s = roda_ps(ctx.t, corpo, 'confere-energia', minutos=1, mostra=False)
+    lado = {'Offline': 'na bateria', 'Online': 'na tomada'}.get(s.dados.get('lado'), 'agora')
+    if s.dados.get('ok') is True:
+        return {'ok': True, 'lado': lado, 'mudou': bool(s.dados.get('mudou'))}
+    if s.dados.get('ok') is None:
+        return {'ok': False, 'motivo': 'não consegui ler o plano ativo do Windows.', 'mudou': False}
+    cod = s.dados.get('codigo')
+    motivo = ('o Windows recusou a troca de plano (talvez política da empresa).' if cod not in (0, None)
+              else 'o Windows não ficou no plano escolhido (algum programa, como o de energia do fabricante, pode estar segurando o plano).')
+    return {'ok': False, 'motivo': motivo, 'mudou': bool(s.dados.get('mudou'))}
+
+
+def desliga_energia_automatica(ctx):
+    """Desliga a troca e volta o plano que estava ativo antes de ligar (se ele ainda existe)."""
+    t = ctx.t
+    salva_config('energia-automatica', 'nao')
+    escreve_config_sp()
+    antes = config('energia-antes', '')
+    if WINDOWS and re.fullmatch(r'[0-9a-f-]{36}', antes or ''):
+        planos, _ = le_planos_de_energia(ctx)
+        if any(p['guid'] == antes for p in planos):
+            roda_ps(ctx.t, f"powercfg /setactive {antes} | Out-Null; Feito 'plano de energia de antes ativado'", 'energia-de-volta', minutos=1)
+    t.ok('Troca automática de energia desligada.')
+    return 0
 
 
 def ferramenta_aovivo(ctx, args):

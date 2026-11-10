@@ -375,13 +375,13 @@ Travadas por driver:
   entrar no raio-x como achado.
 
 Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pessoa ligar**):
-- [ ] **2c.12** Opção "trocar o perfil sozinho na tomada e na bateria", desligada até a pessoa ligar (na interface, nas Configurações e
+- [x] **2c.12** Opção "trocar o perfil sozinho na tomada e na bateria", desligada até a pessoa ligar (na interface, nas Configurações e
   na primeira abertura num notebook, com uma frase do que faz; na CLI, `config energia-automatica sim`). Só aparece em notebook.
-- [ ] **2c.13** Na tomada: o perfil de desempenho do modo escolhido. Na bateria: economia (plano equilibrado ou economia de energia,
+- [x] **2c.13** Na tomada: o perfil de desempenho do modo escolhido. Na bateria: economia (plano equilibrado ou economia de energia,
   processador com teto mais baixo, brilho e efeitos como a pessoa definir). O segundo plano percebe a troca na hora e aplica.
-- [ ] **2c.14** Mostrar a troca (aviso discreto no ícone: "na bateria: economia") e permitir travar um perfil por um tempo ("manter
+- [x] **2c.14** Mostrar a troca (aviso discreto no ícone: "na bateria: economia") e permitir travar um perfil por um tempo ("manter
   desempenho por 1 hora na bateria").
-- [ ] **2c.15** Tudo pelo `powercfg` e pelo que o pacote energia já guarda para desfazer; desligar a opção volta o plano de antes.
+- [x] **2c.15** Tudo pelo `powercfg` e pelo que o pacote energia já guarda para desfazer; desligar a opção volta o plano de antes.
 
 ### Fase 2d: todas as versões do Windows 10 e 11
 Pedido de 10 nov: funcionar bem principalmente no Windows 10 e no 11, em qualquer versão e edição, sabendo o que muda entre elas.
@@ -562,6 +562,11 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
   serviços antes e depois.
 - [x] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
   teste.
+- [ ] **S4** Sem falso positivo (pedido de 10 nov, 20:07): toda ação que muda o PC lê de volta e só diz "feito" quando o Windows mostra
+  que ficou; se não ficou, diz o erro e o motivo provável ("não dá neste PC" é resposta válida). Já valem: pacotes (conferência depois
+  de aplicar, `nao-ficou`), energia no notebook (prova ao ligar, leitura na hora e 15 s depois, erro no ícone mesmo com avisos
+  desligados), permissão de FPS (lê o grupo de volta). Falta: revisar com a mesma régua cada comando que diz "feito" (agendar, segundo
+  plano, ponto de restauração, desfazer, atalhos) e a interface nova.
 - [x] **S3** Segundo plano leve sem perder nada (pedido de 10 nov, 19:57): RAM pode usar, mas nunca pico de CPU nem muita coisa no mesmo
   instante. Lista de processos numa chamada só (NtQuerySystemInformation, poucos ms, sem abrir processo) no lugar do contador "Process"
   (dezenas a centenas de ms); leituras pesadas espalhadas (uma por vez no ritmo de 1 s); freio que espaça o ritmo se a leitura passar
@@ -611,3 +616,5 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | site: todas as seções repaginadas, criar e tirar seções (fase 6) | 3.1.2 | ramo v4 | pedido do usuário |
 | 10 nov 2026 | S3: segundo plano leve (processos numa chamada só, leituras espalhadas, freio de 1/10, custo medido, `--teste-custo` no CI) | 3.1.2 | ramo v4 | testes 304 |
 | 10 nov 2026 | site: vídeos do programa em uso, editados, e pesquisa de sites de produto excelentes (6.R, 6.V) | 3.1.2 | ramo v4 | pedido do usuário |
+| 10 nov 2026 | 2c.12 a 2c.15: notebook troca o plano de energia na tomada e na bateria, desligado até ligar (`segundo-plano` opção e, `config energia-automatica`); só troca o plano ativo (sem administrador); "manter desempenho 1 h" no ícone; desligar volta o plano de antes | 3.1.2 | ramo v4 | testes |
+| 10 nov 2026 | S4 começado: sem falso positivo na energia (prova ao ligar, leitura de volta na hora e 15 s depois) e na permissão de FPS | 3.1.2 | ramo v4 | testes 310 |
