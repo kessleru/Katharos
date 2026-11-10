@@ -13279,6 +13279,9 @@ def responde_api(ctx, canal, pedido):
 def roda_api(argv, entrada=None, saida=None):
     """katharos api              conversa por linhas (a interface usa assim)
        katharos api METODO [JSON] um pedido só, para testar no terminal"""
+    if argv and argv[0] == '--pipe':   # motor elevado (ver roda_api_elevada)
+        op = dict(zip(argv[0::2], argv[1::2]))
+        return roda_api_elevada(op.get('--pipe'), op.get('--dono'), op.get('--senha'))
     canal_real = saida or sys.stdout
     sys.stdout = sys.stderr   # tudo o que as funções escreveriam na tela vai para o erro padrão (o log da interface), nunca no canal
     try:
@@ -13632,6 +13635,89 @@ def api_desfazer(ctx, p, ev):
             LOG.escreve(f'api desfazer: pensar depois falhou: {ex!r}')
         return {'pacotes': res}
     return _com_trava(faz)
+
+
+# ───────── motor elevado: a mesma API num pipe com nome, só para quem tem a senha da sessão ─────────
+# A interface roda como o usuário. Para mudar o PC, ela abre este mesmo programa como administrador (um UAC por sessão) com
+#   katharos api --pipe NOME --dono SID --senha SENHA
+# Segurança: o pipe só aceita o SID do dono e o SYSTEM (ACL), uma conexão só (FILE_FLAG_FIRST_PIPE_INSTANCE, 1 instância, sem rede),
+# e a primeira linha precisa ser a senha de uso único que a interface gerou e passou na linha de comando do processo elevado (um
+# processo comum não lê a linha de comando de um processo elevado). Sem a senha certa, o motor fecha. Quando a interface desconecta,
+# o motor elevado sai.
+
+def _pipe_servidor(nome, sid):
+    """Cria o pipe com a ACL do dono e espera a interface conectar. Devolve (leitor, escritor) em bytes."""
+    import msvcrt
+    from ctypes import wintypes
+    k32, adv = ctypes.WinDLL('kernel32', use_last_error=True), ctypes.WinDLL('advapi32', use_last_error=True)
+    if not re.fullmatch(r'S-1-5-21(-\d+){3,4}', sid or ''):
+        raise ErroApi('pedido_invalido', 'SID do dono inválido')
+    if not re.fullmatch(r'[A-Za-z0-9_.-]{8,80}', nome or ''):
+        raise ErroApi('pedido_invalido', 'nome de pipe inválido')
+
+    class SA(ctypes.Structure):
+        _fields_ = [('nLength', wintypes.DWORD), ('lpSecurityDescriptor', ctypes.c_void_p), ('bInheritHandle', wintypes.BOOL)]
+    sd = ctypes.c_void_p()
+    if not adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(f'D:P(A;;GA;;;{sid})(A;;GA;;;SY)', 1, ctypes.byref(sd), None):
+        raise OSError(ctypes.get_last_error(), 'descritor de segurança do pipe')
+    sa = SA(ctypes.sizeof(SA), sd, False)
+    PIPE_ACCESS_DUPLEX, FIRST, REJ_REMOTO = 0x3, 0x00080000, 0x8
+    k32.CreateNamedPipeW.restype = wintypes.HANDLE
+    h = k32.CreateNamedPipeW('\\\\.\\pipe\\' + nome, PIPE_ACCESS_DUPLEX | FIRST, REJ_REMOTO, 1, 65536, 65536, 0, ctypes.byref(sa))
+    if not h or h == wintypes.HANDLE(-1).value:
+        raise OSError(ctypes.get_last_error(), 'criar o pipe')
+    if not k32.ConnectNamedPipe(wintypes.HANDLE(h), None) and ctypes.get_last_error() != 535:   # 535: já conectou antes da chamada
+        raise OSError(ctypes.get_last_error(), 'esperar a interface')
+    fd = msvcrt.open_osfhandle(h, 0)
+    return os.fdopen(fd, 'rb', buffering=0), os.fdopen(os.dup(fd), 'wb', buffering=0)
+
+
+class _TextoPipe:
+    """Linhas de texto UTF-8 sobre o pipe (o canal da API espera write/flush; o laço espera iterar linhas)."""
+
+    def __init__(self, leitor, escritor):
+        self.leitor, self.escritor = leitor, escritor
+
+    def write(self, s):
+        self.escritor.write(s.encode('utf-8'))
+
+    def flush(self):
+        try:
+            self.escritor.flush()
+        except OSError:
+            pass
+
+    def __iter__(self):
+        buf = b''
+        while True:
+            try:
+                bloco = self.leitor.read(65536)
+            except OSError:
+                return
+            if not bloco:
+                return
+            buf += bloco
+            while b'\n' in buf:
+                linha, buf = buf.split(b'\n', 1)
+                yield linha.decode('utf-8', 'replace')
+
+
+def roda_api_elevada(nome, sid, senha):
+    """O motor elevado: espera a interface no pipe, confere a senha da sessão na primeira linha e então atende como a API normal."""
+    import hmac
+    leitor, escritor = _pipe_servidor(nome, sid)
+    canal = _TextoPipe(leitor, escritor)
+    linhas = iter(canal)
+    primeira = next(linhas, '')
+    try:
+        dada = json.loads(primeira).get('senha', '')
+    except (ValueError, AttributeError):
+        dada = ''
+    if not (isinstance(dada, str) and senha and hmac.compare_digest(dada, senha)):
+        LOG.escreve('motor elevado: senha errada na conexão; fechando')
+        canal.write(json.dumps({'id': None, 'ok': False, 'erro': {'codigo': 'senha', 'texto': 'senha da sessão errada'}}) + '\n')
+        return 3
+    return roda_api([], entrada=linhas, saida=canal)
 # ─────────────── saúde do Windows: erros dos logs, drivers e o que o Windows precisa ───────────────
 # Coleta só leitura (Visualizador de Eventos, drivers instalados, estado do Windows) → catálogo de causas conhecidas → problemas
 # explicados, com o que fazer. Regras: (1) só explica o que está no catálogo; o resto aparece como "sem explicação catalogada",

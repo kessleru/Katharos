@@ -64,6 +64,34 @@ jobs:
           if ($p.ExitCode) { exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--foto', "$d\painel.png" -Wait -PassThru
           if ($p.ExitCode -or -not (Test-Path "$d\painel.png")) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
+      - name: motor elevado (pipe com senha da sessão), de verdade no Windows
+        # O motor que a interface abre como administrador: só aceita quem traz a senha da sessão; senha errada fecha na hora.
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $sid = ([System.Security.Principal.WindowsIdentity]::GetCurrent()).User.Value
+          function Conversa($senhaDada) {
+            $senha = [guid]::NewGuid().ToString('N'); $nome = 'katharos-teste-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+            $p = Start-Process python -ArgumentList 'programa\katharos.py', 'api', '--pipe', $nome, '--dono', $sid, '--senha', $senha -PassThru -NoNewWindow
+            $c = New-Object System.IO.Pipes.NamedPipeClientStream('.', $nome, [System.IO.Pipes.PipeDirection]::InOut)
+            $c.Connect(20000)
+            $w = New-Object System.IO.StreamWriter($c); $w.AutoFlush = $true; $r = New-Object System.IO.StreamReader($c)
+            $w.WriteLine('{"senha": "' + $(if ($senhaDada) { $senhaDada } else { $senha }) + '"}')
+            $linhas = @($r.ReadLine())
+            if (-not $senhaDada) {
+              $w.WriteLine('{"id": 1, "metodo": "versao"}'); $linhas += $r.ReadLine()
+              $w.WriteLine('{"id": 2, "metodo": "aplicar", "params": {"itens": {"servicos": ["x"]}}}'); $linhas += $r.ReadLine()
+              $w.WriteLine('{"id": 3, "metodo": "sair"}'); $linhas += $r.ReadLine()
+            }
+            $c.Dispose(); $null = $p.WaitForExit(20000)
+            $linhas | ForEach-Object { Write-Host $_ }
+            return @{ linhas = $linhas; codigo = $p.ExitCode }
+          }
+          $boa = Conversa $null
+          if ($boa.linhas[0] -notmatch '"pronto": true' -or $boa.linhas[1] -notmatch '"ok": true' -or $boa.linhas[2] -notmatch 'precisa_aceite') { Write-Host '::error::motor elevado não respondeu certo'; exit 1 }
+          $ruim = Conversa 'senha-errada'
+          if ($ruim.linhas[0] -notmatch '"codigo": "senha"' -or $ruim.codigo -ne 3) { Write-Host '::error::motor elevado aceitou senha errada'; exit 1 }
+          Write-Host 'motor elevado ok: senha certa atende, senha errada fecha'
       - name: antivírus do Windows (Defender) no executável e no programa
         # O mesmo antivírus que vem em todo Windows: se ele marcar algo, a versão não sai. Sem Defender neste Windows do CI, só avisa.
         shell: pwsh
