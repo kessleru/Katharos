@@ -57,8 +57,9 @@
   .guias { position: fixed; inset: 0 var(--borda); border-left: 1px solid var(--linha); border-right: 1px solid var(--linha); pointer-events: none; z-index: 0; }
   .faixa { position: relative; z-index: 1; border-top: 1px solid var(--linha); }
   .quadro { position: relative; margin: 0 var(--borda); }
-  .faixa > .quadro::before, .faixa > .quadro::after { display: none; content: '+'; position: absolute; top: -1px; z-index: 31;
+  .faixa > .quadro::before, .faixa > .quadro::after { display: block; content: '+'; position: absolute; top: -1px; z-index: 31;
     font: 400 15px/1 var(--mono); color: var(--apagado); translate: -50% -50%; background: var(--fundo); padding: 0 1px; }
+  .topo > .quadro::before, .topo > .quadro::after { display: none; }
   .faixa > .quadro::before { left: 0; }
   .faixa > .quadro::after { left: 100%; }
   .listras { height: 40px; border-top: 1px solid var(--linha); position: relative; z-index: 1;
@@ -210,16 +211,53 @@
   .limites .nunca li span { transition: opacity .3s calc(var(--i) * 380ms + 650ms), translate .3s calc(var(--i) * 380ms + 650ms); }
   .limites.vis .nunca li s { color: #8e8a82; }
 
-  /* ── painel (telas) ── */
-  .telas-painel .quadro { padding: 28px clamp(20px, 3vw, 40px) 36px; display: grid; gap: 20px; }
-  .tp { margin: 0; border: 1px solid var(--linha-forte); border-radius: 10px; overflow: hidden; background: var(--painel); }
-  .tp img { display: block; width: 100%; height: auto; }
-  .tp figcaption { padding: 12px 16px 14px; border-top: 1px solid var(--linha); font: 400 14px/1.5 var(--sans); color: #a9a49b; }
-  .tp figcaption b { font: 700 13px/1.4 var(--mono); color: var(--osso); margin-right: 8px; }
-  .tp-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-  .tp-nota { font: 400 13px/1.6 var(--mono); color: var(--apagado); max-width: 90ch; }
+  /* ── painel (componentes animados) ── */
+  .telas-painel .quadro { padding: 28px clamp(20px, 3vw, 40px) 36px; display: grid; gap: 16px; }
+  .dash { display: grid; gap: 16px; }
+  .dash > * { min-width: 0; }
+  .dash-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .kpi { border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--painel); padding: 16px 18px 18px; display: grid; gap: 2px; }
+  .kpi span { font: 400 13px/1.4 var(--sans); color: var(--apagado); }
+  .kpi b { font: 800 34px/1.1 var(--mono); color: var(--osso); letter-spacing: -.04em; }
+  .kpi b small { font: 400 13px var(--mono); color: var(--apagado); letter-spacing: 0; margin-left: 4px; }
+  .kpi em { font: 500 12px/1.4 var(--mono); font-style: normal; }
+  .kpi .mau { color: var(--vermelho); } .kpi .bom { color: var(--verde); }
+  .dash-graf { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 16px; }
+  .dash-baixo { display: grid; }
+  .props { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gc { margin: 0; border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--painel); padding: 16px 18px 14px; display: grid; gap: 10px; align-content: start; }
+  .gc header { display: flex; justify-content: space-between; gap: 12px; font: 700 13px/1.4 var(--mono); color: var(--osso); }
+  .gc header span { font-weight: 400; color: var(--apagado); }
+  .gc svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .gc .eixo { font: 400 10px var(--mono); fill: var(--apagado); }
+  .gc .grade { stroke: var(--linha); stroke-width: 1; }
+  .gc .marca { stroke: var(--verde); stroke-width: 1; stroke-dasharray: 1 3; opacity: .7; }
+  .gc .linha { fill: none; stroke: var(--ambar); stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .gc .area { fill: var(--ambar); opacity: 0; }
+  .gc .proj { fill: none; stroke: var(--vermelho); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0; }
+  .gc .ponto { fill: var(--ambar); opacity: 0; } .gc .ponto.r { fill: var(--vermelho); }
+  .gc .rot { font: 500 11px var(--mono); fill: var(--vermelho); opacity: 0; }
+  .vis .gc .linha { stroke-dashoffset: 0; transition: stroke-dashoffset 1.8s cubic-bezier(.5,0,.2,1) .2s; }
+  .vis .gc .area { opacity: .12; transition: opacity .8s 1.4s; }
+  .vis .gc .proj, .vis .gc .rot, .vis .gc .ponto { opacity: 1; transition: opacity .5s 1.9s; }
+  .calor { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; }
+  .calor i { aspect-ratio: 1; border-radius: 2px; background: #17171a; opacity: 0; }
+  .calor i[data-l="1"] { background: #2b2418; } .calor i[data-l="2"] { background: #5d4727; } .calor i[data-l="3"] { background: var(--ambar); } .calor i[data-l="4"] { background: var(--vermelho); }
+  .vis .calor i { opacity: 1; transition: opacity .35s calc(var(--c) * 45ms + var(--r) * 14ms + 300ms); }
+  .props { display: grid; gap: 12px; align-content: start; }
+  .prop { border: 1px solid var(--linha-forte); border-left: 3px solid var(--vermelho); border-radius: 10px; background: var(--painel); padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .prop.media { border-left-color: var(--ambar); }
+  .prop b { font: 700 14px/1.3 var(--mono); color: var(--osso); }
+  .prop code { grid-column: 1; font-size: 12px; color: var(--apagado); }
+  .prop .btn { grid-column: 2; grid-row: 1 / span 2; font: 700 13px/1 var(--sans); background: var(--ambar); color: #16110a; border-radius: 4px; padding: 9px 14px; font-style: normal; }
+  .js .prop { opacity: 0; translate: 0 10px; }
+  .vis .prop { opacity: 1; translate: 0 0; transition: opacity .5s calc(var(--i) * 300ms + 700ms), translate .5s calc(var(--i) * 300ms + 700ms); }
+  .vis .prop .btn { animation: tecla2 1.2s calc(var(--i) * 300ms + 2.2s) 1 both; }
+  @keyframes tecla2 { 0%, 100% { translate: 0 0; background: var(--ambar); } 40% { translate: 0 2px; background: #ecb876; } }
+  .vivo { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--verde); margin-right: 6px; animation: pisca 1.6s ease-in-out infinite; }
+  .tp-nota { font: 400 13px/1.6 var(--mono); color: var(--apagado); }
   .tp-nota code { color: var(--osso); }
-  @media (max-width: 760px) { .tp-duo { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .dash-kpis { grid-template-columns: 1fr; } .dash-graf, .props { grid-template-columns: 1fr; } }
 
   /* ── passos ── */
   .passos .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; counter-reset: p; }
@@ -418,7 +456,7 @@
   <section class="faixa dados" aria-label="Resumo">
     <dl class="quadro celulas">
       <div><dt>funciona em</dt><dd>Windows 10 e 11</dd></div>
-      <div><dt>ajustes</dt><dd>mais de 180, cada um com ganho e perda</dd></div>
+      <div><dt>ajustes</dt><dd>mais de 180</dd></div>
       <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">2.0.1</a> · 9 nov 2026</dd></div>
     </dl>
   </section>
@@ -471,58 +509,65 @@
   </section>
   <section class="faixa passos" aria-label="Passos">
     <ol class="quadro celulas">
-      <li><h3>Baixe e extraia o ZIP</h3><p>Vêm o KATHAROS.bat e a pasta programa.</p></li>
-      <li><h3>Abra o KATHAROS.bat</h3><p>Aceite o pedido de administrador. Se o Windows avisar, clique em Mais informações e Executar assim mesmo.</p></li>
-      <li><h3>Digite <kbd>1</kbd></h3><p>O raio-x dá uma nota e diz o que fazer primeiro. Não muda nada.</p></li>
+      <li><h3>Baixe e extraia o ZIP</h3></li>
+      <li><h3>Abra o KATHAROS.bat</h3><p>Aceite o pedido de administrador.</p></li>
+      <li><h3>Digite <kbd>1</kbd></h3><p>O raio-x dá uma nota. Não muda nada.</p></li>
     </ol>
   </section>
 
   <section class="faixa" id="painel" aria-labelledby="painel-t">
     <div class="quadro cab celulas">
-      <div><h2 id="painel-t">Painel<span>.</span></h2><p>O segundo plano mede o PC; o painel mostra a evolução, as propostas e os erros do Windows, tudo no seu computador.</p></div>
+      <div><h2 id="painel-t">Painel<span>.</span></h2></div>
     </div>
   </section>
-  <section class="faixa telas-painel" aria-label="Telas do painel">
+  <section class="faixa telas-painel" aria-label="Painel do Katharos, exemplo animado">
     <div class="quadro">
-      <figure class="tp"><img src="painel-evolucao.webp" alt="Painel do Katharos: gráficos de espaço livre com projeção de quando o disco enche, RAM, tempo de boot, CPU, temperatura e programas de inicialização, com as datas de cada pacote aplicado" width="1650" height="1073" loading="lazy">
-        <figcaption><b>evolução</b>Espaço, RAM, boot, CPU e temperatura ao longo do tempo.</figcaption></figure>
-      <figure class="tp"><img src="painel-temperatura.webp" alt="Painel do Katharos: temperatura de meses, com faixa de mínimo e máximo por dia, repouso contra carga e mapa de calor por hora" width="1650" height="1410" loading="lazy">
-        <figcaption><b>temperatura</b>Meses de leitura: repouso contra carga e mapa de calor por hora.</figcaption></figure>
-      <div class="tp-duo">
-        <figure class="tp"><img src="painel-agora.webp" alt="Painel do Katharos: cartões com os valores de agora e propostas do conselheiro, cada uma com confiança e comando" width="1280" height="1640" loading="lazy">
-          <figcaption><b>propostas</b>Cada proposta traz o número que a justifica e um botão que abre o Katharos no comando.</figcaption></figure>
-        <figure class="tp"><img src="painel-saude.webp" alt="Painel do Katharos: erros do Windows por dia e problemas explicados, como tela azul e programa que fecha sozinho, com o que fazer" width="1280" height="1640" loading="lazy">
-          <figcaption><b>saúde do Windows</b>Erros do Windows explicados, com o que fazer.</figcaption></figure>
+      <div class="dash" id="dash" role="img" aria-label="Exemplo animado do painel: espaço livre em queda, temperatura por hora e propostas de correção">
+        <div class="dash-kpis" aria-hidden="true">
+          <div class="kpi"><span>Espaço livre</span><b data-n="50">0<small>GB</small></b><em class="mau">−28 GB</em></div>
+          <div class="kpi"><span>Boot</span><b data-n="49">0<small>s</small></b><em class="mau">+10 s</em></div>
+          <div class="kpi"><span><i class="vivo"></i>Temperatura</span><b data-n="47" id="k-temp">0<small>°C</small></b><em class="bom">−1 °C</em></div>
+        </div>
+        <div class="dash-graf" aria-hidden="true">
+          <figure class="gc"><header>Espaço livre em C: <span>cheio em ~17/11</span></header><svg id="g-disco" viewBox="0 0 600 180"></svg></figure>
+          <figure class="gc"><header>Quando esquenta <span>por hora</span></header><div class="calor" id="g-calor"></div></figure>
+        </div>
+        <div class="dash-baixo" aria-hidden="true">
+          <div class="props">
+            <div class="prop" style="--i:0"><b>Driver com problema</b><code>katharos atualizar</code><i class="btn">Corrigir</i></div>
+            <div class="prop" style="--i:1"><b>Tela azul, 3 vezes</b><code>katharos raiox</code><i class="btn">Abrir</i></div>
+          </div>
+        </div>
       </div>
-      <p class="tp-nota">Dados de exemplo. Para ligar: <code>agendar --frequencia continua</code>. Para abrir: <code>painel</code>.</p>
+      <p class="tp-nota">Dados de exemplo. Abra com <code>painel</code>.</p>
     </div>
   </section>
 
   <section class="faixa" id="modos" aria-labelledby="modos-t">
     <div class="quadro cab celulas">
-      <div><h2 id="modos-t">Modos<span>.</span></h2><p>Três modos decidem o que vem marcado. Você vê a lista antes de aplicar e tira ou põe o que quiser.</p></div>
+      <div><h2 id="modos-t">Modos<span>.</span></h2></div>
     </div>
   </section>
   <section class="faixa perfis" aria-label="Modos">
     <div class="quadro celulas">
       <article class="perfil">
-        <header><div><h3><span class="nv nv1">1</span> seguro</h3><p class="para">para PC de trabalho ou de outra pessoa</p><code>turbo --modo seguro</code></div></header>
-        <p class="perde">Só o que não tem contrapartida: telemetria, anúncios, lixo, apps de propaganda, tarefas inúteis. Bom para PC de trabalho ou de outra pessoa.</p>
+        <header><div><h3><span class="nv nv1">1</span> seguro</h3><p class="para">para PC de trabalho</p><code>turbo --modo seguro</code></div></header>
+        <p class="perde">Só o que não tem contrapartida: telemetria, anúncios e lixo.</p>
         <details class="itens"><summary>Marca 39 itens</summary><div class="lista-it"><h4>limpeza <i>5</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>temporários</b><small>ganha: espaço; às vezes centenas de MB · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>downloads do Windows Update</b><small>ganha: espaço (pode passar de 1 GB) · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>cache da Otimização de Entrega</b><small>ganha: espaço · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>relatórios de erro e dumps</b><small>ganha: espaço (dumps podem ter GBs) · perde: quem investiga uma tela azul antiga perde o arquivo</small></div></li><li><span class="nv nv1">seguro</span><div><b>cache de miniaturas</b><small>ganha: espaço; conserta miniaturas erradas · perde: pastas de fotos demoram um pouco na primeira abertura</small></div></li></ul><h4>IA do Windows <i>2</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Copilot desligado</b><small>ganha: menos um app em segundo plano · perde: perde o Copilot do Windows</small></div></li><li><span class="nv nv1">seguro</span><div><b>Recall e análise de IA desligados</b><small>ganha: privacidade; menos processamento em segundo plano · perde: perde esses recursos de IA</small></div></li></ul><h4>serviços <i>2</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>mapas, demonstração, mídia e Insider</b><small>ganha: menos serviços rodando · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>fax</b><small>ganha: um serviço a menos · perde: não envia fax pelo PC</small></div></li></ul><h4>privacidade e propaganda <i>9</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>telemetria no mínimo</b><small>ganha: menos uso de rede e disco · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>serviços de telemetria</b><small>ganha: menos um serviço que grava e envia o tempo todo · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>tarefas de telemetria</b><small>ganha: menos picos de disco e CPU · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>anúncios e apps instalados sozinhos</b><small>ganha: menos propaganda e instalações surpresa · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>histórico de atividades</b><small>ganha: menos escrita em disco · perde: a Linha do Tempo antiga fica vazia</small></div></li><li><span class="nv nv1">seguro</span><div><b>Cortana</b><small>ganha: nenhum processo da Cortana · perde: nenhum (foi descontinuada)</small></div></li><li><span class="nv nv1">seguro</span><div><b>propaganda do Microsoft 365 nas Configurações</b><small>ganha: menos propaganda · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>portas de entrada antigas fechadas</b><small>ganha: mais segurança · perde: aparelhos de rede muito antigos (antes de 2010) podem não abrir pastas</small></div></li><li><span class="nv nv1">seguro</span><div><b>Edge sem rodar escondido</b><small>ganha: menos RAM no boot · perde: o Edge demora um pouco mais para abrir</small></div></li></ul><h4>visual e barra de tarefas <i>2</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>menus sem espera</b><small>ganha: sensação de rapidez · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>mostrar extensões dos arquivos</b><small>ganha: segurança · perde: nomes um pouco mais longos</small></div></li></ul><h4>jogos <i>1</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Modo de Jogo ligado</b><small>ganha: pequeno: segura atualizações e avisos durante o jogo · perde: nenhum</small></div></li></ul><h4>energia <i>1</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>plano fresco (notebook que esquenta)</b><small>ganha: mais frio, silencioso e mais bateria · perde: picos de desempenho um pouco menores</small></div></li></ul><h4>disco e memória <i>4</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Windows Update sem compartilhar com outros PCs</b><small>ganha: menos upload e escrita em disco · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>TRIM ligado no SSD</b><small>ganha: o SSD continua rápido para gravar e dura mais · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>Sensor de Armazenamento mensal</b><small>ganha: disco não enche sozinho · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>otimizar a unidade</b><small>ganha: disco mais rápido · perde: demora pouco</small></div></li></ul><h4>reparar <i>4</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>reparar a imagem do Windows (DISM)</b><small>ganha: conserta erros de atualização e travamentos · perde: demora (até 1 h em HD)</small></div></li><li><span class="nv nv1">seguro</span><div><b>conferir arquivos do sistema (SFC)</b><small>ganha: conserta erros estranhos e telas azuis por arquivo corrompido · perde: demora (até 45 min)</small></div></li><li><span class="nv nv1">seguro</span><div><b>verificar o disco (chkdsk)</b><small>ganha: evita perda de arquivos · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>limpar o cache de DNS</b><small>ganha: conserta site que mudou de endereço e não abre · perde: nenhum</small></div></li></ul><h4>atualizar <i>2</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>definições do Defender</b><small>ganha: proteção em dia · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>atualizações do Windows</b><small>ganha: segurança e correções · perde: demora; pode pedir reinício</small></div></li></ul><h4>área de trabalho e menu <i>1</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>sem &quot;Saiba mais sobre esta foto&quot;</b><small>ganha: área de trabalho limpa · perde: sem papel de parede do Bing trocando</small></div></li></ul><h4>navegador <i>3</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>Brave enxuto</b><small>ganha: Brave mais leve · perde: perde esses recursos do Brave</small></div></li><li><span class="nv nv1">seguro</span><div><b>Chrome enxuto</b><small>ganha: menos RAM · perde: aparece &quot;Gerenciado pela organização&quot;</small></div></li><li><span class="nv nv1">seguro</span><div><b>Edge enxuto</b><small>ganha: menos RAM e propaganda · perde: aparece &quot;Gerenciado pela organização&quot;</small></div></li></ul><h4>rede e DNS <i>3</i></h4><ul><li><span class="nv nv1">seguro</span><div><b>medir o ping</b><small>ganha: decidir com número · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>medir qual DNS responde mais rápido</b><small>ganha: decidir o DNS com número, não com palpite · perde: nenhum</small></div></li><li><span class="nv nv1">seguro</span><div><b>ajuste automático do TCP no normal</b><small>ganha: downloads na velocidade certa · perde: nenhum</small></div></li></ul></div></details>
       </article>
       <article class="perfil">
-        <header><div><h3><span class="nv nv2">2</span> equilibrado</h3><p class="para">para o dia a dia: é o recomendado</p><code>turbo --modo equilibrado</code></div></header>
-        <p class="perde">O seguro mais o que quase ninguém usa: serviços de empresa e de telefone, Xbox (se não joga), IA do Windows, widgets, efeitos visuais, caches. É o recomendado.</p>
+        <header><div><h3><span class="nv nv2">2</span> equilibrado</h3><p class="para">para o dia a dia (recomendado)</p><code>turbo --modo equilibrado</code></div></header>
+        <p class="perde">O seguro mais o que quase ninguém usa.</p>
         <details class="itens"><summary>Marca 105 itens: os do seguro e mais 66</summary><div class="lista-it"><h4>limpeza <i>8</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>logs antigos do Windows</b><small>ganha: espaço · perde: nenhum no uso normal</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>cache dos navegadores</b><small>ganha: espaço (às vezes vários GB) · perde: os sites carregam um pouco mais devagar na primeira visita</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>cache de shaders da placa de vídeo</b><small>ganha: espaço; corrige travadinhas de cache corrompido · perde: cada jogo recompila na primeira vez que abrir (pode engasgar alguns minutos)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>instaladores guardados por programas</b><small>ganha: espaço · perde: reparar esses programas pode pedir o instalador de novo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>caches de desenvolvimento</b><small>ganha: espaço · perde: a próxima instalação de pacotes baixa de novo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Limpeza de Disco do Windows</b><small>ganha: espaço (costuma liberar GBs depois de grandes atualizações) · perde: demora (até 30 min em HD)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Windows.old (versão anterior do Windows)</b><small>ganha: espaço (10 a 30 GB) · perde: não dá mais para voltar à versão anterior</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>componentes antigos do Windows (DISM)</b><small>ganha: espaço (centenas de MB a alguns GB) · perde: demora</small></div></li></ul><h4>IA do Windows <i>7</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>remover o app Copilot</b><small>ganha: menos espaço e processos · perde: perde o app</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>recurso opcional Recall desativado</b><small>ganha: tira o componente do sistema · perde: nenhum para quem não usa</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>IA no Paint</b><small>ganha: menos chamadas à nuvem · perde: perde esses recursos do Paint</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>IA no Bloco de Notas</b><small>ganha: Bloco de Notas mais simples · perde: perde a reescrita com IA</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>IA no Edge</b><small>ganha: Edge mais leve e privado · perde: perde o Copilot no Edge; aparece o aviso de gerenciado</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Microsoft 365 Copilot e IA do Office</b><small>ganha: menos processos do Office em segundo plano · perde: perde o Copilot do Office</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>coleta de digitação e tinta</b><small>ganha: privacidade · perde: sugestões de digitação ficam menos personalizadas</small></div></li></ul><h4>serviços <i>8</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>impressão</b><small>ganha: menos dois serviços · perde: não imprime, nem &quot;Imprimir em PDF&quot;</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>recursos de empresa</b><small>ganha: menos serviços · perde: nenhum em PC doméstico</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>telefonia</b><small>ganha: menos serviços · perde: modem e discador antigos param</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>hotspot móvel</b><small>ganha: menos serviços · perde: não cria hotspot pelo PC</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>controle dos pais</b><small>ganha: um serviço a menos · perde: controle dos pais da conta Microsoft para</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>atualizadores em manual</b><small>ganha: menos serviços parados gastando RAM · perde: atualizações desses programas podem chegar um pouco depois</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>serviços e tarefas de fabricante</b><small>ganha: menos CPU e WMI parados · perde: diagnóstico do fabricante só quando você abrir</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>restos de programas desinstalados</b><small>ganha: menos erros no boot e no registro de eventos · perde: nenhum</small></div></li></ul><h4>privacidade e propaganda <i>5</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>telemetria do Office</b><small>ganha: menos processos e uploads do Office · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>busca do menu sem resultados da web</b><small>ganha: busca mais rápida e privada · perde: pesquisas na web vão para o navegador</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>widgets e notícias</b><small>ganha: menos um processo do Edge em segundo plano · perde: perde o painel de widgets</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>apps da Loja em segundo plano</b><small>ganha: pouco de RAM e CPU · perde: apps da Loja fechados (WhatsApp, Teams novo) podem não notificar</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>relatório de erros</b><small>ganha: menos disco depois de travamentos · perde: a Microsoft não recebe seus relatórios; soluções automáticas não aparecem</small></div></li></ul><h4>visual e barra de tarefas <i>10</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>efeitos visuais em desempenho</b><small>ganha: janelas e menus mais rápidos em PC fraco · perde: visual mais seco</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>animações</b><small>ganha: resposta imediata · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>barra de tarefas enxuta</b><small>ganha: barra limpa · perde: esses botões somem (o atalho Win+Tab continua)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Explorador abre em &quot;Este Computador&quot;</b><small>ganha: privacidade e menos leitura · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>menu do botão direito completo</b><small>ganha: menos cliques · perde: visual do Windows 10 no menu</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>programas da inicialização sem espera</b><small>ganha: área de trabalho pronta mais cedo · perde: em HD, o começo fica mais disputado</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>desligar e fechar travados mais rápido</b><small>ganha: desliga e reinicia mais rápido · perde: programa que demora para salvar ao fechar pode perder o que não foi salvo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>cópia de memória pequena em tela azul</b><small>ganha: GBs de disco e reinício mais rápido depois de travar · perde: investigação profunda de telas azuis fica mais difícil</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>sem minimizar tudo ao sacudir a janela</b><small>ganha: sem minimizar sem querer · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>menu Iniciar com mais fixados</b><small>ganha: menu mais útil · perde: nenhum</small></div></li></ul><h4>jogos <i>5</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>Game DVR e captura em segundo plano</b><small>ganha: pequeno em PC forte; mais perceptível em PC fraco · perde: Win+Alt+G e gravação pela Game Bar param</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>prioridade alta para jogos conhecidos</b><small>ganha: pequeno, e só quando algo disputa a CPU com o jogo · perde: em PC fraco, música e Discord podem engasgar durante o jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>sem aceleração do mouse</b><small>ganha: mira mais consistente · perde: em telas grandes o mouse parece mais lento até se acostumar</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>teclado mais rápido</b><small>ganha: movimentos e digitação respondem antes · perde: quem digita devagar pode repetir letras sem querer</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>sem atalho das Teclas de Aderência</b><small>ganha: sem janela surgindo no jogo · perde: quem usa esses atalhos de acessibilidade perde</small></div></li></ul><h4>energia <i>1</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>disco nunca desliga na tomada</b><small>ganha: sem espera para o HD acordar · perde: gasto mínimo de energia</small></div></li></ul><h4>disco e memória <i>5</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>varreduras do Defender mais leves</b><small>ganha: o PC não trava durante a varredura semanal · perde: a varredura completa demora mais</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>tarefas de manutenção inúteis</b><small>ganha: menos leitura de disco ociosa · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>NTFS sem gravar &quot;último acesso&quot;</b><small>ganha: menos escrita em disco · perde: programas de backup que dependem dessa data (raros) se confundem</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>serviços de terceiros com início atrasado</b><small>ganha: boot e área de trabalho prontos mais cedo · perde: esses serviços demoram ~2 min para subir</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>OneDrive bloqueado</b><small>ganha: menos um programa sincronizando · perde: não sincroniza mais nada com o OneDrive</small></div></li></ul><h4>reparar <i>1</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>conferir o WMI</b><small>ganha: conserta CPU alta do WmiPrvSE por repositório corrompido · perde: nenhum</small></div></li></ul><h4>atualizar <i>3</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>drivers pelo Windows Update</b><small>ganha: drivers mais novos e certificados · perde: raramente um driver novo traz problema (dá para voltar no Gerenciador de Dispositivos)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>programas pelo winget</b><small>ganha: programas em dia e mais seguros · perde: alguns programas mudam de versão principal</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>apps da Loja</b><small>ganha: apps em dia · perde: nenhum</small></div></li></ul><h4>área de trabalho e menu <i>2</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>atalhos do Edge fora da área de trabalho</b><small>ganha: área de trabalho limpa · perde: nenhum (o Edge continua no menu)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>ícone &quot;Este Computador&quot; na área de trabalho</b><small>ganha: acesso rápido · perde: nenhum</small></div></li></ul><h4>ajustes do Windows <i>3</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>&quot;Finalizar tarefa&quot; no botão direito da barra</b><small>ganha: menos passos para matar travados · perde: nenhum</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>caminhos longos (mais de 260 letras)</b><small>ganha: menos erros &quot;caminho muito longo&quot; · perde: programas antigos podem não entender esses caminhos</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>não reiniciar sozinho com você logado</b><small>ganha: sem perder trabalho por um reinício surpresa · perde: esquecer de reiniciar deixa a atualização pendente</small></div></li></ul><h4>Minecraft <i>1</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>Minecraft: opções de vídeo mais leves</b><small>ganha: a distância de renderização é o que mais pesa; o ganho varia com o PC e com mods · perde: o mundo ao longe aparece mais perto; partículas menores</small></div></li></ul><h4>CS2 <i>5</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>CS2 na placa de vídeo dedicada</b><small>ganha: muito mais FPS se ele estava na integrada · perde: mais consumo de bateria durante o jogo</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>otimizações para jogos em janela</b><small>ganha: menos atraso no modo janela sem bordas · perde: nenhum conhecido; alguns jogos antigos ignoram</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>vídeo do CS2 no preset de FPS</b><small>ganha: o MSAA 4x sozinho pode custar 10 a 20% do FPS; o resto varia com o PC · perde: o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>NVIDIA Reflex ligado no CS2</b><small>ganha: menos atraso quando a placa é o gargalo; com FPS muito alto, pouca diferença · perde: um pouco mais de consumo da placa</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>katharos.cfg com comandos do próprio jogo</b><small>ganha: placa mais fria nos menus; tela mais limpa · perde: nada; o arquivo só vale se você mandar o jogo carregar</small></div></li></ul><h4>jogos Unreal Engine <i>2</i></h4><ul><li><span class="nv nv2">equilibrado</span><div><b>Satisfactory: gráficos de &quot;Épico&quot; para &quot;Alto&quot;</b><small>ganha: sombras e efeitos em &quot;Épico&quot; pesam bastante; o ganho varia com o PC (meça com o contador de FPS do jogo) · perde: sombras e longe do horizonte um pouco menos detalhados</small></div></li><li><span class="nv nv2">equilibrado</span><div><b>Stray: gráficos de &quot;Épico&quot; para &quot;Alto&quot;</b><small>ganha: sombras e efeitos em &quot;Épico&quot; pesam bastante; o ganho varia com o PC (meça com o contador de FPS do jogo) · perde: sombras e longe do horizonte um pouco menos detalhados</small></div></li></ul></div></details>
       </article>
       <article class="perfil">
-        <header><div><h3><span class="nv nv3">3</span> extremo</h3><p class="para">para tirar tudo o que dá deste PC</p><code>turbo --modo extremo</code></div></header>
-        <p class="perde">Tudo o que pode ajudar neste PC: desliga sensores, área de trabalho remota, scanner, localização, hibernação no SSD, ajustes de jogos e de rede. Você perde recursos (cada item diz quais).</p>
+        <header><div><h3><span class="nv nv3">3</span> extremo</h3><p class="para">para tirar tudo o que dá</p><code>turbo --modo extremo</code></div></header>
+        <p class="perde">Tudo o que ajuda neste PC. Você perde recursos; cada item diz quais.</p>
         <details class="itens"><summary>Marca 138 itens: os do equilibrado e mais 33</summary><div class="lista-it"><h4>limpeza <i>2</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>componentes, de forma definitiva</b><small>ganha: mais espaço · perde: não dá mais para desinstalar atualizações já instaladas</small></div></li><li><span class="nv nv3">extremo</span><div><b>armazenamento reservado do Windows</b><small>ganha: cerca de 7 GB · perde: com o disco cheio, atualizações grandes podem falhar</small></div></li></ul><h4>IA do Windows <i>1</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>serviço e tarefas de IA</b><small>ganha: menos processos parados gastando · perde: nenhum para quem não usa IA do Windows</small></div></li></ul><h4>serviços <i>12</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>indexação da busca (Windows Search)</b><small>ganha: menos leitura de disco em segundo plano · perde: a busca por arquivos no menu e no Explorador fica bem mais lenta</small></div></li><li><span class="nv nv3">extremo</span><div><b>Nahimic e efeitos de áudio do fabricante</b><small>ganha: menos CPU · perde: os efeitos do Nahimic (surround virtual) param; o som continua normal</small></div></li><li><span class="nv nv3">extremo</span><div><b>serviços que podem subir só quando precisar</b><small>ganha: menos serviços rodando desde o boot · perde: aparelhos de rede (TVs, impressoras na rede) podem demorar a aparecer</small></div></li><li><span class="nv nv3">extremo</span><div><b>agrupar serviços em menos processos</b><small>ganha: dezenas de processos a menos no Gerenciador de Tarefas · perde: ganho de RAM pequeno e não comprovado; se um serviço travar, leva os vizinhos junto</small></div></li><li><span class="nv nv3">extremo</span><div><b>área de trabalho remota</b><small>ganha: menos serviços e menos portas abertas · perde: ninguém acessa este PC pela Área de Trabalho Remota</small></div></li><li><span class="nv nv3">extremo</span><div><b>gerenciamento remoto (WinRM)</b><small>ganha: um serviço a menos · perde: scripts remotos e alguns sistemas de empresa param</small></div></li><li><span class="nv nv3">extremo</span><div><b>agente SSH</b><small>ganha: um serviço a menos · perde: quem usa chave SSH com senha digita de novo</small></div></li><li><span class="nv nv3">extremo</span><div><b>cartão inteligente</b><small>ganha: menos três serviços · perde: certificado digital em cartão ou token (e-CPF, e-CNPJ) para de funcionar</small></div></li><li><span class="nv nv3">extremo</span><div><b>sensores e localização</b><small>ganha: menos serviços · perde: rotação automática de tela, brilho automático, fuso horário automático e &quot;Encontrar meu dispositivo&quot; param</small></div></li><li><span class="nv nv3">extremo</span><div><b>scanner</b><small>ganha: um serviço a menos · perde: scanner para de funcionar</small></div></li><li><span class="nv nv3">extremo</span><div><b>biometria</b><small>ganha: um serviço a menos · perde: Windows Hello com rosto e digital para</small></div></li><li><span class="nv nv3">extremo</span><div><b>assistente de compatibilidade e rastreio de links</b><small>ganha: menos dois serviços · perde: programas muito antigos deixam de receber ajustes automáticos</small></div></li></ul><h4>privacidade e propaganda <i>5</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>registros contínuos de diagnóstico</b><small>ganha: menos escrita contínua em disco · perde: diagnósticos avançados da Microsoft ficam com menos dados</small></div></li><li><span class="nv nv3">extremo</span><div><b>área de transferência na nuvem</b><small>ganha: privacidade · perde: perde o colar entre aparelhos</small></div></li><li><span class="nv nv3">extremo</span><div><b>&quot;Encontrar meu dispositivo&quot;</b><small>ganha: privacidade · perde: não dá para localizar o PC perdido pela conta</small></div></li><li><span class="nv nv3">extremo</span><div><b>bloquear segundo plano para todos</b><small>ganha: mais RAM e CPU livres · perde: nenhum app da Loja notifica fechado</small></div></li><li><span class="nv nv3">extremo</span><div><b>localização</b><small>ganha: privacidade · perde: fuso automático, mapas, clima local e &quot;Encontrar meu dispositivo&quot; param</small></div></li></ul><h4>visual e barra de tarefas <i>5</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>arrastar janela sem conteúdo</b><small>ganha: menos trabalho de vídeo em PC fraco · perde: visual estranho para quem não está acostumado</small></div></li><li><span class="nv nv3">extremo</span><div><b>ícones no lugar de miniaturas</b><small>ganha: pastas de mídia abrem mais rápido em HD · perde: não vê a prévia das fotos</small></div></li><li><span class="nv nv3">extremo</span><div><b>papel de parede liso</b><small>ganha: um pouco de RAM · perde: perde o papel de parede</small></div></li><li><span class="nv nv3">extremo</span><div><b>atalhos quebrados sem busca demorada</b><small>ganha: sem travadas de vários segundos · perde: atalho de arquivo movido não se conserta sozinho</small></div></li><li><span class="nv nv3">extremo</span><div><b>menu Iniciar sem &quot;Recomendados&quot;</b><small>ganha: menu limpo e privado · perde: perde os arquivos recentes no menu</small></div></li></ul><h4>jogos <i>2</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>sem otimizações de tela inteira</b><small>ganha: só em alguns jogos antigos com engasgo ou atraso · perde: no Windows 11 pode piorar: o modo moderno costuma ser melhor</small></div></li><li><span class="nv nv3">extremo</span><div><b>resolução do temporizador global</b><small>ganha: pode reduzir latência em alguns jogos · perde: mais consumo de energia; efeito varia</small></div></li></ul><h4>energia <i>2</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>plano desempenho máximo</b><small>ganha: mais rápido para responder e em jogos · perde: mais calor e consumo; em notebook, a bateria dura menos</small></div></li><li><span class="nv nv3">extremo</span><div><b>sem suspensão seletiva de USB na tomada</b><small>ganha: evita mouse, teclado e headset desconectando ou com atraso · perde: gasto mínimo de energia</small></div></li></ul><h4>disco e memória <i>1</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>NTFS sem nomes 8.3 e com mais cache</b><small>ganha: pastas grandes mais rápidas · perde: programas de DOS muito antigos podem não achar arquivos novos</small></div></li></ul><h4>área de trabalho e menu <i>1</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>área de trabalho só com a Lixeira</b><small>ganha: visual limpo · perde: você abre programas pelo menu Iniciar</small></div></li></ul><h4>Minecraft <i>1</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>Minecraft: opções para PC fraco (a mais)</b><small>ganha: mais FPS em PC fraco ou com placa integrada · perde: o jogo fica bem mais simples e o horizonte, curto</small></div></li></ul><h4>CS2 <i>1</i></h4><ul><li><span class="nv nv3">extremo</span><div><b>vídeo do CS2 para PC fraco (a mais)</b><small>ganha: menos uso de memória de vídeo e mais FPS em placa antiga · perde: texturas mais borradas de perto</small></div></li></ul></div></details>
       </article>
       <article class="perfil montar">
         <span class="vazio-slot" aria-hidden="true">+</span>
-        <div><h3>Ou escolha item por item</h3><p>Abra uma área (limpar, privacidade, jogos...) e marque só o que quer. Outros 36 itens nunca vêm marcados: só entram se você marcar.</p></div>
+        <div><h3>Ou escolha item por item</h3><p>Mais 36 itens só entram se você marcar.</p></div>
         <code>escolher</code>
       </article>
     </div>
@@ -533,8 +578,8 @@
     <div class="quadro">
       <div class="jh-texto">
         <h2 id="jogos-t">Jogos<span>.</span></h2>
-        <p>132 jogos conhecidos recebem prioridade de CPU. O CS2 e o Minecraft Java têm pacote próprio, com ajustes no arquivo de configuração do jogo, sempre com cópia antes.</p>
-        <a class="botao vazio" href="jogos.html">Ver o catálogo completo</a>
+        <p>132 jogos recebem prioridade de CPU. CS2 e Minecraft têm pacote próprio.</p>
+        <a class="botao vazio" href="jogos.html">Ver o catálogo</a>
       </div>
       <div class="placas">
       <a class="placa" href="jogos.html#c-valve">
@@ -576,12 +621,12 @@
       <div class="nunca">
         <div class="nunca-lado"><strong>0</strong><span>proteções do Windows que o Katharos desliga.</span></div>
         <ul>
-          <li style="--i:0"><s>Desligar o Defender</s><span>o antivírus fica ligado</span></li>
-          <li style="--i:1"><s>Bloquear o Windows Update</s><span>ele continua atualizando</span></li>
-          <li style="--i:2"><s>Firewall, UAC, SmartScreen</s><span>ficam como estão</span></li>
-          <li style="--i:3"><s>Integridade de Memória</s><span>ganho pequeno, risco grande</span></li>
-          <li style="--i:4"><s>Desligar a memória virtual</s><span>programas fechariam sozinhos</span></li>
-          <li style="--i:5"><s>Apagar arquivos seus de vez</s><span>os seus vão para a Lixeira</span></li>
+          <li style="--i:0"><s>Desligar o Defender</s><span>antivírus ligado</span></li>
+          <li style="--i:1"><s>Bloquear o Windows Update</s><span>segue atualizando</span></li>
+          <li style="--i:2"><s>Firewall, UAC, SmartScreen</s><span>ficam ligados</span></li>
+          <li style="--i:3"><s>Integridade de Memória</s><span>risco alto</span></li>
+          <li style="--i:4"><s>Desligar a memória virtual</s><span>mantida</span></li>
+          <li style="--i:5"><s>Apagar arquivos seus de vez</s><span>vão para a Lixeira</span></li>
         </ul>
       </div>
     </div>
@@ -595,10 +640,10 @@
   </section>
   <section class="faixa faq" aria-label="Perguntas e respostas">
     <div class="quadro">
-      <details><summary>É seguro?</summary><p>Cria um ponto de restauração e anota cada valor antigo; <code>desfazer</code> põe tudo de volta. Defender, firewall e Windows Update ficam ligados.</p></details>
-      <details><summary>Pode dar ban em jogo?</summary><p>Ele não abre, não injeta e não troca nada do jogo: só configurações do Windows e arquivos de configuração do seu usuário. Em jogos com anti-cheat de terceiros (Valorant, Fortnite, LoL, Rainbow Six) ele não mexe por padrão. Existe um item opcional de prioridade para eles: nenhum anti-cheat garante aceitar, então fica desligado até você marcar.</p></details>
-      <details><summary>Preciso instalar algo?</summary><p>Só o Python; se faltar, ele instala pelo winget.</p></details>
-      <details><summary>Manda meus dados para algum lugar?</summary><p>Não. Histórico e relatórios ficam no seu PC, ao lado do KATHAROS.bat.</p></details>
+      <details><summary>É seguro?</summary><p>Cria um ponto de restauração. <code>desfazer</code> põe tudo de volta.</p></details>
+      <details><summary>Pode dar ban em jogo?</summary><p>Não abre nem altera o jogo. Em jogos com anti-cheat de terceiros ele não mexe por padrão.</p></details>
+      <details><summary>Preciso instalar algo?</summary><p>Só o Python; se faltar, ele instala.</p></details>
+      <details><summary>Manda meus dados para algum lugar?</summary><p>Não. Tudo fica no seu PC.</p></details>
     </div>
   </section>
 
@@ -609,9 +654,8 @@
   </section>
   <section class="faixa novidades" aria-label="Últimas versões">
     <div class="quadro">
-<div class="nov"><div class="nov-v"><b>v2.0.1</b><small>9 nov 2026</small></div><ul><li><b>Autenticidade</b> (autenticidade): confere se os arquivos do programa são os publicados, contra o SHA256SUMS.txt que veio junto e contra a lista oficial da versão (baixada pelo...</li><li><b>Assinatura do GitHub:</b> cada release passa a ser atestada pelo GitHub Actions.</li><li><b>Publicação automática</b> (publicar no GitHub Actions): confere versão, changelog e hashes, roda os testes, monta o Katharos.zip, assina os arquivos e cria a release com o texto do changelog.</li><li>Site: rolagem suave da roda do mouse e do touchpad (Lenis, o mesmo do portfólio), servida pelo próprio site; o toque no celular continua nativo e &quot;reduzir movimento&quot;...</li></ul></div>
-<div class="nov"><div class="nov-v"><b>v2.0.0</b><small>9 nov 2026</small></div><ul><li><b>Menu de sete linhas:</b> raiox, turbo, escolher, jogar, painel, desfazer e mais.</li><li><b>Sem perfis:</b> o comando perfil e os perfis prontos saíram.</li><li><b>jogar:</b> tudo de jogo num lugar só.</li><li><b>Escolha de itens que se explica:</b> os itens aparecem em grupos, e cada grupo diz o que é: **seguro** (não tira nada de você), **equilibrado** (tira o que quase ninguém usa), **extremo** (tira algum...</li><li><b>buscar:</b> digite o que procura (buscar telemetria, buscar ventoinha) e ele acha o item ou o comando em qualquer área, sem depender de acento, entendendo palavras do dia a dia...</li></ul></div>
-<div class="nov"><div class="nov-v"><b>v1.4.1</b><small>9 nov 2026</small></div><ul><li><b>Segundo plano</b> (agendar --frequencia semanal|diaria|continua): a tarefa do Windows agora pode rodar ao iniciar o sistema e a cada 4 horas, só com o PC ocioso e na tomada, em...</li><li><b>conselheiro</b>, o motor de inteligência: junta medidas, benchmarks, pacotes aplicados, erros do relatório e achados do raio-x e propõe o que mudar, cada proposta com o número que a...</li><li><b>tendencia</b> mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo, e o segundo plano avisa.</li><li><b>painel</b> gera um arquivo HTML com gráficos que interpretam os dados: linha suavizada, pontos fora do normal, projeção de quando o disco enche, limite de temperatura, as datas...</li><li><b>Leitura leve a cada 15 minutos</b> (modo continua do agendar): temperatura, CPU, RAM, disco, placa de vídeo e bateria, somadas em uma linha por hora (até ~400 dias, uns 2 MB).</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v2.0.1</b><small>9 nov 2026</small></div><ul><li><b>Autenticidade</b> (autenticidade): confere se os arquivos do programa são os publicados, contra o...</li><li><b>Assinatura do GitHub:</b> cada release passa a ser atestada pelo GitHub Actions.</li><li><b>Publicação automática</b> (publicar no GitHub Actions): confere versão, changelog e hashes, roda os testes,...</li></ul></div>
+<div class="nov"><div class="nov-v"><b>v2.0.0</b><small>9 nov 2026</small></div><ul><li><b>Menu de sete linhas:</b> raiox, turbo, escolher, jogar, painel, desfazer e mais.</li><li><b>Sem perfis:</b> o comando perfil e os perfis prontos saíram.</li><li><b>jogar:</b> tudo de jogo num lugar só.</li></ul></div>
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
     </div>
   </section>
@@ -623,9 +667,9 @@
   </section>
   <section class="faixa contribui" aria-label="Como contribuir">
     <div class="quadro celulas">
-      <div><h3>Contar um problema</h3><p>Abra uma <a href="https://github.com/kessleru/Katharos/issues/new/choose">issue</a> com o que aconteceu.</p></div>
-      <div><h3>Propor um ajuste</h3><p>Faça um <a href="https://github.com/kessleru/Katharos/pulls">pull request</a>. Todo item diz o que ganha e o que perde.</p></div>
-      <div><h3>Revisar o código</h3><p>É um arquivo só, <code>programa/katharos.py</code>. Achou algo perigoso? <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">Conte em privado</a>.</p></div>
+      <div><h3>Contar um problema</h3><p>Abra uma <a href="https://github.com/kessleru/Katharos/issues/new/choose">issue</a>.</p></div>
+      <div><h3>Propor um ajuste</h3><p>Envie um <a href="https://github.com/kessleru/Katharos/pulls">pull request</a>.</p></div>
+      <div><h3>Revisar o código</h3><p>Um arquivo só: <code>katharos.py</code>. Falha de segurança? <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">Conte em privado</a>.</p></div>
     </div>
   </section>
 </main>
@@ -638,6 +682,54 @@
   </div>
 </footer>
 
+<script>
+(() => {
+  const dash = document.getElementById('dash'); if (!dash) return;
+  const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let sd = 7; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, pai) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); pai.appendChild(n); return n; };
+  const caminho = pts => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  function grade(svg, x0, x1, ys, rot) {
+    ys.forEach(y => el('line', { x1: x0, x2: x1, y1: y, y2: y, class: 'grade' }, svg));
+    rot.forEach(([x, y, t, a]) => { const n = el('text', { x, y, class: 'eixo', 'text-anchor': a || 'start' }, svg); n.textContent = t; });
+  }
+  // espaço livre: cai de 92 a 50 GB; o traço vermelho projeta quando enche
+  const disco = document.getElementById('g-disco');
+  const X0 = 10, X1 = 590, XN = 380, Y = v => 15 + (100 - v) / 60 * 140;
+  grade(disco, X0, X1, [], [[X0, 176, '01/10'], [X1, 176, '21/10', 'end']]);
+  const pts = []; for (let i = 0; i <= 60; i++) { const t = i / 60; pts.push([X0 + t * (XN - X0), Y(92 - 42 * t - 1.2 * Math.sin(t * 40) + (rnd() - .5) * 1.4)]); }
+  el('path', { class: 'area', d: caminho(pts) + ` L${XN} ${Y(40)} L${X0} ${Y(40)}Z` }, disco);
+  el('path', { class: 'linha', pathLength: 1, d: caminho(pts) }, disco);
+  el('path', { class: 'proj', d: `M${XN} ${pts[60][1]} L${X1} ${Y(43)}` }, disco);
+  el('circle', { class: 'ponto', cx: XN, cy: pts[60][1], r: 4 }, disco);
+  const rd = el('text', { class: 'rot', x: X1, y: Y(43) - 10, 'text-anchor': 'end' }, disco); rd.textContent = 'cheio ~17/11';
+  // mapa de calor: máxima por hora; esquenta no fim da tarde e à noite
+  const calor = document.getElementById('g-calor');
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 24; c++) {
+    const base = c >= 18 ? 3 : c >= 13 ? 2 : c >= 8 ? 1 : 0, dia = (r % 3 === 0) ? 1 : 0;
+    const l = Math.max(0, Math.min(4, base + (rnd() < .35 ? 1 : 0) - (rnd() < .3 ? 1 : 0) + (c >= 19 && dia && rnd() < .5 ? 1 : 0)));
+    const i = document.createElement('i'); i.dataset.l = l; i.style.setProperty('--c', c); i.style.setProperty('--r', r); calor.appendChild(i);
+  }
+  // números que sobem
+  const nums = [...dash.querySelectorAll('.kpi b[data-n]')];
+  const fmt = (v, d) => v.toFixed(d).replace('.', ',');
+  const un = n => n.querySelector('small');
+  const escreve = (n, v) => { const d = +(n.dataset.d || 0), u = un(n); n.firstChild.nodeValue = fmt(v, d); };
+  nums.forEach(n => { n.insertBefore(document.createTextNode('0'), n.firstChild); n.firstChild.nextSibling.nodeType === 3 && n.firstChild.nextSibling.remove(); });
+  const sobe = () => {
+    const t0 = performance.now(), dur = 1400;
+    const f = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      nums.forEach(n => escreve(n, +n.dataset.n * e)); if (k < 1) requestAnimationFrame(f); };
+    requestAnimationFrame(f);
+  };
+  const tic = () => { const t = document.getElementById('k-temp'); let base = 47, vis = true;
+    setInterval(() => { if (document.hidden) return; base = 46 + Math.round(rnd() * 3); escreve(t, base); }, 2600); };
+  const entra = () => { dash.parentElement.classList.add('vis'); sobe(); setTimeout(tic, 1600); };
+  if (calmo) { dash.parentElement.classList.add('vis'); nums.forEach(n => escreve(n, +n.dataset.n)); }
+  else new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); entra(); } }, { threshold: .25 }).observe(dash);
+})();
+</script>
 <script>
 (() => {
   const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
