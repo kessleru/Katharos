@@ -41,7 +41,7 @@ Ou direto, num PowerShell aberto como administrador: `python programa\katharos.p
 
 ## Modos
 
-A abertura mostra o **próximo passo** para este PC (medir, aplicar o que o raio-x apontou, conferir o ganho, agendar) e o Enter segue; qualquer palavra que não seja comando vira busca (`ventoinha`, `como tirar a propaganda`). Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem sete linhas (`raiox`, `turbo`, `escolher`, `jogar`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas, `jogar` é o turbo com foco em jogos (jogos ou jogos no máximo: mais FPS e menos atraso em qualquer jogo, nada de ajuste jogo por jogo) e `mais` as outras ferramentas, por assunto. O `turbo` também pergunta para quê: uso geral, jogos ou jogos no máximo. Em qualquer tela vale o número da linha ou o nome de um comando.
+A abertura mostra o **próximo passo** para este PC (medir, aplicar o que o raio-x apontou, conferir o ganho, agendar) e o Enter segue; qualquer palavra que não seja comando vira busca (`ventoinha`, `como tirar a propaganda`). Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem seis linhas (`raiox`, `turbo`, `escolher`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas e `mais` as outras ferramentas, por assunto. Jogos não são uma escolha à parte: cada modo já traz o que ajuda FPS e atraso em qualquer jogo (o extremo vai mais longe), e você tira ou põe item por item. Em qualquer tela vale o número da linha ou o nome de um comando.
 
 | Modo | O que marca |
 | --- | --- |

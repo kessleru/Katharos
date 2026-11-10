@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '2.5.0'
+VERSAO = '3.0.0'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -1060,11 +1060,13 @@ COR_NIVEL = {0: 'apagado', 1: 'verde', 2: 'azul', 3: 'pessego'}
 
 EXPLICA_MODOS = [
     ('seguro', 'verde', 'Só o que não tem contrapartida: telemetria, anúncios, lixo, apps de propaganda, '
-     'tarefas inúteis. Bom para PC de trabalho ou de outra pessoa.'),
+     'tarefas inúteis, Modo de Jogo. Bom para PC de trabalho ou de outra pessoa.'),
     ('equilibrado', 'azul', 'O seguro mais o que quase ninguém usa: serviços de empresa e de telefone, '
-     'Xbox (se não joga), IA do Windows, widgets, efeitos visuais, caches. É o recomendado.'),
-    ('extremo', 'pessego', 'Tudo o que pode ajudar neste PC: desliga sensores, área de trabalho remota, '
-     'scanner, localização, hibernação no SSD, ajustes de jogos e de rede. Você perde recursos (cada item diz quais).'),
+     'Xbox (se não joga), IA do Windows, widgets, efeitos visuais, caches, e o que ajuda em jogo sem custo '
+     '(sem gravação de fundo, mouse sem aceleração). É o recomendado.'),
+    ('extremo', 'pessego', 'Tudo o que pode ajudar neste PC, inclusive o máximo de FPS em jogo: energia no máximo, '
+     'placa de vídeo sempre no desempenho, menos atraso de rede e de entrada; desliga sensores, área de trabalho remota, '
+     'scanner, localização, hibernação no SSD. Você perde recursos (cada item diz quais).'),
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
@@ -3642,7 +3644,7 @@ PREFIXOS = [
 ]
 # o fim do nome diz o que o programa está fazendo, mesmo sem saber de quem é
 SUFIXOS = [
-    ('-win64-shipping', 'um jogo feito na Unreal Engine', 'é o jogo em si: "jogar" ajusta o Windows para ele', 'jogar'),
+    ('-win64-shipping', 'um jogo feito na Unreal Engine', 'é o jogo em si: o pacote "jogos" ajusta o Windows para ele', 'jogos'),
     ('-wingdk-shipping', 'um jogo da Microsoft Store feito na Unreal Engine', 'é o jogo em si', 'jogos'),
     ('crashhandler', 'o relator de erros de um programa', 'normal', ''),
     ('crashreporter', 'o relator de erros de um programa', 'normal', ''),
@@ -5609,7 +5611,7 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
         Item('mmcss', 'agendador multimídia: menos CPU reservada ao fundo', 'Baixa a reserva de CPU para tarefas de fundo de 20% para 10% '
              '(SystemResponsiveness) e põe a tarefa "Games" do agendador multimídia em categoria High. Só isso: a Microsoft documenta que '
              '"GPU Priority" e "SFIO Priority" não são usados, então eles não são tocados. Só vale para jogos que usam o MMCSS.',
-             'pequeno e raramente medido; só em jogo que usa o agendador multimídia', 'tarefas de fundo ficam com menos CPU enquanto joga', 0,
+             'pequeno e raramente medido; só em jogo que usa o agendador multimídia', 'tarefas de fundo ficam com menos CPU enquanto joga', 3,
              RR(R(mm, 'SystemResponsiveness', 10), R(mm + '\\Tasks\\Games', 'Scheduling Category', 'High', 'String'))),
         Item('primeiro-plano', 'prioridade do primeiro plano explícita', 'Grava Win32PrioritySeparation = 0x26, o valor que a opção "Programas" '
              'do Windows grava em Desempenho. É o comportamento que o Windows de cliente já usa por padrão (fatias curtas, variáveis, com '
@@ -5617,11 +5619,11 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              'provavelmente nenhum, se o valor nunca foi mexido', 'nenhum', 0,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl', 'Win32PrioritySeparation', 38)),
         Item('mouse', 'sem aceleração do mouse', 'O ponteiro anda sempre a mesma distância para o mesmo movimento ("precisão aprimorada" desligada).',
-             'mira mais consistente', 'em telas grandes o mouse parece mais lento até se acostumar', 2 if j else 0,
+             'mira mais consistente', 'em telas grandes o mouse parece mais lento até se acostumar', 2 if j else 3,
              RR(R('HKCU:\\Control Panel\\Mouse', 'MouseSpeed', '0', 'String'), R('HKCU:\\Control Panel\\Mouse', 'MouseThreshold1', '0', 'String'),
                 R('HKCU:\\Control Panel\\Mouse', 'MouseThreshold2', '0', 'String'))),
         Item('teclado', 'teclado mais rápido', 'Repetição de tecla no máximo e atraso mínimo antes de repetir.',
-             'movimentos e digitação respondem antes', 'quem digita devagar pode repetir letras sem querer', 2 if j else 0,
+             'movimentos e digitação respondem antes', 'quem digita devagar pode repetir letras sem querer', 3,
              RR(R('HKCU:\\Control Panel\\Keyboard', 'KeyboardDelay', '0', 'String'), R('HKCU:\\Control Panel\\Keyboard', 'KeyboardSpeed', '31', 'String'))),
         Item('aderencia', 'sem atalho das Teclas de Aderência', 'Shift 5 vezes (e segurar Shift ou Num Lock) não abre mais o aviso de acessibilidade '
              'no meio do jogo. Os recursos continuam nas Configurações.', 'sem janela surgindo no jogo', 'quem usa esses atalhos de acessibilidade perde', 2 if j else 3,
@@ -5629,12 +5631,12 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
                 R('HKCU:\\Control Panel\\Accessibility\\Keyboard Response', 'Flags', '122', 'String'),
                 R('HKCU:\\Control Panel\\Accessibility\\ToggleKeys', 'Flags', '58', 'String'))),
         Item('gpu-nvidia', 'NVIDIA sem troca dinâmica de estado de energia', 'A placa NVIDIA fica sempre no estado de desempenho (DisableDynamicPstate).',
-             'clock da GPU estável, sem quedas de frequência', 'mais calor e consumo o tempo todo, mesmo parado', 0, GPU_PS.replace('«fab»', 'NVIDIA').replace('«reg»', R('$__k', 'DisableDynamicPstate', 1).replace("'$__k'", '$__k'))) if pf(p, 'tem.nvidia') and not pf(p, 'pc.notebook') else None,
+             'clock da GPU estável, sem quedas de frequência', 'mais calor e consumo o tempo todo, mesmo parado', 3, GPU_PS.replace('«fab»', 'NVIDIA').replace('«reg»', R('$__k', 'DisableDynamicPstate', 1).replace("'$__k'", '$__k'))) if pf(p, 'tem.nvidia') and not pf(p, 'pc.notebook') else None,
         Item('gpu-amd', 'AMD sem ULPS', 'Desliga o modo de ultra baixo consumo das placas AMD, que às vezes causa engasgo ao acordar a placa '
              '(principalmente com duas placas).', 'menos engasgos ao sair do ocioso', 'mais consumo parado', 3,
              GPU_PS.replace('«fab»', 'AMD|Radeon').replace('«reg»', R('$__k', 'EnableULPS', 0).replace("'$__k'", '$__k'))) if pf(p, 'tem.amd') and not pf(p, 'pc.notebook') else None,
         Item('fse', 'sem otimizações de tela inteira', 'Jogos em tela inteira usam o modo exclusivo antigo.',
-             'só em alguns jogos antigos com engasgo ou atraso', 'no Windows 11 pode piorar: o modo moderno costuma ser melhor', 3,
+             'só em alguns jogos antigos com engasgo ou atraso', 'no Windows 11 pode piorar: o modo moderno costuma ser melhor', 0,
              RR(R(gc, 'GameDVR_FSEBehaviorMode', 2), R(gc, 'GameDVR_HonorUserFSEBehaviorMode', 1), R(gc, 'GameDVR_FSEBehavior', 2),
                 R(gc, 'GameDVR_DXGIHonorFSEWindowsCompatible', 1))),
         Item('timer', 'resolução do temporizador global', 'No Windows 11, um programa que pede temporizador fino volta a valer para o '
@@ -5642,13 +5644,13 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel', 'GlobalTimerResolutionRequests', 1)) if pf(p, 'so.win11') else None,
         Item('rede-jogos', 'rede: sem atraso de pacotes (Nagle) e sem limite multimídia', 'Confirmações TCP imediatas e sem o '
              'limitador de rede do agendador multimídia.', 'quase sempre zero ou mínimo (a maioria dos jogos usa UDP)',
-             'um pouco mais de pacotes na rede', 0, RR(nagle, R(mm, 'NetworkThrottlingIndex', -1))),
+             'um pouco mais de pacotes na rede', 3, RR(nagle, R(mm, 'NetworkThrottlingIndex', -1))),
         Item('mpo', 'desligar o Multiplane Overlay (MPO)', 'Correção conhecida para tela piscando, cintilação e engasgos com '
              'algumas placas NVIDIA e vários monitores.', 'só resolve se você tem esse problema', 'sem o problema, não muda nada (ou piora um pouco)', 0,
              R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm', 'OverlayTestMode', 5)),
         Item('hags', 'agendamento de GPU acelerado por hardware', 'A placa de vídeo cuida da própria fila (HAGS). Precisa de placa e '
              'driver recentes; vale depois de reiniciar.', 'pequeno; necessário para o DLSS 3 (geração de quadros)',
-             'em placas antigas pode causar engasgos', 0, R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', 'HwSchMode', 2)),
+             'em placas antigas pode causar engasgos', 3, R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', 'HwSchMode', 2)),
     ]
 
 
@@ -8363,7 +8365,7 @@ INTERVALO_MINIMO_H = 3   # duas execuções agendadas nunca ficam mais perto que
 ORDEM_TURBO = ['programas', 'apps', 'ia', 'inicializacao', 'servicos', 'privacidade', 'visual', 'jogos', 'energia',
                'reparar', 'atualizar', 'limpar', 'disco', 'navegador', 'interface']
 NIVEL_PACOTE = {'programas': 1, 'apps': 1, 'ia': 2, 'inicializacao': 1, 'servicos': 1, 'privacidade': 1, 'visual': 2,
-                'jogos': 3, 'energia': 1, 'reparar': 1, 'atualizar': 1, 'limpar': 1, 'disco': 1, 'navegador': 2, 'interface': 3}
+                'jogos': 1, 'energia': 1, 'reparar': 1, 'atualizar': 1, 'limpar': 1, 'disco': 1, 'navegador': 2, 'interface': 3}
 
 
 def _espera_bateria(t):
@@ -8424,52 +8426,6 @@ def escolhe_modo(t, args):
 
 ETAPAS_FIXAS = ('medir-antes', 'medir-depois', 'reinicio', 'agendar')
 
-# Para que o turbo otimiza. Nada é de um jogo específico: tudo vale para qualquer jogo.
-# jogos: o que ajuda FPS e latência sem custo para o resto do PC. jogos-max: tudo o que pode dar FPS, aceitando mais consumo,
-# mais calor e menos efeitos (plano de energia máximo, placa de vídeo sempre no estado de desempenho, temporizador fino...).
-FOCOS = [
-    ('geral', 'uso geral', 'o PC inteiro mais leve, sem prioridade para jogos'),
-    ('jogos', 'jogos', 'mais FPS e menos atraso em qualquer jogo, sem perder nada no resto do PC'),
-    ('jogos-max', 'jogos no máximo', 'tudo o que pode dar FPS: plano de energia máximo, efeitos visuais desligados, placa de vídeo '
-                  'sempre no desempenho e menos atraso de entrada e de rede. Gasta mais energia e esquenta mais'),
-]
-FOCO_ITENS = {   # itens do pacote "jogos" que cada foco põe, além dos que o modo marca
-    'jogos': {'modo-jogo', 'gamedvr', 'aderencia', 'mouse', 'hags', 'directx-jogos'},
-    'jogos-max': {'modo-jogo', 'gamedvr', 'aderencia', 'mouse', 'teclado', 'hags', 'directx-jogos', 'mmcss', 'primeiro-plano', 'rede-jogos', 'timer',
-                  'gpu-nvidia', 'gpu-amd'},
-}
-FOCO_ETAPAS = {'jogos': ('jogos', 'energia'), 'jogos-max': ('jogos', 'energia', 'visual', 'servicos')}
-FOCO_EXTREMO = {'jogos-max': ('energia', 'visual')}   # nestas etapas o foco máximo marca como no modo extremo
-
-
-def escolhe_foco(t, args):
-    f = getattr(args, 'foco', None)
-    if f in dict((x[0], x) for x in FOCOS):
-        return f
-    t.titulo('para quê')
-    for i, (nome, rot, txt) in enumerate(FOCOS, 1):
-        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(rot, "texto", True)}')
-        t.paragrafo(txt + '.', 6, 'sub')
-    t.escreve()
-    if getattr(args, 'sim', False) or not t.interativo:
-        return 'geral'
-    r = t.pergunta('para quê: 1, 2 ou 3 (Enter = uso geral)').strip().lower()
-    return {'1': 'geral', '2': 'jogos', '3': 'jogos-max'}.get(r, r if r in dict((x[0], x) for x in FOCOS) else 'geral')
-
-
-def ferramenta_jogar(ctx, args):
-    """O turbo com foco em jogos: pergunta só entre jogos e jogos no máximo."""
-    t = ctx.t
-    if getattr(args, 'foco', None) not in ('jogos', 'jogos-max'):
-        t.titulo('otimizar para jogos')
-        for i, (nome, rot, txt) in enumerate(FOCOS[1:], 1):
-            t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(rot, "texto", True)}')
-            t.paragrafo(txt + '.', 6, 'sub')
-        r = '1' if (getattr(args, 'sim', False) or not t.interativo) else t.pergunta('1 ou 2 (Enter = jogos)').strip().lower()
-        args.foco = 'jogos-max' if r in ('2', 'max', 'maximo', 'máximo', 'jogos-max') else 'jogos'
-    return ferramenta_turbo(ctx, args)
-
-
 def le_plano(arq):
     """O plano de um turbo anterior: um .json com etapas, ou o relatório único (.md) de onde ele veio. Só vale o que o
     Katharos conhece: etapas e ids são nomes, nunca comandos."""
@@ -8522,7 +8478,6 @@ def ferramenta_turbo(ctx, args):
         grava_json(ARQ_TURBO, plano)
         return executa_turbo(ctx, args, plano)
     modo = escolhe_modo(t, args)
-    foco = escolhe_foco(t, args)
     t.escreve()
     itens = []
     for nome in ORDEM_TURBO:
@@ -8531,8 +8486,6 @@ def ferramenta_turbo(ctx, args):
         nota = ''
         if nome == 'jogos' and joga(p):
             n, nota = 2, 'tem jogos instalados'
-        if nome in FOCO_ETAPAS.get(foco, ()):
-            n, nota = 1, f'foco: {dict((x[0], x[1]) for x in FOCOS)[foco]}'
         if nome == 'navegador' and config('navegador') == 'brave':
             n = 1
         itens.append(Item(nome, pac.titulo, pac.explica, pac.resumo, '', n, nota=nota))
@@ -8544,7 +8497,7 @@ def ferramenta_turbo(ctx, args):
     if not escolhidos:
         t.nota('nada escolhido.')
         return 0
-    plano = {'criado': agora_iso(), 'modo': modo, 'foco': foco, 'etapas': ['medir-antes'] + [i.id for i in escolhidos if i.id != 'reinicio'],
+    plano = {'criado': agora_iso(), 'modo': modo, 'etapas': ['medir-antes'] + [i.id for i in escolhidos if i.id != 'reinicio'],
              'itens': {}, 'feitas': [], 'tentativas': {}, 'concluido': False}
     if any(i.id == 'reinicio' for i in escolhidos):
         plano['etapas'] += ['reinicio', 'medir-depois']
@@ -8638,12 +8591,7 @@ def _itens_da_etapa(ctx, plano, etapa, filtra_ja=True):
         ids = set(plano['itens'][etapa])
         its = [x for x in its if x.id in ids]
     else:
-        foco = plano.get('foco') or 'geral'
-        marca_por_modo(its, 'extremo' if etapa in FOCO_EXTREMO.get(foco, ()) else plano['modo'])
-        if etapa == 'jogos':
-            for x in its:
-                if x.id in FOCO_ITENS.get(foco, ()):
-                    x.marcado = True
+        marca_por_modo(its, plano['modo'])
         its = [x for x in its if x.marcado]
     if filtra_ja:   # o que já foi conferido como feito nesta sessão não roda de novo
         cache = getattr(ctx, 'ja', None) or {}
@@ -12945,7 +12893,6 @@ MENU = [
     ('raiox', 'nota do PC e o que fazer primeiro (só lê)'),
     ('turbo', 'otimiza tudo de uma vez, no modo que você escolher'),
     ('escolher', 'otimiza por área: você escolhe a área e os itens'),
-    ('jogar', 'otimiza para jogos: mais FPS e menos atraso em qualquer jogo'),
     ('painel', 'gráficos do PC ao longo do tempo, no navegador'),
     ('desfazer', 'volta qualquer mudança'),
     ('mais', 'medir, acompanhar, segurança, preferências...'),
@@ -12969,7 +12916,6 @@ def grupos_da_tela(tela):
 
 
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
-COMANDOS['jogar'] = ('otimiza para jogos: mais FPS e menos atraso em qualquer jogo', 'ferramenta_jogar')
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (--parar tira)', 'ferramenta_bandeja')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
@@ -13067,11 +13013,6 @@ def monta_parser():
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
     tb.add_argument('--continuar', action='store_true', help='continua um turbo pela metade (a tarefa agendada usa)')
     tb.add_argument('--plano', metavar='ARQUIVO', help='usa as escolhas salvas de outro turbo (para repetir em outros PCs, sem perguntas)')
-    tb.add_argument('--foco', choices=['geral', 'jogos', 'jogos-max'], help='para quê: uso geral, jogos ou jogos no máximo')
-    jg = sub.add_parser('jogar', parents=[depois], help='otimiza para jogos: mais FPS e menos atraso em qualquer jogo')
-    jg.add_argument('--foco', choices=['jogos', 'jogos-max'], help='jogos ou jogos no máximo')
-    jg.add_argument('--continuar', action='store_true', help=argparse.SUPPRESS)
-    jg.add_argument('--plano', help=argparse.SUPPRESS)
     for cmd, desc, f in (x for _, _, itens in GRUPOS for x in itens):
         if f == 'pacote':
             sub.add_parser(cmd, parents=[depois], help=desc)
@@ -13123,7 +13064,7 @@ def monta_parser():
 
 def _defaults(args):
     for k, v in (('pastas', []), ('mb', None), ('agora', False), ('remover', False), ('pacotes', []), ('chave', None),
-                 ('valor', None), ('continuar', False), ('plano', None), ('foco', None), ('agendada', False), ('queixas', None), ('salvar', None),
+                 ('valor', None), ('continuar', False), ('plano', None), ('agendada', False), ('queixas', None), ('salvar', None),
                  ('copiar', False), ('codigo', False), ('filtro', None), ('dias', None), ('atalhos', False), ('desfazer', False),
                  ('zerar', False), ('acao', None), ('alvo', None)):
         if not hasattr(args, k):

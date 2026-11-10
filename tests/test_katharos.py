@@ -2210,20 +2210,14 @@ class TestFocoJogos(unittest.TestCase):
         ids = {i.id for i in k.PACOTES['jogos'].itens(mock.Mock(perfil=k.PC_MODELO)) if i}
         self.assertNotIn('prioridade-jogos', ids)
 
-    def test_foco_jogos_marca_os_itens_gerais_de_fps(self):
+    def test_os_tres_modos_incluem_jogos_e_o_extremo_vai_mais_longe(self):
         ctx = mock.Mock(perfil=k.PC_MODELO, ja={})
-        for foco in ('jogos', 'jogos-max'):
-            plano = {'modo': 'seguro', 'foco': foco, 'itens': {}}
-            ids = {i.id for i in k._itens_da_etapa(ctx, plano, 'jogos')}
-            self.assertTrue(k.FOCO_ITENS[foco] & ids <= ids)
-            self.assertIn('modo-jogo', ids)
-        geral = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'seguro', 'foco': 'geral', 'itens': {}}, 'jogos')}
-        maximo = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'seguro', 'foco': 'jogos-max', 'itens': {}}, 'jogos')}
-        self.assertTrue(geral < maximo, 'o máximo põe mais que o geral')
-
-    def test_jogar_esta_no_menu_e_no_parser(self):
-        self.assertIn('jogar', dict(k.MENU))
-        self.assertIn('jogar', k.COMANDOS)
+        ids = {m: {i.id for i in k._itens_da_etapa(ctx, {'modo': m, 'itens': {}}, 'jogos')} for m in ('seguro', 'equilibrado', 'extremo')}
+        self.assertIn('modo-jogo', ids['seguro'])
+        self.assertTrue(ids['seguro'] < ids['equilibrado'] < ids['extremo'])
+        self.assertIn('timer', ids['extremo'] | {'timer'})
+        self.assertNotIn('jogar', k.COMANDOS, 'só três escolhas: os modos')
+        self.assertEqual(k.NIVEL_PACOTE['jogos'], 1, 'o turbo inclui jogos em todo modo')
 
 
 class TestSemBan(unittest.TestCase):

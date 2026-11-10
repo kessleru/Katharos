@@ -18,6 +18,14 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.0.0 · 10 de novembro de 2026
+
+Três escolhas só: seguro, equilibrado e extremo. Jogos vêm dentro delas.
+
+- **Sem perguntas a mais**: saem o "para quê" do `turbo` e o comando `jogar`. O pacote `jogos` entra no turbo em todo modo, e o modo decide os itens: o seguro põe Modo de Jogo e jogos em janela otimizados; o equilibrado, também sem gravação de fundo e mouse sem aceleração; o extremo, também a placa de vídeo sempre no desempenho, o agendamento de GPU, o temporizador fino e menos atraso de rede e de entrada. Continua dando para revisar e escolher item por item (no turbo, `r`; ou pela área, em `escolher`).
+- **Versão maior** porque saem comandos: `jogar` agora, e `cs2`, `minecraft`, `unreal` e `steam` na 2.5.0.
+- Site: "Tudo o que ele faz", a lista inteira das mudanças por área, com botões que mostram o que cada modo marca.
+
 ## 2.5.0 · 10 de novembro de 2026
 
 Jogos sem pacote por jogo, e menos alarme falso.
