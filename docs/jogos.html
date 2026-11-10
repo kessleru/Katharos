@@ -17,6 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo:wght@400;500&display=swap" rel="stylesheet">
 <link rel="preload" as="image" href="jg-hero.webp">
+<link rel="stylesheet" href="lenis.css">
 <script>document.documentElement.classList.add('js');</script>
 <style>
   :root {
@@ -37,8 +38,9 @@
     --fora: clamp(0px, calc((100vw - var(--largura)) / 2 - 24px), 72px);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { background: var(--fundo); color: var(--texto); -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  html { background: var(--fundo); color: var(--texto); -webkit-text-size-adjust: 100%; }
   /* barra de rolagem: fina, quadrada, na cor do site */
+  html.lenis { scroll-behavior: auto; }
   html { scrollbar-width: thin; scrollbar-color: var(--linha-forte) var(--fundo); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: var(--fundo); border-left: 1px solid var(--linha); }
@@ -394,11 +396,24 @@
     vazio.hidden = total > 0;
     chips.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cat === filtro)));
   }
-  chips.forEach(b => b.addEventListener('click', () => { filtro = b.dataset.cat; aplica(); if (filtro.startsWith('c-')) document.getElementById(filtro).scrollIntoView({ block: 'start' }); }));
+  chips.forEach(b => b.addEventListener('click', () => { filtro = b.dataset.cat; aplica(); if (filtro.startsWith('c-')) { const alvo = document.getElementById(filtro); if (window.lenis) window.lenis.scrollTo(alvo, { force: true }); else alvo.scrollIntoView({ block: 'start' }); } }));
   campo.addEventListener('input', aplica);
   if (location.hash.startsWith('#c-')) { filtro = 'todos'; }
   aplica();
 })();
+</script>
+<script src="lenis.min.js"></script>
+<script>
+  /* rolagem suave da roda e do touchpad (Lenis, o mesmo do portfólio); toque continua nativo e "reduzir movimento" desliga */
+  (function () {
+    var reduz = matchMedia('(prefers-reduced-motion: reduce)'), l = null;
+    function liga() {
+      if (!reduz.matches && !l && window.Lenis) { l = new Lenis({ autoRaf: true, lerp: 0.12, anchors: true, allowNestedScroll: true, stopInertiaOnNavigate: true }); window.lenis = l; }
+      else if (reduz.matches && l) { l.destroy(); l = window.lenis = null; }
+    }
+    liga();
+    reduz.addEventListener('change', liga);
+  })();
 </script>
 </body>
 </html>

@@ -2320,3 +2320,15 @@ class TestAutenticidade(_CasaTemporaria):
 
     def test_changelog_tem_a_versao_atual(self):
         self.assertRegex((RAIZ / 'CHANGELOG.md').read_text(encoding='utf-8'), r'(?m)^## ' + re.escape(k.VERSAO) + r'\b')
+
+
+class TestSiteSuave(unittest.TestCase):
+    def test_rolagem_suave_vem_do_proprio_site_e_respeita_reduzir_movimento(self):
+        for nome in ('index.html', 'jogos.html'):
+            h = (RAIZ / 'docs' / nome).read_text(encoding='utf-8')
+            self.assertIn('src="lenis.min.js"', h)
+            self.assertIn('prefers-reduced-motion: reduce', h)
+            self.assertNotIn('https://cdn', h)
+            self.assertNotRegex(h, r'html \{[^}]*scroll-behavior: smooth')
+        for arq in ('lenis.min.js', 'lenis.css', 'lenis-LICENSE.txt'):
+            self.assertTrue((RAIZ / 'docs' / arq).is_file(), arq)

@@ -24,7 +24,8 @@ Conferir que o programa baixado é o original.
 
 - **Autenticidade** (`autenticidade`): confere se os arquivos do programa são os publicados, contra o `SHA256SUMS.txt` que veio junto e contra a lista oficial da versão (baixada pelo PowerShell; `--offline` pula). Na primeira vez, a tela do aviso faz isso sozinha e mostra o resultado em verde; se o programa não bate, ela não deixa continuar. Na abertura, avisa sozinho se o arquivo não bate com a lista que veio junto. Só a lista de hashes é baixada, nada é enviado.
 - **Assinatura do GitHub**: cada release passa a ser atestada pelo GitHub Actions. Quem baixar confere de fora do programa com `gh attestation verify katharos.py --repo kessleru/Katharos`.
-- Site: o texto solto no topo da página saiu e o rodapé ficou mais curto.
+- **Publicação automática** (`publicar` no GitHub Actions): confere versão, changelog e hashes, roda os testes, monta o `Katharos.zip`, assina os arquivos e cria a release com o texto do changelog. Tem modo ensaio, que não publica nada. O botão Baixar do site passa a apontar sempre para a última release.
+- Site: rolagem suave da roda do mouse e do touchpad (Lenis, o mesmo do portfólio), servida pelo próprio site; o toque no celular continua nativo e "reduzir movimento" desliga. O texto solto no topo da página saiu e o rodapé ficou mais curto.
 
 ## 2.0.0 · 9 de novembro de 2026
 
