@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Katharos com janelas (fase 2 do plano 4.0.0). Protótipo 2.0: casca e três telas no design do site, para aprovação. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon>Assets\katharos.ico</ApplicationIcon>
+    <AssemblyName>Katharos</AssemblyName>
+    <RootNamespace>Katharos.App</RootNamespace>
+    <Version>4.0.0</Version>
+    <Product>Katharos</Product>
+    <Description>Katharos: otimiza o Windows, mostra cada mudança antes e desfaz quando você quiser</Description>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.23" />
+  </ItemGroup>
+</Project>

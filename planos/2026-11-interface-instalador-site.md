@@ -287,7 +287,18 @@ O que o motor faz na interface (liga com a fase 2):
 **Design igual ao da landing page** (pedido de 10 nov, 20:10): as mesmas cores (escuro, osso, âmbar), as mesmas fontes, a gravura, as
 linhas divisórias horizontais e os "+" nos cantos dos containers, sem cara de app genérico. Os tokens do site viram os recursos do
 Avalonia (um lugar só para os dois). Bem feita: cada tela desenhada antes de codar, com crítica (skills de design do cofre) e foto no CI.
+**Simples e fácil de ver** (pedido de 10 nov, 20:19): pouca imagem (no máximo o cavaleiro na grama, e só onde fizer sentido, como a
+primeira abertura), menos poluição, números grandes e claros, uma ação principal por tela. O design do site entra pelas cores, fontes,
+linhas e "+", não por enfeite.
+**UX primeiro** (pedido de 10 nov, 20:20): a interface gráfica é o software, não uma vitrine. Cada tela começa pela tarefa da pessoa (o que ela
+quer fazer, o que precisa ver para decidir, o que acontece depois do clique) e só então pelo visual. Texto legível (sem rótulo pequeno em
+mono onde a pessoa precisa ler), botão com o nome da ação, estado sempre visível (o que está rodando, o que deu certo, o que falhou),
+teclado em tudo, nada que dependa só de cor.
 - [ ] **2.0** Protótipo visual da casca e de 3 telas (Início, Otimizar, Ao vivo) no estilo do site, aprovado pelo dono antes das outras.
+  Feito (aguardando aprovação do dono): `app/Katharos.App` (Avalonia 11.3.23, .NET 10; o 12 já saiu, mas o 11.3 é o conhecido e
+  mantido: migrar depois se valer) com navegação lateral por extenso, Início, Otimizar (passo 1 modo, passo 2 itens com "já está
+  assim", barra fixa "Aplicar N mudanças") e Ao vivo (FPS, o que limita, seis números com 2 min de gráfico). `app/Katharos.Fotos`
+  desenha cada tela sem janela (Avalonia.Headless + Skia); fotos em `planos/prototipo/`. Fontes do site embutidas (OFL).
 
 Telas, na ordem do uso real (o raio-x primeiro, como na CLI):
 - [ ] **2.1** Casca: janela, navegação lateral, tema do site, ícone da marca, fontes, escala de DPI, teclado (tudo alcançável sem mouse).
@@ -635,3 +646,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | S4 começado: sem falso positivo na energia (prova ao ligar, leitura de volta na hora e 15 s depois) e na permissão de FPS | 3.1.2 | ramo v4 | testes 310 |
 | 10 nov 2026 | S5 começado: sem porta de rede, PowerShell pelo caminho completo, PresentMon conferido por SHA-256, Defender no CI; interface no design da landing (2.0) | 3.1.2 | ramo v4 | testes 316 |
 | 10 nov 2026 | 2c.1 preparado: `--teste-no-pc` (relatório do PC real, só lê) e opção t no `segundo-plano`; Defender limpo no CI (motor 1.1.26100.4) | 3.1.2 | ramo v4 | ensaio no Windows |
+| 10 nov 2026 | 2.0 protótipo da interface (Início, Otimizar, Ao vivo) no design do site, UX primeiro, sem imagem de enfeite; fotos sem janela | 3.1.2 | ramo v4 | aguardando aprovação |

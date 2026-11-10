@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:k="using:Katharos.App"
+             xmlns:c="using:Katharos.App.Controles"
+             x:Class="Katharos.App.Telas.Inicio">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+  <StackPanel>
+    <c:Secao>
+      <StackPanel Margin="32,36,32,30" Spacing="8">
+        <TextBlock Classes="titulo"><Run Text="Início" /><Run Text="." Foreground="{x:Static k:Tema.Ambar}" /></TextBlock>
+        <TextBlock Classes="sub" Text="Como está o seu PC e o que fazer agora." />
+      </StackPanel>
+    </c:Secao>
+
+    <!-- uma ação principal: o próximo passo -->
+    <c:Secao>
+      <Grid Margin="32,28" ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="rotulo" Text="Próximo passo" />
+          <TextBlock Classes="forte" FontSize="21" Text="Resolver 3 coisas que o raio-x achou" />
+          <TextBlock Classes="sub" MaxWidth="560" HorizontalAlignment="Left"
+                     Text="Uma é grave: o driver da placa de vídeo é de março. As outras deixam o PC ligar mais devagar." />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Button x:Name="BtRefazer" Classes="contorno" Content="Fazer o raio-x de novo" />
+          <Button x:Name="BtVer" Classes="primario" Content="Ver o que fazer" />
+        </StackPanel>
+      </Grid>
+    </c:Secao>
+
+    <!-- três números que dizem como o PC está -->
+    <c:Secao>
+      <Grid ColumnDefinitions="*,*,*">
+        <Border Padding="32,24">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="rotulo" Text="Nota do PC" />
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="numero" Text="72" /><TextBlock Classes="unidade" Text="de 100" />
+            </StackPanel>
+            <TextBlock Classes="atencao" FontSize="13" Text="dá para melhorar · raio-x de hoje, 09:12" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Padding="32,24" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="1,0,0,0">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="rotulo" Text="Temperatura da CPU" />
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="numero" Text="47" /><TextBlock Classes="unidade" Text="°C" />
+            </StackPanel>
+            <TextBlock Classes="bom" FontSize="13" Text="normal · lida do MSI Afterburner" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Padding="32,24" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="1,0,0,0">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="rotulo" Text="Espaço livre no C:" />
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="numero" Text="182" /><TextBlock Classes="unidade" Text="GB de 476" />
+            </StackPanel>
+            <TextBlock Classes="bom" FontSize="13" Text="folgado" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </c:Secao>
+
+    <!-- o que o raio-x achou, do mais grave para o menos -->
+    <c:Secao>
+      <StackPanel>
+        <Border Padding="32,22,32,10">
+          <TextBlock Classes="forte" Text="O que o raio-x achou" />
+        </Border>
+        <ItemsControl x:Name="Achados">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="k:Achado">
+              <Border Padding="32,16" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,1,0,0">
+                <Grid ColumnDefinitions="92,*,Auto">
+                  <Border Classes="etiqueta" HorizontalAlignment="Left" BorderBrush="{Binding Cor}">
+                    <TextBlock Text="{Binding Gravidade}" Foreground="{Binding Cor}" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <TextBlock Foreground="{x:Static k:Tema.Osso}" FontSize="15" FontWeight="SemiBold" Text="{Binding Titulo}" />
+                    <TextBlock Classes="rotulo" FontSize="13.5" Text="{Binding Explica}" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Classes="contorno" Content="{Binding Acao}" VerticalAlignment="Center" Margin="16,0,0,0" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </c:Secao>
+
+    <!-- a última mudança, com a volta sempre a um clique -->
+    <c:Secao>
+      <Grid Margin="32,22" ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="3" VerticalAlignment="Center">
+          <TextBlock Classes="rotulo" Text="Última mudança" />
+          <TextBlock Foreground="{x:Static k:Tema.Osso}" FontSize="15" Text="Modo equilibrado, 08/11 às 21:40: 96 itens, todos conferidos depois" />
+        </StackPanel>
+        <Button x:Name="BtDesfazer" Grid.Column="1" Classes="contorno" Content="Desfazer" VerticalAlignment="Center" />
+      </Grid>
+    </c:Secao>
+  </StackPanel>
+  </ScrollViewer>
+</UserControl>

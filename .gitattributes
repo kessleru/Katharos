@@ -19,3 +19,4 @@ arte export-ignore
 exe export-ignore
 planos export-ignore
 scripts export-ignore
+app export-ignore

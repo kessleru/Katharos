@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:k="using:Katharos.App"
+             xmlns:c="using:Katharos.App.Controles"
+             x:Class="Katharos.App.Telas.Otimizar">
+  <DockPanel>
+    <!-- a ação fica sempre à vista, com o número exato do que vai mudar -->
+    <Border DockPanel.Dock="Bottom" Background="{x:Static k:Tema.Painel}" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,1,0,0" Padding="72,16">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="2" VerticalAlignment="Center">
+          <TextBlock x:Name="Resumo" Foreground="{x:Static k:Tema.Osso}" FontSize="15" FontWeight="SemiBold" />
+          <TextBlock Classes="rotulo" Text="Antes, o Katharos cria um ponto de restauração. Cada mudança volta pelo Desfazer." />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+          <Button Classes="contorno" Content="Ver a lista final" />
+          <Button x:Name="BtAplicar" Classes="primario" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+        <c:Secao>
+          <StackPanel Margin="32,36,32,30" Spacing="8">
+            <TextBlock Classes="titulo"><Run Text="Otimizar" /><Run Text="." Foreground="{x:Static k:Tema.Ambar}" /></TextBlock>
+            <TextBlock Classes="sub" Text="Escolha um modo. Antes de aplicar, você confere cada item e tira o que não quiser." />
+          </StackPanel>
+        </c:Secao>
+
+        <!-- passo 1: o modo (só um pode ficar escolhido) -->
+        <c:Secao>
+          <StackPanel>
+            <Border Padding="32,22,32,14"><TextBlock Classes="forte" Text="1. Escolha o modo" /></Border>
+            <ItemsControl x:Name="Modos" Margin="32,0,32,28">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="k:Modo">
+                  <Button Margin="0,0,12,0" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Background="Transparent" CornerRadius="2">
+                    <Border BorderBrush="{Binding Borda}" Background="{Binding Fundo}" BorderThickness="1" CornerRadius="2" Padding="20,18">
+                      <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Classes="forte" FontSize="17" Text="{Binding Nome}" />
+                          <TextBlock Grid.Column="1" Text="escolhido" FontFamily="{x:Static k:Tema.Mono}" FontSize="12" Foreground="{x:Static k:Tema.Ambar}" IsVisible="{Binding Escolhido}" />
+                        </Grid>
+                        <TextBlock Text="{Binding Explica}" TextWrapping="Wrap" FontSize="14" />
+                        <TextBlock Classes="rotulo" Text="{Binding Conta}" Margin="0,4,0,0" />
+                      </StackPanel>
+                    </Border>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </c:Secao>
+
+        <!-- passo 2: os itens, por área; cada um diz o que ganha e se já está feito -->
+        <c:Secao>
+          <StackPanel>
+            <Border Padding="32,22,32,14">
+              <StackPanel Spacing="4">
+                <TextBlock Classes="forte" Text="2. Confira os itens" />
+                <TextBlock Classes="rotulo" Text="O modo marcou estes. O que já está assim no seu PC não roda de novo." />
+              </StackPanel>
+            </Border>
+            <ItemsControl x:Name="Areas">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="k:Area">
+                  <StackPanel>
+                    <Button Classes="area" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Background="Transparent" CornerRadius="0"
+                            Padding="32,15" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,1,0,0">
+                      <Grid ColumnDefinitions="24,*,Auto">
+                        <TextBlock Text="{Binding Aberta, Converter={x:Static k:Conv.Seta}}" FontFamily="{x:Static k:Tema.Mono}" Foreground="{x:Static k:Tema.Apagado}" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                          <TextBlock Foreground="{x:Static k:Tema.Osso}" FontSize="15" FontWeight="SemiBold" Text="{Binding Nome}" />
+                          <TextBlock Classes="rotulo" Text="{Binding Descricao}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="2" Text="{Binding Conta}" FontFamily="{x:Static k:Tema.Mono}" FontSize="13" Foreground="{x:Static k:Tema.Ambar}" VerticalAlignment="Center" />
+                      </Grid>
+                    </Button>
+                    <ItemsControl ItemsSource="{Binding Itens}" IsVisible="{Binding Aberta}" Margin="0,0,0,10">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="k:ItemOtim">
+                          <Grid ColumnDefinitions="*,Auto" Margin="56,6,32,6">
+                            <CheckBox IsChecked="{Binding Marcado}" IsEnabled="{Binding !JaFeito}" VerticalAlignment="Top">
+                              <StackPanel Spacing="2" Margin="4,0,0,0">
+                                <TextBlock Foreground="{x:Static k:Tema.Osso}" FontSize="15" Text="{Binding Titulo}" />
+                                <TextBlock Classes="rotulo" FontSize="13.5" Text="{Binding Ganho}" TextWrapping="Wrap" />
+                                <TextBlock FontSize="13" Foreground="{x:Static k:Tema.Ambar}" IsVisible="{Binding TemAviso}" Text="{Binding Aviso, StringFormat='atenção: {0}'}" />
+                              </StackPanel>
+                            </CheckBox>
+                            <TextBlock Grid.Column="1" Text="{Binding Estado}" Foreground="{Binding CorEstado}" FontFamily="{x:Static k:Tema.Mono}" FontSize="13" VerticalAlignment="Top" Margin="16,3,0,0" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </c:Secao>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

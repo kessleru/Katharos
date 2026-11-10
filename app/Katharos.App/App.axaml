@@ -1,0 +1,152 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:k="using:Katharos.App"
+             x:Class="Katharos.App.App"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- texto -->
+    <Style Selector="TextBlock">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Sans}" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Texto}" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <!-- título de tela: o do site (mono pesado, osso) com o ponto âmbar -->
+    <Style Selector="TextBlock.titulo">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Mono}" />
+      <Setter Property="FontWeight" Value="ExtraBold" />
+      <Setter Property="FontSize" Value="30" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+    </Style>
+    <Style Selector="TextBlock.sub">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Texto}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.rotulo">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Apagado}" />
+    </Style>
+    <Style Selector="TextBlock.forte">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Mono}" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+    </Style>
+    <Style Selector="TextBlock.numero">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Mono}" />
+      <Setter Property="FontWeight" Value="ExtraBold" />
+      <Setter Property="FontSize" Value="34" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+    </Style>
+    <Style Selector="TextBlock.unidade">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Mono}" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Apagado}" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="Margin" Value="4,0,0,6" />
+    </Style>
+    <Style Selector="TextBlock.bom"><Setter Property="Foreground" Value="{x:Static k:Tema.Verde}" /></Style>
+    <Style Selector="TextBlock.atencao"><Setter Property="Foreground" Value="{x:Static k:Tema.Ambar}" /></Style>
+    <Style Selector="TextBlock.ruim"><Setter Property="Foreground" Value="{x:Static k:Tema.Vermelho}" /></Style>
+
+    <!-- botões: a ação principal em âmbar (uma por tela), as outras com contorno -->
+    <Style Selector="Button">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Mono}" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="18,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.primario">
+      <Setter Property="Background" Value="{x:Static k:Tema.Ambar}" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Fundo}" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="Button.primario:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#efbd7b" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Fundo}" />
+    </Style>
+    <Style Selector="Button.contorno">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.LinhaForte}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.contorno:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{x:Static k:Tema.Painel}" />
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.Apagado}" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+    </Style>
+    <Style Selector="Button:focus-visible /template/ ContentPresenter">
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.Osso}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!-- navegação lateral: nomes legíveis, área de clique grande, a tela atual marcada com a barra âmbar e o texto claro -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Texto}" />
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Sans}" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="22,11" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{x:Static k:Tema.Painel}" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+    </Style>
+    <Style Selector="Button.nav.ativo">
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+      <Setter Property="Background" Value="{x:Static k:Tema.Painel}" />
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.Ambar}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- etiqueta de gravidade, como no site ("grave" com contorno vermelho) -->
+    <Style Selector="Border.etiqueta">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="7,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.etiqueta > TextBlock">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Mono}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- caixa de marcar: quadrada, âmbar quando marcada -->
+    <Style Selector="CheckBox">
+      <Setter Property="FontFamily" Value="{x:Static k:Tema.Sans}" />
+      <Setter Property="Foreground" Value="{x:Static k:Tema.Osso}" />
+      <Setter Property="FontSize" Value="15" />
+    </Style>
+    <Style Selector="CheckBox /template/ Border#NormalRectangle">
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.LinhaForte}" />
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+      <Setter Property="Background" Value="{x:Static k:Tema.Ambar}" />
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.Ambar}" />
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Path#CheckGlyph">
+      <Setter Property="Fill" Value="{x:Static k:Tema.Fundo}" />
+    </Style>
+    <!-- item que já está feito no PC: marca verde, não dá para desmarcar (não há o que mudar) -->
+    <Style Selector="CheckBox:disabled:checked /template/ Border#NormalRectangle">
+      <Setter Property="Background" Value="{x:Static k:Tema.Verde}" />
+      <Setter Property="BorderBrush" Value="{x:Static k:Tema.Verde}" />
+    </Style>
+    <Style Selector="CheckBox:disabled /template/ ContentPresenter#ContentPresenter">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="ScrollViewer">
+      <Setter Property="AllowAutoHide" Value="True" />
+    </Style>
+  </Application.Styles>
+</Application>
