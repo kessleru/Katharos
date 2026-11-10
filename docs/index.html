@@ -500,7 +500,7 @@
 
 <header class="faixa topo">
   <div class="quadro celulas">
-    <a class="marca" href="#" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v3.0.4</small></a>
+    <a class="marca" href="#" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v3.1.0</small></a>
     <nav class="menu" aria-label="Seções">
       <a href="#usar">usar</a>
       <a href="#modos">modos</a>
@@ -549,7 +549,7 @@
     <dl class="quadro celulas">
       <div><dt>funciona em</dt><dd>Windows 10 e 11</dd></div>
       <div><dt>ajustes</dt><dd>mais de 170</dd></div>
-      <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">3.0.4</a>, 10 nov 2026</dd></div>
+      <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">3.1.0</a>, 10 nov 2026</dd></div>
     </dl>
   </section>
 
@@ -566,7 +566,7 @@
     <span class="t-a"> 3</span>  <span class="t-o">escolher </span> <span class="t-s">otimiza por área: você escolhe a área e os itens</span>
     <span class="t-a"> 4</span>  <span class="t-o">painel   </span> <span class="t-s">gráficos do PC ao longo do tempo, no navegador</span>
     <span class="t-a"> 5</span>  <span class="t-o">desfazer </span> <span class="t-s">volta qualquer mudança</span>
-    <span class="t-a"> 6</span>  <span class="t-o">mais     </span> <span class="t-s">medir, acompanhar, segurança, preferências...</span>
+    <span class="t-a"> 6</span>  <span class="t-o">mais     </span> <span class="t-s">medir, acompanhamento, segurança, preferências...</span>
 
 <span class="t-m">     0  sair</span>
 
@@ -600,8 +600,8 @@
   </section>
   <section class="faixa passos" aria-label="Passos">
     <ol class="quadro celulas">
-      <li><h3>Baixe e extraia o ZIP</h3><p>Vêm o .bat e a pasta do programa.</p></li>
-      <li><h3>Abra o KATHAROS.bat</h3><p>Aceite o pedido de administrador.</p></li>
+      <li><h3>Baixe e extraia o ZIP</h3><p>Vêm o Katharos.exe e a pasta do programa.</p></li>
+      <li><h3>Abra o Katharos.exe</h3><p>Aceite o pedido de administrador.</p></li>
       <li><h3>Digite <kbd>1</kbd></h3><p>O raio-x dá uma nota. Não muda nada.</p></li>
     </ol>
   </section>
@@ -609,7 +609,7 @@
   <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
   <section class="faixa" id="painel" aria-labelledby="painel-t">
     <div class="quadro cab celulas">
-      <div><h2 id="painel-t">Painel<span>.</span></h2></div>
+      <div><h2 id="painel-t">Painel<span>.</span></h2><p>Ao vivo no ícone perto do relógio. O histórico abre no navegador.</p></div>
     </div>
   </section>
   <section class="faixa telas-painel" aria-label="Painel do Katharos, exemplo animado">
@@ -629,7 +629,7 @@
           <div class="prop" style="--i:1"><span class="nv nv3">grave</span><b>Tela azul, 3 vezes</b><code>katharos raiox</code><i class="btn">Abrir</i></div>
         </div>
       </div>
-      <p class="tp-nota">Dados de exemplo. Abra com <code>painel</code>.</p>
+      <p class="tp-nota">Dados de exemplo. Ao vivo: <code>segundo-plano</code>. Histórico: <code>painel</code>.</p>
     </div>
   </section>
 
@@ -701,7 +701,7 @@
     <div class="quadro">
       <div class="jh-texto">
         <h2 id="jogos-t">Jogos<span>.</span></h2>
-        <p>Mais FPS e menos atraso em qualquer jogo. Já vem em cada modo.</p>
+        <p>Mais FPS e menos atraso em qualquer jogo. Já vem em cada modo. Com o segundo plano ligado, ele grava cada partida e diz o que segurou o FPS.</p>
       </div>
       <div class="focos">
         <div><h3><span class="nv nv1">1</span> seguro</h3><p>Modo de Jogo e jogos em janela otimizados.</p></div>
@@ -736,7 +736,9 @@
   <section class="faixa faq" aria-label="Perguntas e respostas">
     <div class="quadro">
       <details><summary>É seguro?</summary><p>Cria um ponto de restauração. <code>desfazer</code> põe tudo de volta.</p></details>
-      <details><summary>Pode dar ban em jogo?</summary><p>Não. Ele não abre nem altera nenhum jogo: só ajusta o Windows.</p></details>
+      <details><summary>Pode dar ban em jogo?</summary><p>Não. Ele não abre nem altera nenhum jogo: só ajusta o Windows. O segundo plano lê o que o Gerenciador de Tarefas lê.</p></details>
+      <details><summary>O segundo plano pesa?</summary><p>Uns 30 a 60 MB de RAM e menos de 1 % de CPU, em prioridade baixa. O ritmo é seu: de 1 a 10 s.</p></details>
+      <details><summary>O Windows avisou "aplicativo não reconhecido"</summary><p>É o aviso de todo programa novo sem certificado pago. Clique em Mais informações e Executar assim mesmo. O ZIP tem a assinatura do GitHub para conferir.</p></details>
       <details><summary>Preciso instalar algo?</summary><p>Só o Python; se faltar, ele instala.</p></details>
       <details><summary>Manda meus dados para algum lugar?</summary><p>Não. Tudo fica no seu PC.</p></details>
     </div>
@@ -750,8 +752,8 @@
   </section>
   <section class="faixa novidades" aria-label="Últimas versões">
     <div class="quadro">
+<div class="nov"><div class="nov-v"><b>v3.1.0</b><small>10 nov 2026</small></div><ul><li><b>Katharos.exe:</b> clique duas vezes para abrir; o ícone fica perto do relógio</li><li><b>Segundo plano ao vivo:</b> CPU, placa de vídeo, RAM e temperatura a cada segundo, no ícone</li><li><b>Sessões de jogo:</b> ele diz o que segurou o FPS e a central de inteligência aprende com isso</li></ul></div>
 <div class="nov"><div class="nov-v"><b>v3.0.4</b><small>10 nov 2026</small></div><ul><li><b>Nada elevado na pasta do usuário:</b> backup do desfazer, scripts e a tarefa do turbo vão para onde só administradores gravam</li><li><b>Só de jogo, só com jogos:</b> placa de vídeo, entrada e rede ficam fora do extremo em PC sem jogos</li></ul></div>
-<div class="nov"><div class="nov-v"><b>v3.0.3</b><small>10 nov 2026</small></div><ul><li><b>aplicado refaz a conferência a cada abertura:</b> , mesmo dentro da mesma sessão</li><li><b>Depois de aplicar uma área, a conferência dela é descartada:</b> , para a tela de escolha não mostrar &quot;falta&quot; de algo que acabou de ser…</li></ul></div>
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
     </div>
   </section>

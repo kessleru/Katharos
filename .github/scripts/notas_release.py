@@ -20,7 +20,7 @@ def notas(versao, sha=None, texto=None):
     rodape = ['', '---', '',
               '**Antes de usar:** leia o [aviso](https://github.com/kessleru/Katharos#antes-de-usar). Grátis, de código aberto e sem garantia. '
               'Comece pelo `raiox`, que só lê.', '',
-              '**Como rodar:** baixe `Katharos.zip`, extraia e abra `KATHAROS.bat` (ou `python programa\\katharos.py` no Windows).', '',
+              '**Como rodar:** baixe `Katharos.zip`, extraia e abra `Katharos.exe` (ou `KATHAROS.bat`, ou `python programa\\katharos.py` no Windows).', '',
               '**Conferir o download** (de fora do programa):',
               '```powershell', 'gh attestation verify Katharos.zip --repo kessleru/Katharos', 'Get-FileHash .\\katharos.py -Algorithm SHA256', '```']
     if sha:

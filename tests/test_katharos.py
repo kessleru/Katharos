@@ -2487,3 +2487,136 @@ class TestCorrecoesMiudas(unittest.TestCase):
         with mock.patch.object(k, 'CASA', casa):
             self.assertEqual(k.desfaz_organizar(Ctx()), 0)
         self.assertTrue((desk / 'a.png').exists())
+
+
+class TestSegundoPlano(_CasaTemporaria):
+    """O acompanhamento em segundo plano: o Katharos.exe (exe/Katharos.cs) e o que o Python faz com os dados dele."""
+    CS = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+
+    def test_versao_do_executavel_e_a_do_programa(self):
+        self.assertIn(f'public const string VERSAO = "{k.VERSAO}";', self.CS)
+        num = k.VERSAO.split('-')[0]
+        self.assertIn(f'[assembly: AssemblyVersion("{num}.0")]', self.CS)
+
+    def test_executavel_nao_mexe_em_processo_de_jogo(self):
+        """Anti-cheat: só contadores do Windows, nomes de processo e o driver de vídeo. Nada que abra, leia ou injete em outro processo."""
+        proibido = re.compile(r'OpenProcess|ReadProcessMemory|WriteProcessMemory|VirtualAllocEx|CreateRemoteThread|SetWindowsHookEx|NtQueryInformationProcess'
+                              r'|\.MainModule|\.Modules\b|\.MainWindowHandle|\bp\.Handle\b|\.StartTime\b|TotalProcessorTime|PrivateMemorySize|GetProcessById')
+        self.assertEqual(proibido.findall(self.CS), [])
+
+    def test_executavel_e_csharp_5(self):
+        """Compila com o csc.exe que vem dentro do Windows (C# 5): sem $"", ?., nameof, => em membro."""
+        codigo = re.sub(r'"(?:\\.|[^"\\])*"', '""', self.CS)   # tira o conteúdo das strings
+        codigo = re.sub(r'//[^\n]*', '', codigo)
+        self.assertNotIn('$"', self.CS)
+        self.assertNotRegex(codigo, r'\?\.[A-Za-z]')
+        self.assertNotIn('nameof(', codigo)
+        self.assertNotRegex(codigo, r'\)\s*=>\s*[^{;]*;\s*\n\s*(public|static|private|void|int|string|bool)')
+
+    def test_executavel_le_a_config_que_o_python_grava(self):
+        c = k.config_segundo_plano()
+        for chave in ('ps1', 'py', 'pyw', 'kpy', 'intervalo_s', 'em_jogo', 'notificar', 'nomes_de_jogo'):
+            self.assertIn(chave, c)
+            self.assertIn(f'"{chave}"', self.CS, f'o executável não lê {chave}')
+        self.assertEqual(c['intervalo_s'], 1.0)
+        with mock.patch.object(k, 'config', side_effect=lambda ch, p=None: '5' if ch == 'tempo-real' else p):
+            self.assertEqual(k.config_segundo_plano()['intervalo_s'], 5.0)
+        self.assertTrue(k.escreve_config_sp())
+        self.assertEqual(k.le_json(self.casa / k.SP_CONFIG, {})['versao'], k.VERSAO)
+
+    def test_os_arquivos_que_o_executavel_grava_tem_os_campos_que_o_python_le(self):
+        for campo in ('"agora.json"', '"minutos.jsonl"', '"sessoes.jsonl"', 'd["t"]', 'd["inicio"]', 'd["min"]', 'd["principal"]', 'd["tempo_no_limite"]',
+                      'd["quando"]', 'd["conclusoes"]', 'd["jogo"]', '"propostas.json"'):
+            self.assertIn(campo, self.CS)
+
+    def _sessao(self, jogo, inicio, minutos, limites, principal, **kw):
+        d = {'jogo': jogo, 'inicio': inicio, 'fim': inicio, 'min': minutos, 'cpu': 50, 'gpu': 80, 'ram_max': 70, 'tempo_no_limite': limites, 'principal': principal}
+        d.update(kw)
+        return d
+
+    def test_le_minutos_e_sessoes_so_da_janela_pedida(self):
+        import json as _j
+        agora = datetime(2026, 11, 10, 20, 0)
+        (self.casa / 'minutos.jsonl').write_text('\n'.join(_j.dumps({'t': t, 'cpu': 10}) for t in ('2026-11-08T10:00', '2026-11-10T19:59', 'lixo')) + '\nnão é json\n', encoding='utf-8')
+        (self.casa / 'sessoes.jsonl').write_text(_j.dumps(self._sessao('jogo', '2026-11-09T21:00:00', 90, {}, 'gpu')) + '\n', encoding='utf-8')
+        self.assertEqual([m['t'] for m in k.le_minutos(24, agora)], ['2026-11-10T19:59'])
+        self.assertEqual(len(k.le_sessoes(30, agora)), 1)
+
+    def test_resumo_pondera_pelo_tempo_jogado(self):
+        ss = [self._sessao('a', '2026-11-01T20:00:00', 90, {'cpu': 60}, 'cpu'), self._sessao('b', '2026-11-02T20:00:00', 30, {'gpu': 80}, 'gpu'),
+              self._sessao('c', '2026-11-03T20:00:00', 2, {'calor': 100}, 'calor')]   # menos de 5 min não conta
+        r = k.resumo_sessoes(ss)
+        self.assertEqual((r['sessoes'], r['horas'], r['principal']), (2, 2.0, 'cpu'))
+        self.assertEqual(r['limites'], {'cpu': 45, 'gpu': 20})
+
+    def test_central_aprende_com_as_sessoes(self):
+        ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': True,
+              'agora': datetime(2026, 11, 10), 'perfil': {}, 'segundo_plano': True, 'minutos': [],
+              'sessoes': [self._sessao('jogo', '2026-11-05T20:00:00', 120, {'cpu': 40, 'freio': 30, 'ram': 20}, 'cpu', desempenho_min=61)]}
+        ids = {x['id'] for x in k.gera_sugestoes(ev)}
+        self.assertTrue({'jogo-cpu', 'jogo-freio', 'jogo-ram'} <= ids, ids)
+        for x in k.gera_sugestoes(ev):
+            self.assertTrue(not x['comando'] or x['comando'].split()[0] in k.COMANDOS, x['comando'])
+        ev['sessoes'] = [self._sessao('jogo', '2026-11-05T20:00:00', 30, {'cpu': 90}, 'cpu')]   # menos de 1 h jogada: cedo para concluir
+        self.assertFalse({x['id'] for x in k.gera_sugestoes(ev)} & {'jogo-cpu', 'jogo-freio'})
+        ev['sessoes'] = [self._sessao('jogo', '2026-11-05T20:00:00', 120, {'gpu': 85}, 'gpu')]   # placa no limite: só informa
+        sug = [x for x in k.gera_sugestoes(ev) if x['id'].startswith('jogo')]
+        self.assertEqual([(x['id'], x['tipo']) for x in sug], [('jogo-gpu', 'info')])
+
+    def test_sem_segundo_plano_a_central_propoe_ligar(self):
+        ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': False,
+              'agora': datetime(2026, 11, 10), 'perfil': {}}
+        self.assertEqual(k.gera_sugestoes(ev)[0]['comando'], 'segundo-plano')
+
+    def test_exporta_propostas_para_o_icone(self):
+        with mock.patch.object(k, 'coleta_evidencias', return_value={}), \
+             mock.patch.object(k, 'gera_sugestoes', return_value=[{'id': 'x', 'titulo': 'T', 'porque': 'p', 'comando': 'raiox', 'confianca': 'alta', 'tipo': 'acao', 'pontos': 1}]):
+            self.assertEqual(k.exporta_propostas(), 0)
+        d = k.le_json(self.casa / 'propostas.json', {})
+        self.assertEqual(d['propostas'][0]['titulo'], 'T')
+        self.assertIn('"propostas"', self.CS)
+
+    def test_painel_mostra_ao_vivo_e_jogos(self):
+        from datetime import timedelta as _td
+        base = datetime(2026, 11, 10, 18, 0)
+        mins = [{'_dt': base + _td(minutes=i), 'cpu': 30 + i % 7, 'gpu': 90, 'temp_cpu': 70, 'ram': 60, 'jogo': 'jogo' if i > 30 else None} for i in range(60)]
+        ss = [dict(self._sessao('eldenring', '2026-11-10T18:31:00', 29, {'gpu': 90}, 'gpu', temp_cpu_max=78), _dt=base)]
+        h = k.monta_painel([], [], [], [], ao_vivo={'minutos': mins, 'sessoes': ss})
+        self.assertIn('Ao vivo e jogos', h)
+        self.assertIn('eldenring', h)
+        self.assertIn('placa de vídeo no limite', h)
+        self.assertIn('jogo: jogo', h)
+        vazio = k.monta_painel([], [], [], [], ao_vivo={'minutos': [], 'sessoes': []})
+        self.assertIn('segundo-plano --ligar', vazio)
+
+    def test_comandos_do_acompanhamento(self):
+        p = k.monta_parser()
+        a = p.parse_args(['segundo-plano', '--intervalo', '2'])
+        self.assertEqual((a.comando, a.intervalo), ('segundo-plano', '2'))
+        self.assertEqual(p.parse_args(['aovivo', '--segundos', '3']).segundos, 3)
+        self.assertTrue(p.parse_args(['conselheiro', '--exportar']).exportar)
+        self.assertEqual(k.COMANDOS['bandeja'][1], 'ferramenta_segundo_plano')
+        grupo = [g for g in k.GRUPOS if g[0] == 'acompanhamento']
+        self.assertTrue(grupo and grupo[0][2][0][0] == 'segundo-plano', 'rodar em segundo plano fica dentro de acompanhamento, em primeiro')
+        self.assertEqual(k.VALIDOS_CONFIG['tempo-real'], ('1', '2', '5', '10'))
+
+    def test_fora_do_windows_nada_quebra(self):
+        with mock.patch.object(k, 'WINDOWS', False):
+            self.assertFalse(k.sp_rodando())
+            self.assertFalse(k.migra_segundo_plano(mock.Mock()))
+            self.assertFalse(k.garante_segundo_plano(mock.Mock()))
+            self.assertFalse(k.abre_segundo_plano())
+
+    def test_aovivo_mostra_a_leitura_do_executavel(self):
+        import json as _j
+        agora = {'quando': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'cpu': 42.5, 'gpu': 97, 'ram_pct': 61, 'ram_gb': 9.8, 'ram_total_gb': 16, 'nucleo_max': 70,
+                 'temp_cpu': 71, 'temp_gpu': 69, 'disco': 3, 'vram_gb': 6.2, 'intervalo_s': 1, 'jogo': {'nome': 'eldenring', 'min': 12, 'principal': 'gpu'},
+                 'conclusoes': [{'nivel': 0, 'titulo': 'A placa de vídeo é o limite agora', 'texto': 'x'}]}
+        (self.casa / 'agora.json').write_text(_j.dumps(agora), encoding='utf-8')
+        t = mock.Mock(interativo=False, cor=False)
+        ctx = mock.Mock(t=t)
+        self.assertEqual(k.ferramenta_aovivo(ctx, mock.Mock(segundos=1)), 0)
+        texto = ' '.join(str(c.args[0]) for c in t.escreve.call_args_list if c.args)
+        self.assertIn('eldenring', texto)
+        self.assertIn('placa de vídeo no limite', texto)
+        self.assertIn('A placa de vídeo é o limite agora', texto)

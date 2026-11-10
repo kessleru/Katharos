@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '3.0.4'
+VERSAO = '3.1.0'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -1070,7 +1070,7 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1081,7 +1081,9 @@ DESCR_CONFIG = {
     'confirmar': ('"manter alterações?"', 'risco (padrão): depois de mudar serviços, jogos, energia, disco ou visual, pergunta se está tudo bem e desfaz '
                   'sozinho se você não responder; sempre; ou nunca'),
     'abrir-relatorio': ('abrir o relatório', 'perguntar (padrão: uma tecla no fim do raio-x, da segurança e do turbo), sempre (abre a pasta sozinho) ou nunca'),
-    'coleta-em-jogo': ('coleta com jogo aberto', 'segura (padrão): só lê CPU, RAM, disco e temperatura do sistema, sem olhar processos nem a placa de vídeo; ou pausar: não coleta nada enquanto houver jogo aberto'),
+    'coleta-em-jogo': ('acompanhamento com jogo aberto', 'segura (padrão): continua lendo tudo, como o Gerenciador de Tarefas (sem abrir o processo do jogo); ou pausar: não lê nada enquanto houver jogo aberto'),
+    'tempo-real': ('ritmo do segundo plano', 'de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10'),
+    'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
 
@@ -7579,7 +7581,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
@@ -9107,7 +9109,7 @@ $__s = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration (New-TimeSpan -
 if ($TESTE) { Plano 'criar a tarefa de segundo plano'; return }
 Unregister-ScheduledTask -TaskName «antiga» -Confirm:$false -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes, em segundo plano, sem janela. Criada pelo Katharos.' -Force | Out-Null
-Feito 'segundo plano ligado: «quando», com o PC ocioso por 10 min e na tomada'
+Feito 'manutenção sozinha ligada: «quando», com o PC ocioso por 10 min e na tomada'
 ''', exe=psq(exe), arg=psq(arg), nome=psq(TAREFA_MANUT), antiga=psq(TAREFA_MANUT_ANTIGA), gatilho=gatilho, quando=quando)
     s = roda_ps(ctx.t, corpo, 'agendar', minutos=2)
     if s.ok and not s.erros:
@@ -9122,13 +9124,14 @@ Feito 'segundo plano ligado: «quando», com o PC ocioso por 10 min e na tomada'
 
 def ferramenta_agendar(ctx, args):
     t = ctx.t
-    t.aba('segundo plano: o Katharos trabalha sozinho, leve e silencioso')
-    t.paragrafo('Não fica um programa aberto gastando RAM: é uma tarefa do próprio Windows que acorda quando o PC está ocioso há 10 min e na tomada, '
+    t.aba('manutenção sozinha: o Katharos cuida do PC quando você não está usando')
+    t.paragrafo('É uma tarefa do próprio Windows que acorda quando o PC está ocioso há 10 min e na tomada, '
                 'em prioridade baixa, e para sozinha se você voltar a usar. Limpa temporários e caches antigos, reaplica o que grandes '
                 'atualizações desfazem (só dos pacotes que você aplicou e não desfez), atualiza o Defender, confere SMART, '
                 'erros de disco, telas azuis e espaço livre, e uma vez por mês cria um ponto de restauração. '
                 'Só avisa (notificação do Windows) quando há algo errado. Escolha quando: semanal (domingo), diária ou '
-                'contínua (ao iniciar com o Windows e a cada 4 horas).', 2, 'sub')
+                'contínua (ao iniciar com o Windows e a cada 4 horas, e liga também o acompanhamento em segundo plano: '
+                'o ícone com as métricas ao vivo e as sessões de jogo).', 2, 'sub')
     if not precisa_admin(ctx, args):
         return 1
     s = roda_ps(t, f"$__x = Get-ScheduledTask -TaskName {psq(TAREFA_MANUT)} -ErrorAction SilentlyContinue; if (-not $__x) {{ $__x = Get-ScheduledTask -TaskName {psq(TAREFA_MANUT_ANTIGA)} -ErrorAction SilentlyContinue }}; if ($__x) {{ Dado 'tarefa' @{{ estado = [string]$__x.State; ultima = (Tenta {{ ($__x | Get-ScheduledTaskInfo).LastRunTime.ToString('s') }} '') }} }}",
@@ -9168,7 +9171,7 @@ def ferramenta_agendar(ctx, args):
         e = estado()
         e.pop('manut_freq', None)
         salva_estado(e)
-        t.ok('Segundo plano desligado.')
+        t.ok('Manutenção sozinha desligada. O acompanhamento em segundo plano (ícone) continua; "segundo-plano --desligar" fecha ele.')
     return 0
 
 
@@ -9780,8 +9783,8 @@ def ferramenta_benchmark(ctx, args):
         LOG.escreve(f'benchmark não entrou no relatório: {e!r}')
     t.nota('  Rode de novo depois de aplicar algo: o programa compara com este resultado.')
     return 0
-# ─────────────── ícone na bandeja: mostra que o Katharos está em segundo plano ───────────────
-# Com o modo contínuo ligado, um ícone fica perto do relógio. Ele não mede nada sozinho: lê a última amostra que a tarefa de 15 min gravou
+# ─────────────── ícone simples na bandeja (reserva de quem roda só o katharos.py, sem o Katharos.exe) ───────────────
+# O acompanhamento completo é o Katharos.exe (63-segundoplano.py). Sem ele, este ícone em PowerShell mostra a última amostra que a tarefa de 15 min gravou
 # (ultima-amostra.json) e mostra no menu. Clicar abre o menu com os números de agora e atalhos. Roda como o seu usuário, sem administrador,
 # num PowerShell sem janela; um só por sessão. Fechar o ícone não desliga a coleta.
 TAREFA_BANDEJA = 'Katharos - ícone'
@@ -10010,8 +10013,8 @@ def ferramenta_bandeja(ctx, args):
         t.ok('Ícone ligado perto do relógio. Se não aparecer, clique na setinha ^ da barra de tarefas e arraste o ícone para fora.')
     return r
 # ─────────────── segundo plano: métricas ao longo do tempo e tendência ───────────────
-# A tarefa agendada acorda, mede o PC (leve, uns 5 s) e grava UMA linha em ~/.katharos/metricas.jsonl. Nada fica residente em memória:
-# o custo em RAM entre uma medida e outra é zero. O arquivo tem teto de linhas; passou do teto, as mais antigas saem.
+# A manutenção agendada mede o PC (espaço, boot, RAM, processos...) e grava UMA linha em ~/.katharos/metricas.jsonl: é a medida de
+# longo prazo. O tempo real fica com o Katharos.exe. O arquivo tem teto de linhas; passou do teto, as mais antigas saem.
 METRICAS_MAX = 1500          # uma medida a cada 4 h dá ~250 dias; ~300 bytes por linha = uns 450 KB no máximo
 METRICAS_CHAVES = ('cpu', 'desempenho', 'limite', 'ram_total', 'ram_usada', 'processos', 'servicos', 'inicializacao', 'livre_c', 'temperatura', 'boot_s')
 
@@ -10246,8 +10249,9 @@ def projecao_enchimento(serie, minimo=6):
     return (dias, serie[-1][0] + timedelta(days=dias)) if dias < 120 else None
 # ─────────────── coleta leve em segundo plano: temperatura e consumo por hora, com cuidado em jogo ───────────────
 # A cada 15 min uma tarefa do Windows acorda, lê alguns contadores do próprio sistema (os mesmos que o Gerenciador de Tarefas mostra),
-# grava e dorme. Nada fica residente em memória. As amostras viram UMA linha por hora (mín, máx, soma e contagem), por até ~400 dias:
-# é isso que permite gráfico de temperatura de meses sem arquivo gigante.
+# com mais fontes de temperatura (LibreHardwareMonitor, driver de vídeo, nvidia-smi) e quem mais consome, e grava. As amostras viram UMA
+# linha por hora (mín, máx, soma e contagem), por até ~400 dias: é o histórico de meses. O tempo real (segundo a segundo, sessões de jogo)
+# é do Katharos.exe, em 63-segundoplano.py; esta tarefa também reabre ele se tiver fechado.
 #
 # CUIDADO COM JOGOS (anti-cheat): o coletor só lê contadores de desempenho e WMI do sistema. Nunca abre o processo de um jogo, nunca lê
 # memória, nunca injeta DLL, não instala driver nem overlay. Enquanto há jogo aberto (anti-cheat, sobreposição de jogo de uma loja ou GPU acima de 60 %), ele nem olha
@@ -10503,7 +10507,9 @@ def ferramenta_amostrar(ctx, args):
     if agendada:
         if leitura_pausada():   # o ícone pausou por 1 hora
             return 0
-        if WINDOWS and not estado().get('bandeja'):   # coleta ligada numa versão sem ícone: liga o ícone uma vez (a tarefa é do seu usuário)
+        if WINDOWS and estado().get('segundo_plano') == 'sim':
+            garante_segundo_plano(ctx)   # o executável caiu ou o PC acabou de ligar: abre de novo
+        elif WINDOWS and not estado().get('bandeja'):   # coleta ligada numa versão sem ícone: liga o ícone uma vez (a tarefa é do seu usuário)
             try:
                 instala_bandeja(ctx)
             except Exception as e:
@@ -10566,8 +10572,9 @@ Feito 'leitura leve ligada: a cada «min» min, sem janela'
     if not (s.ok and not s.erros):
         return 1
     marca_estado('amostra_ligada', agora_iso())
-    try:
-        instala_bandeja(ctx)   # o ícone perto do relógio mostra que a coleta está ligada
+    try:   # o acompanhamento contínuo inclui o segundo plano: o Katharos.exe, ou o ícone simples se só há o katharos.py
+        if not instala_segundo_plano(ctx, mostrar=True, quieto=True):
+            instala_bandeja(ctx)
     except Exception as e:
         LOG.escreve(f'ícone: {e!r}')
     if not sem_janela:
@@ -10577,11 +10584,441 @@ Feito 'leitura leve ligada: a cada «min» min, sem janela'
 
 
 def remove_amostra(ctx):
-    remove_bandeja(ctx)
+    if estado().get('bandeja') == 'sim':   # o ícone simples só existe junto da leitura de 15 min; o segundo plano (executável) é independente
+        remove_bandeja(ctx)
     roda_ps(ctx.t, f"Unregister-ScheduledTask -TaskName {psq(TAREFA_AMOSTRA)} -Confirm:$false -ErrorAction SilentlyContinue", 'remover-amostra', minutos=1, mostra=False)
     e = estado()
     e.pop('amostra_ligada', None)
     salva_estado(e)
+# ─────────────── acompanhamento em segundo plano: o Katharos.exe ───────────────
+# O Katharos.exe fica rodando perto do relógio e lê o PC sem parar, no ritmo da config tempo-real (padrão: a cada 1 s): CPU, placa de vídeo,
+# RAM, disco, rede, temperatura. Percebe quando há um jogo aberto e grava a sessão. Tudo vai para ~/.katharos:
+#   agora.json      a leitura de agora (o "aovivo" e o medir leem daqui)
+#   minutos.jsonl   uma linha por minuto, 14 dias (o painel desenha as últimas 24 h)
+#   sessoes.jsonl   uma linha por sessão de jogo: quanto tempo, o que ficou no limite (a central de inteligência aprende com elas)
+# O código do executável está em exe/Katharos.cs, e a publicação compila ele no próprio Windows, com assinatura do GitHub.
+EXE_NOME = 'Katharos.exe'
+SP_CONFIG = 'segundo-plano.json'
+SP_MUTEX = 'Local\\KatharosSegundoPlano'
+SP_EV_SAIR = 'Local\\KatharosSegundoPlanoSair'
+RUN_CHAVE = r'Software\Microsoft\Windows\CurrentVersion\Run'
+TAREFA_ABRE_SP = 'Katharos - abrir segundo plano'
+NOMES_LIMITE = {'gpu': 'placa de vídeo no limite', 'cpu': 'CPU segurando o jogo', 'freio': 'CPU abaixo da velocidade', 'ram': 'RAM cheia',
+                'vram': 'memória de vídeo cheia', 'disco': 'disco ocupado', 'calor': 'calor', 'equilibrado': 'nada no limite'}
+
+
+def exe_do_pacote():
+    """O Katharos.exe que veio no zip, ao lado da pasta programa (Katharos/Katharos.exe e Katharos/programa/katharos.py)."""
+    p = Path(__file__).resolve().parent.parent / EXE_NOME
+    return p if p.is_file() else None
+
+
+def exe_instalado():
+    return CASA / EXE_NOME
+
+
+def exe_disponivel():
+    p = exe_do_pacote()
+    if p:
+        return p
+    i = exe_instalado()
+    return i if i.is_file() else None
+
+
+def sp_rodando():
+    """O segundo plano está aberto? (o executável segura um mutex com nome enquanto roda)"""
+    if not WINDOWS:
+        return False
+    try:
+        import ctypes
+        h = ctypes.windll.kernel32.OpenMutexW(0x00100000, False, SP_MUTEX)
+        if h:
+            ctypes.windll.kernel32.CloseHandle(h)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def sp_para(espera_s=6):
+    """Pede para o segundo plano fechar (evento com nome) e espera ele sair."""
+    if not WINDOWS or not sp_rodando():
+        return True
+    try:
+        import ctypes
+        h = ctypes.windll.kernel32.OpenEventW(0x0002, False, SP_EV_SAIR)
+        if h:
+            ctypes.windll.kernel32.SetEvent(h)
+            ctypes.windll.kernel32.CloseHandle(h)
+    except Exception as e:
+        LOG.escreve(f'segundo plano: não pedi para fechar ({e!r})')
+    fim = time.time() + espera_s
+    while time.time() < fim:
+        if not sp_rodando():
+            return True
+        time.sleep(0.25)
+    return not sp_rodando()
+
+
+def config_segundo_plano():
+    """O que o executável lê (e relê a cada 30 s): onde está o Katharos, o ritmo e os limites."""
+    py = Path(sys.executable)
+    pyw = py.with_name('pythonw.exe')
+    ps1 = Path(__file__).resolve().parent / 'katharos.ps1'
+    if ps1.is_file():
+        marca_estado('ps1', str(ps1))
+    else:
+        ps1 = Path(estado().get('ps1') or ps1)
+    try:
+        intervalo = float(config('tempo-real', '1'))
+    except (TypeError, ValueError):
+        intervalo = 1.0
+    return {'versao': VERSAO, 'ps1': str(ps1), 'py': str(py if not py.name.lower().startswith('pythonw') else py.with_name('python.exe')),
+            'pyw': str(pyw) if pyw.exists() else '', 'kpy': str(CASA / 'katharos.py'), 'intervalo_s': intervalo,
+            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'), 'aviso_cpu': 90, 'aviso_gpu': 85,
+            'nomes_de_jogo': nomes_de_jogo()}
+
+
+def escreve_config_sp():
+    try:
+        CASA.mkdir(parents=True, exist_ok=True)
+        tmp = CASA / (SP_CONFIG + '.tmp')
+        tmp.write_text(json.dumps(config_segundo_plano(), ensure_ascii=False, indent=1), encoding='utf-8')
+        os.replace(tmp, CASA / SP_CONFIG)
+        return True
+    except OSError as e:
+        LOG.escreve(f'segundo plano: não gravei a config ({e!r})')
+        return False
+
+
+def inicia_com_windows(ligar=True):
+    """Abre ao entrar no Windows pela chave Run do seu usuário: aparece na aba Inicializar do Gerenciador de Tarefas, onde dá para desligar."""
+    if not WINDOWS:
+        return False
+    try:
+        import winreg
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_CHAVE) as k:
+            if ligar:
+                winreg.SetValueEx(k, 'Katharos', 0, winreg.REG_SZ, f'"{exe_instalado()}" --segundo-plano')
+            else:
+                try:
+                    winreg.DeleteValue(k, 'Katharos')
+                except FileNotFoundError:
+                    pass
+        return True
+    except OSError as e:
+        LOG.escreve(f'segundo plano: chave Run ({e!r})')
+        return False
+
+
+def inicia_com_windows_ligado():
+    if not WINDOWS:
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_CHAVE) as k:
+            winreg.QueryValueEx(k, 'Katharos')
+            return True
+    except OSError:
+        return False
+
+
+def abre_segundo_plano(ctx=None, mostrar=False):
+    """Abre o executável como o seu usuário. Se o Katharos estiver como administrador, abre por uma tarefa de uso único sem privilégio
+    elevado: o segundo plano nunca roda como administrador."""
+    exe = exe_instalado()
+    if not WINDOWS or not exe.is_file():
+        return False
+    args = ['--segundo-plano'] + (['--mostrar'] if mostrar else [])
+    if eh_admin() and ctx is not None:
+        corpo = ps_monta(r'''
+$__a = New-ScheduledTaskAction -Execute «exe» -Argument «arg»
+$__p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+if ($TESTE) { Plano 'abrir o segundo plano como o seu usuário'; return }
+Register-ScheduledTask -TaskName «nome» -Action $__a -Principal $__p -Force | Out-Null
+Start-ScheduledTask -TaskName «nome»
+Start-Sleep -Seconds 2
+Unregister-ScheduledTask -TaskName «nome» -Confirm:$false -ErrorAction SilentlyContinue
+''', exe=psq(exe), arg=psq(' '.join(args)), nome=psq(TAREFA_ABRE_SP))
+        s = roda_ps(ctx.t, corpo, 'abrir-segundo-plano', minutos=1, mostra=False)
+        return s.ok and not s.erros
+    try:
+        subprocess.Popen([str(exe)] + args, creationflags=0x00000008 | 0x00000200, close_fds=True)
+        return True
+    except OSError as e:
+        LOG.escreve(f'segundo plano: não abriu ({e!r})')
+        return False
+
+
+def instala_segundo_plano(ctx, mostrar=True, quieto=False):
+    """Copia o executável e o programa para ~/.katharos (sobrevivem a apagar a pasta do zip), grava a config, liga ao entrar no Windows,
+    tira o ícone antigo (PowerShell) e abre. Devolve False se não há executável (rodando só o katharos.py)."""
+    t = ctx.t
+    origem = exe_disponivel()
+    if not origem:
+        return False
+    destino = exe_instalado()
+    try:
+        CASA.mkdir(parents=True, exist_ok=True)
+        if Path(__file__).resolve() != (CASA / 'katharos.py').resolve():
+            shutil.copy2(Path(__file__).resolve(), CASA / 'katharos.py')
+        if origem.resolve() != destino.resolve():
+            if destino.is_file() and sp_rodando():
+                sp_para()
+            shutil.copy2(origem, destino)
+    except OSError as e:
+        if not quieto:
+            t.erro(f'Não consegui copiar o Katharos.exe para {CASA} ({e}). Feche o ícone do Katharos e tente de novo.')
+        LOG.escreve(f'segundo plano: cópia falhou ({e!r})')
+        return False
+    escreve_config_sp()
+    inicia_com_windows(True)
+    if estado().get('bandeja') == 'sim' or WINDOWS:
+        try:
+            remove_bandeja(ctx)   # o ícone antigo, em PowerShell, sai: o executável faz tudo o que ele fazia e mais
+        except Exception as e:
+            LOG.escreve(f'ícone antigo: {e!r}')
+    e = estado()
+    e['segundo_plano'] = 'sim'
+    e['bandeja'] = 'executavel'
+    salva_estado(e)
+    if not sp_rodando():
+        abre_segundo_plano(ctx, mostrar=mostrar)
+    return True
+
+
+def remove_segundo_plano(ctx):
+    sp_para()
+    inicia_com_windows(False)
+    marca_estado('segundo_plano', 'nao')
+
+
+def garante_segundo_plano(ctx):
+    """Na leitura de 15 min: se o segundo plano está ligado e caiu, abre de novo (como o seu usuário: a tarefa já roda assim)."""
+    if not WINDOWS or estado().get('segundo_plano') != 'sim' or not exe_instalado().is_file() or sp_rodando():
+        return False
+    try:
+        subprocess.Popen([str(exe_instalado()), '--segundo-plano'], creationflags=0x00000008 | 0x00000200, close_fds=True)
+        LOG.escreve('segundo plano: tinha fechado, abri de novo')
+        return True
+    except OSError:
+        return False
+
+
+def migra_segundo_plano(ctx):
+    """Quem já tinha o acompanhamento contínuo (ou o ícone antigo) passa para o executável na primeira vez que abre esta versão pelo zip."""
+    if not WINDOWS:
+        return False
+    e = estado()
+    if e.get('segundo_plano') in ('sim', 'nao') or not exe_do_pacote():
+        if e.get('segundo_plano') == 'sim':
+            escreve_config_sp()   # caminho do programa e do Python podem ter mudado
+            if exe_do_pacote() and exe_instalado().is_file() and exe_do_pacote().stat().st_size != exe_instalado().stat().st_size:
+                instala_segundo_plano(ctx, mostrar=False, quieto=True)   # versão nova do executável
+        return False
+    if e.get('manut_freq') == 'continua' or e.get('bandeja') == 'sim':
+        if instala_segundo_plano(ctx, mostrar=True, quieto=True):
+            ctx.t.ok('O acompanhamento contínuo agora roda pelo Katharos.exe: o ícone está perto do relógio, com as métricas ao vivo.')
+            return True
+    return False
+
+
+# ───────── os dados que o executável grava ─────────
+
+def le_agora(max_idade_s=15):
+    """A leitura de agora, se o segundo plano está rodando (e escreveu há pouco)."""
+    d = le_json(CASA / 'agora.json', None)
+    if not isinstance(d, dict):
+        return None
+    try:
+        q = datetime.fromisoformat(d.get('quando'))
+    except (TypeError, ValueError):
+        return None
+    if (datetime.now() - q).total_seconds() > max_idade_s:
+        return None
+    d['_dt'] = q
+    return d
+
+
+def _le_jsonl(arq, campo, desde):
+    out = []
+    try:
+        with open(arq, encoding='utf-8', errors='replace') as f:
+            for linha in f:
+                try:
+                    d = json.loads(linha)
+                    dt = datetime.fromisoformat(d[campo])
+                except (ValueError, KeyError, TypeError):
+                    continue
+                if dt >= desde:
+                    d['_dt'] = dt
+                    out.append(d)
+    except OSError:
+        pass
+    return out
+
+
+def le_minutos(horas=24, agora=None):
+    return _le_jsonl(CASA / 'minutos.jsonl', 't', (agora or datetime.now()) - timedelta(hours=horas))
+
+
+def le_sessoes(dias=60, agora=None):
+    return _le_jsonl(CASA / 'sessoes.jsonl', 'inicio', (agora or datetime.now()) - timedelta(days=dias))
+
+
+def resumo_sessoes(sessoes, minimo_min=5):
+    """O que as sessões de jogo dizem juntas: horas jogadas, o limite mais comum e quanto tempo cada limite durou (ponderado pela duração)."""
+    ss = [s for s in sessoes if isinstance(s.get('min'), (int, float)) and s['min'] >= minimo_min]
+    if not ss:
+        return None
+    total = sum(s['min'] for s in ss)
+    limites = {}
+    for s in ss:
+        for k, v in (s.get('tempo_no_limite') or {}).items():
+            if isinstance(v, (int, float)):
+                limites[k] = limites.get(k, 0) + v * s['min'] / total
+    principal = {}
+    for s in ss:
+        p = s.get('principal') or 'equilibrado'
+        principal[p] = principal.get(p, 0) + s['min']
+    def maxi(c):
+        v = [s[c] for s in ss if isinstance(s.get(c), (int, float))]
+        return max(v) if v else None
+    jogos = {}
+    for s in ss:
+        jogos[s.get('jogo') or '?'] = jogos.get(s.get('jogo') or '?', 0) + s['min']
+    return {'sessoes': len(ss), 'horas': round(total / 60, 1), 'limites': {k: round(v, 0) for k, v in limites.items()},
+            'principal': max(principal, key=principal.get), 'temp_cpu_max': maxi('temp_cpu_max'), 'temp_gpu_max': maxi('temp_gpu_max'),
+            'ram_max': maxi('ram_max'), 'vram_max': maxi('vram_max'), 'desempenho_min': min([s['desempenho_min'] for s in ss if isinstance(s.get('desempenho_min'), (int, float))] or [0]) or None,
+            'jogos': sorted(jogos.items(), key=lambda x: -x[1])}
+
+
+# ───────── os comandos ─────────
+
+def ferramenta_segundo_plano(ctx, args):
+    """Acompanhamento: liga, desliga e ajusta o segundo plano."""
+    t = ctx.t
+    t.aba('acompanhamento em segundo plano: o Katharos perto do relógio, lendo o PC sem parar')
+    if not WINDOWS:
+        t.erro('só funciona no Windows.')
+        return 1
+    exe = exe_disponivel()
+    if not exe:   # só o katharos.py, sem o zip: fica o ícone simples de antes
+        t.paragrafo('Para o acompanhamento completo (métricas ao vivo, sessões de jogo, painel no ícone) baixe o Katharos.zip: ele traz o Katharos.exe. '
+                    'Só com o katharos.py, o Katharos liga o ícone simples, que mostra a leitura de 15 em 15 minutos.', 2, 'sub')
+        return ferramenta_bandeja(ctx, args)
+    if getattr(args, 'parar', False) or getattr(args, 'desligar', False):
+        remove_segundo_plano(ctx)
+        t.ok('Segundo plano desligado e tirado da inicialização. Os dados que ele guardou ficam em ' + str(CASA) + '.')
+        return 0
+    iv = getattr(args, 'intervalo', None)
+    if iv:
+        salva_config('tempo-real', str(iv))
+        escreve_config_sp()
+        t.ok(f'Lendo a cada {iv} s (vale em até 30 s, sem reiniciar).')
+        return 0
+    if getattr(args, 'ligar', False) or getattr(args, 'agendada', False) or (not t.interativo and args.sim):
+        ok = instala_segundo_plano(ctx, mostrar=not getattr(args, 'agendada', False))
+        if ok:
+            t.ok('Segundo plano ligado. O ícone do Katharos está perto do relógio (se não aparecer, clique na setinha ^ e arraste-o para fora).')
+        return 0 if ok else 1
+    rodando = sp_rodando()
+    a = le_agora()
+    t.paragrafo('O ícone do Katharos fica perto do relógio. Clique nele para o painel ao vivo: CPU, placa de vídeo, RAM, temperatura, disco e rede, '
+                'o que está no limite agora e o que a central de inteligência propõe. Com um jogo aberto, ele grava a sessão (quanto tempo, o que segurou o FPS). '
+                'Usa uns 30 a 60 MB de RAM e menos de 1 % de CPU, em prioridade baixa. Lê o que o Gerenciador de Tarefas lê: não abre o processo do jogo.', 2, 'sub')
+    ss = le_sessoes(30)
+    t.titulo('situação')
+    t.chaves([('segundo plano', t.p('rodando', 'verde') if rodando else (t.p('ligado, mas fechado', 'amarelo') if estado().get('segundo_plano') == 'sim' else 'desligado')),
+              ('abre com o Windows', 'sim' if inicia_com_windows_ligado() else 'não'),
+              ('ritmo', f'a cada {config("tempo-real", "1")} s'),
+              ('com jogo aberto', 'continua lendo' if config('coleta-em-jogo', 'segura') != 'pausar' else 'pausa'),
+              ('avisos', config('avisos', 'sim')),
+              ('agora', (f'CPU {br(a.get("cpu"), 0)} % · GPU {br(a.get("gpu"), 0)} % · RAM {br(a.get("ram_pct"), 0)} %'
+                         + (f' · {br(a.get("temp_cpu"), 0)} °C' if a.get('temp_cpu') is not None else '')) if a else '-'),
+              ('sessões de jogo (30 dias)', str(len(ss)))])
+    if not t.interativo:
+        return 0
+    t.escreve()
+    t.paragrafo('l = ligar (e abrir o painel) · d = desligar · r = ritmo (1, 2, 5 ou 10 s) · j = com jogo aberto (continuar ou pausar) · '
+                'a = avisos (sim ou não) · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
+    r = t.pergunta('fazer').strip().lower()[:1]
+    if r == 'l':
+        return 0 if instala_segundo_plano(ctx, mostrar=True) else 1
+    if r == 'd':
+        remove_segundo_plano(ctx)
+        t.ok('Segundo plano desligado.')
+    elif r == 'r':
+        ops = VALIDOS_CONFIG['tempo-real']
+        atual = config('tempo-real', '1')
+        salva_config('tempo-real', ops[(ops.index(atual) + 1) % len(ops)] if atual in ops else '1')
+        escreve_config_sp()
+        t.ok(f'Lendo a cada {config("tempo-real")} s.')
+    elif r == 'j':
+        salva_config('coleta-em-jogo', 'pausar' if config('coleta-em-jogo', 'segura') != 'pausar' else 'segura')
+        escreve_config_sp()
+        t.ok('Com jogo aberto: ' + ('pausa a leitura.' if config('coleta-em-jogo') == 'pausar' else 'continua lendo.'))
+    elif r == 'a':
+        salva_config('avisos', 'nao' if config('avisos', 'sim') == 'sim' else 'sim')
+        escreve_config_sp()
+        t.ok('Avisos: ' + config('avisos'))
+    elif r == 'v':
+        return ferramenta_aovivo(ctx, args)
+    return 0
+
+
+def ferramenta_aovivo(ctx, args):
+    """As métricas de agora, atualizando no terminal até você apertar Ctrl+C."""
+    t = ctx.t
+    t.aba('métricas em tempo real (Ctrl+C para sair)')
+    if not le_agora():
+        if WINDOWS and exe_disponivel() and not sp_rodando():
+            t.nota('O segundo plano não está rodando; vou abrir.')
+            if estado().get('segundo_plano') != 'sim':
+                instala_segundo_plano(ctx, mostrar=False)
+            else:
+                abre_segundo_plano(ctx)
+            for _ in range(12):
+                time.sleep(0.5)
+                if le_agora():
+                    break
+        if not le_agora():
+            t.erro('Sem leitura ao vivo: o tempo real vem do Katharos.exe (acompanhamento). Abra o Katharos pelo Katharos.exe do zip e ligue o segundo plano.')
+            return 1
+    vezes = int(getattr(args, 'segundos', 0) or 0)
+    linhas_ant = 0
+    hist = {'cpu': [], 'gpu': []}
+    n = 0
+    try:
+        while True:
+            a = le_agora() or {}
+            for k in hist:
+                hist[k] = (hist[k] + [a.get(k) if isinstance(a.get(k), (int, float)) else 0])[-40:]
+            j = a.get('jogo') or {}
+            ls = [f'  CPU   {br(a.get("cpu"), 0):>4} %   {sparkline_txt(hist["cpu"], getattr(t, "ascii", False))}   núcleo máx. {br(a.get("nucleo_max"), 0)} %'
+                  + (f' · {br(a.get("cpu_ghz"), 1)} GHz' if a.get('cpu_ghz') else ''),
+                  f'  GPU   {br(a.get("gpu"), 0):>4} %   {sparkline_txt(hist["gpu"], getattr(t, "ascii", False))}   memória {br(a.get("vram_gb"), 1)} GB',
+                  f'  RAM   {br(a.get("ram_pct"), 0):>4} %   {br(a.get("ram_gb"), 1)} de {br(a.get("ram_total_gb"), 0)} GB',
+                  f'  temp  CPU {br(a.get("temp_cpu"), 0) if a.get("temp_cpu") is not None else "-"} °C · GPU {br(a.get("temp_gpu"), 0) if a.get("temp_gpu") is not None else "-"} °C',
+                  f'  disco {br(a.get("disco"), 0):>4} %   rede ↓ {br((a.get("rede_baixa_mbs") or 0) * 8, 1)} Mb/s ↑ {br((a.get("rede_sobe_mbs") or 0) * 8, 1)} Mb/s',
+                  ('  jogo  ' + f'{j.get("nome")} há {br(j.get("min"), 0)} min · limite: {NOMES_LIMITE.get(j.get("principal"), j.get("principal"))}') if j else '  jogo  nenhum aberto']
+            for c in (a.get('conclusoes') or [])[:2]:
+                ls.append(f'  {"!" if c.get("nivel", 0) >= 1 else "·"} {c.get("titulo")}: {c.get("texto")}'[:160])
+            if linhas_ant and t.interativo and t.cor:
+                sys.stdout.write(f'\x1b[{linhas_ant}F\x1b[J')
+            for l in ls:
+                t.escreve(l)
+            sys.stdout.flush()
+            linhas_ant = len(ls)
+            n += 1
+            if vezes and n >= vezes:
+                return 0
+            if not t.interativo and not vezes:
+                return 0
+            time.sleep(max(0.5, float(a.get('intervalo_s') or 1)))
+    except KeyboardInterrupt:
+        t.escreve()
+        return 0
 # ─────────────── painel: gráficos em HTML autocontido (SVG feito aqui, sem internet, sem biblioteca) ───────────────
 import html as _html
 import math
@@ -10938,7 +11375,47 @@ def _secao_saude(sa, cliques=False):
     return cab + fig + ''.join(blocos)
 
 
-def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False, horas=(), provas=None):
+def _secao_ao_vivo(minutos, sessoes):
+    """As últimas 24 h minuto a minuto e as sessões de jogo, do segundo plano (Katharos.exe)."""
+    if not minutos and not sessoes:
+        return ('<h2>Ao vivo e jogos</h2><div class="vazio">Ligue o acompanhamento em segundo plano (<code>katharos segundo-plano --ligar</code>): '
+                'o Katharos passa a ler o PC segundo a segundo e a gravar cada sessão de jogo, e esta seção mostra as últimas 24 horas e o que segurou cada jogo.</div>')
+    out = ['<h2>Ao vivo e jogos</h2>']
+    figs = []
+    for chave, titulo, un, lim in (('cpu', 'CPU (média do minuto)', '%', None), ('gpu', 'Placa de vídeo (média do minuto)', '%', None),
+                                   ('temp_cpu', 'Temperatura da CPU (máxima do minuto)', '°C', (85, '85 °C')), ('temp_gpu', 'Temperatura da placa de vídeo', '°C', (85, '85 °C')),
+                                   ('ram', 'RAM (média do minuto)', '%', (90, '90 %'))):
+        s = [(m['_dt'], float(m[chave])) for m in minutos if isinstance(m.get(chave), (int, float))]
+        if len(s) >= 10:
+            jogos = []
+            ant = None
+            for m in minutos:   # marca o começo de cada jogo no gráfico
+                if m.get('jogo') and m.get('jogo') != ant:
+                    jogos.append((m['_dt'], f'jogo: {m["jogo"]}'))
+                ant = m.get('jogo')
+            figs.append(f'<figure><figcaption>{_e(titulo)}<span>{_num(min(v for _, v in s), 0)} a {_num(max(v for _, v in s), 0)} {_e(un)}</span></figcaption>'
+                        + svg_linha(s, titulo, un, 0, jogos[-12:], zero=(un == '%'), suave=True, destaque=True, limite=lim) + '</figure>')
+    if figs:
+        out.append('<p class="legenda">Últimas 24 horas, um ponto por minuto. As linhas verdes pontilhadas marcam quando um jogo abriu.</p><div class="graficos">' + ''.join(figs) + '</div>')
+    r = resumo_sessoes(sessoes, minimo_min=1)
+    if r:
+        lim = r['limites']
+        partes_ = [f'{_e(NOMES_LIMITE.get(k, k))}: {_num(v, 0)} %' for k, v in sorted(lim.items(), key=lambda x: -x[1]) if v >= 1]
+        out.append(f'<p>{r["sessoes"]} {"sessão" if r["sessoes"] == 1 else "sessões"} de jogo, {_num(r["horas"], 1)} h no total. '
+                   f'O que mais segurou: <b>{_e(NOMES_LIMITE.get(r["principal"], r["principal"]))}</b>.'
+                   + (f' Tempo de cada limite: {"; ".join(partes_)}.' if partes_ else '') + '</p>')
+        linhas = ''.join(f'<tr><td>{_e(s.get("jogo") or "?")}</td><td>{s["_dt"]:%d/%m %H:%M}</td><td>{_num(s.get("min"), 0)} min</td>'
+                         f'<td>{_num(s.get("cpu"), 0)} %</td><td>{_num(s.get("gpu"), 0)} %</td><td>{_num(s.get("ram_max"), 0)} %</td>'
+                         f'<td>{_num(s.get("temp_cpu_max"), 0) if isinstance(s.get("temp_cpu_max"), (int, float)) else "-"} / {_num(s.get("temp_gpu_max"), 0) if isinstance(s.get("temp_gpu_max"), (int, float)) else "-"} °C</td>'
+                         f'<td>{_e(NOMES_LIMITE.get(s.get("principal"), s.get("principal") or "-"))}</td></tr>' for s in reversed(sessoes[-20:]))
+        out.append('<table><tr><th>jogo</th><th>quando</th><th>duração</th><th>CPU média</th><th>GPU média</th><th>RAM máx.</th><th>temp. máx. CPU / GPU</th><th>o que segurou</th></tr>'
+                   + linhas + '</table><p class="legenda">"O que segurou" é o limite em que o jogo passou mais tempo (pelo menos 20 % da sessão). '
+                   'Placa de vídeo no limite é o normal de um jogo pesado; CPU, calor, RAM ou disco no limite são o que dá para melhorar.</p>')
+    return ''.join(out)
+
+
+def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes=(), efeitos=(), resultados=(), saude=None, cliques=False, horas=(), provas=None,
+                 ao_vivo=None):
     """HTML completo do painel. amostras: de le_metricas(); benchs: [(datetime, {chave: mediana})]; pacotes: [(datetime, título)]."""
     marcas = [(d, f'aplicou: {t}') for d, t in pacotes]
     corpo = []
@@ -10964,7 +11441,7 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
         if sugestoes:
             corpo.append('<h2>O que eu proporia</h2><ul class="propostas">' + ''.join(
                 f'<li class="{"c-" + {"média": "media"}.get(x["confianca"], x["confianca"])}"><b>{_e(x["titulo"])}</b><p>{_e(x["porque"])}</p>'
-                f'<p class="det">Confiança {_e(x["confianca"])} · comando <code>katharos {_e(x["comando"])}</code>'
+                f'<p class="det">Confiança {_e(x["confianca"])}' + (f' · comando <code>katharos {_e(x["comando"])}</code>' if x['comando'] else '')
                 + (f' · {_e(x["impacto"])}' if x['impacto'] else '') + '</p>' + link_clique(x['comando'], cliques) + '</li>' for x in sugestoes) + '</ul>'
                 '<p class="legenda">Só proponho; nada é aplicado sem você pedir. Cada proposta tem o número que a justifica.'
                 + ('' if cliques else ' Quer um botão <b>Corrigir</b> em cada uma? Rode <code>katharos painel --ativar-cliques</code> (registra um link só para o seu usuário; <code>--desativar-cliques</code> remove).')
@@ -10990,6 +11467,8 @@ def monta_painel(amostras, benchs, pacotes, achados, pc='', versao='', sugestoes
             corpo.append(f'<p class="legenda">{leg}</p>')
     if not amostras:
         corpo.append(_secao_provas(provas))
+    if ao_vivo is not None:
+        corpo.append(_secao_ao_vivo(ao_vivo.get('minutos') or [], ao_vivo.get('sessoes') or []))
     if horas:
         corpo.append(_secao_termica(horas, marcas))
         corpo.append(_secao_consumo(horas, marcas))
@@ -11065,7 +11544,7 @@ def ferramenta_painel(ctx, args):
     ev['amostras'] = am
     html_ = monta_painel(am, ev['benchs'], pacotes_para_painel(), analisa_tendencia(am), nome_do_pc(), VERSAO, gera_sugestoes(ev),
                          tabela_efeito(am, ev['pacotes']), resultados_das_propostas(ev), saude=le_saude(), cliques=cliques_ativos(), horas=le_horas(),
-                         provas=provas_para_painel())
+                         provas=provas_para_painel(), ao_vivo={'minutos': le_minutos(24), 'sessoes': le_sessoes(60)})
     destino = CASA / 'painel.html'
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(html_, encoding='utf-8')
@@ -11396,18 +11875,91 @@ def coleta_evidencias(ctx=None, agora=None):
     return {'amostras': le_metricas(), 'benchs': benchs_para_painel(), 'pacotes': pacotes_aplicados_dt(),
             'eventos': rel.get('eventos') or [], 'raiox': ((rel.get('secoes') or {}).get('raiox') or {}).get('dados') or {},
             'dispensadas': e.get('conselheiro_dispensadas') or {}, 'vistas': e.get('conselheiro_vistas') or {},
-            'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')), 'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {}}
+            'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')) or e.get('segundo_plano') == 'sim',
+            'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {},
+            'sessoes': le_sessoes(30, agora), 'minutos': le_minutos(24 * 7, agora), 'segundo_plano': e.get('segundo_plano') == 'sim'}
 
 
 # ───────── regras ─────────
 
 @regra
 def r_ligar_fundo(ev):
-    if ev['amostras'] or ev['fundo_ligado']:
+    if ev.get('segundo_plano') or ev.get('minutos') or ev['fundo_ligado'] or ev['amostras']:
         return []
-    return [_sug('ligar-fundo', 'Ligar o segundo plano para eu poder aconselhar com dados',
-                 'Ainda não há nenhuma medida deste PC. Sem medidas eu só chutaria.', 'agendar --frequencia continua', 'alta',
-                 'o painel, a tendência e as propostas passam a existir', 'nenhum: é uma tarefa leve do Windows, que você desliga quando quiser', 4, 0)]
+    sem_nada = True
+    return [_sug('ligar-fundo', 'Ligar o acompanhamento em segundo plano para eu pensar com dados de verdade',
+                 ('Ainda não há nenhuma medida deste PC: sem medidas eu só chutaria. ' if sem_nada else '') +
+                 'Com o segundo plano, eu vejo o PC segundo a segundo e em cada jogo: o que segura o FPS, calor, RAM cheia, CPU freando.',
+                 'segundo-plano', 'alta', 'métricas ao vivo no ícone, sessões de jogo e propostas com base nelas',
+                 'nenhum: uns 30 a 60 MB de RAM, em prioridade baixa; desliga quando quiser', 4 if sem_nada else 3, 0)]
+
+
+# ───────── o que as sessões de jogo e o tempo real dizem ─────────
+
+@regra
+def r_jogos_gargalo(ev):
+    """Nas sessões de jogo dos últimos 30 dias, o que mais ficou no limite (ponderado pelo tempo jogado)."""
+    r = resumo_sessoes(ev.get('sessoes') or [])
+    if not r or r['horas'] < 1:
+        return []
+    lim, h, n = r['limites'], br(r['horas'], 1), r['sessoes']
+    base = f'Em {n} {"sessão" if n == 1 else "sessões"} de jogo ({h} h), '
+    out = []
+    if lim.get('cpu', 0) >= 25:
+        out.append(_sug('jogo-cpu', 'A CPU segura seus jogos',
+                        base + f'um núcleo da CPU ficou no limite com a placa de vídeo sobrando em {br(lim["cpu"], 0)} % do tempo. '
+                        'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', 'alta',
+                        'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao'))
+        out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
+                        'fica disputando ela durante o jogo.', 'inicializacao', 'média', 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0))
+    if lim.get('freio', 0) >= 15:
+        out.append(_sug('jogo-freio', 'A CPU freia durante os jogos',
+                        base + f'com carga, ela rodou abaixo de 75 % da frequência normal em {br(lim["freio"], 0)} % do tempo'
+                        + (f' (chegou a {br(r["desempenho_min"], 0)} %)' if r.get('desempenho_min') else '') +
+                        '. Isso é calor ou o plano de energia economizando.', 'energia', 'alta', 'plano de energia no máximo; se continuar, é calor (limpeza e pasta térmica)', 'mais consumo', 4, 1))
+    if lim.get('calor', 0) >= 10:
+        mx = max([x for x in (r.get('temp_cpu_max'), r.get('temp_gpu_max')) if x] or [0])
+        out.append(_sug('jogo-calor', 'Seus jogos esquentam o PC além do seguro',
+                        base + f'a temperatura passou do limite em {br(lim["calor"], 0)} % do tempo (máxima de {br(mx, 0)} °C). '
+                        'Acima disso o chip reduz a velocidade e o FPS cai sozinho.', 'painel', 'alta',
+                        'o histórico mostra quando e quanto; poeira, ventoinha e pasta térmica resolvem de verdade', 'nenhum: só leitura', 4, 0))
+    if lim.get('ram', 0) >= 15:
+        out.append(_sug('jogo-ram', 'A RAM enche durante os jogos',
+                        base + f'a RAM passou de 90 % em {br(lim["ram"], 0)} % do tempo. Aí o Windows usa o disco no lugar e o jogo engasga.',
+                        'memoria', 'alta', 'mostra quem ocupa a RAM e o que dá para fechar ou tirar da inicialização', 'nenhum: só leitura', 4, 0))
+    if lim.get('vram', 0) >= 20:
+        out.append(_sug('jogo-vram', 'A memória da placa de vídeo enche nos jogos',
+                        base + f'ela ficou acima de 95 % em {br(lim["vram"], 0)} % do tempo. Baixar a qualidade das texturas no jogo tira as travadas.',
+                        '', 'média', 'travadas curtas somem', 'texturas menos nítidas', 3, 0, tipo='info'))
+    if lim.get('disco', 0) >= 15:
+        out.append(_sug('jogo-disco', 'O disco trava seus jogos',
+                        base + f'o disco ficou 100 % ocupado em {br(lim["disco"], 0)} % do tempo. Jogo num HD ou disco quase cheio faz isso.',
+                        'raiox', 'média', 'o raio-x mostra o tipo de disco, o espaço e quem escreve nele', 'nenhum: só leitura', 3, 0))
+    if not out and lim.get('gpu', 0) >= 40:
+        out.append(_sug('jogo-gpu', 'Seus jogos já usam tudo da placa de vídeo',
+                        base + f'ela ficou no limite em {br(lim["gpu"], 0)} % do tempo, com a CPU sobrando. O PC já entrega o máximo dela: '
+                        'mais FPS só baixando resolução ou qualidade no jogo (ou ativando DLSS/FSR, se o jogo tiver).',
+                        '', 'alta', 'nada a otimizar no Windows para isso', '', 2, 0, tipo='info'))
+    return out
+
+
+@regra
+def r_tempo_real_repouso(ev):
+    """Fora de jogo, nos minutos da última semana: CPU ocupada por muito tempo ou RAM sempre cheia."""
+    mins = [m for m in (ev.get('minutos') or []) if not m.get('jogo')]
+    if len(mins) < 120:
+        return []
+    out = []
+    cpu_alta = sum(1 for m in mins if isinstance(m.get('cpu'), (int, float)) and m['cpu'] >= 60)
+    if cpu_alta / len(mins) >= 0.25:
+        out.append(_sug('repouso-cpu', 'Algo mantém a CPU ocupada fora dos jogos',
+                        f'Na última semana, sem jogo aberto, a CPU ficou acima de 60 % em {br(100 * cpu_alta / len(mins), 0)} % dos minutos medidos.',
+                        'raiox', 'alta', 'o raio-x mostra quem gasta', 'nenhum: só leitura', 3, 0, 'cpu'))
+    ram_alta = sum(1 for m in mins if isinstance(m.get('ram'), (int, float)) and m['ram'] >= 85)
+    if ram_alta / len(mins) >= 0.4:
+        out.append(_sug('repouso-ram', 'A RAM vive cheia', f'Na última semana, a RAM ficou acima de 85 % em {br(100 * ram_alta / len(mins), 0)} % dos minutos medidos.',
+                        'memoria', 'alta', 'mostra quem ocupa e o que tirar da inicialização', 'nenhum: só leitura', 3, 0, 'ram'))
+    return out
 
 
 def _achados_tendencia(ev):
@@ -11657,6 +12209,8 @@ def ferramenta_conselheiro(ctx, args):
     t.paragrafo('Junta as medidas do segundo plano, os benchmarks, os pacotes que você aplicou, os erros do relatório e o que o raio-x apontou, e diz o que mudaria, '
                 'com o número que justifica, a confiança e o comando. Não aplica nada sozinho. Depois que você executa uma proposta, ele mede o resultado.', 2, 'sub')
     e = estado()
+    if getattr(args, 'exportar', False):
+        return exporta_propostas(ctx)
     alvo = getattr(args, 'dispensar', None)
     if alvo:
         dis = e.get('conselheiro_dispensadas') or {}
@@ -11701,6 +12255,21 @@ def ferramenta_conselheiro(ctx, args):
         t.chaves(linhas, recuo=4)
         t.nota(f'    não quer? "katharos conselheiro --dispensar {x["id"]}" esconde por {DISPENSA_DIAS} dias.', 4)
     return 0
+
+
+def exporta_propostas(ctx=None):
+    """Grava as propostas de agora em ~/.katharos/propostas.json: o ícone do segundo plano mostra as primeiras."""
+    try:
+        ev = coleta_evidencias(ctx)
+        sug = gera_sugestoes(ev)
+        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]]}
+        tmp = CASA / 'propostas.json.tmp'
+        tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, CASA / 'propostas.json')
+        return 0
+    except Exception as ex:
+        LOG.escreve(f'exportar propostas: {ex!r}')
+        return 1
 
 
 def avisa_propostas(e, ctx=None):
@@ -12971,6 +13540,8 @@ def ferramenta_config(ctx, args):
             t.erro('use um número de MB.')
             return 1
         salva_config(chave, valor)
+        if exe_instalado().is_file():
+            escreve_config_sp()
         t.ok(f'{chave} = {config(chave)}')
         return 0
     while True:
@@ -12996,6 +13567,8 @@ def ferramenta_config(ctx, args):
         else:
             novo = t.pergunta(f'{k} (Enter = padrão {PADROES[k]})').strip()
         salva_config(k, novo)
+        if exe_instalado().is_file():
+            escreve_config_sp()
         t.ok(f'{DESCR_CONFIG[k][0]}: {config(k)}')
 
 
@@ -13012,12 +13585,14 @@ GRUPOS = [
         ('provas', 'o que cada item rendeu de verdade neste PC', 'ferramenta_provas'),
         ('memoria', 'quem usa a RAM e o que liberar', 'ferramenta_memoria'),
     ]),
-    ('acompanhar', 'o PC ao longo do tempo, com o segundo plano', [
+    ('acompanhamento', 'o PC ao vivo e ao longo do tempo', [
+        ('segundo-plano', 'rodar em segundo plano: ícone, ao vivo e jogos', 'ferramenta_segundo_plano'),
+        ('aovivo', 'métricas em tempo real aqui no terminal', 'ferramenta_aovivo'),
         ('painel', 'gráficos do PC ao longo do tempo, no navegador', 'ferramenta_painel'),
         ('tendencia', 'o PC está piorando com o tempo?', 'ferramenta_tendencia'),
-        ('conselheiro', 'propõe mudanças com base nas medidas', 'ferramenta_conselheiro'),
+        ('conselheiro', 'central de inteligência: propõe com base nas medidas', 'ferramenta_conselheiro'),
         ('saude', 'erros do Windows, drivers e o que ajustar', 'ferramenta_saude'),
-        ('agendar', 'segundo plano: manutenção e medidas sozinhas', 'ferramenta_agendar'),
+        ('agendar', 'manutenção sozinha: semanal, diária ou contínua', 'ferramenta_agendar'),
     ]),
     ('segurança', 'só olha, não muda nada', [
         ('seguranca', 'auditoria: o que está fraco na segurança', 'ferramenta_seguranca'),
@@ -13087,7 +13662,7 @@ MENU = [
     ('escolher', 'otimiza por área: você escolhe a área e os itens'),
     ('painel', 'gráficos do PC ao longo do tempo, no navegador'),
     ('desfazer', 'volta qualquer mudança'),
-    ('mais', 'medir, acompanhar, segurança, preferências...'),
+    ('mais', 'medir, acompanhamento, segurança, preferências...'),
 ]
 TELAS = ('escolher', 'mais')
 
@@ -13109,9 +13684,9 @@ def grupos_da_tela(tela):
 
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
-COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (--parar tira)', 'ferramenta_bandeja')
+COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (o mesmo que segundo-plano)', 'ferramenta_segundo_plano')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'aplicado', 'bandeja', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -13188,6 +13763,7 @@ def monta_parser():
     sd.add_argument('--ultimo', action='store_true', help='mostra o último retrato em vez de ler os logs de novo')
     cs = sub.add_parser('conselheiro', parents=[depois], help='propõe mudanças com base nas medidas do segundo plano (não aplica nada)')
     cs.add_argument('--dispensar', metavar='ID', help='esconde uma proposta por 30 dias')
+    cs.add_argument('--exportar', action='store_true', help='só grava as propostas em ~/.katharos/propostas.json (o ícone do segundo plano mostra)')
     pn = sub.add_parser('painel', parents=[depois], help='gera o painel de gráficos (HTML) e abre no navegador')
     pn.add_argument('--nao-abrir', action='store_true', help='só gera o arquivo')
     pn.add_argument('--ativar-cliques', action='store_true', help='liga os botões Corrigir/Abrir do painel (registra katharos:// só para você)')
@@ -13212,6 +13788,12 @@ def monta_parser():
     g = sub.add_parser('grandes', parents=[depois], help='arquivos grandes, duplicados e instaladores velhos (vão para a Lixeira)')
     g.add_argument('pastas', nargs='*', help='onde procurar (padrão: suas pastas pessoais)')
     g.add_argument('--mb', type=int, help='tamanho mínimo em MB (padrão 500 ou o da config)')
+    sp = sub.add_parser('segundo-plano', parents=[depois], help='acompanhamento em segundo plano: ícone perto do relógio, métricas ao vivo e sessões de jogo')
+    sp.add_argument('--ligar', action='store_true', help='liga, abre com o Windows e mostra o painel ao vivo')
+    sp.add_argument('--desligar', action='store_true', help='fecha e tira da inicialização')
+    sp.add_argument('--intervalo', choices=['1', '2', '5', '10'], help='de quantos em quantos segundos lê o PC')
+    av = sub.add_parser('aovivo', parents=[depois], help='métricas em tempo real no terminal (Ctrl+C sai)')
+    av.add_argument('--segundos', type=int, default=0, help='mostra só esta quantidade de leituras e sai')
     a = sub.add_parser('agendar', parents=[depois], help='segundo plano: liga a manutenção sozinha (semanal, diária ou contínua), roda agora ou desliga')
     a.add_argument('--frequencia', choices=['semanal', 'diaria', 'continua'], help='quando o segundo plano roda: semanal (domingo), diaria ou continua (ao iniciar com o Windows e a cada 4 h)')
     a.add_argument('--agora', action='store_true', help='roda a manutenção agora')
@@ -13525,6 +14107,11 @@ def main(argv=None):
         elif not args.sim:   # sem terminal, quem usa --sim já está escolhendo seguir sem perguntar
             t.aviso('Leia o aviso de uso antes (katharos aviso) e aceite no menu, ou use --sim para seguir sem perguntar.')
             return 1
+    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'segundo-plano', 'bandeja') and not args.teste:
+        try:   # quem tinha o acompanhamento contínuo passa para o Katharos.exe; quem já usa, fica com a config atualizada
+            migra_segundo_plano(ctx)
+        except Exception as e:
+            LOG.escreve(f'segundo plano: migração falhou ({e!r})')
     try:
         pend = pendentes_andamento() if args.comando != 'retomar' else None
         if pend:

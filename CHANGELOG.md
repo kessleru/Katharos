@@ -18,6 +18,21 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.1.0 · 10 de novembro de 2026
+
+O Katharos ganha um executável e um acompanhamento em segundo plano de verdade, que lê o PC sem parar e pensa em cima disso.
+
+- **Katharos.exe**: a porta de entrada, com o ícone da marca. Clique duas vezes para abrir o Katharos (faz o mesmo que o `KATHAROS.bat`, que continua no zip). O código está em `exe/Katharos.cs`; a publicação compila ele num Windows, com o compilador que vem no próprio sistema, roda uma conferência lá e assina o zip.
+- **Acompanhamento › rodar em segundo plano** (`segundo-plano`): o Katharos.exe fica perto do relógio e lê o PC no ritmo que você escolher (`config tempo-real`: 1, 2, 5 ou 10 s, padrão 1): CPU por núcleo e a frequência de verdade, placa de vídeo (uso e memória), RAM, disco, rede, temperatura (LibreHardwareMonitor, driver de vídeo, zona térmica) e bateria. Uns 30 a 60 MB de RAM, prioridade baixa, sempre como o seu usuário.
+- **Painel ao vivo no ícone**: clique e aparece, com o gráfico dos últimos 2 minutos de cada métrica, o que está no limite agora e as propostas da central de inteligência. O botão direito traz turbo, raio-x, verificar, limpar, desfazer, pausar e iniciar com o Windows. O ícone ganha um ponto de cor: verde jogando, âmbar atenção, vermelho grave.
+- **Sessões de jogo**: ele percebe o jogo aberto (quem usa a placa de vídeo, na frente ou em tela cheia, ou um anti-cheat rodando) e grava a sessão: quanto tempo e quanto dele ficou no limite (placa de vídeo, CPU, CPU freando, RAM, memória de vídeo, disco, calor). Na hora, diz o que segura o FPS.
+- **Central de inteligência mais esperta**: aprende com as sessões de jogo e com os minutos da última semana. "A CPU segura seus jogos", "a CPU freia durante os jogos", "a RAM enche nos jogos", "seus jogos esquentam o PC" viram propostas com o comando que resolve; placa de vídeo no limite vira só informação (é o normal de jogo pesado). O ícone mostra as primeiras e ela pensa de novo a cada hora.
+- **Painel**: seção "Ao vivo e jogos", com as últimas 24 horas minuto a minuto e a tabela das sessões.
+- **`aovivo`**: as mesmas métricas no terminal, atualizando até o Ctrl+C.
+- **Quem já tinha o acompanhamento contínuo** passa para o executável sozinho na primeira vez que abre esta versão pelo zip, e o ícone antigo (em PowerShell, que em alguns PCs nem aparecia) sai. Só com o `katharos.py`, sem o zip, o ícone simples continua.
+- **Anti-cheat**: o segundo plano lê o que o Gerenciador de Tarefas lê e nunca abre o processo do jogo; um teste confere que o código do executável não usa nenhuma API que abra, leia ou injete em outro processo.
+- `agendar` agora é só a manutenção sozinha (semanal, diária ou contínua); a contínua liga também o segundo plano.
+
 ## 3.0.4 · 10 de novembro de 2026
 
 Nada que roda como administrador depende de arquivo que um programa comum consegue trocar.

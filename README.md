@@ -23,19 +23,35 @@ O programa é distribuído sob a licença MIT (arquivo `LICENSE`), que também d
 
 ## Rodando
 
-[Baixe o ZIP](https://github.com/kessleru/Katharos/archive/refs/heads/main.zip) e extraia. Ele traz só duas coisas: o **`KATHAROS.bat`**, que é onde você clica, e a pasta `programa`, que ele usa. Na primeira vez, o Katharos oferece criar uma pasta **Katharos** na área de trabalho, com ícone. Deixe a pasta baixada onde está: é nela que ficam os relatórios (`relatorios/`).
+[Baixe o Katharos.zip da última versão](https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip) e extraia. Ele traz o **`Katharos.exe`**, que é onde você clica, e a pasta `programa`, que ele usa (o `KATHAROS.bat` continua lá e faz o mesmo). Na primeira vez, o Katharos oferece criar uma pasta **Katharos** na área de trabalho, com ícone. Deixe a pasta baixada onde está: é nela que ficam os relatórios (`relatorios/`).
 
-O `KATHAROS.bat`:
+O `Katharos.exe` (ou o `KATHAROS.bat`):
 
 1. acha o Python que você já tem (Python Launcher, PATH, registro, pastas comuns e até o da Microsoft Store) e só instala o oficial pelo winget se não houver nenhum;
 2. abre o Katharos como administrador no melhor terminal do PC: **Windows Terminal**, senão PowerShell 7, senão Windows PowerShell.
 
 ```bat
-KATHAROS.bat                       :: menu
-KATHAROS.bat raiox                 :: diagnóstico completo (só leitura)
-KATHAROS.bat turbo                 :: tudo em sequência, com reinício e retomada
-KATHAROS.bat privacidade --teste   :: mostra o que faria, sem alterar nada
+Katharos.exe                       :: menu
+Katharos.exe raiox                 :: diagnóstico completo (só leitura)
+Katharos.exe turbo                 :: tudo em sequência, com reinício e retomada
+Katharos.exe privacidade --teste   :: mostra o que faria, sem alterar nada
 ```
+
+O Windows pode avisar "aplicativo não reconhecido" na primeira vez: é o aviso de todo programa novo sem certificado pago. Clique em **Mais informações** e **Executar assim mesmo**. Para conferir que o zip saiu daqui: `gh attestation verify Katharos.zip --repo kessleru/Katharos`.
+
+## Acompanhamento em segundo plano
+
+`segundo-plano` (no menu: mais › acompanhamento) liga o **Katharos.exe perto do relógio**, com o ícone da marca. Ele lê o PC sem parar, no ritmo que você escolher (`config tempo-real`: 1, 2, 5 ou 10 s): CPU por núcleo e a frequência de verdade, placa de vídeo (uso e memória), RAM, disco, rede, temperatura e bateria.
+
+- **Clique no ícone**: o painel ao vivo, com gráfico dos últimos 2 minutos de cada métrica, o que está no limite agora e o que a central de inteligência propõe. Botão direito: atalhos (turbo, raio-x, verificar, limpar, desfazer, pausar, iniciar com o Windows).
+- **Jogos**: ele percebe quando há um jogo aberto (quem usa a placa de vídeo, na frente ou em tela cheia) e grava a sessão: quanto tempo, o que ficou no limite (placa de vídeo, CPU, CPU freando, RAM, memória de vídeo, disco, calor).
+- **Central de inteligência** (`conselheiro`): aprende com as sessões e com as últimas 24 horas minuto a minuto. Exemplo: "a CPU segura seus jogos em 40 % do tempo" vira uma proposta com o comando que resolve.
+- **Painel** (`painel`): seção "Ao vivo e jogos", com as últimas 24 horas e a tabela das sessões.
+- **No terminal**: `aovivo`.
+- **Custo**: uns 30 a 60 MB de RAM e menos de 1 % de CPU, em prioridade baixa. Roda como o seu usuário (nunca como administrador).
+- **Anti-cheat**: lê o que o Gerenciador de Tarefas lê (contadores do Windows, nomes de processo, temperatura do driver de vídeo). Não abre o processo do jogo, não lê memória, não injeta nada. Um teste confere isso no código.
+
+O código do executável está em `exe/Katharos.cs`. A publicação compila ele no próprio Windows, com o compilador que vem no sistema, e assina o zip. `Katharos.exe --diagnostico arquivo.json` grava tudo o que ele consegue ler neste PC (bom para relatar problema).
 
 Ou direto, num PowerShell aberto como administrador: `python programa\katharos.py [comando] [opções]`.
 
@@ -167,7 +183,8 @@ programa\katharos.py
   PARTE 3         os pacotes (limpar … interface, rede, ajustes)
   PARTE 4         turbo, manutenção, restaurar, desfazer, estado, grandes, memória
   PARTE 5         menu e linha de comando
-KATHAROS.bat               chama o programa\katharos.ps1
+Katharos.exe               abre o Katharos e roda o segundo plano (código em exe\Katharos.cs)
+KATHAROS.bat               o mesmo que o Katharos.exe sem argumentos: chama o programa\katharos.ps1
 programa\katharos.ps1      acha o Python, escolhe o terminal e abre como administrador
 docs/             o site (GitHub Pages)
 tests/            testes automáticos (rodam também no GitHub Actions)

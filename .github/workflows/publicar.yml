@@ -3,7 +3,8 @@ name: publicar
 #   1. Actions > publicar > Run workflow  (deixe "publicar" desmarcado para um ensaio: faz tudo menos criar a release)
 #   2. git tag vX.Y.Z && git push --tags   (a tag precisa ser igual a "v" + VERSAO do programa)
 # Antes: subir VERSAO em partes/00-cabecalho.py e escrever a entrada "## X.Y.Z" no CHANGELOG.md.
-# O que ele faz: confere versão, changelog e hashes, roda os testes, monta o Katharos.zip, assina tudo (atestado do GitHub),
+# O que ele faz: compila o Katharos.exe num Windows (exe/Katharos.cs) e roda ele lá, confere versão, changelog e hashes, roda os testes,
+# monta o Katharos.zip (com o executável), assina tudo (atestado do GitHub),
 # e cria a release com o texto do changelog. Quem baixa confere com:  gh attestation verify Katharos.zip --repo kessleru/Katharos
 on:
   push:
@@ -20,7 +21,40 @@ permissions:
   attestations: write
 concurrency: publicar
 jobs:
+  executavel:
+    # Compila o Katharos.exe num Windows, com o compilador que vem dentro do próprio Windows (o mesmo que qualquer pessoa pode usar
+    # para conferir), e roda ele de verdade: lê o PC (--diagnostico) e desenha o painel ao vivo (--foto). Os dois resultados ficam
+    # como artefato da execução.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: compila
+        shell: pwsh
+        run: |
+          $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          Push-Location exe
+          & $csc /nologo /target:winexe /optimize+ /out:..\Katharos.exe /win32icon:katharos.ico /win32manifest:katharos.manifest /resource:katharos.ico,katharos.ico `
+            /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll Katharos.cs
+          if ($LASTEXITCODE) { exit 1 }
+          Pop-Location
+          (Get-Item .\Katharos.exe).VersionInfo | Format-List FileVersion, ProductName, FileDescription
+      - name: roda num Windows de verdade
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP 'conferencia'; New-Item -ItemType Directory -Force $d | Out-Null
+          $p = Start-Process .\Katharos.exe -ArgumentList '--diagnostico', "$d\diagnostico.json" -Wait -PassThru
+          if ($p.ExitCode) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
+          Get-Content "$d\diagnostico.json"
+          $p = Start-Process .\Katharos.exe -ArgumentList '--foto', "$d\painel.png" -Wait -PassThru
+          if ($p.ExitCode -or -not (Test-Path "$d\painel.png")) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
+      - uses: actions/upload-artifact@v4
+        with: { name: executavel, path: Katharos.exe }
+      - uses: actions/upload-artifact@v4
+        with: { name: conferencia-executavel, path: '${{ runner.temp }}/conferencia' }
   publicar:
+    needs: executavel
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -29,6 +63,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
+      - uses: actions/download-artifact@v4
+        with: { name: executavel, path: saida/exe }
       - name: versão, changelog e tag
         id: v
         run: |
@@ -55,8 +91,11 @@ jobs:
         run: |
           mkdir -p saida
           git archive --format=zip --prefix=Katharos/ HEAD KATHAROS.bat programa README.md LICENSE SECURITY.md CHANGELOG.md SHA256SUMS.txt -o saida/Katharos.zip
+          mkdir -p saida/z/Katharos && cp saida/exe/Katharos.exe saida/z/Katharos/Katharos.exe
+          (cd saida/z && zip -q -X ../Katharos.zip Katharos/Katharos.exe)
           cp programa/katharos.py saida/katharos.py
-          (cd saida && sha256sum katharos.py Katharos.zip > SHA256SUMS-release.txt)
+          (cd saida && sha256sum katharos.py Katharos.zip > SHA256SUMS-release.txt && (cd z && sha256sum Katharos/Katharos.exe) >> SHA256SUMS-release.txt)
+          unzip -l saida/Katharos.zip
           python .github/scripts/notas_release.py "${{ steps.v.outputs.versao }}" "$(sha256sum programa/katharos.py | cut -d' ' -f1)" > notas.md
           cat saida/SHA256SUMS-release.txt
       - name: atestado de procedência (assinatura do GitHub)
@@ -65,6 +104,7 @@ jobs:
         with:
           subject-path: |
             saida/Katharos.zip
+            saida/exe/Katharos.exe
             saida/katharos.py
       - name: cria a release
         if: env.PUBLICA == 'true'
