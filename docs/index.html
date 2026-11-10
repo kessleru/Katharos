@@ -233,7 +233,7 @@
   .js .faixa:not(.topo):not(.hero):not(.divisor) { border-top-color: transparent; }
   .js .faixa:not(.topo):not(.hero):not(.divisor)::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 1px; background: var(--linha);
     transform: scaleX(0); transform-origin: 0 50%; z-index: 30; pointer-events: none; }
-  .js .faixa.traco::before { transform: scaleX(1); transition: transform .6s cubic-bezier(.65,0,.25,1); }
+  .js .faixa.traco:not(.topo):not(.hero):not(.divisor)::before { transform: scaleX(1); transition: transform .6s cubic-bezier(.65,0,.25,1); }
   .js .faixa > .quadro::before, .js .faixa > .quadro::after { opacity: 0; }
   .js .faixa.traco > .quadro::before { opacity: 1; scale: 1; transition: opacity .2s; }
   .js .faixa.traco > .quadro::after { opacity: 1; scale: 1; transition: opacity .2s .4s; }

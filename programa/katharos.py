@@ -2277,7 +2277,7 @@ for ($i = 0; $i -lt 4; $i++) {
     $q = Tenta { Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation -Filter "Name='_Total'" -ErrorAction Stop }
     $dk = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop }
     $me = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop }
-    if ($p) { $amostras += [pscustomobject]@{ dpc = [double]$p.PercentDPCTime; irq = [double]$p.PercentInterruptTime; disco = $(if ($dk) { [math]::Min(100, [double]$dk.PercentDiskTime) } else { $null }); fila = $(if ($dk) { [double]$dk.AvgDiskQueueLength } else { $null }); pag = $(if ($me) { [double]$me.PagesInputPersec } else { $null }); cpu = [double]$p.PercentProcessorTime; kernel = [double]$p.PercentPrivilegedTime; perf = $(if ($q) { [double]$q.PercentProcessorPerformance } else { $null }); limite = $(if ($q) { [double]$q.PercentPerformanceLimit } else { $null }) } }
+    if ($p) { $amostras += [pscustomobject]@{ dpc = [double]$p.PercentDPCTime; irq = [double]$p.PercentInterruptTime; disco = $(if ($dk) { [math]::Max(0, [math]::Min(100, 100 - [double]$dk.PercentIdleTime)) } else { $null }); fila = $(if ($dk) { [double]$dk.AvgDiskQueueLength } else { $null }); pag = $(if ($me) { [double]$me.PagesInputPersec } else { $null }); cpu = $(if ($q -and $null -ne $q.PercentProcessorUtility) { [math]::Min(100, [double]$q.PercentProcessorUtility) } else { [double]$p.PercentProcessorTime }); kernel = [double]$p.PercentPrivilegedTime; perf = $(if ($q) { [double]$q.PercentProcessorPerformance } else { $null }); limite = $(if ($q) { [double]$q.PercentPerformanceLimit } else { $null }) } }
     Start-Sleep -Milliseconds 900
 }
 function Media($c) { $v = @($amostras | ForEach-Object { $_.$c } | Where-Object { $null -ne $_ }); if ($v.Count) { [math]::Round(($v | Measure-Object -Average).Average, 1) } else { $null } }
@@ -2305,7 +2305,7 @@ Dado 'medidas' @{
     ram_disponivel = $(if ($mem) { [math]::Round([double]$mem.AvailableMBytes / 1024, 2) } else { $null })
     commit_pct = $(if ($mem -and [double]$mem.CommitLimit -gt 0) { [math]::Round(100 * [double]$mem.CommittedBytes / [double]$mem.CommitLimit, 0) } else { $null })
     ram_total = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
-    ram_usada = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 2)
+    ram_usada = $(if ($mem) { [math]::Round([math]::Max(0, $os.TotalVisibleMemorySize / 1MB - [double]$mem.AvailableMBytes / 1024), 2) } else { [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 2) })
     processos = @(Get-Process).Count
     servicos = @(Get-Service | Where-Object Status -eq 'Running').Count
     inicializacao = $run
@@ -10363,17 +10363,18 @@ $__emJogo = [bool](@($__nomes | Where-Object { $__jogos -contains $_ }).Count)
 if ($__emJogo -and $__pausar) { Dado 'amostra' @{ em_jogo = $true; pausado = $true }; return }
 $__cpuS = @()
 for ($i = 0; $i -lt 3; $i++) {
-    $p = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop }
-    if ($p -and $i -gt 0) { $__cpuS += [double]$p.PercentProcessorTime }
+    $p = Tenta { Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation -Filter "Name='_Total'" -ErrorAction Stop }
+    if ($p -and $i -gt 0) { $__cpuS += $(if ($null -ne $p.PercentProcessorUtility) { [math]::Min(100, [double]$p.PercentProcessorUtility) } else { [double]$p.PercentProcessorTime }) }
     if ($i -lt 2) { Start-Sleep -Milliseconds 500 }
 }
 $__os = Get-CimInstance Win32_OperatingSystem
 $__ramT = $__os.TotalVisibleMemorySize / 1MB
-$__ramU = ($__os.TotalVisibleMemorySize - $__os.FreePhysicalMemory) / 1MB
+$__memD = Tenta { [double](Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop).AvailableMBytes / 1024 } $null
+$__ramU = $(if ($null -ne $__memD) { [math]::Max(0, $__ramT - $__memD) } else { ($__os.TotalVisibleMemorySize - $__os.FreePhysicalMemory) / 1MB })
 ''' + TEMP_PS + r'''
 $__tt = LeTemperaturas (-not $__emJogo)   # em jogo: só sensores do sistema; o driver de vídeo e a NVIDIA ficam para fora de jogo
 $__temp = $__tt.cpu
-$__disco = Tenta { [math]::Min(100, [double](Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop).PercentDiskTime) } $null
+$__disco = Tenta { [math]::Max(0, [math]::Min(100, 100 - [double](Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop).PercentIdleTime)) } $null
 $__gpuU = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
 $__bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
 $a = @{ em_jogo = $__emJogo; ram_pct = [math]::Round($__ramU / $__ramT * 100, 1); ram_gb = [math]::Round($__ramU, 2) }
