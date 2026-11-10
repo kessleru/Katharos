@@ -1930,7 +1930,8 @@ class TestProvaDeGanho(_CasaTemporaria):
 
             def avanca(self, *a, **kw):
                 pass
-        with contextlib.redirect_stdout(buf), mock.patch.object(k, 'Progresso', Pr), mock.patch.object(k, 'roda_ps', lambda t_, corpo, *a, **kw: corpos.append(corpo) or S), \
+        with contextlib.redirect_stdout(buf), mock.patch.object(k, 'Progresso', Pr), mock.patch.object(k, 'mede', lambda *a, **kw: {'boot_s': 50}), \
+                mock.patch.object(k, 'salva_medida', lambda *a: None), mock.patch.object(k, 'roda_ps', lambda t_, corpo, *a, **kw: corpos.append(corpo) or S), \
                 mock.patch.object(k, 'rel_eventos', lambda x: None), mock.patch.object(k, '_andamento_marca', lambda *a: None), \
                 mock.patch.object(k, '_andamento_avanca', lambda *a: None), mock.patch.object(k, 'estado', lambda: {}), mock.patch.object(k, 'salva_estado', lambda e: None):
             k.executa_itens(ctx, pac, self._itens())
