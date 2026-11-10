@@ -2,6 +2,7 @@
 Verificam o que não pode quebrar: cada item é completo, nenhum script mexe nas proteções do Windows, os perfis só
 citam itens que existem, o menu só cita comandos que existem e o ZIP bate com os hashes publicados."""
 import hashlib
+import json
 from datetime import datetime
 import importlib.util
 import re
@@ -2804,6 +2805,79 @@ class TestAProvaDeInvasores(unittest.TestCase):
     def test_desfazer_le_da_pasta_protegida(self):
         # o desfazer roda como administrador e executa o que está guardado: o backup fica onde só administrador grava
         self.assertIn("novo = pasta_da_tarefa() / 'backup'", self.PY)
+
+
+class TestApi(_CasaTemporaria):
+    """katharos api: o que a interface com janelas usa. JSON por linha; erro vira resposta, nunca derruba; mudar o PC pede aceite."""
+
+    def conversa(self, *pedidos):
+        import io
+        entrada = io.StringIO(''.join((p if isinstance(p, str) else json.dumps(p)) + '\n' for p in pedidos))
+        saida = io.StringIO()
+        k.roda_api([], entrada=entrada, saida=saida)
+        return [json.loads(l) for l in saida.getvalue().splitlines()]
+
+    def um(self, metodo, params=None):
+        r = self.conversa({'id': 1, 'metodo': metodo, 'params': params or {}})
+        return [x for x in r if x.get('id') == 1 and 'evento' not in x][0]
+
+    def test_protocolo(self):
+        r = self.conversa('lixo', {'id': 2, 'metodo': 'nao-existe'}, {'id': 3, 'metodo': 'versao'}, {'id': 4, 'metodo': 'sair'},
+                          {'id': 5, 'metodo': 'versao'})
+        self.assertEqual(r[0], {'pronto': True, 'api': k.API_VERSAO, 'versao': k.VERSAO})
+        self.assertEqual(r[1]['erro']['codigo'], 'json_invalido')
+        self.assertEqual(r[2]['erro']['codigo'], 'metodo_desconhecido')
+        self.assertTrue(r[3]['ok'])
+        self.assertEqual(r[3]['dados']['versao'], k.VERSAO)
+        self.assertEqual(r[4], {'id': 4, 'ok': True, 'dados': None})
+        self.assertEqual(len(r), 5)   # depois de "sair" nada é respondido
+
+    def test_saida_da_tela_nunca_vai_para_o_canal(self):
+        # tudo o que as funções escrevem vai para o erro padrão: cada linha do canal é JSON
+        r = self.conversa({'id': 1, 'metodo': 'itens', 'params': {'modo': 'seguro'}}, {'id': 2, 'metodo': 'inicio'})
+        self.assertTrue(all(isinstance(x, dict) for x in r))
+
+    def test_mudar_o_pc_pede_aceite(self):
+        self.assertEqual(self.um('aplicar', {'itens': {'servicos': ['x']}})['erro']['codigo'], 'precisa_aceite')
+        self.assertEqual(self.um('aceitar_aviso', {})['erro']['codigo'], 'pedido_invalido')
+        self.assertTrue(self.um('aceitar_aviso', {'li': True})['dados']['aceito'])
+        self.assertEqual(self.um('aplicar', {'itens': {'nada': ['x']}})['erro']['codigo'], 'pedido_invalido')
+        self.assertTrue(all(m['muda'] for n, m in self.um('metodos')['dados'].items() if n in ('aplicar', 'desfazer')))
+
+    def test_desfazer_sem_backup_nao_diz_que_desfez(self):
+        self.um('aceitar_aviso', {'li': True})
+        d = self.um('desfazer', {'pacotes': ['servicos']})['dados']['pacotes'][0]
+        self.assertEqual((d['ok'], d['nada']), (False, True))
+
+    def test_itens_iguais_aos_do_site(self):
+        d = self.um('itens', {'modo': 'equilibrado'})['dados']
+        total = sum(len(a['itens']) for a in d['areas'])
+        marcados = sum(i['marcado'] for a in d['areas'] for i in a['itens'])
+        ctx = k.Ctx(k._defaults(k.monta_parser().parse_args([])), k.Terminal(True, True, consulta_fundo=False))
+        ctx.perfil = json.loads(json.dumps(k.PC_MODELO))
+        esperado = 0
+        for nome, pac in k.PACOTES.items():
+            its = [x for x in (pac.itens(ctx) or []) if x]
+            its, _ = k.aplica_protegidos(nome, its)
+            k.marca_por_modo(its, 'equilibrado')
+            esperado += sum(x.marcado for x in its)
+        self.assertEqual(marcados, esperado)
+        self.assertGreater(total, 100)
+        self.assertEqual(self.um('itens', {'modo': 'turbo'})['erro']['codigo'], 'pedido_invalido')
+
+    def test_config(self):
+        self.assertEqual(self.um('config_gravar', {'chave': 'modo', 'valor': 'extremo'})['dados']['valor'], 'extremo')
+        self.assertEqual(self.um('config_gravar', {'chave': 'modo', 'valor': 'turbo'})['erro']['codigo'], 'pedido_invalido')
+        self.assertEqual(self.um('config_gravar', {'chave': 'energia-automatica', 'valor': 'sim'})['erro']['codigo'], 'precisa_fluxo')
+        self.assertEqual(self.um('config_ler')['dados']['modo']['valor'], 'extremo')
+
+    def test_contrato_congelado(self):
+        """O contrato com a interface (tests/api/contrato.json): mudar um método ou um campo exige mudar o C# junto."""
+        contrato = json.loads((RAIZ / 'tests' / 'api' / 'contrato.json').read_text(encoding='utf-8'))
+        self.assertEqual(self.um('metodos')['dados'], contrato['metodos'])
+        self.assertEqual(sorted(self.um('inicio')['dados']), contrato['inicio'])
+        item = next(a['itens'][0] for a in self.um('itens', {'modo': 'seguro'})['dados']['areas'] if a['itens'])
+        self.assertEqual(sorted(item), contrato['item'])
 
 
 class TestFonte(unittest.TestCase):

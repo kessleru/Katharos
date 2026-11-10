@@ -572,6 +572,8 @@ def main(argv=None):
     sem_janela_global()
     cru = list(argv if argv is not None else sys.argv[1:])
     primeiro = cru[0] if cru and not cru[0].startswith('-') else None
+    if primeiro == 'api':   # a interface com janelas: JSON por linha, sem tela e sem perguntas (66-api.py)
+        return roda_api(cru[1:])
     tela = primeiro if primeiro in TELAS else None
     if tela:
         cru = cru[1:]

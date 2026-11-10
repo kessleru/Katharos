@@ -920,6 +920,9 @@ class Terminal:
 
 # ═══════════════════════════════ Progresso ═══════════════════════════════
 
+OUVINTES_PROGRESSO = []   # funções (rotulo, n, total, atual) chamadas a cada passo de um Progresso
+
+
 class Progresso:
     """Spinner com barra (ou só contagem, com total=None). Ao sair, deixa uma linha de registro:
     o que foi feito e quanto demorou, como o spinner do Clack.
@@ -979,6 +982,11 @@ class Progresso:
     def avanca(self, atual='', n=1):
         self.n += n
         self.atual = str(atual)
+        for f in OUVINTES_PROGRESSO:   # a API da interface recebe cada passo (um ouvinte que falha não para a aplicação)
+            try:
+                f(self.rotulo, self.n, self.total, self.atual)
+            except Exception:
+                pass
 
     def _desenho(self):
         t = self.t

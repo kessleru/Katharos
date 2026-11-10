@@ -420,6 +420,7 @@ def executa_itens(ctx, pac, itens, teste=False):
             pr.avanca(bloco[-1].titulo, len(bloco))
             if not teste:
                 _andamento_avanca([i.id for i in bloco])
+    ctx.ultimos_eventos = eventos   # a API devolve os avisos e erros de cada bloco para a interface
     if not teste:
         e = estado()
         e.pop('em_andamento', None)

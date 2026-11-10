@@ -1,0 +1,77 @@
+{
+ "metodos": {
+  "aceitar_aviso": {
+   "muda": false
+  },
+  "agora": {
+   "muda": false
+  },
+  "aplicado": {
+   "muda": false
+  },
+  "aplicar": {
+   "muda": true
+  },
+  "aviso": {
+   "muda": false
+  },
+  "config_gravar": {
+   "muda": false
+  },
+  "config_ler": {
+   "muda": false
+  },
+  "desfazer": {
+   "muda": true
+  },
+  "inicio": {
+   "muda": false
+  },
+  "itens": {
+   "muda": false
+  },
+  "metodos": {
+   "muda": false
+  },
+  "raiox": {
+   "muda": false
+  },
+  "responder": {
+   "muda": false
+  },
+  "sessoes": {
+   "muda": false
+  },
+  "sugestoes": {
+   "muda": false
+  },
+  "versao": {
+   "muda": false
+  }
+ },
+ "inicio": [
+  "aviso_aceito",
+  "pc",
+  "raiox",
+  "segundo_plano",
+  "temperatura",
+  "ultima_mudanca"
+ ],
+ "item": [
+  "alerta",
+  "conflita",
+  "custo",
+  "explica",
+  "ganho",
+  "grupo",
+  "id",
+  "ja",
+  "marcado",
+  "nivel",
+  "nota",
+  "pacote",
+  "recorrente",
+  "sem_volta",
+  "titulo"
+ ]
+}
