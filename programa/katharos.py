@@ -22,8 +22,8 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '2.0.1'
-DATA_VERSAO = '9 nov 2026'
+VERSAO = '2.1.0'
+DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #
@@ -2177,7 +2177,99 @@ Dado 'perfil' @{
 }
 '''
 
-MEDIDAS_PS = r'''
+TEMP_GPU_PS = r'''
+# GPU pelo driver de vídeo (D3DKMT, o mesmo dado do Gerenciador de Tarefas). Só nas leituras que você pede, nunca na coleta de fundo.
+function KGpuTemp {
+    if (-not ('KatharosGpu' -as [type])) {
+        Add-Type -ErrorAction Stop -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public static class KatharosGpu {
+    [StructLayout(LayoutKind.Sequential)] struct LUID { public uint Low; public int High; }
+    [StructLayout(LayoutKind.Sequential)] struct INFO { public uint hAdapter; public LUID Luid; public uint Sources; public int Precise; }
+    [StructLayout(LayoutKind.Sequential)] struct ENUM2 { public uint Num; public IntPtr pAdapters; }
+    [StructLayout(LayoutKind.Sequential)] struct QUERY { public uint hAdapter; public int Type; public IntPtr pData; public uint Size; }
+    [StructLayout(LayoutKind.Sequential)] struct PERF { public uint Index; public ulong MemFreq, MaxMemFreq, MaxMemFreqOC, MemBw, PcieBw; public uint Fan, Power, Temperature; public byte Override; }
+    [StructLayout(LayoutKind.Sequential)] struct CLOSE { public uint hAdapter; }
+    [DllImport("gdi32.dll")] static extern int D3DKMTEnumAdapters2(ref ENUM2 e);
+    [DllImport("gdi32.dll")] static extern int D3DKMTQueryAdapterInfo(ref QUERY q);
+    [DllImport("gdi32.dll")] static extern int D3DKMTCloseAdapter(ref CLOSE c);
+    public static double Maxima() {
+        var e = new ENUM2(); D3DKMTEnumAdapters2(ref e);
+        if (e.Num == 0 || e.Num > 16) return -1;
+        int ti = Marshal.SizeOf(typeof(INFO)), tp = Marshal.SizeOf(typeof(PERF));
+        IntPtr buf = Marshal.AllocHGlobal(ti * (int)e.Num); double max = -1;
+        try {
+            e.pAdapters = buf;
+            if (D3DKMTEnumAdapters2(ref e) != 0) return -1;
+            for (int i = 0; i < e.Num; i++) {
+                var a = (INFO)Marshal.PtrToStructure(new IntPtr(buf.ToInt64() + (long)i * ti), typeof(INFO));
+                IntPtr pb = Marshal.AllocHGlobal(tp);
+                try {
+                    Marshal.StructureToPtr(new PERF(), pb, false);
+                    var q = new QUERY { hAdapter = a.hAdapter, Type = 62, pData = pb, Size = (uint)tp };
+                    if (D3DKMTQueryAdapterInfo(ref q) == 0) {
+                        var p = (PERF)Marshal.PtrToStructure(pb, typeof(PERF));
+                        double t = p.Temperature / 10.0;
+                        if (t > 5 && t < 125 && t > max) max = t;
+                    }
+                } finally { Marshal.FreeHGlobal(pb); var c = new CLOSE { hAdapter = a.hAdapter }; D3DKMTCloseAdapter(ref c); }
+            }
+        } finally { Marshal.FreeHGlobal(buf); }
+        return max;
+    }
+}
+'@
+    }
+    $t = [KatharosGpu]::Maxima()
+    if ($t -gt 0) { [math]::Round($t, 0) } else { $null }
+}
+function KNvTemp {
+    $smi = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $smi) { return $null }
+    $l = Tenta { (& $smi.Source --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } $null; $d = 0.0
+    if ($l -and [double]::TryParse("$l".Trim(), [ref]$d) -and $d -gt 5) { [math]::Round($d, 0) } else { $null }
+}
+'''
+
+TEMP_PS = r'''
+# temperatura da CPU e da GPU: tenta do mais certo para o mais pobre e diz de onde veio
+function LeTemperaturas([bool]$GpuTambem = $true) {
+    $r = @{ cpu = $null; cpu_fonte = $null; gpu = $null; gpu_fonte = $null }
+    # 1) LibreHardwareMonitor ou OpenHardwareMonitor abertos: leem o sensor de verdade (CPU Package, Tctl/Tdie, GPU Core)
+    foreach ($ns in 'root\LibreHardwareMonitor', 'root\OpenHardwareMonitor') {
+        $s = @(Tenta { Get-CimInstance -Namespace $ns -ClassName Sensor -Filter "SensorType='Temperature'" -ErrorAction Stop } @())
+        if (-not $s.Count) { continue }
+        $c = @($s | Where-Object { "$($_.Identifier)" -match 'cpu' -and $_.Value -gt 5 -and $_.Value -lt 125 })
+        $cp = @($c | Where-Object { $_.Name -match 'Package|Tctl|Tdie|Core Average' })
+        if ($cp.Count) { $c = $cp }
+        if ($null -eq $r.cpu -and $c.Count) { $r.cpu = [math]::Round(($c | Measure-Object Value -Maximum).Maximum, 0); $r.cpu_fonte = ($ns -split '\\')[1] }
+        $g = @($s | Where-Object { "$($_.Identifier)" -match 'gpu' -and $_.Value -gt 5 -and $_.Value -lt 125 })
+        $gc = @($g | Where-Object { $_.Name -match 'GPU Core|^Core' })
+        if ($gc.Count) { $g = $gc }
+        if ($null -eq $r.gpu -and $g.Count) { $r.gpu = [math]::Round(($g | Measure-Object Value -Maximum).Maximum, 0); $r.gpu_fonte = ($ns -split '\\')[1] }
+    }
+    # 2) CPU pela zona térmica do ACPI, que o Windows mostra sem programa extra. 298, 300 e 301 K são o valor fixo de muitas placas-mãe: não é leitura.
+    if ($null -eq $r.cpu) {
+        $k = @(Tenta { Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop | ForEach-Object { if ([double]$_.HighPrecisionTemperature -gt 0) { [double]$_.HighPrecisionTemperature / 10 } else { [double]$_.Temperature } } } @())
+        $k += @(Tenta { Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | ForEach-Object { [double]$_.CurrentTemperature / 10 } } @())
+        $z = @($k | Where-Object { $v = $_; -not (@(298.15, 300, 301) | Where-Object { [math]::Abs($v - $_) -lt .25 }) } | ForEach-Object { $_ - 273.15 } | Where-Object { $_ -gt 15 -and $_ -lt 120 })
+        if ($z.Count) { $r.cpu = [math]::Round(($z | Measure-Object -Maximum).Maximum, 0); $r.cpu_fonte = 'zona térmica' }
+    }
+    # 3) GPU pelo driver de vídeo, o mesmo dado do Gerenciador de Tarefas (Windows 10 2004 ou mais novo; placas dedicadas)
+    if ($GpuTambem -and $null -eq $r.gpu) {
+        $g = $null; if (Get-Command KGpuTemp -ErrorAction SilentlyContinue) { $g = Tenta { KGpuTemp } $null }
+        if ($null -ne $g) { $r.gpu = $g; $r.gpu_fonte = 'driver de vídeo' }
+    }
+    # 4) GPU NVIDIA pela ferramenta da própria NVIDIA (só nas leituras que você pede; a coleta de fundo chama a dela fora de jogo)
+    if ($GpuTambem -and $null -eq $r.gpu -and (Get-Command KNvTemp -ErrorAction SilentlyContinue)) {
+        $g = Tenta { KNvTemp } $null
+        if ($null -ne $g) { $r.gpu = $g; $r.gpu_fonte = 'ferramenta da NVIDIA' }
+    }
+    $r
+}
+'''
+
+MEDIDAS_PS = TEMP_GPU_PS + TEMP_PS + r'''
 $os = Get-CimInstance Win32_OperatingSystem
 $amostras = @()
 for ($i = 0; $i -lt 4; $i++) {
@@ -2189,7 +2281,8 @@ for ($i = 0; $i -lt 4; $i++) {
     Start-Sleep -Milliseconds 900
 }
 function Media($c) { $v = @($amostras | ForEach-Object { $_.$c } | Where-Object { $null -ne $_ }); if ($v.Count) { [math]::Round(($v | Measure-Object -Average).Average, 1) } else { $null } }
-$temp = Tenta { $z = @(Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | ForEach-Object { ($_.CurrentTemperature / 10) - 273.15 } | Where-Object { $_ -gt 5 -and $_ -lt 120 }); if ($z.Count) { [math]::Round(($z | Measure-Object -Maximum).Maximum, 0) } else { $null } } $null
+$tt = LeTemperaturas $true
+$temp = $tt.cpu
 $boot = Tenta { $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction Stop; [int](([xml]$e.ToXml()).Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text' } $null
 $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $mem = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop } $null
@@ -2218,6 +2311,9 @@ Dado 'medidas' @{
     inicializacao = $run
     livre_c = [math]::Round($ld.FreeSpace / 1GB, 1)
     temperatura = $temp
+    temp_fonte = $tt.cpu_fonte
+    temperatura_gpu = $tt.gpu
+    temp_gpu_fonte = $tt.gpu_fonte
     boot_s = $(if ($boot) { [math]::Round($boot / 1000, 1) } else { $null })
 }
 '''
@@ -2713,7 +2809,7 @@ def analisa(p, m, d):
                         f'Limite de desempenho em {br(m["limite"], 0)}%.',
                         'Calor (poeira, pasta térmica), carregador fraco ou plano de energia. Limpe as saídas de ar.'))
     if (m.get('temperatura') or 0) >= 80:
-        A.append(Achado(2, ['calor', 'tudo'], 'Temperatura alta em repouso', f'{br(m["temperatura"], 0)} °C pela zona térmica do ACPI.',
+        A.append(Achado(2, ['calor', 'tudo'], 'Temperatura alta em repouso', f'{br(m["temperatura"], 0)} °C (lido por: {m.get("temp_fonte") or "zona térmica"}).',
                         'Limpar ventoinhas; em notebook, usar o plano "fresco" (mínimo de CPU 5% e turbo eficiente).', 'energia'))
     trocas = lista(saude.get('trocas_plano'))
     if trocas:
@@ -10274,14 +10370,16 @@ for ($i = 0; $i -lt 3; $i++) {
 $__os = Get-CimInstance Win32_OperatingSystem
 $__ramT = $__os.TotalVisibleMemorySize / 1MB
 $__ramU = ($__os.TotalVisibleMemorySize - $__os.FreePhysicalMemory) / 1MB
-$__temp = Tenta { $z = @(Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | ForEach-Object { ($_.CurrentTemperature / 10) - 273.15 } | Where-Object { $_ -gt 5 -and $_ -lt 120 }); if ($z.Count) { [math]::Round(($z | Measure-Object -Maximum).Maximum, 0) } else { $null } } $null
-if ($null -eq $__temp) { $__temp = Tenta { $z = @(Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop | ForEach-Object { [double]$_.Temperature - 273.15 } | Where-Object { $_ -gt 5 -and $_ -lt 120 }); if ($z.Count) { [math]::Round(($z | Measure-Object -Maximum).Maximum, 0) } else { $null } } $null }
+''' + TEMP_PS + r'''
+$__tt = LeTemperaturas (-not $__emJogo)   # em jogo: só sensores do sistema; o driver de vídeo e a NVIDIA ficam para fora de jogo
+$__temp = $__tt.cpu
 $__disco = Tenta { [math]::Min(100, [double](Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop).PercentDiskTime) } $null
 $__gpuU = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
 $__bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
 $a = @{ em_jogo = $__emJogo; ram_pct = [math]::Round($__ramU / $__ramT * 100, 1); ram_gb = [math]::Round($__ramU, 2) }
 if ($__cpuS.Count) { $a.cpu = [math]::Round(($__cpuS | Measure-Object -Average).Average, 1) }
-if ($null -ne $__temp) { $a.temp = $__temp }
+if ($null -ne $__temp) { $a.temp = $__temp; $a.temp_fonte = $__tt.cpu_fonte }
+if ($null -ne $__tt.gpu) { $a.gpu_temp = $__tt.gpu; $a.gpu_fonte = $__tt.gpu_fonte }
 if ($null -ne $__disco) { $a.disco = $__disco }
 if ($null -ne $__gpuU) { $a.gpu_util = $__gpuU }
 if ($__bat) { $a.bat = [int]$__bat.EstimatedChargeRemaining; $a.na_bateria = ([int]$__bat.BatteryStatus -eq 1) }
@@ -10295,12 +10393,16 @@ if (-not $__emJogo) {
     if ($__smi) {
         $__l = Tenta { (& $__smi.Source --query-gpu=temperature.gpu,power.draw --format=csv,noheader,nounits 2>$null | Select-Object -First 1) } $null
         if ($__l) { $__v = @("$__l" -split ',' | ForEach-Object { $_.Trim() }); $__d = 0.0
-            if ($__v.Count -ge 1 -and [double]::TryParse($__v[0], [ref]$__d)) { $a.gpu_temp = $__d }
+            if (-not $a.ContainsKey('gpu_temp') -and $__v.Count -ge 1 -and [double]::TryParse($__v[0], [ref]$__d)) { $a.gpu_temp = $__d }
             if ($__v.Count -ge 2 -and [double]::TryParse($__v[1], [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$__d)) { $a.gpu_w = $__d } }
     }
 }
 Dado 'amostra' $a
 '''
+
+
+SEM_SENSOR_CPU = ('o Windows não mostra o sensor deste processador. Abra o LibreHardwareMonitor (winget install LibreHardwareMonitor.LibreHardwareMonitor) '
+                  'e deixe aberto: o Katharos passa a ler dele')
 
 
 def horas_arq():
@@ -10494,7 +10596,8 @@ def ferramenta_amostrar(ctx, args):
         t.nota('  Há um jogo aberto e a coleta está em "pausar": nada foi lido. (config coleta-em-jogo segura liga de novo a leitura só do sistema.)', 2)
         return 0
     t.chaves([('CPU', f'{br(a.get("cpu"), 0)} %' if 'cpu' in a else '-'), ('RAM', f'{br(a.get("ram_pct"), 0)} % ({br(a.get("ram_gb"), 1)} GB)'),
-              ('disco ocupado', f'{br(a.get("disco"), 0)} %' if 'disco' in a else '-'), ('temperatura', f'{br(a.get("temp"), 0)} °C' if 'temp' in a else 'sem sensor acessível pelo Windows'),
+              ('disco ocupado', f'{br(a.get("disco"), 0)} %' if 'disco' in a else '-'), ('CPU temperatura', f'{br(a.get("temp"), 0)} °C ({a.get("temp_fonte") or "zona térmica"})' if 'temp' in a else SEM_SENSOR_CPU),
+              ('GPU temperatura', f'{br(a.get("gpu_temp"), 0)} °C ({a.get("gpu_fonte") or "nvidia-smi"})' if 'gpu_temp' in a else ('pulada: jogo aberto' if a.get('em_jogo') else 'o driver de vídeo não informa')),
               ('jogo aberto', 'sim: leitura só do sistema' if a.get('em_jogo') else 'não')])
     return 0
 

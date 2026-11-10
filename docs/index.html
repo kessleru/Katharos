@@ -62,8 +62,10 @@
   .topo > .quadro::before, .topo > .quadro::after { display: none; }
   .faixa > .quadro::before { left: 0; }
   .faixa > .quadro::after { left: 100%; }
-  .listras { height: 40px; border-top: 1px solid var(--linha); position: relative; z-index: 1;
-    background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); }
+  /* faixa hachurada entre blocos: as mesmas diagonais da gravura; chega junto com o fio */
+  .listras .quadro { height: 36px; background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); }
+  .js .listras .quadro { clip-path: inset(0 100% 0 0); }
+  .js .listras.traco .quadro { clip-path: inset(0 0 0 0); transition: clip-path 1.3s .1s cubic-bezier(.65,0,.25,1); }
   .celulas { display: grid; }
   .celulas > * + * { border-left: 1px solid var(--linha); }
 
@@ -475,7 +477,7 @@
 
 <header class="faixa topo">
   <div class="quadro celulas">
-    <a class="marca" href="#" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v2.0.1</small></a>
+    <a class="marca" href="#" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v2.1.0</small></a>
     <nav class="menu" aria-label="Seções">
       <a href="#usar">usar</a>
       <a href="#modos">modos</a>
@@ -523,7 +525,7 @@
     <dl class="quadro celulas">
       <div><dt>funciona em</dt><dd>Windows 10 e 11</dd></div>
       <div><dt>ajustes</dt><dd>mais de 180</dd></div>
-      <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">2.0.1</a>, 9 nov 2026</dd></div>
+      <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">2.1.0</a>, 10 nov 2026</dd></div>
     </dl>
   </section>
 
@@ -581,6 +583,7 @@
     </ol>
   </section>
 
+  <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
   <section class="faixa" id="painel" aria-labelledby="painel-t">
     <div class="quadro cab celulas">
       <div><h2 id="painel-t">Painel<span>.</span></h2></div>
@@ -711,6 +714,7 @@
     </div>
   </section>
 
+  <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
   <section class="faixa" id="novidades" aria-labelledby="nov-t">
     <div class="quadro cab celulas">
       <div><h2 id="nov-t">Novidades<span>.</span></h2></div>
@@ -718,12 +722,13 @@
   </section>
   <section class="faixa novidades" aria-label="Últimas versões">
     <div class="quadro">
+<div class="nov"><div class="nov-v"><b>v2.1.0</b><small>10 nov 2026</small></div><ul><li><b>Temperatura da CPU:</b> lê primeiro o LibreHardwareMonitor ou o OpenHardwareMonitor</li><li><b>Temperatura da GPU:</b> placas AMD, NVIDIA e Intel dedicadas passam a ser lidas pelo driver de…</li><li>Quando o Windows não mostra o sensor da CPU</li></ul></div>
 <div class="nov"><div class="nov-v"><b>v2.0.1</b><small>9 nov 2026</small></div><ul><li><b>Autenticidade:</b> confere se os arquivos do programa são os publicados</li><li><b>Assinatura do GitHub:</b> cada release passa a ser atestada pelo GitHub Actions</li><li><b>Publicação automática:</b> confere versão, changelog e hashes, roda os testes</li></ul></div>
-<div class="nov"><div class="nov-v"><b>v2.0.0</b><small>9 nov 2026</small></div><ul><li><b>Menu de sete linhas:</b> raiox, turbo, escolher, jogar, painel, desfazer e mais</li><li><b>Sem perfis:</b> o comando perfil e os perfis prontos saíram</li><li><b>jogar:</b> tudo de jogo num lugar só</li></ul></div>
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
     </div>
   </section>
 
+  <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
   <section class="faixa" id="contribuir" aria-labelledby="contr-t">
     <div class="quadro cab celulas">
       <div><h2 id="contr-t">Contribuir<span>.</span></h2></div>
@@ -989,7 +994,7 @@
     const el = document.getElementById(id);
     if (!el) return false;
     let fim = el;
-    while (fim.nextElementSibling && !fim.nextElementSibling.id && !fim.nextElementSibling.classList.contains('divisor') && fim.nextElementSibling.tagName !== 'FOOTER') fim = fim.nextElementSibling;
+    while (fim.nextElementSibling && !fim.nextElementSibling.id && !fim.nextElementSibling.classList.contains('divisor') && !fim.nextElementSibling.classList.contains('listras') && fim.nextElementSibling.tagName !== 'FOOTER') fim = fim.nextElementSibling;
     const a = el.getBoundingClientRect().top + scrollY, b = fim.getBoundingClientRect().bottom + scrollY;
     const h = topo ? topo.offsetHeight : 60, livre = innerHeight - h;
     const alvo = (b - a) >= livre - 32 ? a - h - 8 : (a + b) / 2 - h - livre / 2;

@@ -18,6 +18,14 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.1.0 · 10 de novembro de 2026
+
+Temperatura da CPU e da GPU em mais PCs.
+
+- **Temperatura da CPU**: lê primeiro o LibreHardwareMonitor ou o OpenHardwareMonitor, se estiver aberto (o sensor de verdade: CPU Package, Tctl/Tdie); depois a zona térmica do Windows por dois caminhos. Descarta o valor fixo de 25 a 28 °C que muitas placas-mãe informam sem medir nada. Cada leitura diz de onde veio.
+- **Temperatura da GPU**: placas AMD, NVIDIA e Intel dedicadas passam a ser lidas pelo driver de vídeo, o mesmo dado do Gerenciador de Tarefas (Windows 10 2004 ou mais novo), além da ferramenta da NVIDIA. A coleta de fundo só faz isso fora de jogo, como antes.
+- Quando o Windows não mostra o sensor da CPU, o `amostrar` diz como resolver: abrir o LibreHardwareMonitor.
+
 ## 2.0.1 · 9 de novembro de 2026
 
 Conferir que o programa baixado é o original.
