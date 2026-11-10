@@ -73,6 +73,11 @@ jobs:
         run: |
           python programa/katharos.py amostrar --sem-cor
           python -c "import pathlib,json; p=pathlib.Path.home()/'.katharos'/'horas.jsonl'; l=p.read_text(encoding='utf-8').splitlines(); b=json.loads(l[-1]); print(b); assert b['n']>=1 and 'rn' in b, 'sem leitura de RAM'"
+      - name: raio-x no Windows real (só leitura) e busca
+        run: |
+          python programa/katharos.py raiox --sim --sem-cor
+          python -c "import pathlib,json; c=pathlib.Path.home()/'.katharos'; m=json.loads(sorted((c/'medidas').glob('*raiox.json'))[-1].read_text(encoding='utf-8')); print({x: m.get(x) for x in ('dpc','interrupcoes','disco_ativo','fila_disco','paginas_s','ram_disponivel','commit_pct')}); assert m.get('commit_pct') is not None and m.get('ram_disponivel') is not None, 'sem leitura de memoria'; assert m.get('dpc') is not None, 'sem leitura de DPC'; h=json.loads((c/'relatorio.json').read_text(encoding='utf-8'))['secoes']['raiox']['dados']['hardware']; print(h); assert isinstance(h['video'], list) and isinstance(h['pentes'], list), 'perfil sem video ou pentes'"
+          python programa/katharos.py buscar telemetria --sem-cor
       - name: saúde do Windows (só leitura) e painel
         run: |
           python programa/katharos.py saude --sem-cor

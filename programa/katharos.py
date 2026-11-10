@@ -1476,7 +1476,8 @@ function _LeValor([string]$Path, [string]$Name) {
 }
 function Set-Valor([string]$Path, [string]$Name, $Value, [string]$Type = 'DWord', [string]$Rotulo = '') {
     $a = _LeValor $Path $Name
-    if ($a.existe -and (_Iguais $a.valor $Value)) { return $false }
+    # igual só se o valor E o tipo batem: uma política gravada como texto ("0") não vale como número para o Windows
+    if ($a.existe -and (_Iguais $a.valor $Value) -and ($Name -eq '(default)' -or [string]$a.tipo -eq $Type -or (@('String','ExpandString') -contains [string]$a.tipo -and @('String','ExpandString') -contains $Type))) { return $false }
     if ($TESTE) {
         if ($Rotulo) { Plano $Rotulo } else { $vv = $Value; if ($Value -is [byte[]]) { $vv = 'binario' }; Plano ("{0} = {1}  ({2})" -f $Name, $vv, (Split-Path $Path -Leaf)) }
         return $true
@@ -1499,7 +1500,7 @@ function Remove-Valor([string]$Path, [string]$Name, [string]$Rotulo = '') {
     $v = $a.valor
     if ($a.tipo -eq 'Binary' -and $null -ne $a.valor) { $v = [Convert]::ToBase64String([byte[]]$a.valor) }
     _BkGuarda ("reg|" + $Path + "|" + $Name) @{ t = 'reg'; p = $Path; n = $Name; existe = $true; tipo = $a.tipo; v = $v }
-    try { Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -ErrorAction Stop; $script:MUDOU++; return $true } catch { return $false }
+    try { Remove-ItemProperty -LiteralPath $Path -Name $Name -Force -ErrorAction Stop; $script:MUDOU++; return $true } catch { Aviso ("nao apagou {0} em {1}: {2}" -f $Name, $Path, $_.Exception.Message); return $false }
 }
 function Get-ModoServico([string]$Nome) {
     $s = Get-CimInstance Win32_Service -Filter ("Name='" + $Nome + "'") -ErrorAction SilentlyContinue
@@ -2123,6 +2124,20 @@ $dono = Tenta { (Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" | S
 $pf = Tenta { Get-CimInstance Win32_PageFileSetting } $null
 $pfAuto = Tenta { (Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile } $true
 $mm = Tenta { (Get-MMAgent -ErrorAction Stop).MemoryCompression } $null
+$pentesL = @($pentes | ForEach-Object { [pscustomobject]@{ gb = [math]::Round([double]$_.Capacity / 1GB, 0); mhz = [int]$_.ConfiguredClockSpeed; mhz_max = [int]$_.Speed; fab = ([string]$_.Manufacturer).Trim(); modelo = ([string]$_.PartNumber).Trim() } })
+$video = @(Tenta { Get-CimInstance Win32_VideoController -ErrorAction Stop | ForEach-Object { [pscustomobject]@{ nome = [string]$_.Name; driver = [string]$_.DriverVersion; driver_data = $(if ($_.DriverDate) { ([datetime]$_.DriverDate).ToString('s') } else { '' }); basico = ([string]$_.Name -match 'Basic Display|Basic Render|sico da Microsoft') } } } @())
+$tela = Tenta {
+    Add-Type -Namespace Katharos -Name Tela -ErrorAction Stop -MemberDefinition '
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)] public struct DEVMODE { [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra; public int dmFields; public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput; public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public int dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight; public int dmDisplayFlags; public int dmDisplayFrequency; public int dmICMMethod; public int dmICMIntent; public int dmMediaType; public int dmDitherType; public int dmReserved1; public int dmReserved2; public int dmPanningWidth; public int dmPanningHeight; }
+[DllImport("user32.dll", CharSet = CharSet.Ansi)] public static extern bool EnumDisplaySettings(string dev, int modo, ref DEVMODE dm);'
+    $dm = New-Object 'Katharos.Tela+DEVMODE'
+    $dm.dmSize = [int16][System.Runtime.InteropServices.Marshal]::SizeOf($dm)
+    if (-not [Katharos.Tela]::EnumDisplaySettings($null, -1, [ref]$dm)) { throw 'sem tela' }
+    $tw = $dm.dmPelsWidth; $th = $dm.dmPelsHeight; $thz = $dm.dmDisplayFrequency; $tmax = $thz; $ti = 0
+    while ($ti -lt 2000 -and [Katharos.Tela]::EnumDisplaySettings($null, $ti, [ref]$dm)) { if ($dm.dmPelsWidth -eq $tw -and $dm.dmPelsHeight -eq $th -and $dm.dmDisplayFrequency -gt $tmax) { $tmax = $dm.dmDisplayFrequency }; $ti++ }
+    @{ largura = $tw; altura = $th; hz = $thz; hz_max = $tmax }
+} $null
+$trim = Tenta { $q = (fsutil behavior query DisableDeleteNotify | Out-String); if ($q -match '(?m)^\s*(?:NTFS\s+)?DisableDeleteNotify\s*=\s*(\d)') { $Matches[1] -eq '0' } else { $null } } $null
 $uptime = 0; if ($os) { $uptime = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalHours, 1) }
 $pend = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
 $build = 0; if ($os) { $build = [int]$os.BuildNumber }
@@ -2142,9 +2157,11 @@ Dado 'perfil' @{
     so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
     pc = @{ fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; bateria = [bool]$bat }
     cpu = @{ nome = ([string]$cpu.Name).Trim(); nucleos = [int]$cpu.NumberOfCores; threads = [int]$cpu.NumberOfLogicalProcessors; mhz = [int]$cpu.MaxClockSpeed }
-    ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1); slots = $slots; ocupados = $pentes.Count }
-    disco = @{ tipo = $tipoC; barramento = $barC; saude = $saudeC; livre = $livreC; total = $totalC }
+    ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1); slots = $slots; ocupados = $pentes.Count; pentes = (Lista $pentesL) }
+    disco = @{ tipo = $tipoC; barramento = $barC; saude = $saudeC; livre = $livreC; total = $totalC; trim = $trim }
     gpus = (Lista $gpus)
+    video = (Lista $video)
+    tela = $tela
     tem = @{ impressora = ($impressoras.Count -gt 0); scanner = (TemClasse 'Image'); camera = $camera; smartcard = (TemClasse 'SmartCardReader'); bluetooth = (TemClasse 'Bluetooth'); biometria = (TemClasse 'Biometric'); rdp = $rdp; winrm = $winrm; ssh = $ssh; wsl = $wsl; hyperv = $hyperv; docker = $docker; historico_arquivos = $fh; office = (TemProg '^Microsoft (Office|365)'); visualstudio = (TemProg '^Visual Studio (Community|Professional|Enterprise|Build Tools)|^Microsoft Visual Studio'); onedrive_usado = $odUsado; onedrive = (Test-Path "$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe") -or (Test-Path "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe"); brave = (TemProg '^Brave'); chrome = (TemProg '^Google Chrome'); firefox = (TemProg 'Mozilla Firefox'); edge = (Test-Path "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"); nvidia = [bool]($gpus | Where-Object { $_ -match 'NVIDIA' }); amd = [bool]($gpus | Where-Object { $_ -match 'AMD|Radeon' }); winget = [bool](Get-Command winget.exe -ErrorAction SilentlyContinue); devdrive = [bool](Tenta { Get-Volume -ErrorAction Stop | Where-Object { $_.FileSystemType -eq 'ReFS' -and $_.DriveLetter } | Select-Object -First 1 }) }
     jogos = (Lista $jogos)
     oem_gamer = (Lista $oemGamer)
@@ -2162,13 +2179,16 @@ $amostras = @()
 for ($i = 0; $i -lt 4; $i++) {
     $p = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop }
     $q = Tenta { Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation -Filter "Name='_Total'" -ErrorAction Stop }
-    if ($p) { $amostras += [pscustomobject]@{ cpu = [double]$p.PercentProcessorTime; kernel = [double]$p.PercentPrivilegedTime; perf = $(if ($q) { [double]$q.PercentProcessorPerformance } else { $null }); limite = $(if ($q) { [double]$q.PercentPerformanceLimit } else { $null }) } }
+    $dk = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop }
+    $me = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop }
+    if ($p) { $amostras += [pscustomobject]@{ dpc = [double]$p.PercentDPCTime; irq = [double]$p.PercentInterruptTime; disco = $(if ($dk) { [math]::Min(100, [double]$dk.PercentDiskTime) } else { $null }); fila = $(if ($dk) { [double]$dk.AvgDiskQueueLength } else { $null }); pag = $(if ($me) { [double]$me.PagesInputPersec } else { $null }); cpu = [double]$p.PercentProcessorTime; kernel = [double]$p.PercentPrivilegedTime; perf = $(if ($q) { [double]$q.PercentProcessorPerformance } else { $null }); limite = $(if ($q) { [double]$q.PercentPerformanceLimit } else { $null }) } }
     Start-Sleep -Milliseconds 900
 }
 function Media($c) { $v = @($amostras | ForEach-Object { $_.$c } | Where-Object { $null -ne $_ }); if ($v.Count) { [math]::Round(($v | Measure-Object -Average).Average, 1) } else { $null } }
 $temp = Tenta { $z = @(Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | ForEach-Object { ($_.CurrentTemperature / 10) - 273.15 } | Where-Object { $_ -gt 5 -and $_ -lt 120 }); if ($z.Count) { [math]::Round(($z | Measure-Object -Maximum).Maximum, 0) } else { $null } } $null
 $boot = Tenta { $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction Stop; [int](([xml]$e.ToXml()).Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text' } $null
 $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
+$mem = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop } $null
 $run = 0
 foreach ($par in @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run','HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'), @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'), @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32'))) {
     $it = Tenta { Get-Item $par[0] -ErrorAction Stop } $null
@@ -2183,6 +2203,9 @@ foreach ($par in @(@("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup
 Dado 'medidas' @{
     data = (Get-Date).ToString('s')
     cpu = (Media 'cpu'); kernel = (Media 'kernel'); desempenho = (Media 'perf'); limite = (Media 'limite')
+    dpc = (Media 'dpc'); interrupcoes = (Media 'irq'); disco_ativo = (Media 'disco'); fila_disco = (Media 'fila'); paginas_s = (Media 'pag')
+    ram_disponivel = $(if ($mem) { [math]::Round([double]$mem.AvailableMBytes / 1024, 2) } else { $null })
+    commit_pct = $(if ($mem -and [double]$mem.CommitLimit -gt 0) { [math]::Round(100 * [double]$mem.CommittedBytes / [double]$mem.CommitLimit, 0) } else { $null })
     ram_total = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
     ram_usada = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 2)
     processos = @(Get-Process).Count
@@ -2290,6 +2313,7 @@ def medidas_salvas():
 LINHAS_MEDIDA = [
     ('cpu', 'CPU em repouso', '%', 'menor'), ('kernel', 'tempo de kernel', '%', 'menor'),
     ('desempenho', 'clock (desempenho)', '%', 'maior'), ('ram_usada', 'RAM em uso', 'GB', 'menor'),
+    ('disco_ativo', 'disco ocupado', '%', 'menor'),
     ('processos', 'processos', '', 'menor'), ('servicos', 'serviços rodando', '', 'menor'),
     ('inicializacao', 'abrem com o Windows', '', 'menor'), ('livre_c', 'livre em C:', 'GB', 'maior'),
     ('temperatura', 'temperatura', '°C', 'menor'), ('boot_s', 'último boot', 's', 'menor'),
@@ -2356,6 +2380,9 @@ $top = foreach ($p in Get-Process) { try { if ($a.ContainsKey($p.Id)) { [pscusto
 $porNome = $top | Group-Object n | ForEach-Object { [pscustomobject]@{ n = $_.Name; cpu = [math]::Round(($_.Group | Measure-Object cpu -Sum).Sum, 1); mb = [math]::Round(($_.Group | Measure-Object mb -Sum).Sum); qtd = $_.Count } }
 Dado 'top_cpu' (Lista ($porNome | Sort-Object cpu -Descending | Select-Object -First 8))
 Dado 'top_ram' (Lista ($porNome | Sort-Object mb -Descending | Select-Object -First 8))
+
+$io = @(Tenta { Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -ErrorAction Stop | Where-Object { @('_Total','Idle') -notcontains $_.Name -and [double]$_.IODataBytesPersec -gt 1MB } | ForEach-Object { [pscustomobject]@{ n = ([string]$_.Name -replace '#\d+$', ''); mbs = [math]::Round([double]$_.IODataBytesPersec / 1MB, 1) } } } @())
+Dado 'top_io' (Lista ($io | Group-Object n | ForEach-Object { [pscustomobject]@{ n = $_.Name; mbs = [math]::Round(($_.Group | Measure-Object mbs -Sum).Sum, 1) } } | Sort-Object mbs -Descending | Select-Object -First 5))
 
 Vivo 'quem chama o WMI'
 $wmiCpu = ($porNome | Where-Object { $_.n -eq 'WmiPrvSE' } | Measure-Object cpu -Sum).Sum
@@ -2513,7 +2540,8 @@ def pergunta_queixas(t, args):
 
 
 class Achado:
-    """Uma dor encontrada: impacto (3 alto, 2 médio, 1 baixo), evidência medida e o que fazer."""
+    """Uma dor encontrada: impacto (3 alto, 2 médio, 1 baixo, 0 só informa e não tira ponto da nota),
+    evidência medida e o que fazer."""
 
     def __init__(self, impacto, queixas, titulo, evidencia, faz='', comando=''):
         self.impacto, self.queixas, self.titulo = impacto, set(queixas), titulo
@@ -2587,10 +2615,83 @@ def analisa(p, m, d):
                         'Abra Segurança do Windows e ligue a proteção em tempo real (o katharos nunca desliga isso).'))
     cpu = m.get('cpu')
     if cpu is not None and cpu > 15:
-        top = ', '.join(f'{x.get("n")} {br(x.get("cpu"), 1)}%' for x in lista(d.get('top_cpu'))[:3])
+        tops = lista(d.get('top_cpu'))
+        top = explica_processos(tops, 'cpu', '%')
+        q = quem_e(tops[0].get('n')) if tops else None
         A.append(Achado(2, ['lento', 'calor', 'bateria', 'tudo'], 'CPU ocupada com o PC parado',
                         f'{br(cpu, 0)}% em repouso (kernel {br(m.get("kernel"), 0)}%). Quem mais gasta: {top}.',
-                        'Ver o que é cada um; serviços de fabricante e atualizadores costumam ser a causa.', 'servicos'))
+                        (f'O primeiro é {q[0]}: {q[1]}.' if q else 'Ver o que é cada um; serviços de fabricante e atualizadores costumam ser a causa.'),
+                        (q[2] if q and q[2] else 'servicos')))
+
+    # ── sinais medidos: memória de verdade, disco que não para, drivers interrompendo ──
+    commit = m.get('commit_pct')
+    if commit is not None and commit >= 90:
+        A.append(Achado(3, ['lento', 'tudo', 'jogos'], 'Memória no limite',
+                        f'{br(commit, 0)}% do que o Windows consegue prometer aos programas (RAM + arquivo de paginação) já está comprometido'
+                        + (f'; {gb(m["ram_disponivel"])} disponíveis.' if m.get('ram_disponivel') is not None else '.'),
+                        'Passando de 100% os programas fecham sozinhos. Feche o que mais usa memória, deixe o arquivo de paginação '
+                        'automático e, se for sempre assim, este PC precisa de mais RAM. Mais usam: '
+                        + (explica_processos(lista(d.get('top_ram')), 'mb', 'MB') or 'sem registro') + '.', 'memoria'))
+    elif (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
+        A.append(Achado(2, ['lento', 'tudo'], 'Windows buscando memória no disco',
+                        f'{br(m["paginas_s"], 0)} páginas por segundo lidas do arquivo de paginação, com só {gb(m["ram_disponivel"])} disponíveis.',
+                        'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'inicializacao'))
+    ativo = m.get('disco_ativo')
+    if ativo is not None and ativo >= 50:
+        io = lista(d.get('top_io'))
+        quem = ', '.join(f'{x.get("n")} {br(x.get("mbs"), 1)} MB/s' + (f' ({quem_e(x.get("n"))[0]})' if quem_e(x.get('n')) else '') for x in io[:3])
+        A.append(Achado(3 if eh_hd(p) else 2, ['lento', 'boot', 'tudo'], 'Disco ocupado sem parar com o PC parado',
+                        f'{br(ativo, 0)}% do tempo ocupado em repouso (fila de {br(m.get("fila_disco") or 0, 1)}). '
+                        + (f'Quem mais lê e grava agora: {quem}.' if quem else 'Nenhum programa se destacou na leitura: pode ser o próprio disco lento.'),
+                        ('Em HD é o clássico "disco a 100%": o Windows fica esperando o disco. ' if eh_hd(p) else '')
+                        + 'Espere atualizações e antivírus terminarem; se for sempre assim, reduza a escrita em segundo plano.', 'disco'))
+    dpc = (m.get('dpc') or 0) + (m.get('interrupcoes') or 0)
+    if dpc >= 5:
+        A.append(Achado(2, ['jogos', 'lento', 'tudo'], 'Drivers interrompendo o processador',
+                        f'{br(dpc, 1)}% da CPU em interrupções e DPC com o PC parado (o normal é abaixo de 2%).',
+                        'É a causa mais comum de áudio picotando e de engasgos em jogos mesmo com FPS alto. Quase sempre é driver de rede, '
+                        'de áudio ou de vídeo desatualizado, ou um dispositivo USB com defeito: veja os drivers antigos em "saude".', 'saude'))
+
+    # ── o que o hardware entrega e não está sendo usado ──
+    pentes = [x for x in lista(pf(p, 'ram.pentes')) if isinstance(x, dict)]
+    lentos = [x for x in pentes if (x.get('mhz') or 0) > 0 and (x.get('mhz_max') or 0) >= 2666 and x['mhz'] <= 0.85 * x['mhz_max']]
+    if lentos and not pf(p, 'pc.notebook'):
+        A.append(Achado(2 if joga(p) else 1, ['jogos', 'lento', 'tudo'], 'Memória rodando abaixo da velocidade dela',
+                        f'Os pentes são de {lentos[0]["mhz_max"]} MHz e estão a {lentos[0]["mhz"]} MHz.',
+                        'Parece que o perfil XMP (Intel) ou EXPO/DOCP (AMD) está desligado na BIOS. Ligar é uma opção só na tela da BIOS e '
+                        'dá ganho real em jogos. O Katharos não mexe na BIOS: procure "XMP" no manual da placa-mãe.'))
+    tamanhos = {x.get('gb') for x in pentes if x.get('gb')}
+    if len(pentes) >= 2 and len(tamanhos) > 1:
+        A.append(Achado(0, ['jogos', 'tudo'], 'Pentes de memória de tamanhos diferentes',
+                        ' + '.join(f'{x.get("gb")} GB' for x in pentes) + '.',
+                        'Funciona, mas só a parte igual trabalha em canal duplo. Numa troca futura, prefira dois pentes iguais.'))
+    tela = pf(p, 'tela') or {}
+    if isinstance(tela, dict) and (tela.get('hz_max') or 0) >= (tela.get('hz') or 0) + 15 and (tela.get('hz') or 0) > 0:
+        A.append(Achado(2, ['jogos', 'tudo'], f'Monitor de {tela["hz_max"]} Hz rodando a {tela["hz"]} Hz',
+                        f'Na resolução atual ({tela.get("largura")}×{tela.get("altura")}) a tela aceita {tela["hz_max"]} Hz.',
+                        'Você pagou por uma tela mais fluida e não está usando: Configurações > Sistema > Tela > Tela avançada > '
+                        'Taxa de atualização. Em notebook na bateria, a taxa menor economiza energia.'))
+    videos = [v for v in lista(pf(p, 'video')) if isinstance(v, dict)]
+    if any(v.get('basico') for v in videos):
+        A.append(Achado(3, ['lento', 'jogos', 'tudo'], 'Placa de vídeo sem driver',
+                        'O Windows está usando o "Adaptador de Vídeo Básico da Microsoft": sem aceleração, tudo é desenhado pelo processador.',
+                        'Instale o driver do fabricante da placa (NVIDIA, AMD ou Intel) ou rode o Windows Update até ele aparecer.', 'atualizar'))
+    for v in videos:
+        if v.get('basico') or not re.search(r'nvidia|geforce|radeon|amd|arc', str(v.get('nome', '')), re.I):
+            continue
+        try:
+            meses = (datetime.now() - datetime.fromisoformat(str(v.get('driver_data'))[:19])).days / 30.4
+        except ValueError:
+            continue
+        if meses >= 12:
+            A.append(Achado(2 if joga(p) and meses >= 18 else 1, ['jogos', 'tudo'], 'Driver da placa de vídeo antigo',
+                            f'{v.get("nome")}: driver {v.get("driver")} de {str(v.get("driver_data"))[:10]} (há {br(meses, 0)} meses).',
+                            'Jogos novos dependem de driver novo. Baixe no site da NVIDIA ou da AMD (o Katharos não baixa nada).'))
+            break
+    if eh_ssd(p) and pf(p, 'disco.trim') is False:
+        A.append(Achado(2, ['lento', 'tudo'], 'TRIM desligado no SSD',
+                        'O Windows não está avisando o SSD sobre os blocos livres.',
+                        'Sem TRIM o SSD fica mais lento para gravar com o tempo e se desgasta mais. O pacote de disco liga de novo.', 'disco'))
     w = d.get('wmi') or {}
     if (w.get('cpu') or 0) > 2:
         cli = ', '.join(f'{c.get("processo")} ({c.get("consultas")})' for c in lista(w.get('clientes'))[:3])
@@ -2675,7 +2776,7 @@ def analisa(p, m, d):
         A.append(Achado(1, ['tudo'], 'Windows 10 sem suporte', 'O suporte comum acabou em outubro de 2025.',
                         'Atualize para o 11 se o processador for compatível; senão, o Defender e o navegador atualizados seguram por um tempo.'))
     if pf(p, 'pc.dominio'):
-        A.append(Achado(1, ['tudo'], 'PC de empresa (domínio)', 'Políticas da empresa podem desfazer ou bloquear ajustes.',
+        A.append(Achado(0, ['tudo'], 'PC de empresa (domínio)', 'Políticas da empresa podem desfazer ou bloquear ajustes.',
                         'Use o modo seguro e combine com o TI antes de remover programas.'))
     plano = str(pf(p, 'energia.plano', '')).lower()
     if not pf(p, 'pc.notebook') and re.search(r'equilibrado|balanced|economia|power saver', plano):
@@ -2685,17 +2786,18 @@ def analisa(p, m, d):
         A.append(Achado(1, ['calor', 'bateria', 'tudo'], 'Notebook em plano de alto desempenho', 'Plano ativo: ' + plano.split('(')[-1].rstrip(')'),
                         'Esquenta e gasta bateria. O plano "fresco" (mínimo 5%, turbo eficiente) costuma resolver ventoinha alta.', 'energia'))
     if joga(p):
-        A.append(Achado(1, ['jogos'], 'Ajustes para jogos disponíveis', 'Launchers encontrados: ' + ', '.join(lista(p.get('jogos'))),
+        A.append(Achado(0, ['jogos'], 'Ajustes para jogos disponíveis', 'Launchers encontrados: ' + ', '.join(lista(p.get('jogos'))),
                         'Modo de Jogo, prioridade dos jogos, Game DVR desligado e mais (cada um explicado).', 'jogos'))
     for nome in lista(p.get('oem_gamer')):
-        A.append(Achado(1, ['calor', 'bateria', 'jogos'], f'{nome} instalado',
+        A.append(Achado(0, ['calor', 'bateria', 'jogos'], f'{nome} instalado',
                         'Centrais de fabricante costumam forçar alto desempenho e consultar o WMI sem parar.',
                         'Use o perfil Equilibrado ou Silencioso nele no dia a dia; versões antigas pesam mais (atualize pelo site do fabricante).'))
-    A.append(Achado(1, ['privacidade', 'tudo'], 'Telemetria, anúncios e IA do Windows',
-                    'Ligados por padrão em toda instalação.', 'Desligar por políticas oficiais (reversível).', 'privacidade'))
+    if 'privacidade' not in ja_aplicados():
+        A.append(Achado(0, ['privacidade', 'tudo'], 'Telemetria, anúncios e IA do Windows',
+                        'Ligados por padrão em toda instalação.', 'Desligar por políticas oficiais (reversível).', 'privacidade'))
     dev = any(pf(p, 'tem.' + k) for k in ('wsl', 'docker', 'visualstudio', 'ssh')) or bool(shutil.which('git'))
     if dev and pf(p, 'so.win11') and (pf(p, 'so.build', 0) or 0) >= 22621 and not pf(p, 'tem.devdrive') and (pf(p, 'disco.livre', 0) or 0) > 60:
-        A.append(Achado(1, ['lento', 'tudo'], 'Projetos sem Unidade de Desenvolvimento (Dev Drive)',
+        A.append(Achado(0, ['lento', 'tudo'], 'Projetos sem Unidade de Desenvolvimento (Dev Drive)',
                         'Há ferramentas de programação aqui e nenhum volume ReFS.',
                         'No Windows 11 dá para criar uma Unidade de Desenvolvimento, bem mais rápida para node_modules, builds e git: '
                         'Configurações > Sistema > Armazenamento > Configurações avançadas > Discos e volumes > Criar unidade de desenvolvimento. '
@@ -2703,9 +2805,26 @@ def analisa(p, m, d):
     return A
 
 
+PESO_NOTA = {3: 14, 2: 6, 1: 2, 0: 0}   # quanto cada achado tira da nota; os informativos (0) não tiram nada
+
+
 def nota_pc(achados):
-    pontos = 100 - sum({3: 14, 2: 6, 1: 2}[a.impacto] for a in achados)
+    pontos = 100 - sum(PESO_NOTA.get(a.impacto, 0) for a in achados)
     return max(5, min(100, pontos))
+
+
+def pesa_na_nota(achados, limite=3):
+    """Os achados que mais tiram ponto, para a nota se explicar: [(título, pontos)]."""
+    com_peso = sorted((a for a in achados if PESO_NOTA.get(a.impacto, 0)), key=lambda a: -PESO_NOTA[a.impacto])
+    return [(a.titulo, PESO_NOTA[a.impacto]) for a in com_peso[:limite]]
+
+
+def ja_aplicados():
+    """Os pacotes que já foram aplicados neste PC (pelos backups guardados). Vazio se não dá para saber."""
+    try:
+        return {nome for _, nome, _ in pacotes_aplicados_dt()}
+    except Exception:
+        return set()
 
 
 def raiox_dados(p, m, d, achados, queixas):
@@ -2719,6 +2838,8 @@ def raiox_dados(p, m, d, achados, queixas):
         'inicializacao': [f'{i.get("nome")} ({i.get("onde")})' for i in lista(d.get('inicializacao'))],
         'boot': [f'{b.get("tipo")}: {b.get("nome")}, {br(b.get("s"), 1)} s em média ({b.get("vezes")}x)' for b in lista(d.get('boot'))],
         'top': [[x.get('n'), f'{br(x.get("cpu"), 1)}%', f'{x.get("mb")} MB'] for x in lista(d.get('top_ram'))],
+        'nao_reconhecidos': [str(x.get('n')) for x in lista(d.get('top_cpu')) + lista(d.get('top_ram')) if not quem_e(x.get('n'))][:12],
+        'hardware': {'pentes': lista(pf(p, 'ram.pentes')), 'video': lista(pf(p, 'video')), 'tela': pf(p, 'tela'), 'trim': pf(p, 'disco.trim')},
         'programas': [str(x) for x in lista(d.get('programas'))][:300],
         'bios': f'{saude.get("bios", "")} {str(saude.get("bios_data", ""))[:10]}'.strip(),
     }
@@ -2758,6 +2879,18 @@ def ferramenta_raiox(ctx, args):
     t.titulo('nota')
     cor = 'verde' if nota >= 80 else ('amarelo' if nota >= 55 else 'vermelho')
     t.barra('saúde geral', nota, 100, t.p(f'{nota}/100', cor, True), cor)
+    pesos = pesa_na_nota(achados)
+    if pesos:
+        t.paragrafo('O que mais tira ponto: ' + '; '.join(f'{ti} (-{pt})' for ti, pt in pesos) + '.', 2, 'apagado')
+    if (pf(p, 'sistema.uptime_h', 1) or 0) < 0.2:
+        t.paragrafo('O PC ligou há poucos minutos: o Windows ainda está terminando de abrir e as medidas em repouso saem piores. '
+                    'Para um número justo, rode de novo daqui a 10 minutos.', 2, 'amarelo')
+    tops = [x for x in lista(d.get('top_cpu')) if (x.get('cpu') or 0) >= 0.5][:5]
+    if tops:
+        t.titulo('quem mais gasta agora')
+        t.tabela(['processo', 'CPU', 'RAM', 'o que é'],
+                 [[str(x.get('n')), br(x.get('cpu'), 1) + '%', f'{x.get("mb")} MB', (quem_e(x.get('n')) or ('não conheço este',))[0]] for x in tops],
+                 alinha='edde')
 
     nomes = dict(QUEIXAS)
     if 'tudo' not in queixas:
@@ -2773,7 +2906,7 @@ def ferramenta_raiox(ctx, args):
     t.titulo('o que encontrei' if 'tudo' in queixas else 'o que mais encontrei')
     ordem = sorted(achados, key=lambda a: (-(bool(a.queixas & set(queixas))), -a.impacto))
     for a in ordem:
-        icone, c = {3: ('■', 'vermelho'), 2: ('●', 'amarelo'), 1: ('·', 'azul')}[a.impacto]
+        icone, c = {3: ('■', 'vermelho'), 2: ('●', 'amarelo'), 1: ('·', 'azul'), 0: ('○', 'apagado')}[a.impacto]
         t.item(icone, c, a.titulo, t.p(a.comando, 'destaque') if a.comando else '')
         t.paragrafo(a.evidencia, 6, 'sub')
         if a.faz:
@@ -2784,7 +2917,7 @@ def ferramenta_raiox(ctx, args):
         if a.comando and a.comando not in comandos:
             comandos.append(a.comando)
     t.titulo('resumo', caixa=True)
-    t.chaves([('nota', t.p(f'{nota}/100', cor, True)), ('achados', str(len(achados))),
+    t.chaves([('nota', t.p(f'{nota}/100', cor, True)), ('achados', str(sum(a.impacto > 0 for a in achados))),
               ('alto impacto', t.p(str(sum(a.impacto == 3 for a in achados)), 'vermelho')),
               ('sugestão', ' · '.join(comandos[:6]) or 'nada')])
     t.relatorio(rel_md_path(), 'relatório único', recuo=2)
@@ -2796,6 +2929,163 @@ def ferramenta_raiox(ctx, args):
         if t.pergunta('abrir sugestões').strip().lower() in ('s', 'sim'):
             ctx.proximos = comandos
     return 0
+# ──────────────────────────────────────────────────────────────────────────────
+# Quem é quem: o que é cada processo que aparece gastando CPU, memória ou disco, e o que dá para fazer.
+# Só nomes de processo (sem .exe, minúsculas). O raio-x usa isto para explicar em vez de só listar.
+# Cada entrada: (o que é, o que fazer, comando do Katharos que ajuda ou '').
+# ──────────────────────────────────────────────────────────────────────────────
+
+PROCESSOS = {
+    # Windows
+    'system': ('o núcleo do Windows e os drivers', 'se gasta muito parado, é driver: veja "saude"', 'saude'),
+    'system interrupts': ('interrupções de hardware', 'alto parado indica driver ou dispositivo com defeito', 'saude'),
+    'registry': ('o registro do Windows na memória', 'normal', ''),
+    'memory compression': ('memória comprimida pelo Windows', 'muito alta quer dizer RAM faltando', 'inicializacao'),
+    'memcompression': ('memória comprimida pelo Windows', 'muito alta quer dizer RAM faltando', 'inicializacao'),
+    'svchost': ('serviços do Windows agrupados', 'normal; se um deles gasta muito, o Gerenciador de Tarefas diz qual', 'servicos'),
+    'dwm': ('desenha as janelas (Gerenciador de Janelas)', 'alto quer dizer efeitos visuais pesando ou driver de vídeo', 'visual'),
+    'explorer': ('a área de trabalho e as pastas', 'se gasta muito, uma extensão de menu ou miniatura travou: reinicie o Explorer', ''),
+    'msmpeng': ('o antivírus do Windows (Defender) verificando arquivos', 'passa sozinho; o pacote de disco deixa as varreduras mais leves', 'disco'),
+    'nissrv': ('a inspeção de rede do Defender', 'normal', ''),
+    'mpdefendercoreservice': ('o núcleo do Defender', 'normal', ''),
+    'tiworker': ('o Windows Update instalando', 'espere terminar e reinicie', 'atualizar'),
+    'trustedinstaller': ('o instalador de componentes do Windows', 'espere terminar e reinicie', 'atualizar'),
+    'mousocoreworker': ('o Windows Update procurando atualizações', 'passa sozinho', 'atualizar'),
+    'wuauclt': ('o Windows Update', 'passa sozinho', 'atualizar'),
+    'usoclient': ('o Windows Update', 'passa sozinho', 'atualizar'),
+    'searchindexer': ('o índice da busca do Windows', 'depois de muita cópia de arquivo ele trabalha; se nunca para, reduza as pastas indexadas', 'servicos'),
+    'searchhost': ('a busca do menu Iniciar', 'normal', ''),
+    'searchapp': ('a busca do menu Iniciar', 'normal', ''),
+    'searchprotocolhost': ('o índice da busca lendo arquivos', 'passa sozinho', ''),
+    'compattelrunner': ('a telemetria de compatibilidade da Microsoft', 'o pacote de privacidade desliga', 'privacidade'),
+    'diagtrack': ('a telemetria do Windows', 'o pacote de privacidade desliga', 'privacidade'),
+    'wmiprvse': ('consultas WMI que outros programas fazem', 'quase sempre é programa de fabricante perguntando sem parar', 'servicos'),
+    'wsappx': ('a Microsoft Store instalando ou atualizando apps', 'passa sozinho', ''),
+    'runtimebroker': ('permissões dos apps da Store', 'normal', ''),
+    'audiodg': ('o áudio do Windows', 'alto indica efeito de áudio do driver: desligue os aprimoramentos de som', ''),
+    'spoolsv': ('a fila de impressão', 'se gasta muito, há impressão presa', 'servicos'),
+    'widgets': ('os Widgets do Windows 11', 'o pacote de privacidade desliga', 'privacidade'),
+    'widgetservice': ('os Widgets do Windows 11', 'o pacote de privacidade desliga', 'privacidade'),
+    'phoneexperiencehost': ('o Vincular ao Celular', 'tire da inicialização se não usa', 'inicializacao'),
+    'yourphone': ('o Vincular ao Celular', 'tire da inicialização se não usa', 'inicializacao'),
+    'gamebar': ('a Barra de Jogos do Xbox', 'o pacote de jogos desliga a gravação em segundo plano', 'jogos'),
+    'gamebarftserver': ('a Barra de Jogos do Xbox', 'o pacote de jogos desliga a gravação em segundo plano', 'jogos'),
+    'copilot': ('o Copilot', 'o pacote de privacidade desliga', 'privacidade'),
+    'msedgewebview2': ('páginas embutidas em outros programas (WebView2)', 'quem usa é o programa que abriu: Teams, Widgets, Outlook novo', ''),
+    'smartscreen': ('a checagem de programas baixados', 'proteção: deixe ligada', ''),
+    'securityhealthservice': ('a Segurança do Windows', 'normal', ''),
+    'lsass': ('logins e senhas do Windows', 'normal', ''),
+    'csrss': ('parte do núcleo do Windows', 'normal', ''),
+    'fontdrvhost': ('fontes do Windows', 'normal', ''),
+    'ctfmon': ('teclado e idiomas', 'normal', ''),
+    'taskhostw': ('tarefas agendadas do Windows', 'normal', ''),
+    'sihost': ('a interface do Windows', 'normal', ''),
+    'startmenuexperiencehost': ('o menu Iniciar', 'normal', ''),
+    'shellexperiencehost': ('a barra de tarefas e as notificações', 'normal', ''),
+    'textinputhost': ('o teclado virtual e os emojis', 'normal', ''),
+    'vmmem': ('uma máquina virtual (WSL, Docker ou Hyper-V)', 'a memória é da máquina virtual: limite no .wslconfig ou feche-a', ''),
+    'vmmemwsl': ('o Linux do WSL', 'limite a memória no arquivo .wslconfig ou rode "wsl --shutdown"', ''),
+    'vmwp': ('uma máquina virtual do Hyper-V', 'a memória é da máquina virtual', ''),
+    'onedrive': ('o OneDrive sincronizando', 'muita CPU quer dizer muitos arquivos pequenos na pasta sincronizada', 'privacidade'),
+    'cleanmgr': ('a Limpeza de Disco', 'passa sozinho', ''),
+    'dism': ('reparo ou limpeza de componentes do Windows', 'espere terminar', ''),
+    'dismhost': ('reparo ou limpeza de componentes do Windows', 'espere terminar', ''),
+    'sppsvc': ('a ativação do Windows e do Office', 'passa sozinho', ''),
+    'mrt': ('a Ferramenta de Remoção de Software Mal-Intencionado', 'roda uma vez por mês', ''),
+    'software_reporter_tool': ('o verificador do Chrome', 'passa sozinho', ''),
+    # navegadores e comunicação
+    'chrome': ('o Google Chrome', 'cada aba e extensão é um processo: feche abas e veja as extensões', ''),
+    'msedge': ('o Microsoft Edge', 'cada aba e extensão é um processo; desligue o "início rápido" dele', 'privacidade'),
+    'firefox': ('o Firefox', 'feche abas e veja as extensões', ''),
+    'brave': ('o Brave', 'feche abas e veja as extensões', ''),
+    'opera': ('o Opera', 'feche abas e veja as extensões', ''),
+    'teams': ('o Microsoft Teams', 'tire da inicialização se não usa todo dia', 'inicializacao'),
+    'ms-teams': ('o Microsoft Teams', 'tire da inicialização se não usa todo dia', 'inicializacao'),
+    'discord': ('o Discord', 'desligue a aceleração por hardware e a sobreposição se pesa no jogo', 'inicializacao'),
+    'slack': ('o Slack', 'tire da inicialização se não usa todo dia', 'inicializacao'),
+    'whatsapp': ('o WhatsApp', 'tire da inicialização se não usa todo dia', 'inicializacao'),
+    'spotify': ('o Spotify', 'tire da inicialização', 'inicializacao'),
+    'zoom': ('o Zoom', 'tire da inicialização', 'inicializacao'),
+    'skype': ('o Skype', 'tire da inicialização', 'inicializacao'),
+    'outlook': ('o Outlook', 'normal enquanto sincroniza', ''),
+    'olk': ('o Outlook novo', 'normal enquanto sincroniza', ''),
+    # jogos e lojas
+    'steam': ('a Steam', 'tire da inicialização se não joga todo dia', 'steam'),
+    'steamwebhelper': ('as páginas dentro da Steam', 'o modo "pouco desempenho" da Steam reduz', 'steam'),
+    'epicgameslauncher': ('a loja da Epic', 'tire da inicialização', 'inicializacao'),
+    'epicwebhelper': ('as páginas dentro da loja da Epic', 'feche a loja depois de abrir o jogo', ''),
+    'battle.net': ('a Battle.net', 'tire da inicialização', 'inicializacao'),
+    'eadesktop': ('o EA app', 'tire da inicialização', 'inicializacao'),
+    'eabackgroundservice': ('o serviço do EA app', 'pode ficar em manual', 'servicos'),
+    'upc': ('a Ubisoft Connect', 'tire da inicialização', 'inicializacao'),
+    'ubisoftconnect': ('a Ubisoft Connect', 'tire da inicialização', 'inicializacao'),
+    'riotclientservices': ('o cliente da Riot', 'tire da inicialização', 'inicializacao'),
+    'galaxyclient': ('o GOG Galaxy', 'tire da inicialização', 'inicializacao'),
+    'xboxpcapp': ('o app Xbox', 'normal enquanto baixa jogos', ''),
+    'gamingservices': ('os serviços de jogos do Xbox', 'necessário para jogos da Microsoft Store', ''),
+    # placas de vídeo e fabricantes
+    'nvcontainer': ('serviços da NVIDIA', 'normal', ''),
+    'nvdisplay.container': ('o driver de vídeo da NVIDIA', 'normal', ''),
+    'nvidia app': ('o app da NVIDIA', 'a sobreposição pode ser desligada nele', ''),
+    'nvidia share': ('a sobreposição da NVIDIA', 'desligue a sobreposição no app da NVIDIA se não grava', ''),
+    'nvidia web helper': ('o GeForce Experience', 'pode ser desinstalado se você não usa', 'programas'),
+    'radeonsoftware': ('o painel da AMD', 'normal; a sobreposição pode ser desligada nele', ''),
+    'amdrsserv': ('o serviço do painel da AMD', 'normal', ''),
+    'igfxem': ('o driver de vídeo da Intel', 'normal', ''),
+    'armourycrate.service': ('a central da ASUS (Armoury Crate)', 'costuma pesar: use o perfil silencioso ou atualize', 'servicos'),
+    'armourycrate.usersessionhelper': ('a central da ASUS (Armoury Crate)', 'costuma pesar: use o perfil silencioso ou atualize', 'servicos'),
+    'lightingservice': ('as luzes RGB da ASUS', 'conhecido por gastar CPU: desligue se não usa RGB', 'servicos'),
+    'awcc': ('a central da Alienware', 'costuma pesar: atualize ou use o perfil equilibrado', 'servicos'),
+    'lenovovantageservice': ('o Lenovo Vantage', 'pode ficar em manual', 'servicos'),
+    'supportassistagent': ('o Dell SupportAssist', 'conhecido por pesar: pode ser removido', 'programas'),
+    'hpsupportsolutionsframeworkservice': ('o HP Support Assistant', 'pode ser removido', 'programas'),
+    'touchpointanalyticsclientservice': ('a telemetria da HP', 'pode ser removida', 'programas'),
+    'msi.centralserver': ('o MSI Center', 'costuma pesar: atualize ou tire da inicialização', 'servicos'),
+    'icue': ('o iCUE da Corsair', 'conhecido por gastar CPU: atualize ou feche quando não precisa', 'inicializacao'),
+    'lghub': ('o Logitech G HUB', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    'razer synapse': ('o Razer Synapse', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    'rtkauduservice64': ('o áudio da Realtek', 'normal', ''),
+    # antivírus de terceiros
+    'mcshield': ('o antivírus McAfee', 'o Defender pesa menos: remova se não pagou por ele', 'programas'),
+    'mfemms': ('o antivírus McAfee', 'o Defender pesa menos: remova se não pagou por ele', 'programas'),
+    'avastsvc': ('o antivírus Avast', 'o Defender pesa menos', 'programas'),
+    'avgsvc': ('o antivírus AVG', 'o Defender pesa menos', 'programas'),
+    'nortonsecurity': ('o antivírus Norton', 'o Defender pesa menos: remova se não pagou por ele', 'programas'),
+    # programação
+    'node': ('o Node.js (um programa seu ou de um editor)', 'feche o servidor ou o editor que abriu', ''),
+    'code': ('o Visual Studio Code', 'extensões pesam: veja "Developer: Show Running Extensions"', ''),
+    'python': ('um programa em Python', 'é algo que você ou outro programa abriu', ''),
+    'java': ('um programa em Java', 'é algo que você ou outro programa abriu', ''),
+    'javaw': ('um programa em Java (o Minecraft, por exemplo)', 'ajuste a memória no launcher', 'minecraft'),
+    'docker desktop': ('o Docker Desktop', 'feche quando não usa: ele mantém uma máquina virtual ligada', ''),
+    'com.docker.backend': ('o Docker Desktop', 'feche quando não usa: ele mantém uma máquina virtual ligada', ''),
+    'devenv': ('o Visual Studio', 'normal enquanto compila ou indexa', ''),
+}
+
+
+def quem_e(nome):
+    """(o que é, o que fazer, comando) para um nome de processo, ou None se o Katharos não conhece."""
+    n = str(nome or '').strip().lower()
+    if n.endswith('.exe'):
+        n = n[:-4]
+    if n in PROCESSOS:
+        return PROCESSOS[n]
+    for prefixo in ('armourycrate', 'nvidia', 'razer', 'steam', 'riot', 'epic'):
+        if n.startswith(prefixo):
+            achado = next((v for k, v in PROCESSOS.items() if k.startswith(prefixo)), None)
+            if achado:
+                return achado
+    return None
+
+
+def explica_processos(lista_proc, campo, unidade, limite=3):
+    """'chrome 12% (o Google Chrome), xyz 4%': os primeiros de uma lista do raio-x, com o que cada um é."""
+    partes = []
+    for x in lista_proc[:limite]:
+        q = quem_e(x.get('n'))
+        valor = f'{br(x.get(campo), 1 if unidade == "%" else 0)}{" " if unidade != "%" else ""}{unidade}'
+        partes.append(f'{x.get("n")} {valor}' + (f' ({q[0]})' if q else ''))
+    return ', '.join(partes)
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -3262,7 +3552,13 @@ def ferramenta_pacote(ctx, args, nome=None):
     pode, modo = cuidado_empresa(ctx, args, pac)
     if not pode:
         return 0
-    escolhidos = escolhe_itens(ctx, itens, modo, args)
+    so = (getattr(ctx, 'itens_busca', None) or {}).pop(pac.nome, None)
+    if so and any(i.id in so for i in itens):   # veio da busca: só o item procurado vem marcado
+        for i in itens:
+            i.marcado = i.id in so
+        escolhidos = escolhe_itens(ctx, itens, modo, args, titulo='o que você procurou vem marcado', manter_marcas=True)
+    else:
+        escolhidos = escolhe_itens(ctx, itens, modo, args)
     if escolhidos is None:
         t.nota('voltou sem aplicar nada.')
         return 0
@@ -4524,6 +4820,11 @@ $__v1 = '2'; if ($__a -match 'NtfsDisable8dot3NameCreation\s*=\s*(\d)') { $__v1 
 $__v2 = '1'; if ($__b -match '=\s*(\d)') { $__v2 = $Matches[1] }
 if ($__v1 -ne '1') { if ($TESTE) { Plano 'sem nomes 8.3' } else { Guarda-Desfazer '8dot3' ('fsutil behavior set disable8dot3 ' + $__v1 + ' | Out-Null'); fsutil behavior set disable8dot3 1 | Out-Null; $script:MUDOU++ } }
 if ($__v2 -ne '2' -and «ram» -ge 8) { if ($TESTE) { Plano 'mais cache para o NTFS' } else { Guarda-Desfazer 'memusage' ('fsutil behavior set memoryusage ' + $__v2 + ' | Out-Null'); fsutil behavior set memoryusage 2 | Out-Null; $script:MUDOU++ } }'''.replace('«ram»', str(int(ram)))),
+        *([Item('trim', 'TRIM ligado no SSD', 'O TRIM é o aviso que o Windows dá ao SSD sobre os blocos que ficaram livres. Vem ligado; '
+                'alguns "otimizadores" e clonagens de disco desligam.', 'o SSD continua rápido para gravar e dura mais', 'nenhum', 1, r'''
+$__q = (fsutil behavior query DisableDeleteNotify | Out-String)
+if ($__q -match '(?m)^\s*(?:NTFS\s+)?DisableDeleteNotify\s*=\s*1') { if ($TESTE) { Plano 'ligar o TRIM do SSD' } else { Guarda-Desfazer 'trim' 'fsutil behavior set DisableDeleteNotify 1 | Out-Null'; fsutil behavior set DisableDeleteNotify 0 | Out-Null; $script:MUDOU++ } }''',
+                nota=('o raio-x viu o TRIM desligado neste PC' if pf(p, 'disco.trim') is False else ''))] if not hd else []),
         Item('sensor', 'Sensor de Armazenamento mensal', 'O próprio Windows limpa temporários todo mês, sem tocar na Lixeira nem em Downloads.',
              'disco não enche sozinho', 'nenhum', 1, RR(R(ss, '01', 1), R(ss, '04', 1), R(ss, '2048', 30), R(ss, '08', 0), R(ss, '32', 0))),
         Item('sysmain', 'SysMain e Prefetch ligados', 'Pré-carregam os programas que você mais usa. Em HD aceleram a abertura; há '
@@ -5238,7 +5539,7 @@ def _q(s):
     return (s or '')[:16].replace('T', ' ')
 
 
-IMPACTO = ['', 'baixo', 'médio', 'alto']
+IMPACTO = ['informação', 'baixo', 'médio', 'alto']
 
 
 def rel_md(r):
@@ -5275,8 +5576,12 @@ def rel_md(r):
     if ras:
         L += [f'## Raio-x ({_q(Q.get("raiox", ""))})', '', f'Nota {ras.get("nota")}/100. Dores relatadas: {", ".join(ras.get("queixas", [])) or "nenhuma"}.', '']
         L += _tab(['Impacto', 'Achado', 'Evidência', 'Comando'],
-                  [[IMPACTO[min(3, max(1, int(a.get('impacto') or 1)))], a.get('titulo', ''), a.get('evidencia', ''), a.get('comando', '')]
+                  [[IMPACTO[min(3, max(0, int(a.get('impacto') or 0)))], a.get('titulo', ''), a.get('evidencia', ''), a.get('comando', '')]
                    for a in ras.get('achados', [])])
+        if ras.get('nao_reconhecidos'):
+            L += ['### Processos que o Katharos não soube explicar', '',
+                  'Estavam entre os que mais gastam e não estão na base de processos conhecidos: '
+                  + ', '.join(_q(x) for x in ras['nao_reconhecidos']) + '.', '']
         if ras.get('inicializacao'):
             L += ['### Inicialização', ''] + [f'- {x}' for x in ras['inicializacao']] + ['']
         if ras.get('boot'):
@@ -6683,7 +6988,7 @@ def ferramenta_organizar(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 #
 #   QUAIS JOGOS ESTÃO NESTE PC
-#   só lê: o registro, as listas da Steam, da Epic e da GOG e os nomes dos arquivos nas pastas de instalação.
+#   só lê: o registro, as listas da Steam, da Epic, da GOG, da Ubisoft, da EA, da Riot e do Xbox e os nomes dos arquivos nas pastas de instalação.
 #   Nunca abre o jogo, o processo dele nem arquivo dentro dele.
 #
 # ███████████████████████████████████████████████████████████████████████████
@@ -6731,8 +7036,8 @@ _CACHE_JOGOS = {}
 
 
 def _pastas_de_instalacao():
-    """Pastas onde há jogos instalados: bibliotecas da Steam (cada installdir), Epic, GOG e o InstallLocation que os
-    programas deixam no registro do Windows. Só lê listas e registro; nenhuma pasta de jogo é aberta aqui."""
+    """Pastas onde há jogos instalados: bibliotecas da Steam (cada installdir), Epic, GOG, Ubisoft, EA, Riot,
+    Xbox / Microsoft Store e o InstallLocation que os programas deixam no registro do Windows. Só lê listas e registro; nenhuma pasta de jogo é aberta aqui."""
     achadas = set()
     for p in _steam_pastas() or []:
         try:
@@ -6752,16 +7057,20 @@ def _pastas_de_instalacao():
         pass
     try:
         import winreg
-        for raiz, chave in ((winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\WOW6432Node\GOG.com\Games'),
-                            (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
-                            (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'),
-                            (winreg.HKEY_CURRENT_USER, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')):
+        HKLM, HKCU = winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER
+        for raiz, chave in ((HKLM, r'SOFTWARE\WOW6432Node\GOG.com\Games'),
+                            (HKLM, r'SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs'),
+                            (HKLM, r'SOFTWARE\WOW6432Node\EA Games'), (HKLM, r'SOFTWARE\EA Games'),
+                            (HKLM, r'SOFTWARE\WOW6432Node\Electronic Arts'), (HKLM, r'SOFTWARE\Electronic Arts'),
+                            (HKLM, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
+                            (HKLM, r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'),
+                            (HKCU, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')):
             try:
                 with winreg.OpenKey(raiz, chave) as pai:
                     for i in range(winreg.QueryInfoKey(pai)[0]):
                         try:
                             with winreg.OpenKey(pai, winreg.EnumKey(pai, i)) as sub:
-                                for nome in ('path', 'InstallLocation'):
+                                for nome in ('path', 'InstallLocation', 'InstallDir', 'Install Dir'):
                                     try:
                                         v = str(winreg.QueryValueEx(sub, nome)[0]).strip().strip('"')
                                     except OSError:
@@ -6774,7 +7083,47 @@ def _pastas_de_instalacao():
                 continue
     except ImportError:
         pass
+    achadas.update(_pastas_xbox())
+    achadas.update(_pastas_riot())
     return [p for p in achadas if str(p) not in ('', '.')]
+
+
+def _pastas_xbox(raizes=None):
+    """As pastas dos jogos do app Xbox / Microsoft Store: em cada disco, a pasta que o arquivo .GamingRoot aponta
+    (ou "XboxGames", o padrão). Cada subpasta é um jogo. Só lê o .GamingRoot e a lista de pastas."""
+    if raizes is None:
+        raizes = [f'{letra}:\\' for letra in 'CDEFGHIJKLMNOPQRSTUVWXYZ'] if WINDOWS else []
+    achadas = set()
+    for raiz in raizes:
+        nomes = {'XboxGames'}
+        try:
+            with open(os.path.join(raiz, '.GamingRoot'), 'rb') as f:   # "RGBX" + 4 bytes + o nome da pasta em UTF-16
+                nome = f.read(600)[8:].decode('utf-16-le', errors='ignore').split('\x00')[0].strip('\\/ ')
+            if nome and '..' not in nome and ':' not in nome:
+                nomes.add(nome)
+        except OSError:
+            pass
+        for nome in nomes:
+            try:
+                with os.scandir(os.path.join(raiz, nome)) as it:
+                    achadas.update(Path(e.path) for e in it if e.is_dir(follow_symlinks=False))
+            except OSError:
+                continue
+    return achadas
+
+
+def _pastas_riot(base=None):
+    """As pastas dos jogos da Riot, pelo que o cliente dela anota em ProgramData. Só lê esses arquivos de texto."""
+    base = Path(base) if base else Path(os.path.expandvars(r'%ProgramData%\Riot Games\Metadata'))
+    achadas = set()
+    try:
+        for arq in base.glob('*/*.product_settings.yaml'):
+            m = re.search(r'product_install_full_path:\s*"?([^"\r\n]+)', arq.read_text(encoding='utf-8', errors='replace'))
+            if m:
+                achadas.add(Path(m.group(1).strip().replace('/', os.sep)))
+    except OSError:
+        pass
+    return achadas
 
 
 def _nomes_de_exe(pasta, profundidade=3, teto=1500):
@@ -10813,7 +11162,7 @@ AVISO_PONTOS = [
 ]
 
 # Comandos que só leem ou que protegem (desfazer nunca pode ficar atrás de um aviso): não pedem o aceite.
-SEM_ACEITE = {'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
+SEM_ACEITE = {'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
               'benchmark', 'verificar', 'config', 'desfazer', 'socorro', 'retomar', 'restaurar', 'amostrar', 'manutencao'}
 
 
@@ -10848,6 +11197,127 @@ def ferramenta_aviso(ctx, args):
     t = ctx.t
     mostra_aviso(t)
     t.nota('  A licença e o aviso completo estão no arquivo LICENSE e na seção "Antes de usar" do README.', 2)
+    return 0
+# ──────────────────────────────────────────────────────────────────────────────
+# Buscar: acha um item ou um comando pelo que a pessoa digitou, sem precisar saber em que área ele mora.
+# Não depende de acento nem de maiúscula, entende algumas palavras do dia a dia ("propaganda", "esquenta")
+# e, se nada bate, tenta a palavra mais parecida. Só lê; aplicar continua sendo na tela da área.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# palavra que a pessoa usa → palavras que aparecem nos itens
+SINONIMOS = {
+    'propaganda': ('anuncio', 'sugest'), 'ads': ('anuncio',), 'anuncios': ('anuncio',),
+    'espionagem': ('telemetria', 'diagnostico'), 'espiao': ('telemetria',), 'rastreio': ('telemetria', 'rastre'),
+    'ia': ('copilot', 'recall', 'inteligencia'), 'internet': ('rede', 'dns', 'wi-fi'), 'wifi': ('wi-fi', 'rede'),
+    'ping': ('rede', 'latencia'), 'lag': ('rede', 'latencia', 'jogo'), 'fps': ('jogo', 'gpu', 'video'),
+    'esquenta': ('temperatura', 'fresco', 'calor', 'turbo'), 'quente': ('temperatura', 'fresco', 'calor'),
+    'ventoinha': ('fresco', 'calor', 'temperatura'), 'cooler': ('fresco', 'calor'), 'barulho': ('fresco', 'ventoinha'),
+    'lixo': ('temporario', 'cache', 'limp'), 'espaco': ('limp', 'cache', 'temporario', 'disco'), 'cheio': ('limp', 'espaco'),
+    'ligar': ('boot', 'inicializ'), 'iniciar': ('boot', 'inicializ'), 'demora': ('boot', 'inicializ'),
+    'travando': ('servico', 'inicializ', 'memoria'), 'lento': ('servico', 'inicializ', 'visual'),
+    'memoria': ('ram', 'memoria'), 'placa': ('gpu', 'video'), 'bloatware': ('fabrica', 'apps', 'remov'),
+    'atualizacao': ('update', 'atualiz'), 'update': ('update', 'atualiz'), 'animacao': ('animac', 'efeito'),
+    'mouse': ('mouse', 'ponteiro'), 'teclado': ('teclado', 'tecla'), 'som': ('audio', 'som'), 'tela': ('tela', 'monitor', 'visual'),
+}
+
+
+def sem_acento(txt):
+    return unicodedata.normalize('NFKD', str(txt).lower()).encode('ascii', 'ignore').decode()
+
+
+def _palavras(texto):
+    return [w for w in re.findall(r'[a-z0-9\-\.]+', sem_acento(texto)) if len(w) >= 2 or w.isdigit()]
+
+
+def _pontos(palavras, campos):
+    """Quanto um texto casa com a busca: cada palavra (ou um sinônimo dela) precisa aparecer em algum campo.
+    campos: [(texto já sem acento, peso)]. 0 se alguma palavra não aparece em lugar nenhum."""
+    total = 0
+    for w in palavras:
+        melhor = 0
+        for alvo, peso_alvo in [(w, 1.0)] + [(s, 0.6) for s in SINONIMOS.get(w, ())]:
+            for txt, peso in campos:
+                if alvo in txt:
+                    melhor = max(melhor, peso * peso_alvo * (1.5 if re.search(r'\b' + re.escape(alvo), txt) else 1))
+        if not melhor:
+            return 0
+        total += melhor
+    return total
+
+
+def indice_busca(ctx):
+    """Tudo que dá para achar: os comandos e os itens de cada área deste PC. [(tipo, área, id, título, campos, item)]"""
+    out = []
+    for cmd, (desc, _) in COMANDOS.items():
+        if cmd in ('manutencao', 'amostrar'):
+            continue
+        out.append(('comando', cmd, cmd, desc, [(sem_acento(cmd), 4), (sem_acento(desc), 2)], None))
+    for nome, pac in PACOTES.items():
+        try:
+            itens = [i for i in (pac.itens(ctx) or []) if i]
+        except Exception as e:   # uma área que não se monta neste PC não pode derrubar a busca
+            LOG.escreve(f'busca: {nome} não montou: {e!r}')
+            continue
+        for it in itens:
+            campos = [(sem_acento(it.titulo), 4), (sem_acento(it.id), 3), (sem_acento(it.explica), 1.5),
+                      (sem_acento(f'{it.ganho} {it.custo} {it.alerta}'), 1), (sem_acento(f'{nome} {pac.titulo}'), 1)]
+            out.append(('item', nome, it.id, it.titulo, campos, it))
+    return out
+
+
+def busca(indice, texto, limite=12):
+    """Os resultados em ordem de relevância: [(pontos, tipo, área, id, título, item)]. Sem nada exato, tenta a
+    palavra mais parecida que existe nos títulos (erro de digitação)."""
+    palavras = _palavras(texto)
+    if not palavras:
+        return []
+    def roda(pals):
+        achados = [(p, tipo, area, id_, titulo, item) for tipo, area, id_, titulo, campos, item in indice
+                   for p in [_pontos(pals, campos)] if p]
+        return sorted(achados, key=lambda x: (-x[0], x[1] != 'comando', x[2], x[4]))[:limite]
+    r = roda(palavras)
+    if not r:
+        import difflib
+        vocabulario = sorted({w for _, _, _, _, campos, _ in indice for txt, _ in campos[:2] for w in re.findall(r'[a-z0-9]{4,}', txt)})
+        perto = [(difflib.get_close_matches(w, vocabulario, n=1, cutoff=0.75) or [w])[0] for w in palavras]
+        if perto != palavras:
+            r = roda(perto)
+    return r
+
+
+def ferramenta_buscar(ctx, args):
+    t = ctx.t
+    t.aba('acha um ajuste ou um comando pelo que você digitar')
+    texto = ' '.join(getattr(args, 'texto', None) or []).strip()
+    if not texto and t.interativo:
+        texto = t.pergunta('o que você procura (ex.: telemetria, anúncios, boot, ventoinha)').strip()
+    if not texto:
+        t.nota('  Use: katharos buscar telemetria')
+        return 0
+    perfil_pc(ctx)
+    r = busca(indice_busca(ctx), texto)
+    if not r:
+        t.aviso(f'Não achei nada para "{corta(texto, 30)}". Tente outra palavra, ou abra "escolher" no menu para ver as áreas.')
+        return 0
+    t.titulo(f'"{corta(texto, 30)}" · {pl(len(r), "resultado", "resultados")}')
+    for n, (_, tipo, area, id_, titulo, item) in enumerate(r, 1):
+        onde = 'comando' if tipo == 'comando' else f'{area} · {NOME_NIVEL.get(item.nivel, "")}'
+        t.escreve(f'  {t.p(f"{n:>2}", "destaque", True)}  {t.p(id_ if tipo == "comando" else titulo, "texto")}  {t.p(onde, "apagado")}')
+        t.paragrafo(titulo if tipo == 'comando' else item.explica.split('. ')[0].rstrip('.') + '.', 6, 'sub')
+    if not t.interativo or getattr(args, 'sim', False):
+        t.escreve()
+        t.nota('  Para abrir um resultado: katharos e o nome da área (a primeira palavra em cinza).')
+        return 0
+    t.escreve()
+    t.dicas([('número', 'abrir esse resultado'), ('Enter', 'voltar')])
+    esc = t.pergunta('abrir').strip()
+    if not esc.isdigit() or not 0 < int(esc) <= len(r):
+        return 0
+    _, tipo, area, id_, _, _ = r[int(esc) - 1]
+    if tipo == 'item':
+        ctx.itens_busca = {area: {id_}}   # a área abre só com este item marcado
+    ctx.proximos = [area] + [c for c in ctx.proximos if c != area]
+    ctx.direto = True
     return 0
 
 
@@ -10988,6 +11458,7 @@ GRUPOS = [
     ('preferências', 'como o Katharos se comporta neste PC', [
         ('atalhos', 'pasta Katharos na área de trabalho, com ícone', 'ferramenta_atalhos'),
         ('config', 'modo padrão e preferências', 'ferramenta_config'),
+        ('buscar', 'acha um ajuste ou comando pelo nome', 'ferramenta_buscar'),
         ('aviso', 'leia antes de usar: riscos e responsabilidade', 'ferramenta_aviso'),
         ('ajuda', 'os passos mais comuns, em poucas linhas', 'ferramenta_ajuda'),
     ]),
@@ -11027,7 +11498,7 @@ def grupos_da_tela(tela):
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -11134,6 +11605,8 @@ def monta_parser():
     at.add_argument('--remover', action='store_true', help='tira a pasta Katharos da área de trabalho')
     ex = sub.add_parser('exportar', parents=[depois], help='salva o que está aplicado neste PC, para repetir em outro')
     ex.add_argument('alvo', nargs='?', help='arquivo de destino (padrão: katharos-exportado.json na sua pasta)')
+    bu = sub.add_parser('buscar', parents=[depois], help='acha um ajuste ou um comando pelo que você digitar')
+    bu.add_argument('texto', nargs='*', help='o que procurar (ex.: telemetria, anúncios, boot)')
     im = sub.add_parser('importar', parents=[depois], help='aplica neste PC um arquivo exportado (ou o relatório único)')
     im.add_argument('alvo', nargs='?', help='o arquivo .json exportado, ou o relatório .md')
     sub.add_parser('seguranca', parents=[depois], help='auditoria de segurança (só lê)')
@@ -11190,11 +11663,11 @@ def primeira_vez(ctx, args=None):
     return None
 
 
-def _roda_do_menu(ctx, parser, args, cmd):
+def _roda_do_menu(ctx, parser, args, cmd, extra=()):
     """Roda um comando escolhido no menu e, se o raio-x sugeriu telas, oferece uma de cada vez."""
     t = ctx.t
     try:
-        sub_args = _defaults(parser.parse_args([cmd]))
+        sub_args = _defaults(parser.parse_args([cmd, *extra]))
     except SystemExit:
         return
     for k in ('ascii', 'sem_cor', 'teste', 'sim', 'modo'):
@@ -11207,9 +11680,13 @@ def _roda_do_menu(ctx, parser, args, cmd):
         if prox not in COMANDOS:
             continue
         t.escreve(guia=False)
+        direto, ctx.direto = getattr(ctx, 'direto', False), False
         try:
-            t.dicas([('Enter', 'abrir'), ('p', 'pular'), ('v', 'voltar ao menu')])
-            r = t.pergunta(f'próxima sugestão: {prox}').strip().lower()
+            if direto:   # a busca já perguntou qual abrir
+                r = ''
+            else:
+                t.dicas([('Enter', 'abrir'), ('p', 'pular'), ('v', 'voltar ao menu')])
+                r = t.pergunta(f'próxima sugestão: {prox}').strip().lower()
             if r in ('p', 'pular'):
                 continue
             if r in ('v', 'voltar'):
@@ -11268,7 +11745,7 @@ def menu(ctx, parser, args, tela=None):
                         t.paragrafo(f'Jogos da lista do Katharos achados aqui ({len(lista_ok)}): {resumo_jogos_achados(lista_ok)}. '
                                     'A prioridade alta do pacote "jogos" vale para eles.', 2, 'sub')
                     else:
-                        t.paragrafo('Não achei jogos da lista do Katharos na Steam, na Epic, na GOG nem entre os programas instalados.', 2, 'apagado')
+                        t.paragrafo('Não achei jogos da lista do Katharos na Steam, na Epic, na GOG, na Ubisoft, na EA, no Xbox nem entre os programas instalados.', 2, 'apagado')
                     if com_ac:
                         t.paragrafo(f'Também achei {pl(com_ac, "jogo", "jogos")} com anti-cheat de terceiros: o Katharos não mexe neles '
                                     '(só se você marcar o item opcional do pacote "jogos").', 2, 'apagado')
@@ -11304,6 +11781,12 @@ def menu(ctx, parser, args, tela=None):
             cmd = g[2][0][0]   # grupo de um comando só: abre direto
         if not cmd:
             perto = comando_parecido(escolha)
+            if not perto and len(escolha) >= 3 and not escolha.isdigit():   # não é comando: procura nos ajustes
+                try:
+                    _roda_do_menu(ctx, parser, args, 'buscar', extra=escolha.split())
+                except KeyboardInterrupt:
+                    return 130
+                continue
             aviso = f'"{corta(escolha, 20)}" não é uma das opções.' + (f' Você quis dizer "{perto}"?' if perto else '')
             continue
         if cmd in TELAS:
@@ -11391,7 +11874,17 @@ def main(argv=None):
         LOG.escreve(f'aviso de retomar falhou: {e!r}')
     try:
         if args.comando:
-            return roda_ferramenta(ctx, args)
+            cod = roda_ferramenta(ctx, args)
+            if args.comando == 'buscar' and ctx.proximos and getattr(ctx, 'direto', False):   # escolheu um resultado: abre
+                ctx.direto = False
+                a2 = _defaults(parser.parse_args([ctx.proximos.pop(0)]))
+                for k in ('ascii', 'sem_cor', 'teste', 'sim', 'modo'):
+                    if getattr(args, k, None):
+                        setattr(a2, k, getattr(args, k))
+                if a2.comando not in SEM_ACEITE and not a2.teste and not aviso_aceito() and not pede_aceite(ctx):
+                    return 0
+                cod = roda_ferramenta(ctx, a2)
+            return cod
         return menu(ctx, parser, args, tela)
     except KeyboardInterrupt:
         t.fim('interrompido', 'erro')

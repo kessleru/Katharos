@@ -61,6 +61,8 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 - dobra os limites de tempo em HD e aumenta em pouca RAM;
 - com o Python da Microsoft Store, roda o PowerShell **fora do contêiner** dela pelo WMI (senão o registro do usuário seria gravado numa cópia virtual), e avisa quando o administrador é outra conta.
 
+O `raiox` não só lista: ele mede e explica. Além de CPU, RAM e disco, olha a memória comprometida (falta de RAM de verdade, não só "em uso"), o disco ocupado com o PC parado e quem está lendo e gravando, as interrupções e DPC (o driver que picota o áudio e engasga o jogo), a velocidade real dos pentes de memória (XMP desligado), a taxa de atualização do monitor contra a que ele aceita, a idade do driver de vídeo e o TRIM do SSD. Cada processo que aparece gastando vem com o que ele é e o que fazer (mais de 110 conhecidos). A nota diz quais achados mais pesaram, e o que é só informação não tira ponto.
+
 ## Comandos
 
 | Grupo | Comando | O que faz |
@@ -108,6 +110,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 | | `painel` | Gera um painel HTML com gráficos das medidas, dos benchmarks, das datas de cada pacote e da saúde do Windows; sem internet e sem scripts. `--ativar-cliques` liga botões "Corrigir" que abrem o Katharos já no comando (você confirma lá) |
 | | `amostrar` | Uma leitura leve do sistema (CPU, RAM, disco, temperatura), somada ao histórico por hora; a tarefa de 15 min do modo contínuo chama. `config coleta-em-jogo pausar` para não coletar com jogo aberto |
 | | `retomar` | Se o PC travou ou a janela fechou no meio de uma aplicação, termina só o que faltou (`--descartar` esquece a anotação) |
+| | `buscar` | Acha um item ou comando pelo que você digitar (`buscar telemetria`, `buscar ventoinha`): sem acento, com palavras do dia a dia e erro de digitação; abre a área só com o item achado marcado |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 
 ## Opções

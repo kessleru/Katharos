@@ -1640,5 +1640,163 @@ class TestAvisoDeUso(unittest.TestCase):
         self.assertIn('Antes de usar', (RAIZ / 'README.md').read_text(encoding='utf-8'))
 
 
+class TestRaioxInteligente(unittest.TestCase):
+    def analisa(self, perfil=None, medidas=None, dados=None):
+        p = {'so': {'win11': True, 'build': 26100}, 'pc': {'notebook': False}, 'ram': {'total': 16, 'usada': 6, 'slots': 2, 'ocupados': 2},
+             'disco': {'tipo': 'SSD', 'livre': 200, 'total': 500}, 'defender': {'tempo_real': True}, 'sistema': {'uptime_h': 5},
+             'memoria': {'pagefile_auto': True, 'compressao': True}, 'energia': {'plano': 'desempenho'}, 'tem': {}}
+        for ch, v in (perfil or {}).items():
+            p.setdefault(ch, {})
+            if isinstance(v, dict) and isinstance(p[ch], dict):
+                p[ch].update(v)
+            else:
+                p[ch] = v
+        with mock.patch.object(k, 'ja_aplicados', lambda: {'privacidade'}), mock.patch.object(k.shutil, 'which', lambda x: None):
+            return k.analisa(p, medidas or {}, dados or {})
+
+    def titulos(self, *a, **kw):
+        return [x.titulo for x in self.analisa(*a, **kw)]
+
+    def test_pc_saudavel_nao_tem_achado_e_tira_nota_cem(self):
+        a = self.analisa()
+        self.assertEqual([x.titulo for x in a], [])
+        self.assertEqual(k.nota_pc(a), 100)
+
+    def test_informativo_nao_tira_ponto(self):
+        a = self.analisa({'pc': {'dominio': True}, 'jogos': ['Steam']})
+        self.assertTrue(a and all(x.impacto == 0 for x in a))
+        self.assertEqual(k.nota_pc(a), 100)
+        self.assertEqual(k.pesa_na_nota(a), [])
+
+    def test_memoria_no_limite_pelo_commit(self):
+        a = self.analisa(medidas={'commit_pct': 94, 'ram_disponivel': 0.6}, dados={'top_ram': [{'n': 'chrome', 'mb': 5200}]})
+        m = [x for x in a if x.titulo == 'Memória no limite'][0]
+        self.assertEqual(m.impacto, 3)
+        self.assertIn('o Google Chrome', m.faz)
+
+    def test_disco_ocupado_parado_diz_quem_le_e_pesa_mais_em_hd(self):
+        d = {'top_io': [{'n': 'MsMpEng', 'mbs': 30.5}]}
+        ssd = [x for x in self.analisa(medidas={'disco_ativo': 80, 'fila_disco': 2}, dados=d) if 'Disco ocupado' in x.titulo][0]
+        hd = [x for x in self.analisa({'disco': {'tipo': 'HDD'}}, {'disco_ativo': 80}, d) if 'Disco ocupado' in x.titulo][0]
+        self.assertEqual((ssd.impacto, hd.impacto), (2, 3))
+        self.assertIn('Defender', ssd.evidencia)
+
+    def test_dpc_alto_aponta_para_drivers(self):
+        a = [x for x in self.analisa(medidas={'dpc': 4, 'interrupcoes': 2}) if 'interrompendo' in x.titulo]
+        self.assertEqual(a[0].comando, 'saude')
+        self.assertNotIn('Drivers interrompendo o processador', self.titulos(medidas={'dpc': 0.4, 'interrupcoes': 0.3}))
+
+    def test_xmp_desligado_so_quando_a_diferenca_e_clara(self):
+        lento = {'ram': {'pentes': [{'gb': 8, 'mhz': 2133, 'mhz_max': 3200}, {'gb': 8, 'mhz': 2133, 'mhz_max': 3200}]}}
+        certo = {'ram': {'pentes': [{'gb': 8, 'mhz': 3200, 'mhz_max': 3200}]}}
+        self.assertIn('Memória rodando abaixo da velocidade dela', self.titulos(lento))
+        self.assertNotIn('Memória rodando abaixo da velocidade dela', self.titulos(certo))
+        self.assertNotIn('Memória rodando abaixo da velocidade dela', self.titulos({'ram': {'pentes': [{'gb': 8, 'mhz': 0, 'mhz_max': 0}]}}))
+
+    def test_monitor_abaixo_da_taxa_que_aceita(self):
+        self.assertIn('Monitor de 144 Hz rodando a 60 Hz', self.titulos({'tela': {'hz': 60, 'hz_max': 144, 'largura': 2560, 'altura': 1440}}))
+        self.assertEqual(self.titulos({'tela': {'hz': 60, 'hz_max': 60}}), [])
+        self.assertEqual(self.titulos({'tela': None}), [])
+
+    def test_video_sem_driver_e_driver_antigo(self):
+        self.assertIn('Placa de vídeo sem driver', self.titulos({'video': [{'nome': 'Microsoft Basic Display Adapter', 'basico': True}]}))
+        velho = {'video': [{'nome': 'NVIDIA GeForce RTX 3060', 'driver': '31.0', 'driver_data': '2023-01-10T00:00:00', 'basico': False}]}
+        self.assertIn('Driver da placa de vídeo antigo', self.titulos(velho))
+        novo = {'video': [{'nome': 'NVIDIA GeForce RTX 3060', 'driver': '32.0', 'driver_data': k.agora_iso(), 'basico': False}]}
+        self.assertEqual(self.titulos(novo), [])
+        self.assertEqual(self.titulos({'video': [{'nome': 'NVIDIA X', 'driver_data': 'lixo'}]}), [], 'data ilegível não derruba')
+
+    def test_trim_desligado_so_em_ssd(self):
+        self.assertIn('TRIM desligado no SSD', self.titulos({'disco': {'trim': False}}))
+        self.assertNotIn('TRIM desligado no SSD', self.titulos({'disco': {'trim': None}}))
+        self.assertNotIn('TRIM desligado no SSD', self.titulos({'disco': {'tipo': 'HDD', 'trim': False}}))
+
+    def test_processos_conhecidos_apontam_para_comandos_que_existem(self):
+        for nome, (oque, faz, cmd) in k.PROCESSOS.items():
+            self.assertTrue(oque and faz, nome)
+            self.assertEqual(nome, nome.lower())
+            if cmd:
+                self.assertIn(cmd, k.COMANDOS, f'{nome} aponta para {cmd}')
+        self.assertEqual(k.quem_e('MsMpEng.exe')[2], 'disco')
+        self.assertIsNone(k.quem_e('programa-que-ninguem-conhece'))
+        self.assertIsNone(k.quem_e(None))
+
+    def test_item_trim_existe_no_pacote_de_disco_so_para_ssd(self):
+        ctx = type('C', (), {})()
+        ctx.perfil = {'disco': {'tipo': 'SSD', 'trim': False}, 'ram': {'total': 8}, 'tem': {}}
+        ids = [i.id for i in k.PACOTES['disco'].itens(ctx) if i]
+        self.assertIn('trim', ids)
+        ctx.perfil = {'disco': {'tipo': 'HDD'}, 'ram': {'total': 8}, 'tem': {}}
+        self.assertNotIn('trim', [i.id for i in k.PACOTES['disco'].itens(ctx) if i])
+
+    def test_set_valor_compara_o_tipo_alem_do_valor(self):
+        self.assertIn("[string]$a.tipo -eq $Type", k.PS_BASE if hasattr(k, 'PS_BASE') else (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8'))
+
+
+class TestBusca(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        ctx = type('C', (), {})()
+        ctx.perfil = k.PERFIL_VAZIO
+        cls.indice = k.indice_busca(ctx)
+
+    def ids(self, texto):
+        return [(area, id_) for _, _, area, id_, _, _ in k.busca(self.indice, texto)]
+
+    def test_indice_tem_comandos_e_itens_de_varias_areas(self):
+        self.assertGreater(len({a for t, a, *_ in self.indice if t == 'item'}), 8)
+        self.assertTrue(any(t == 'comando' and a == 'raiox' for t, a, *_ in self.indice))
+
+    def test_acha_sem_acento_e_sem_maiuscula(self):
+        self.assertEqual(self.ids('TELEMETRIA')[0][0], 'privacidade')
+        self.assertEqual(self.ids('anuncios'), self.ids('anúncios'))
+
+    def test_erro_de_digitacao_ainda_acha(self):
+        self.assertEqual(self.ids('telemetira')[0][0], 'privacidade')
+
+    def test_palavra_do_dia_a_dia_vira_o_termo_do_item(self):
+        self.assertTrue(any(a == 'energia' for a, _ in self.ids('ventoinha')))
+
+    def test_nome_de_comando_vem_primeiro(self):
+        self.assertEqual(self.ids('desfazer')[0], ('desfazer', 'desfazer'))
+
+    def test_todas_as_palavras_precisam_aparecer(self):
+        self.assertEqual(self.ids('telemetria zzzqqq'), [])
+        self.assertEqual(self.ids(''), [])
+
+    def test_buscar_nao_pede_aceite_e_nao_guarda_estado(self):
+        self.assertIn('buscar', k.SEM_ACEITE)
+        self.assertIn('buscar', k.SEM_ESTADO)
+        self.assertIn('buscar', k.COMANDOS)
+
+
+class TestJogosDeOutrasLojas(unittest.TestCase):
+    def test_xbox_pela_pasta_padrao_e_pelo_gamingroot(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / 'XboxGames' / 'Forza Horizon 5' / 'Content').mkdir(parents=True)
+            (Path(d) / 'Jogos' / 'Halo').mkdir(parents=True)
+            (Path(d) / '.GamingRoot').write_bytes(b'RGBX\x01\x00\x00\x00' + 'Jogos'.encode('utf-16-le') + b'\x00\x00')
+            nomes = {p.name for p in k._pastas_xbox([d])}
+        self.assertEqual(nomes, {'Forza Horizon 5', 'Halo'})
+
+    def test_gamingroot_estranho_nao_sai_da_unidade(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / '.GamingRoot').write_bytes(b'RGBX\x01\x00\x00\x00' + '..\\..\\Windows'.encode('utf-16-le') + b'\x00\x00')
+            self.assertEqual(k._pastas_xbox([d]), set())
+        self.assertEqual(k._pastas_xbox(['/pasta/que/nao/existe']), set())
+
+    def test_riot_pelo_arquivo_do_cliente(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            m = Path(d) / 'valorant.live'
+            m.mkdir()
+            (m / 'valorant.live.product_settings.yaml').write_text('x: 1\nproduct_install_full_path: "C:/Riot Games/VALORANT/live"\n', encoding='utf-8')
+            achadas = k._pastas_riot(d)
+        self.assertEqual(len(achadas), 1)
+        self.assertIn('VALORANT', str(next(iter(achadas))))
+
+
 if __name__ == '__main__':
     unittest.main()
