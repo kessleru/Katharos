@@ -457,7 +457,20 @@ function _LeValor([string]$Path, [string]$Name) {
     } catch {}
     return $r
 }
+# UCPD (Windows 11 24H2 e 10 atualizado): um driver da Microsoft não deixa gravar alguns valores do registro. Esses não contam como
+# "falta fazer" nem como erro: o item usa a política que funciona e diz por que aquele valor ficou.
+$script:UCPD = $null
+function _Protegido([string]$Path, [string]$Name) {
+    if (@('TaskbarDa') -notcontains $Name) { return $false }   # = UCPD_PROTEGIDOS (28-windows.py); um teste confere
+    if ($null -eq $script:UCPD) { $script:UCPD = [bool](Get-Service UCPD -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running') }
+    return $script:UCPD
+}
 function Set-Valor([string]$Path, [string]$Name, $Value, [string]$Type = 'DWord', [string]$Rotulo = '') {
+    if (_Protegido $Path $Name) {
+        $b = _LeValor $Path $Name
+        if (-not ($b.existe -and (_Iguais $b.valor $Value))) { if (-not $TESTE) { Info ("{0}: o Windows protege este valor nesta versao (UCPD); ficou como estava" -f $Name) } }
+        return $false
+    }
     $a = _LeValor $Path $Name
     # igual só se o valor E o tipo batem: uma política gravada como texto ("0") não vale como número para o Windows
     if ($a.existe -and (_Iguais $a.valor $Value) -and ($Name -eq '(default)' -or [string]$a.tipo -eq $Type -or (@('String','ExpandString') -contains [string]$a.tipo -and @('String','ExpandString') -contains $Type))) { return $false }

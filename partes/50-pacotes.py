@@ -742,8 +742,15 @@ def itens_privacidade(ctx):
                '\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient', '\\Microsoft\\Windows\\Feedback\\Siuf\\DmClientOnScenarioDownload',
                '\\Microsoft\\Windows\\Maps\\MapsUpdateTask', '\\Microsoft\\Windows\\Maps\\MapsToastTask',
                '\\Microsoft\\Windows\\CloudExperienceHost\\CreateObjectTask']
+    cw = compat_windows(ctx.perfil)
+    tele = ('O Windows para de enviar dados de diagnóstico e de pedir opinião.' if cw['telemetria_desliga_de_todo'] else
+            f'O Windows envia só os dados obrigatórios e para de pedir opinião (no {cw["edicao_nome"] or "Home e no Pro"}, o mínimo que a '
+            'Microsoft permite é o obrigatório: desligar de todo só no Enterprise e no Education).')
+    anun = ('Sem ID de propaganda, sem apps de propaganda instalados sozinhos, sem "sugestões" no menu, na tela de bloqueio e nas '
+            'Configurações, sem "vamos terminar de configurar".' + ('' if cw['consumidor_por_politica'] else
+            ' Nesta edição a política de "experiências do consumidor" não vale; o que desliga são os ajustes da sua conta, que vêm junto.'))
     return [
-        Item('telemetria', 'telemetria no mínimo', 'O Windows envia só os dados obrigatórios e para de pedir opinião.',
+        Item('telemetria', 'telemetria no mínimo', tele,
              'menos uso de rede e disco', 'nenhum', 1,
              RR(R(dc, 'AllowTelemetry', 0), R(dc, 'DoNotShowFeedbackNotifications', 1), R(dc, 'LimitDiagnosticLogCollection', 1),
                 R(dc, 'DisableOneSettingsDownloads', 1), R(dc, 'AllowCommercialDataPipeline', 0), R(dc, 'AllowDeviceNameInTelemetry', 0),
@@ -762,8 +769,7 @@ def itens_privacidade(ctx):
         Item('telemetria-tarefas', 'tarefas de telemetria', 'Avaliador de compatibilidade, programa de experiência do usuário, '
              'coleta de diagnóstico de disco, pesquisas de opinião e mapas (11 tarefas).', 'menos picos de disco e CPU', 'nenhum', 1,
              TAREFAS(tarefas)),
-        Item('anuncios', 'anúncios e apps instalados sozinhos', 'Sem ID de propaganda, sem apps de propaganda instalados sozinhos, '
-             'sem "sugestões" no menu, na tela de bloqueio e nas Configurações, sem "vamos terminar de configurar".',
+        Item('anuncios', 'anúncios e apps instalados sozinhos', anun,
              'menos propaganda e instalações surpresa', 'nenhum', 1,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo', 'Enabled', 0),
                 R(f'{HKLM_POL}\\AdvertisingInfo', 'DisabledByGroupPolicy', 1),

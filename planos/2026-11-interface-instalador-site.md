@@ -402,13 +402,13 @@ O que já se sabe (fontes na pesquisa do cofre `2026-11-10 versoes-do-windows`):
   **IoT**, **ARM64** (Python x64 roda emulado; o executável .NET roda nativo).
 
 Tarefas:
-- [ ] **2d.1** Perfil de compatibilidade (`compat_windows`): família (10 ou 11), versão (21H2…25H2), build, edição normalizada (home, pro,
+- [x] **2d.1** Perfil de compatibilidade (`compat_windows`): família (10 ou 11), versão (21H2…25H2), build, edição normalizada (home, pro,
   empresa, educação, ltsc, server, iot, s-mode), arquitetura, se está no suporte e até quando, UCPD ligado.
-- [ ] **2d.2** Raio-x: achado "versão sem atualizações de segurança" com a data e o que fazer (atualizar para a versão atual; no Windows 10,
+- [x] **2d.2** Raio-x: achado "versão sem atualizações de segurança" com a data e o que fazer (atualizar para a versão atual; no Windows 10,
   o ESU até 12/10/2027), e aviso de versão antiga demais (antes do Windows 10 1809) com só o modo seguro.
-- [ ] **2d.3** Itens honestos por edição: telemetria e anúncios dizem o que de fato acontece no Home e no Pro.
-- [ ] **2d.4** UCPD: valor protegido não conta como "falta fazer" nem como erro; o item usa a política que funciona (Widgets).
-- [ ] **2d.5** Matriz de testes: o Katharos monta os itens e os scripts para perfis de Windows 10 1809, 21H2 e 22H2, Windows 11 21H2,
+- [x] **2d.3** Itens honestos por edição: telemetria e anúncios dizem o que de fato acontece no Home e no Pro.
+- [x] **2d.4** UCPD: valor protegido não conta como "falta fazer" nem como erro; o item usa a política que funciona (Widgets).
+- [x] **2d.5** Matriz de testes: o Katharos monta os itens e os scripts para perfis de Windows 10 1809, 21H2 e 22H2, Windows 11 21H2,
   22H2, 23H2, 24H2 e 25H2, nas edições Home, Pro, Enterprise, LTSC e Server, sem erro e com os itens certos em cada um.
 - [ ] **2d.6** Rodar o Katharos de verdade nas versões que o GitHub oferece (Windows Server 2022 e 2025) no job `windows-real`.
 - [ ] **2d.7** Ler o que mudou a cada versão nova do Windows (lista de recursos removidos e as notas de cada atualização) e anotar na
@@ -558,3 +558,4 @@ Tarefas a mais desta reformulação:
 | 10 nov 2026 | I3 linha de base por PC (`65-motor.py`, `linha-de-base.json`, faixa do normal nos gráficos do ícone, regra "fora do normal deste PC") | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | I4 confiança pelos dados (uma sessão só não conclui nada); I5 previsão x resultado (`conselheiro_feitos`, "o que eu previ e o que aconteceu"); I6 "ajudou?" e "não me importa" no ícone e na CLI | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | fases 2d (versões do Windows) e 2e (medidas fiéis) no plano | 3.1.2 | ramo v4 | pedidos do usuário |
+| 10 nov 2026 | 2d.1 a 2d.5: `28-windows.py` (versões, fim de suporte, edição, UCPD, arquitetura), aviso no raio-x, só modo seguro em build antiga e Server, telemetria e anúncios honestos por edição, `Set-Valor` ciente do UCPD, matriz de testes (8 builds x 5 edições), sem WMIC | 3.1.2 | ramo v4 | |

@@ -1496,7 +1496,20 @@ function _LeValor([string]$Path, [string]$Name) {
     } catch {}
     return $r
 }
+# UCPD (Windows 11 24H2 e 10 atualizado): um driver da Microsoft não deixa gravar alguns valores do registro. Esses não contam como
+# "falta fazer" nem como erro: o item usa a política que funciona e diz por que aquele valor ficou.
+$script:UCPD = $null
+function _Protegido([string]$Path, [string]$Name) {
+    if (@('TaskbarDa') -notcontains $Name) { return $false }   # = UCPD_PROTEGIDOS (28-windows.py); um teste confere
+    if ($null -eq $script:UCPD) { $script:UCPD = [bool](Get-Service UCPD -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running') }
+    return $script:UCPD
+}
 function Set-Valor([string]$Path, [string]$Name, $Value, [string]$Type = 'DWord', [string]$Rotulo = '') {
+    if (_Protegido $Path $Name) {
+        $b = _LeValor $Path $Name
+        if (-not ($b.existe -and (_Iguais $b.valor $Value))) { if (-not $TESTE) { Info ("{0}: o Windows protege este valor nesta versao (UCPD); ficou como estava" -f $Name) } }
+        return $false
+    }
     $a = _LeValor $Path $Name
     # igual só se o valor E o tipo batem: uma política gravada como texto ("0") não vale como número para o Windows
     if ($a.existe -and (_Iguais $a.valor $Value) -and ($Name -eq '(default)' -or [string]$a.tipo -eq $Type -or (@('String','ExpandString') -contains [string]$a.tipo -and @('String','ExpandString') -contains $Type))) { return $false }
@@ -2131,6 +2144,102 @@ def exige_espaco(t, para, rotulo):
         t.aviso(f'{rotulo}: só há {gb:.1f} GB livres em C: e isto pede pelo menos {precisa:g} GB. Libere espaço (comando limpar) e tente de novo.')
     return ok
 
+# ─────────────── versões e edições do Windows: o que muda entre elas ───────────────
+# O Katharos é feito para o Windows 10 e o 11, em qualquer versão e edição. Aqui fica o que muda de uma para outra e quando cada uma
+# deixa de receber atualização de segurança. Fontes e datas: pesquisa "versões do Windows" no cofre (10/11/2026) e o ciclo de vida
+# publicado pela Microsoft. Revisar a cada versão nova do Windows (fluxo de publicação, passo de pesquisa).
+VERSOES_WINDOWS = {   # build: (família, versão)
+    17763: (10, '1809'), 18362: (10, '1903'), 18363: (10, '1909'), 19041: (10, '2004'), 19042: (10, '20H2'), 19043: (10, '21H1'),
+    19044: (10, '21H2'), 19045: (10, '22H2'),
+    22000: (11, '21H2'), 22621: (11, '22H2'), 22631: (11, '23H2'), 26100: (11, '24H2'), 26200: (11, '25H2'),
+}
+BUILD_MINIMO = 17763   # Windows 10 1809: antes disso, só o modo seguro
+# fim das atualizações de segurança (AAAA-MM-DD) por (família, versão, tipo de ciclo)
+FIM_SUPORTE = {
+    (10, '1809', 'consumo'): '2020-11-10', (10, '1903', 'consumo'): '2020-12-08', (10, '1909', 'consumo'): '2021-05-11',
+    (10, '2004', 'consumo'): '2021-12-14', (10, '20H2', 'consumo'): '2022-05-10', (10, '21H1', 'consumo'): '2022-12-13',
+    (10, '21H2', 'consumo'): '2023-06-13', (10, '22H2', 'consumo'): '2025-10-14',
+    (10, '21H2', 'empresa'): '2024-06-11', (10, '22H2', 'empresa'): '2025-10-14',
+    (10, '1809', 'ltsc'): '2029-01-09', (10, '21H2', 'ltsc'): '2027-01-12',
+    (11, '21H2', 'consumo'): '2023-10-10', (11, '22H2', 'consumo'): '2024-10-08', (11, '23H2', 'consumo'): '2025-11-11',
+    (11, '24H2', 'consumo'): '2026-10-13', (11, '25H2', 'consumo'): '2027-10-12',
+    (11, '21H2', 'empresa'): '2024-10-08', (11, '22H2', 'empresa'): '2025-10-14', (11, '23H2', 'empresa'): '2026-11-10',
+    (11, '24H2', 'empresa'): '2027-10-12', (11, '25H2', 'empresa'): '2028-10-10',
+    (11, '24H2', 'ltsc'): '2029-10-09',
+}
+ESU_WINDOWS10 = '2027-10-12'   # atualizações estendidas grátis para pessoa física, no 22H2 em dia e com inscrição (estendidas em jun/2026)
+EDICOES = {   # EditionID do registro → tipo
+    'core': 'home', 'coren': 'home', 'coresinglelanguage': 'home', 'corecountryspecific': 'home',
+    'professional': 'pro', 'professionaln': 'pro', 'professionalworkstation': 'pro', 'professionalworkstationn': 'pro',
+    'professionaleducation': 'pro', 'professionaleducationn': 'pro',
+    'enterprise': 'empresa', 'enterprisen': 'empresa', 'enterpriseg': 'empresa', 'education': 'educacao', 'educationn': 'educacao',
+    'enterprises': 'ltsc', 'enterprisesn': 'ltsc', 'iotenterprises': 'ltsc', 'iotenterprise': 'iot',
+    'cloudedition': 'se', 'cloud': 'se', 'cloudn': 'se',
+}
+NOME_EDICAO = {'home': 'Home', 'pro': 'Pro', 'empresa': 'Enterprise', 'educacao': 'Education', 'ltsc': 'LTSC', 'iot': 'IoT',
+               'server': 'Server', 'se': 'SE', '': ''}
+UCPD_PROTEGIDOS = ('TaskbarDa',)   # valores que o UCPD (Windows 11 24H2 e 10 atualizado) não deixa gravar: a política que funciona fica no item
+
+
+def edicao_tipo(edition_id):
+    e = (edition_id or '').strip().lower()
+    if e.startswith('server'):
+        return 'server'
+    return EDICOES.get(e, '')
+
+
+def compat_windows(perfil, hoje=None):
+    """O que importa da versão e da edição deste PC: família, versão, edição normalizada, se está no suporte e até quando, UCPD e arquitetura."""
+    so = (perfil.get('so') if isinstance(perfil, dict) else None) or {}
+    if not isinstance(so, dict):
+        so = {}
+    build = int(so.get('build') or 0)
+    fam, ver = VERSOES_WINDOWS.get(build, (11 if build >= 22000 else 10 if build >= 10240 else 0, so.get('versao') or ''))
+    if build and build not in VERSOES_WINDOWS:   # build mais nova que a tabela: usa a versão que o Windows informa
+        ver = so.get('versao') or ver
+    tipo = edicao_tipo(so.get('edicao'))
+    ciclo = 'ltsc' if tipo in ('ltsc', 'iot') else 'empresa' if tipo in ('empresa', 'educacao') else 'consumo'
+    fim = FIM_SUPORTE.get((fam, ver, ciclo)) or (FIM_SUPORTE.get((fam, ver, 'consumo')) if ciclo == 'ltsc' else None)
+    hoje = hoje or datetime.now().date()
+    sem_suporte = bool(fim) and datetime.fromisoformat(fim).date() < hoje
+    esu = fam == 10 and ver == '22H2' and ciclo == 'consumo' and datetime.fromisoformat(ESU_WINDOWS10).date() >= hoje
+    return {'familia': fam, 'versao': ver, 'build': build, 'edicao': tipo, 'edicao_nome': NOME_EDICAO.get(tipo, so.get('edicao') or ''),
+            'ciclo': ciclo, 'fim_suporte': fim, 'sem_suporte': sem_suporte, 'esu_possivel': esu,
+            'antigo_demais': bool(build) and build < BUILD_MINIMO, 'conhecida': build in VERSOES_WINDOWS or build > max(VERSOES_WINDOWS),
+            'ucpd': bool(so.get('ucpd')), 'arquitetura': (so.get('arq') or '').upper(), 'server': tipo == 'server',
+            'telemetria_desliga_de_todo': tipo in ('empresa', 'educacao', 'server', 'ltsc', 'iot'),
+            'consumidor_por_politica': tipo in ('empresa', 'educacao', 'ltsc', 'iot')}
+
+
+def nome_windows(c):
+    if not c.get('familia'):
+        return 'Windows'
+    return ' '.join(x for x in ('Windows', str(c['familia']), c['versao'], c['edicao_nome']) if x)
+
+
+def achados_da_versao(c, hoje=None):
+    """Achados do raio-x sobre a versão: sem atualizações de segurança, antiga demais, Server."""
+    out = []
+    if c.get('antigo_demais'):
+        out.append((3, 'Windows antigo demais para o Katharos',
+                    f'Build {c["build"]}: o Katharos é feito para o Windows 10 1809 ou mais novo.',
+                    'Atualize o Windows. Até lá, só o modo seguro vem marcado.', 'atualizar'))
+    if c.get('sem_suporte'):
+        quando = datetime.fromisoformat(c['fim_suporte']).strftime('%d/%m/%Y')
+        if c['esu_possivel']:
+            faz = (f'O Windows 10 22H2 ainda pode receber atualizações estendidas grátis até 12/10/2027 (ESU): Configurações > Windows Update > '
+                   '"Inscreva-se agora" (pede conta Microsoft de administrador). Ou passe para o Windows 11, se o PC aceitar.')
+        elif c['familia'] == 11:
+            faz = 'Instale a versão mais nova do Windows 11 pelo Windows Update (Configurações > Windows Update > "Obter as atualizações mais recentes").'
+        else:
+            faz = 'Atualize para o Windows 10 22H2 (e inscreva no ESU) ou para o Windows 11, se o PC aceitar.'
+        out.append((3 if not c['esu_possivel'] else 2, f'{nome_windows(c)} sem atualizações de segurança',
+                    f'Esta versão deixou de receber correções de segurança em {quando}.', faz, 'atualizar'))
+    if c.get('server'):
+        out.append((0, 'Windows Server', 'O Katharos é feito para Windows 10 e 11; num servidor, vários itens não se aplicam.',
+                    'Use o modo seguro e revise item por item.', ''))
+    return out
+
 
 # ███████████████████████████████████████████████████████████████████████████
 #
@@ -2247,7 +2356,7 @@ $gerenciado = $mdm -or $aad -or [bool]$cs.PartOfDomain
 $porque = @(); if ([bool]$cs.PartOfDomain) { $porque += 'domínio ' + [string]$cs.Domain }; if ($aad) { $porque += 'Azure AD (conta de trabalho ou escola)' }; if ($mdm) { $porque += 'gestão remota (MDM, como o Intune)' }
 
 Dado 'perfil' @{
-    so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
+    so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; arq = [string]$env:PROCESSOR_ARCHITECTURE; ucpd = [bool](Get-Service UCPD -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running'); idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
     pc = @{ placa = $(if ($placa) { (([string]$placa.Manufacturer).Trim() + ' ' + ([string]$placa.Product).Trim()).Trim() } else { '' }); bios = $(if ($bios) { ([string]$bios.SMBIOSBIOSVersion).Trim() } else { '' }); bios_data = $(if ($bios -and $bios.ReleaseDate) { ([datetime]$bios.ReleaseDate).ToString('yyyy-MM-dd') } else { '' }); fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; gerenciado_por = ($porque -join ', '); bateria = [bool]$bat }
     cpu = @{ nome = (([string]$cpu.Name).Trim() -replace '\s+', ' '); nucleos = [int]$cpu.NumberOfCores; threads = [int]$cpu.NumberOfLogicalProcessors; mhz = [int]$cpu.MaxClockSpeed; l3_mb = [math]::Round([double]$cpu.L3CacheSize / 1024, 0); virtualizacao = [bool]$cpu.VirtualizationFirmwareEnabled; fabricante = ([string]$cpu.Manufacturer).Trim() }
     ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = $(if ($null -ne $memDisp) { [math]::Round([math]::Max(0, [double]$os.TotalVisibleMemorySize / 1MB - $memDisp), 1) } else { [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1) }); tipo = $tipoRam; slots = $slots; ocupados = $pentes.Count; pentes = (Lista $pentesL) }
@@ -2481,6 +2590,11 @@ def perfil_pc(ctx, forca=False):
     ctx.mult = fator_hardware(p)
     if p is not PERFIL_VAZIO:
         rel_pc(p)
+        cw = compat_windows(p)
+        if (cw['antigo_demais'] or cw['server']) and ctx.args is not None and getattr(ctx.args, 'modo', None) != 'seguro':
+            ctx.args.modo = 'seguro'
+            ctx.t.aviso(f'{nome_windows(cw)}: ' + ('build antiga demais (o Katharos é feito para o Windows 10 1809 ou mais novo)' if cw['antigo_demais']
+                        else 'é um Windows Server') + '. Por segurança, só vão marcados os itens do modo seguro.')
         if not so_reconhecido(p):
             if ctx.args is not None:
                 ctx.args.modo = 'seguro'
@@ -2872,6 +2986,9 @@ def analisa(p, m, d):
     total = pf(p, 'disco.total', 1) or 1
     ini = lista(d.get('inicializacao'))
     saude = d.get('saude') or {}
+
+    for imp, tit, evid, faz, cmd in achados_da_versao(compat_windows(p)):
+        A.append(Achado(imp, ['tudo', 'seguranca'], tit, evid, faz, cmd))
 
     if eh_hd(p):
         A.append(Achado(3, ['lento', 'boot', 'tudo', 'jogos'], 'O Windows está num HD mecânico',
@@ -5467,8 +5584,15 @@ def itens_privacidade(ctx):
                '\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient', '\\Microsoft\\Windows\\Feedback\\Siuf\\DmClientOnScenarioDownload',
                '\\Microsoft\\Windows\\Maps\\MapsUpdateTask', '\\Microsoft\\Windows\\Maps\\MapsToastTask',
                '\\Microsoft\\Windows\\CloudExperienceHost\\CreateObjectTask']
+    cw = compat_windows(ctx.perfil)
+    tele = ('O Windows para de enviar dados de diagnóstico e de pedir opinião.' if cw['telemetria_desliga_de_todo'] else
+            f'O Windows envia só os dados obrigatórios e para de pedir opinião (no {cw["edicao_nome"] or "Home e no Pro"}, o mínimo que a '
+            'Microsoft permite é o obrigatório: desligar de todo só no Enterprise e no Education).')
+    anun = ('Sem ID de propaganda, sem apps de propaganda instalados sozinhos, sem "sugestões" no menu, na tela de bloqueio e nas '
+            'Configurações, sem "vamos terminar de configurar".' + ('' if cw['consumidor_por_politica'] else
+            ' Nesta edição a política de "experiências do consumidor" não vale; o que desliga são os ajustes da sua conta, que vêm junto.'))
     return [
-        Item('telemetria', 'telemetria no mínimo', 'O Windows envia só os dados obrigatórios e para de pedir opinião.',
+        Item('telemetria', 'telemetria no mínimo', tele,
              'menos uso de rede e disco', 'nenhum', 1,
              RR(R(dc, 'AllowTelemetry', 0), R(dc, 'DoNotShowFeedbackNotifications', 1), R(dc, 'LimitDiagnosticLogCollection', 1),
                 R(dc, 'DisableOneSettingsDownloads', 1), R(dc, 'AllowCommercialDataPipeline', 0), R(dc, 'AllowDeviceNameInTelemetry', 0),
@@ -5487,8 +5611,7 @@ def itens_privacidade(ctx):
         Item('telemetria-tarefas', 'tarefas de telemetria', 'Avaliador de compatibilidade, programa de experiência do usuário, '
              'coleta de diagnóstico de disco, pesquisas de opinião e mapas (11 tarefas).', 'menos picos de disco e CPU', 'nenhum', 1,
              TAREFAS(tarefas)),
-        Item('anuncios', 'anúncios e apps instalados sozinhos', 'Sem ID de propaganda, sem apps de propaganda instalados sozinhos, '
-             'sem "sugestões" no menu, na tela de bloqueio e nas Configurações, sem "vamos terminar de configurar".',
+        Item('anuncios', 'anúncios e apps instalados sozinhos', anun,
              'menos propaganda e instalações surpresa', 'nenhum', 1,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo', 'Enabled', 0),
                 R(f'{HKLM_POL}\\AdvertisingInfo', 'DisabledByGroupPolicy', 1),

@@ -115,7 +115,7 @@ $gerenciado = $mdm -or $aad -or [bool]$cs.PartOfDomain
 $porque = @(); if ([bool]$cs.PartOfDomain) { $porque += 'domínio ' + [string]$cs.Domain }; if ($aad) { $porque += 'Azure AD (conta de trabalho ou escola)' }; if ($mdm) { $porque += 'gestão remota (MDM, como o Intune)' }
 
 Dado 'perfil' @{
-    so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
+    so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; arq = [string]$env:PROCESSOR_ARCHITECTURE; ucpd = [bool](Get-Service UCPD -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running'); idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
     pc = @{ placa = $(if ($placa) { (([string]$placa.Manufacturer).Trim() + ' ' + ([string]$placa.Product).Trim()).Trim() } else { '' }); bios = $(if ($bios) { ([string]$bios.SMBIOSBIOSVersion).Trim() } else { '' }); bios_data = $(if ($bios -and $bios.ReleaseDate) { ([datetime]$bios.ReleaseDate).ToString('yyyy-MM-dd') } else { '' }); fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; gerenciado_por = ($porque -join ', '); bateria = [bool]$bat }
     cpu = @{ nome = (([string]$cpu.Name).Trim() -replace '\s+', ' '); nucleos = [int]$cpu.NumberOfCores; threads = [int]$cpu.NumberOfLogicalProcessors; mhz = [int]$cpu.MaxClockSpeed; l3_mb = [math]::Round([double]$cpu.L3CacheSize / 1024, 0); virtualizacao = [bool]$cpu.VirtualizationFirmwareEnabled; fabricante = ([string]$cpu.Manufacturer).Trim() }
     ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = $(if ($null -ne $memDisp) { [math]::Round([math]::Max(0, [double]$os.TotalVisibleMemorySize / 1MB - $memDisp), 1) } else { [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1) }); tipo = $tipoRam; slots = $slots; ocupados = $pentes.Count; pentes = (Lista $pentesL) }
@@ -349,6 +349,11 @@ def perfil_pc(ctx, forca=False):
     ctx.mult = fator_hardware(p)
     if p is not PERFIL_VAZIO:
         rel_pc(p)
+        cw = compat_windows(p)
+        if (cw['antigo_demais'] or cw['server']) and ctx.args is not None and getattr(ctx.args, 'modo', None) != 'seguro':
+            ctx.args.modo = 'seguro'
+            ctx.t.aviso(f'{nome_windows(cw)}: ' + ('build antiga demais (o Katharos é feito para o Windows 10 1809 ou mais novo)' if cw['antigo_demais']
+                        else 'é um Windows Server') + '. Por segurança, só vão marcados os itens do modo seguro.')
         if not so_reconhecido(p):
             if ctx.args is not None:
                 ctx.args.modo = 'seguro'
@@ -740,6 +745,9 @@ def analisa(p, m, d):
     total = pf(p, 'disco.total', 1) or 1
     ini = lista(d.get('inicializacao'))
     saude = d.get('saude') or {}
+
+    for imp, tit, evid, faz, cmd in achados_da_versao(compat_windows(p)):
+        A.append(Achado(imp, ['tudo', 'seguranca'], tit, evid, faz, cmd))
 
     if eh_hd(p):
         A.append(Achado(3, ['lento', 'boot', 'tudo', 'jogos'], 'O Windows está num HD mecânico',

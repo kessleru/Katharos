@@ -1597,7 +1597,7 @@ class TestAvisoDeUso(unittest.TestCase):
 
 class TestRaioxInteligente(unittest.TestCase):
     def analisa(self, perfil=None, medidas=None, dados=None):
-        p = {'so': {'win11': True, 'build': 26100}, 'pc': {'notebook': False}, 'ram': {'total': 16, 'usada': 6, 'slots': 2, 'ocupados': 2},
+        p = {'so': {'win11': True, 'build': 26200, 'edicao': 'Professional'}, 'pc': {'notebook': False}, 'ram': {'total': 16, 'usada': 6, 'slots': 2, 'ocupados': 2},
              'disco': {'tipo': 'SSD', 'livre': 200, 'total': 500}, 'defender': {'tempo_real': True}, 'sistema': {'uptime_h': 5},
              'memoria': {'pagefile_auto': True, 'compressao': True}, 'energia': {'plano': 'desempenho'}, 'tem': {}}
         for ch, v in (perfil or {}).items():
@@ -2788,3 +2788,70 @@ class TestMotorAprende(_CasaTemporaria):
         cs = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
         self.assertIn('SessaoFechou', cs)
         self.assertIn('Pensa("fim de sessão de jogo")', cs)
+
+
+class TestVersoesDoWindows(unittest.TestCase):
+    """2d: o Katharos funciona em todas as versões do Windows 10 e 11 e diz o que muda em cada edição."""
+    MATRIZ = [(b, e) for b in (17763, 19044, 19045, 22000, 22621, 22631, 26100, 26200)
+              for e in ('Core', 'Professional', 'Enterprise', 'EnterpriseS', 'ServerStandard')]
+
+    def _perfil(self, build, edicao):
+        import copy
+        p = copy.deepcopy(MODELO)
+        p['so'] = dict(p.get('so') or {}, build=build, win11=build >= 22000, edicao=edicao, versao='')
+        return p
+
+    def test_todos_os_itens_montam_em_toda_versao_e_edicao(self):
+        for build, ed in self.MATRIZ:
+            ctx = mock.Mock(perfil=self._perfil(build, ed), ja={}, args=mock.Mock(modo='equilibrado'))
+            for nome, pac in k.PACOTES.items():
+                with self.subTest(build=build, edicao=ed, pacote=nome):
+                    its = [i for i in (pac.itens(ctx) or []) if i]
+                    for i in its:
+                        self.assertTrue(i.titulo and i.explica)
+            ids10 = {i.id for i in k.PACOTES['jogos'].itens(ctx) if i}
+            if build < 22000:
+                self.assertNotIn('directx-jogos', ids10, 'modo janela otimizado é só do Windows 11')
+
+    def test_versao_e_fim_de_suporte(self):
+        from datetime import date
+        hoje = date(2026, 11, 10)
+        c = k.compat_windows(self._perfil(26100, 'Core'), hoje)
+        self.assertEqual((c['familia'], c['versao'], c['edicao'], c['sem_suporte']), (11, '24H2', 'home', True))
+        self.assertFalse(k.compat_windows(self._perfil(26100, 'Enterprise'), hoje)['sem_suporte'], '24H2 Enterprise vai até 2027')
+        self.assertFalse(k.compat_windows(self._perfil(26200, 'Professional'), hoje)['sem_suporte'])
+        w10 = k.compat_windows(self._perfil(19045, 'Core'), hoje)
+        self.assertTrue(w10['sem_suporte'] and w10['esu_possivel'])
+        self.assertFalse(k.compat_windows(self._perfil(17763, 'EnterpriseS'), hoje)['sem_suporte'], 'LTSC 2019 vai até 2029')
+        self.assertTrue(k.compat_windows(self._perfil(15063, 'Professional'), hoje)['antigo_demais'])
+        self.assertEqual(k.compat_windows(self._perfil(20348, 'ServerStandard'), hoje)['edicao'], 'server')
+        self.assertEqual(k.compat_windows(None)['familia'], 0)
+        nova = k.compat_windows(dict(so={'build': 26500, 'versao': '26H2', 'edicao': 'Professional'}), hoje)
+        self.assertEqual((nova['versao'], nova['conhecida']), ('26H2', True), 'build mais nova que a tabela: confia na versão que o Windows diz')
+
+    def test_raiox_avisa_versao_sem_suporte_com_o_que_fazer(self):
+        from datetime import date
+        a = k.achados_da_versao(k.compat_windows(self._perfil(19045, 'Core'), date(2026, 11, 10)))
+        self.assertEqual(len(a), 1)
+        self.assertIn('ESU', a[0][3])
+        self.assertIn('12/10/2027', a[0][3])
+        self.assertEqual(k.achados_da_versao(k.compat_windows(self._perfil(26200, 'Core'), date(2026, 11, 10))), [])
+
+    def test_texto_honesto_por_edicao(self):
+        def tele(ed):
+            ctx = mock.Mock(perfil=self._perfil(26200, ed), ja={})
+            return next(i for i in k.PACOTES['privacidade'].itens(ctx) if i and i.id == 'telemetria').explica
+        self.assertIn('obrigatório', tele('Core'))
+        self.assertIn('Enterprise', tele('Professional'))
+        self.assertNotIn('obrigatório', tele('Enterprise'))
+
+    def test_ucpd_no_powershell_bate_com_a_lista(self):
+        for nome in k.UCPD_PROTEGIDOS:
+            self.assertIn(f"'{nome}'", k.PRELUDIO_PS)
+        self.assertIn('_Protegido $Path $Name', k.PRELUDIO_PS)
+
+    def test_nao_depende_do_wmic(self):
+        """O WMIC sai do Windows (25H2): nenhum script do Katharos pode chamar."""
+        fonte = (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8')
+        chamadas = [l for l in fonte.splitlines() if re.search(r'\bwmic(\.exe)?\s', l, re.I) and 'wmiprvse' not in l.lower()]
+        self.assertEqual([l for l in chamadas if not l.strip().startswith('#') and "'wmic'" not in l and '"wmic"' not in l], [])
