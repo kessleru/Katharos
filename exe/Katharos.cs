@@ -19,7 +19,7 @@
 // Compilar em qualquer Windows 10 ou 11, sem instalar nada (é o que a publicação faz):
 //   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /optimize+ /out:Katharos.exe
 //     /win32icon:katharos.ico /win32manifest:katharos.manifest /resource:katharos.ico,katharos.ico
-//     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll /r:System.Core.dll Katharos.cs
+//     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.Web.Extensions.dll /r:System.Core.dll /resource:regras.json,regras.json Katharos.cs
 // O código é C# 5 de propósito: é a versão do compilador que vem dentro do Windows.
 
 using System;
@@ -137,7 +137,7 @@ namespace KatharosApp
         public string Ps1, Py, Pyw, Kpy;
         public int IntervaloMs = 1000;
         public bool PausarEmJogo = false;
-        public double AvisoCpu = 90, AvisoGpu = 85;
+        public double AvisoCpu = Lim.G("calor_cpu"), AvisoGpu = Lim.G("calor_gpu");
         public bool Notificar = true;
         public List<string> NomesJogo = new List<string>();
 
@@ -828,6 +828,45 @@ namespace KatharosApp
         public Conclusao(string id, int nivel, string titulo, string texto, string comando) { Id = id; Nivel = nivel; Titulo = titulo; Texto = texto; Comando = comando; }
     }
 
+    // ───────── limites do motor: uma fonte só (REGRAS_MOTOR no Python) ─────────
+    // A montagem grava exe/regras.json (embutido aqui); o Katharos grava ~/.katharos/regras.json, que vale por cima (versão nova sem
+    // recompilar). Nenhum limite fica escrito neste arquivo: um teste confere.
+    static class Lim
+    {
+        static Dictionary<string, double> v = new Dictionary<string, double>();
+        static DateTime lido = DateTime.MinValue;
+
+        static void Carrega()
+        {
+            var novo = new Dictionary<string, double>();
+            Action<string> junta = delegate (string json)
+            {
+                var d = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
+                if (d == null) return;
+                foreach (var kv in d)
+                {
+                    double x;
+                    if (kv.Value != null && double.TryParse(Convert.ToString(kv.Value, K.INV), NumberStyles.Float, K.INV, out x)) novo[kv.Key] = x;
+                }
+            };
+            try
+            {
+                var st = Assembly.GetExecutingAssembly().GetManifestResourceStream("regras.json");
+                if (st != null) using (var r = new StreamReader(st, Encoding.UTF8)) junta(r.ReadToEnd());
+            }
+            catch (Exception e) { Log.Escreve("regras embutidas: " + e.Message); }
+            try { string arq = K.Arq("regras.json"); if (File.Exists(arq)) junta(File.ReadAllText(arq, Encoding.UTF8)); }
+            catch (Exception e) { Log.Escreve("regras.json: " + e.Message); }
+            v = novo; lido = DateTime.Now;
+        }
+
+        public static double G(string chave)
+        {
+            if ((DateTime.Now - lido).TotalSeconds > 60) Carrega();
+            double x; return v.TryGetValue(chave, out x) ? x : double.NaN;   // NaN: toda comparação dá falso (nada de alarme sem regra)
+        }
+    }
+
     static class Regras
     {
         // os mesmos critérios contam o tempo de cada limite na sessão de jogo e geram as conclusões de agora
@@ -837,12 +876,12 @@ namespace KatharosApp
         {
             switch (m)
             {
-                case "gpu": return a.Gpu >= 95 && a.NucleoMax < 90;
-                case "cpu": return a.NucleoMax >= 95 && a.Gpu.HasValue && a.Gpu < 85;
-                case "freio": return a.CpuDesempenho.HasValue && a.CpuDesempenho < 75 && a.Cpu >= 40;
-                case "ram": return a.RamPct >= 90;
-                case "vram": return a.VramPct >= 95;
-                case "disco": return a.Disco >= 95;
+                case "gpu": return a.Gpu >= Lim.G("gpu_limite") && a.NucleoMax < Lim.G("gpu_nucleo_folga");
+                case "cpu": return a.NucleoMax >= Lim.G("cpu_nucleo_limite") && a.Gpu.HasValue && a.Gpu < Lim.G("cpu_gpu_folga");
+                case "freio": return a.CpuDesempenho.HasValue && a.CpuDesempenho < Lim.G("freio_desempenho") && a.Cpu >= Lim.G("freio_cpu_min");
+                case "ram": return a.RamPct >= Lim.G("ram_cheia");
+                case "vram": return a.VramPct >= Lim.G("vram_cheia");
+                case "disco": return a.Disco >= Lim.G("disco_cheio");
                 case "calor": return a.TempCpu >= c.AvisoCpu || a.TempGpu >= c.AvisoGpu;
             }
             return false;
@@ -851,42 +890,42 @@ namespace KatharosApp
         public static List<Conclusao> Agora(List<Amostra> janela, Config c, bool emJogo)
         {
             var r = new List<Conclusao>();
-            if (janela.Count < 3) return r;
+            if (janela.Count < Lim.G("janela_min_leituras")) return r;
             var ult = janela[janela.Count - 1];
             Func<string, double> frac = delegate (string m) { int n = 0; foreach (var a in janela) if (Marca(m, a, c)) n++; return (double)n / janela.Count; };
-            if (frac("calor") >= .5)
+            if (frac("calor") >= Lim.G("fracao_calor"))
             {
                 bool cpu = ult.TempCpu >= c.AvisoCpu;
                 r.Add(new Conclusao("calor", 2, "PC quente",
                     (cpu ? "CPU em " + K.Num(ult.TempCpu, 0) + " °C" : "Placa de vídeo em " + K.Num(ult.TempGpu, 0) + " °C") +
                     ". Acima disso o chip reduz a velocidade para se proteger. Confira ventoinha e poeira.", "painel"));
             }
-            if (frac("freio") >= .6)
+            if (frac("freio") >= Lim.G("fracao_freio"))
                 r.Add(new Conclusao("freio", 1, "CPU abaixo da velocidade normal",
                     "Com carga, ela está rodando a " + K.Num(ult.CpuDesempenho, 0) + " % da frequência normal" +
                     (ult.NaBateria ? ": é a economia da bateria. Na tomada ela volta." : ": calor ou plano de energia economizando."), ult.NaBateria ? "" : "energia"));
             if (emJogo)
             {
-                if (frac("gpu") >= .6)
+                if (frac("gpu") >= Lim.G("fracao_gargalo"))
                     r.Add(new Conclusao("gpu", 0, "A placa de vídeo é o limite agora",
                         "Ela está em " + K.Num(ult.Gpu, 0) + " % e a CPU sobra. O jogo roda o máximo que ela entrega; mais FPS vem de baixar resolução ou qualidade.", ""));
-                else if (frac("cpu") >= .6)
+                else if (frac("cpu") >= Lim.G("fracao_gargalo"))
                     r.Add(new Conclusao("cpu", 1, "A CPU segura o jogo",
                         "Um núcleo está em " + K.Num(ult.NucleoMax, 0) + " % e a placa de vídeo sobra (" + K.Num(ult.Gpu, 0) + " %). Feche o que roda em segundo plano; o modo extremo do turbo ajuda.", "turbo"));
-                if (frac("vram") >= .6)
+                if (frac("vram") >= Lim.G("fracao_vram"))
                     r.Add(new Conclusao("vram", 1, "Memória da placa de vídeo cheia",
                         K.Num(ult.VramGb, 1) + " de " + K.Num(ult.VramTotalGb, 1) + " GB. Baixe a qualidade das texturas: acima disso o jogo engasga.", ""));
             }
-            else if (ult.Cpu >= 85 && frac("cpu") < .5)
+            else if (ult.Cpu >= Lim.G("cpu_ocupada") && frac("cpu") < Lim.G("fracao_gargalo"))
             {
-                int n = 0; foreach (var a in janela) if (a.Cpu >= 85) n++;
-                if (n >= janela.Count * .8)
+                int n = 0; foreach (var a in janela) if (a.Cpu >= Lim.G("cpu_ocupada")) n++;
+                if (n >= janela.Count * Lim.G("fracao_cpu_ocupada"))
                     r.Add(new Conclusao("cpu-ocupada", 1, "Algo mantém a CPU ocupada", "CPU em " + K.Num(ult.Cpu, 0) + " % sem jogo aberto. O raio-x mostra quem é.", "raiox"));
             }
-            if (frac("ram") >= .8)
+            if (frac("ram") >= Lim.G("fracao_ram"))
                 r.Add(new Conclusao("ram", 1, "RAM quase cheia",
                     K.Num(ult.RamGb, 1) + " de " + K.Num(ult.RamTotalGb, 1) + " GB em uso. O Windows passa a usar o disco no lugar e tudo fica mais lento.", "memoria"));
-            if (frac("disco") >= .8)
+            if (frac("disco") >= Lim.G("fracao_disco"))
                 r.Add(new Conclusao("disco", 1, "Disco ocupado o tempo todo",
                     "Em " + K.Num(ult.Disco, 0) + " %. Jogos e programas esperam por ele: travadas curtas vêm daqui.", "raiox"));
             r.Sort(delegate (Conclusao x, Conclusao y) { return y.Nivel.CompareTo(x.Nivel); });
@@ -916,7 +955,7 @@ namespace KatharosApp
 
         public string Principal()
         {
-            string melhor = "equilibrado"; double fm = .2;
+            string melhor = "equilibrado"; double fm = Lim.G("sessao_principal_min");
             foreach (var kv in Marcas) { double f = (double)kv.Value / Math.Max(1, N); if (f > fm) { fm = f; melhor = kv.Key; } }
             return melhor;
         }
@@ -1061,7 +1100,7 @@ namespace KatharosApp
             lock (Trava)
             {
                 Ultima = a;
-                Janela.Add(a); while (Janela.Count > 1 && (a.Quando - Janela[0].Quando).TotalSeconds > 30) Janela.RemoveAt(0);
+                Janela.Add(a); while (Janela.Count > 1 && (a.Quando - Janela[0].Quando).TotalSeconds > Lim.G("janela_s")) Janela.RemoveAt(0);
                 Historico.Add(a); while (Historico.Count > 1 && (a.Quando - Historico[0].Quando).TotalSeconds > 120) Historico.RemoveAt(0);
                 Conclusoes = Regras.Agora(Janela, Cfg, Sessao != null);
             }
@@ -1077,14 +1116,14 @@ namespace KatharosApp
             DateTime agora = a.Quando;
             string nomeTop = null;
             if (a.TopGpuPid > 0) leitor.Nomes.TryGetValue(a.TopGpuPid, out nomeTop);
-            bool candidato = a.TopGpuPid > 0 && a.TopGpu >= 20 && nomeTop != null && !NAO_JOGO.Contains(nomeTop) &&
+            bool candidato = a.TopGpuPid > 0 && a.TopGpu >= Lim.G("jogo_gpu_min") && nomeTop != null && !NAO_JOGO.Contains(nomeTop) &&
                              (a.TopGpuPid == a.PrimeiroPlanoPid || a.TelaCheia || a.AntiCheat);
             if (Sessao == null)
             {
                 if (candidato)
                 {
                     if (candidatoPid != a.TopGpuPid) { candidatoPid = a.TopGpuPid; candidatoDesde = agora; }
-                    else if ((agora - candidatoDesde).TotalSeconds >= 10)
+                    else if ((agora - candidatoDesde).TotalSeconds >= Lim.G("jogo_segundos_comecar"))
                     {
                         Sessao = new Sessao { Jogo = nomeTop, Pid = a.TopGpuPid, Inicio = candidatoDesde, Ultimo = agora };
                         semJogoDesde = DateTime.MaxValue;
@@ -1096,10 +1135,10 @@ namespace KatharosApp
             else
             {
                 bool vivo = leitor.Nomes.ContainsKey(Sessao.Pid);
-                bool ativo = vivo && (a.TopGpuPid == Sessao.Pid && a.TopGpu >= 5 || a.PrimeiroPlanoPid == Sessao.Pid);
+                bool ativo = vivo && (a.TopGpuPid == Sessao.Pid && a.TopGpu >= Lim.G("jogo_gpu_ativo") || a.PrimeiroPlanoPid == Sessao.Pid);
                 if (ativo) semJogoDesde = DateTime.MaxValue;
                 else if (semJogoDesde == DateTime.MaxValue) semJogoDesde = agora;
-                if (!vivo || (agora - semJogoDesde).TotalSeconds >= 30) FechaSessao();
+                if (!vivo || (agora - semJogoDesde).TotalSeconds >= Lim.G("jogo_segundos_fechar")) FechaSessao();
             }
             if (Sessao != null) { a.Jogo = Sessao.Jogo; a.JogoPid = Sessao.Pid; }
         }

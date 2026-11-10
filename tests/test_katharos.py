@@ -2660,3 +2660,31 @@ class TestFonte(unittest.TestCase):
         soma = b''.join(p.read_bytes() for p in partes)
         self.assertEqual(soma, (RAIZ / 'programa' / 'katharos.py').read_bytes(),
                          'programa/katharos.py não bate com partes/: rode bash scripts/monta.sh (e nunca edite o katharos.py direto)')
+
+
+class TestRegrasDoMotor(unittest.TestCase):
+    """I1: os limites do motor têm uma fonte só (REGRAS_MOTOR); o Katharos.exe não tem limite escrito no código."""
+    CS = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+
+    def test_regras_do_exe_sao_as_do_python(self):
+        import json as _j
+        self.assertEqual(_j.loads((RAIZ / 'exe' / 'regras.json').read_text(encoding='utf-8')), k.REGRAS_MOTOR,
+                         'exe/regras.json desatualizado: rode bash scripts/monta.sh')
+
+    def test_toda_regra_que_o_exe_usa_existe(self):
+        usadas = set(re.findall(r'Lim\.G\("([a-z_]+)"\)', self.CS))
+        self.assertGreater(len(usadas), 15)
+        self.assertEqual(usadas - set(k.REGRAS_MOTOR), set())
+
+    def test_sem_limite_escrito_nas_regras_do_exe(self):
+        ini = self.CS.index('static class Regras'); fim = self.CS.index('class Sessao')
+        trecho = re.sub(r'"(?:\\.|[^"\\])*"', '""', self.CS[ini:fim])
+        self.assertEqual(re.findall(r'(?:>=|<=|<|>)\s*\.?\d', trecho), [], 'limite numérico nas Regras do Katharos.cs: ponha em REGRAS_MOTOR')
+
+    def test_central_usa_as_regras(self):
+        ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': True,
+              'agora': datetime(2026, 11, 10), 'perfil': {}, 'segundo_plano': True, 'minutos': [],
+              'sessoes': [{'jogo': 'j', 'inicio': '2026-11-05T20:00:00', 'min': 120, 'tempo_no_limite': {'cpu': 20}, 'principal': 'cpu'}]}
+        self.assertNotIn('jogo-cpu', {x['id'] for x in k.gera_sugestoes(ev)})
+        with mock.patch.dict(k.REGRAS_MOTOR, {'central_cpu': 15}):
+            self.assertIn('jogo-cpu', {x['id'] for x in k.gera_sugestoes(ev)})

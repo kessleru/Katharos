@@ -132,7 +132,7 @@ O motor novo:
 - **Fato** é a unidade: métrica, valor, unidade, quando, de onde veio (sensor e confiança da fonte) e contexto (repouso, jogo, bateria,
   hora do dia, modo aplicado).
 - **Cinco camadas**: linha de base → detectores → diagnóstico de causa → planejador → avaliador, com o avaliador realimentando os pesos.
-- **Regras como dados**: limites, janelas, duração mínima, textos e ações num arquivo (`motor/regras.json`) lido pelo C# e pelo Python.
+- **Regras como dados**: limites, janelas, duração mínima, textos e ações num arquivo (`REGRAS_MOTOR` no Python; a montagem grava `exe/regras.json`, embutido no exe, e o Katharos grava `~/.katharos/regras.json`) lido pelo C# e pelo Python.
   Nunca mais um limite duplicado em código.
 - **Eventos em vez de relógio**: o segundo plano e a interface avisam o motor por um pipe local; o motor pensa quando algo acontece.
 - **Honestidade acima de tudo**: cada conclusão com os números e a fonte; pouco dado vira "ainda não sei"; aviso falso é bug.
@@ -217,7 +217,7 @@ Arquitetura, em ordem de dependência. As tarefas I1 a I6 dá para fazer antes d
 ```
 
 Ajustes imediatos (antes da interface):
-- [ ] **I1** **Regras como dados**: tirar os limites do `Katharos.cs` (`Regras`) e do `conselheiro` para `motor/regras.json`
+- [x] **I1** **Regras como dados**: tirar os limites do `Katharos.cs` (`Regras`) e do `conselheiro` para `motor/regras.json`
   (métrica, condição, janela, duração mínima, nível, título, texto, comando). O C# e o Python leem o mesmo arquivo; um teste falha se um
   limite aparecer escrito no código.
 - [ ] **I2** **Pensar por evento**: no fim de cada sessão de jogo, depois de aplicar ou desfazer, ao mudar de driver ou depois de uma
@@ -407,6 +407,25 @@ Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pess
 - [ ] **5.4** Ligar a assinatura no workflow quando aprovada (o `Setup.exe`, o aplicativo e o `Katharos.exe` da CLI).
 
 ### Fase 6: site novo
+Pedido de 10 nov: **mudança extrema** no site, com uma reformulação boa de verdade, **mantendo o hero** (a abertura com o cavaleiro na
+grama, o título e o botão: mais ou menos a mesma pegada) e **a mesma linha de design** (escuro, osso, âmbar, gravura, linhas e "+" dos
+containers). Todo o resto pode ser refeito: estrutura, ordem, componentes, interações e animações.
+
+Ferramentas para isso (usar, não só citar):
+- **Skills de design do cofre** (`Knowledge/10 • Skills`), carregadas antes de desenhar cada parte: `impeccable` (desenhar, criticar e
+  polir), `design-taste-frontend` e `frontend-design` (direção visual sem cara de IA), `emil-design-eng` (acabamento e detalhes),
+  `ui-ux-pro-max` (padrões de UI e UX), `animate`, `animation-performance` e `review-animations` (movimento que serve e não trava),
+  `gsap-*` (se a animação pedir GSAP), `web-design-guidelines` (revisão de acessibilidade e boas práticas no fim),
+  `vercel-react-best-practices` e `vercel-composition-patterns` (as ilhas em React).
+- **MCPs**: shadcn/ui e Magic UI (componentes prontos, grátis), Context7 (documentação atual de Astro, Tailwind e Motion), Figma (gerar e
+  testar variações de seção antes de codar, como já foi feito na cena do hero) e o navegador para conferir no celular e no computador.
+- Referências de sites com a mesma ideia de arte (Hermes/Nous, kc1t e outros), com crítica: pegar o que serve, não copiar.
+
+Tarefas a mais desta reformulação:
+- [ ] **6.0** Direção visual antes de codar: 2 ou 3 propostas para as seções depois do hero (rascunho no Figma ou em HTML), escolha com o
+  dono e registro da escolha no cofre (`04 • Decisions`).
+- [ ] **6.0b** Mapa das seções novas: o que cada uma precisa contar (baixar CLI ou GUI, o que ele faz, o painel ao vivo, a central de
+  inteligência, jogos com FPS de verdade, segurança e desfazer, novidades) e o componente de cada uma.
 - [ ] **6.1** `site/` com Astro, Tailwind v4, shadcn/ui e Magic UI; tokens do site atual (cores, fontes, espaçamentos) num só lugar.
 - [ ] **6.2** Dados gerados do motor: modos, áreas e itens, contagens, novidades do changelog, versão (substitui o `gera_site.py`).
 - [ ] **6.3** Seções na ordem de hoje, refeitas com componentes: abertura (cavaleiro intacto), como usar, painel (exemplo vivo com números
@@ -470,3 +489,5 @@ Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pess
 | 10 nov 2026 | 2c.12 a 2c.15: notebook na tomada e na bateria, desligado por padrão | 3.1.2 | d7107c3 (local) | pedido do usuário (item 6); não publicar |
 | 10 nov 2026 | D10 e fase 1b: motor de inteligência novo (I1 a I25), com tudo o que ele faz na interface | 3.1.2 | (este commit, local) | pedido do usuário; não publicar |
 | 10 nov 2026 | 0.1 fonte no repositório: `partes/`, `arte/gera_site.py`, `arte/site.html`, `scripts/monta.sh`, teste da soma | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | fase 6: mudança extrema no site mantendo o hero e a linha de design; skills do cofre e MCPs | 3.1.2 | ramo v4 | pedido do usuário |
+| 10 nov 2026 | I1 regras como dados: `REGRAS_MOTOR` única, `exe/regras.json` embutido, `Lim.G()` no C#, central usando as mesmas | 3.1.2 | ramo v4 | testes: sem limite no código das Regras do exe |

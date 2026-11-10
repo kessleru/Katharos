@@ -77,42 +77,42 @@ def r_ligar_fundo(ev):
 def r_jogos_gargalo(ev):
     """Nas sessões de jogo dos últimos 30 dias, o que mais ficou no limite (ponderado pelo tempo jogado)."""
     r = resumo_sessoes(ev.get('sessoes') or [])
-    if not r or r['horas'] < 1:
+    if not r or r['horas'] < REGRAS_MOTOR['central_horas_min']:
         return []
     lim, h, n = r['limites'], br(r['horas'], 1), r['sessoes']
     base = f'Em {n} {"sessão" if n == 1 else "sessões"} de jogo ({h} h), '
     out = []
-    if lim.get('cpu', 0) >= 25:
+    if lim.get('cpu', 0) >= REGRAS_MOTOR['central_cpu']:
         out.append(_sug('jogo-cpu', 'A CPU segura seus jogos',
                         base + f'um núcleo da CPU ficou no limite com a placa de vídeo sobrando em {br(lim["cpu"], 0)} % do tempo. '
                         'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', 'alta',
                         'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao'))
         out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
                         'fica disputando ela durante o jogo.', 'inicializacao', 'média', 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0))
-    if lim.get('freio', 0) >= 15:
+    if lim.get('freio', 0) >= REGRAS_MOTOR['central_freio']:
         out.append(_sug('jogo-freio', 'A CPU freia durante os jogos',
                         base + f'com carga, ela rodou abaixo de 75 % da frequência normal em {br(lim["freio"], 0)} % do tempo'
                         + (f' (chegou a {br(r["desempenho_min"], 0)} %)' if r.get('desempenho_min') else '') +
                         '. Isso é calor ou o plano de energia economizando.', 'energia', 'alta', 'plano de energia no máximo; se continuar, é calor (limpeza e pasta térmica)', 'mais consumo', 4, 1))
-    if lim.get('calor', 0) >= 10:
+    if lim.get('calor', 0) >= REGRAS_MOTOR['central_calor']:
         mx = max([x for x in (r.get('temp_cpu_max'), r.get('temp_gpu_max')) if x] or [0])
         out.append(_sug('jogo-calor', 'Seus jogos esquentam o PC além do seguro',
                         base + f'a temperatura passou do limite em {br(lim["calor"], 0)} % do tempo (máxima de {br(mx, 0)} °C). '
                         'Acima disso o chip reduz a velocidade e o FPS cai sozinho.', 'painel', 'alta',
                         'o histórico mostra quando e quanto; poeira, ventoinha e pasta térmica resolvem de verdade', 'nenhum: só leitura', 4, 0))
-    if lim.get('ram', 0) >= 15:
+    if lim.get('ram', 0) >= REGRAS_MOTOR['central_ram']:
         out.append(_sug('jogo-ram', 'A RAM enche durante os jogos',
                         base + f'a RAM passou de 90 % em {br(lim["ram"], 0)} % do tempo. Aí o Windows usa o disco no lugar e o jogo engasga.',
                         'memoria', 'alta', 'mostra quem ocupa a RAM e o que dá para fechar ou tirar da inicialização', 'nenhum: só leitura', 4, 0))
-    if lim.get('vram', 0) >= 20:
+    if lim.get('vram', 0) >= REGRAS_MOTOR['central_vram']:
         out.append(_sug('jogo-vram', 'A memória da placa de vídeo enche nos jogos',
                         base + f'ela ficou acima de 95 % em {br(lim["vram"], 0)} % do tempo. Baixar a qualidade das texturas no jogo tira as travadas.',
                         '', 'média', 'travadas curtas somem', 'texturas menos nítidas', 3, 0, tipo='info'))
-    if lim.get('disco', 0) >= 15:
+    if lim.get('disco', 0) >= REGRAS_MOTOR['central_disco']:
         out.append(_sug('jogo-disco', 'O disco trava seus jogos',
                         base + f'o disco ficou 100 % ocupado em {br(lim["disco"], 0)} % do tempo. Jogo num HD ou disco quase cheio faz isso.',
                         'raiox', 'média', 'o raio-x mostra o tipo de disco, o espaço e quem escreve nele', 'nenhum: só leitura', 3, 0))
-    if not out and lim.get('gpu', 0) >= 40:
+    if not out and lim.get('gpu', 0) >= REGRAS_MOTOR['central_gpu']:
         out.append(_sug('jogo-gpu', 'Seus jogos já usam tudo da placa de vídeo',
                         base + f'ela ficou no limite em {br(lim["gpu"], 0)} % do tempo, com a CPU sobrando. O PC já entrega o máximo dela: '
                         'mais FPS só baixando resolução ou qualidade no jogo (ou ativando DLSS/FSR, se o jogo tiver).',
@@ -124,16 +124,16 @@ def r_jogos_gargalo(ev):
 def r_tempo_real_repouso(ev):
     """Fora de jogo, nos minutos da última semana: CPU ocupada por muito tempo ou RAM sempre cheia."""
     mins = [m for m in (ev.get('minutos') or []) if not m.get('jogo')]
-    if len(mins) < 120:
+    if len(mins) < REGRAS_MOTOR['repouso_minutos_min']:
         return []
     out = []
-    cpu_alta = sum(1 for m in mins if isinstance(m.get('cpu'), (int, float)) and m['cpu'] >= 60)
-    if cpu_alta / len(mins) >= 0.25:
+    cpu_alta = sum(1 for m in mins if isinstance(m.get('cpu'), (int, float)) and m['cpu'] >= REGRAS_MOTOR['repouso_cpu'])
+    if cpu_alta / len(mins) >= REGRAS_MOTOR['repouso_cpu_fracao']:
         out.append(_sug('repouso-cpu', 'Algo mantém a CPU ocupada fora dos jogos',
                         f'Na última semana, sem jogo aberto, a CPU ficou acima de 60 % em {br(100 * cpu_alta / len(mins), 0)} % dos minutos medidos.',
                         'raiox', 'alta', 'o raio-x mostra quem gasta', 'nenhum: só leitura', 3, 0, 'cpu'))
-    ram_alta = sum(1 for m in mins if isinstance(m.get('ram'), (int, float)) and m['ram'] >= 85)
-    if ram_alta / len(mins) >= 0.4:
+    ram_alta = sum(1 for m in mins if isinstance(m.get('ram'), (int, float)) and m['ram'] >= REGRAS_MOTOR['repouso_ram'])
+    if ram_alta / len(mins) >= REGRAS_MOTOR['repouso_ram_fracao']:
         out.append(_sug('repouso-ram', 'A RAM vive cheia', f'Na última semana, a RAM ficou acima de 85 % em {br(100 * ram_alta / len(mins), 0)} % dos minutos medidos.',
                         'memoria', 'alta', 'mostra quem ocupa e o que tirar da inicialização', 'nenhum: só leitura', 3, 0, 'ram'))
     return out

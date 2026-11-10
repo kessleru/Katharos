@@ -5,6 +5,40 @@
 #   minutos.jsonl   uma linha por minuto, 14 dias (o painel desenha as últimas 24 h)
 #   sessoes.jsonl   uma linha por sessão de jogo: quanto tempo, o que ficou no limite (a central de inteligência aprende com elas)
 # O código do executável está em exe/Katharos.cs, e a publicação compila ele no próprio Windows, com assinatura do GitHub.
+# Os limites do motor de inteligência, numa fonte só. O Katharos.exe recebe uma cópia embutida (exe/regras.json, gravada pela montagem)
+# e a de ~/.katharos/regras.json, que o Katharos grava junto com a config: mudar aqui muda o ícone, a central e o raio-x.
+REGRAS_MOTOR = {
+    'versao': 1,
+    # gargalo agora (por leitura): placa de vídeo no limite com a CPU sobrando, e o contrário
+    'gpu_limite': 95, 'gpu_nucleo_folga': 90, 'cpu_nucleo_limite': 95, 'cpu_gpu_folga': 85,
+    # CPU freando: abaixo desta % da frequência normal, com pelo menos esta % de uso
+    'freio_desempenho': 75, 'freio_cpu_min': 40,
+    'ram_cheia': 90, 'vram_cheia': 95, 'disco_cheio': 95, 'calor_cpu': 90, 'calor_gpu': 85,
+    # quanto da janela precisa estar no limite para virar conclusão
+    'janela_s': 30, 'janela_min_leituras': 3, 'fracao_calor': 0.5, 'fracao_freio': 0.6, 'fracao_gargalo': 0.6, 'fracao_vram': 0.6, 'fracao_ram': 0.8, 'fracao_disco': 0.8,
+    'cpu_ocupada': 85, 'fracao_cpu_ocupada': 0.8,
+    # o que conta como jogo aberto e como a sessão fecha
+    'jogo_gpu_min': 20, 'jogo_gpu_ativo': 5, 'jogo_segundos_comecar': 10, 'jogo_segundos_fechar': 30, 'sessao_principal_min': 0.2,
+    # a central, olhando as sessões (% do tempo jogado em cada limite) e os minutos fora de jogo
+    'central_horas_min': 1, 'central_cpu': 25, 'central_freio': 15, 'central_calor': 10, 'central_ram': 15, 'central_vram': 20, 'central_disco': 15,
+    'central_gpu': 40, 'repouso_minutos_min': 120, 'repouso_cpu': 60, 'repouso_cpu_fracao': 0.25, 'repouso_ram': 85, 'repouso_ram_fracao': 0.4,
+}
+
+
+def escreve_regras(destino=None):
+    """Grava os limites para o Katharos.exe ler (relidos a cada minuto)."""
+    try:
+        arq = Path(destino) if destino else CASA / 'regras.json'
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        tmp = arq.with_name(arq.name + '.tmp')
+        tmp.write_text(json.dumps(REGRAS_MOTOR, ensure_ascii=False, indent=1, sort_keys=True) + '\n', encoding='utf-8')
+        os.replace(tmp, arq)
+        return True
+    except OSError as e:
+        LOG.escreve(f'regras: {e!r}')
+        return False
+
+
 EXE_NOME = 'Katharos.exe'
 SP_CONFIG = 'segundo-plano.json'
 SP_MUTEX = 'Local\\KatharosSegundoPlano'
@@ -83,7 +117,8 @@ def config_segundo_plano():
         intervalo = 1.0
     return {'versao': VERSAO, 'ps1': str(ps1), 'py': str(py if not py.name.lower().startswith('pythonw') else py.with_name('python.exe')),
             'pyw': str(pyw) if pyw.exists() else '', 'kpy': str(CASA / 'katharos.py'), 'intervalo_s': intervalo,
-            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'), 'aviso_cpu': 90, 'aviso_gpu': 85,
+            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'),
+            'aviso_cpu': REGRAS_MOTOR['calor_cpu'], 'aviso_gpu': REGRAS_MOTOR['calor_gpu'],
             'nomes_de_jogo': nomes_de_jogo()}
 
 
@@ -93,6 +128,7 @@ def escreve_config_sp():
         tmp = CASA / (SP_CONFIG + '.tmp')
         tmp.write_text(json.dumps(config_segundo_plano(), ensure_ascii=False, indent=1), encoding='utf-8')
         os.replace(tmp, CASA / SP_CONFIG)
+        escreve_regras()
         return True
     except OSError as e:
         LOG.escreve(f'segundo plano: não gravei a config ({e!r})')
