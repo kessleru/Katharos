@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '2.3.0'
+VERSAO = '2.4.0'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -2188,13 +2188,15 @@ $hyperv = [bool](Get-Service vmcompute -ErrorAction SilentlyContinue)
 $docker = [bool](Get-Service com.docker.service -ErrorAction SilentlyContinue) -or (TemProg 'Docker Desktop')
 $fh = [bool](Tenta { (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\FileHistory' -ErrorAction Stop).ProtectedUpToTime })
 $camera = (TemClasse 'Camera') -or (TemClasse 'Image')
-$mdm = [bool](Tenta { Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Enrollments' -ErrorAction Stop | Where-Object { $e = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; $e.ProviderID -and $e.ProviderID -notmatch '^(Local|Sideload)' } | Select-Object -First 1 })
+$mdm = [bool](Tenta { Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Enrollments' -ErrorAction Stop | Where-Object { $e = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+    $e -and $e.ProviderID -eq 'MS DM Server' -and [int]$e.EnrollmentState -eq 1 -and @(6, 13) -contains [int]$e.EnrollmentType -and "$($e.UPN)" -match '@' -and "$($e.DiscoveryServiceFullURL)" } | Select-Object -First 1 })
 $aad = (Tenta { (& dsregcmd.exe /status 2>$null | Out-String) -match 'AzureAdJoined\s*:\s*YES' } $false)
 $gerenciado = $mdm -or $aad -or [bool]$cs.PartOfDomain
+$porque = @(); if ([bool]$cs.PartOfDomain) { $porque += 'domínio ' + [string]$cs.Domain }; if ($aad) { $porque += 'Azure AD (conta de trabalho ou escola)' }; if ($mdm) { $porque += 'gestão remota (MDM, como o Intune)' }
 
 Dado 'perfil' @{
     so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
-    pc = @{ placa = $(if ($placa) { (([string]$placa.Manufacturer).Trim() + ' ' + ([string]$placa.Product).Trim()).Trim() } else { '' }); bios = $(if ($bios) { ([string]$bios.SMBIOSBIOSVersion).Trim() } else { '' }); bios_data = $(if ($bios -and $bios.ReleaseDate) { ([datetime]$bios.ReleaseDate).ToString('yyyy-MM-dd') } else { '' }); fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; bateria = [bool]$bat }
+    pc = @{ placa = $(if ($placa) { (([string]$placa.Manufacturer).Trim() + ' ' + ([string]$placa.Product).Trim()).Trim() } else { '' }); bios = $(if ($bios) { ([string]$bios.SMBIOSBIOSVersion).Trim() } else { '' }); bios_data = $(if ($bios -and $bios.ReleaseDate) { ([datetime]$bios.ReleaseDate).ToString('yyyy-MM-dd') } else { '' }); fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; gerenciado_por = ($porque -join ', '); bateria = [bool]$bat }
     cpu = @{ nome = (([string]$cpu.Name).Trim() -replace '\s+', ' '); nucleos = [int]$cpu.NumberOfCores; threads = [int]$cpu.NumberOfLogicalProcessors; mhz = [int]$cpu.MaxClockSpeed; l3_mb = [math]::Round([double]$cpu.L3CacheSize / 1024, 0); virtualizacao = [bool]$cpu.VirtualizationFirmwareEnabled; fabricante = ([string]$cpu.Manufacturer).Trim() }
     ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = $(if ($null -ne $memDisp) { [math]::Round([math]::Max(0, [double]$os.TotalVisibleMemorySize / 1MB - $memDisp), 1) } else { [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1) }); tipo = $tipoRam; slots = $slots; ocupados = $pentes.Count; pentes = (Lista $pentesL) }
     disco = @{ tipo = $tipoC; barramento = $barC; saude = $saudeC; livre = $livreC; total = $totalC; trim = $trim; modelo = $modeloC; desgaste = $desgC; temperatura = $tempC; horas = $horasC; erros = $errC }
@@ -2305,7 +2307,70 @@ function LeTemperaturas([bool]$GpuTambem = $true) {
 }
 '''
 
-MEDIDAS_PS = TEMP_GPU_PS + TEMP_PS + r'''
+INICIO_PS = r'''
+# o que abre com o Windows, como o Gerenciador de Tarefas vê: registro (Run), pasta Inicializar, apps da Loja e tarefas no logon.
+# ligado: o Gerenciador de Tarefas não marcou como desativado (vale a marca do usuário OU a da máquina).
+# existe: o programa ainda está no disco (entrada de programa desinstalado não abre nada e não conta).
+function _Aprovado([string[]]$Chaves, [string]$Nome) {
+    foreach ($ap in $Chaves) { $b = Tenta { (Get-Item -LiteralPath $ap -ErrorAction Stop).GetValue($Nome) } $null; if ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] % 2) -eq 1) { return $false } }
+    return $true
+}
+function _ExeDe([string]$Cmd) {
+    $c = [Environment]::ExpandEnvironmentVariables($Cmd.Trim())
+    if ($c -match '^"([^"]+)"') { return $Matches[1] }
+    if ($c -match '^(.+?\.(exe|bat|cmd|com|vbs|ps1|lnk))(\s|$)') { return $Matches[1] }
+    return ($c -split '\s+')[0]
+}
+function _Existe([string]$Exe) {
+    if (-not $Exe) { return $false }
+    if ($Exe -notmatch '[\\/]') { return $true }   # só o nome (ctfmon, rundll32...): o Windows acha no PATH
+    return [bool](Test-Path -LiteralPath $Exe -ErrorAction SilentlyContinue)
+}
+function ListaInicio {
+    $r = New-Object System.Collections.Generic.List[object]
+    $base = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\'
+    $runs = @(
+        @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run', @("HKCU:\$($base)Run")),
+        @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run', @("HKLM:\$($base)Run", "HKCU:\$($base)Run")),
+        @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run', @("HKLM:\$($base)Run32", "HKCU:\$($base)Run32")))
+    foreach ($par in $runs) {
+        $it = Tenta { Get-Item -LiteralPath $par[0] -ErrorAction Stop } $null
+        if (-not $it) { continue }
+        foreach ($n in $it.GetValueNames()) {
+            if (-not $n) { continue }
+            $cmd = [string]$it.GetValue($n)
+            if (-not $cmd.Trim()) { continue }
+            $exe = _ExeDe $cmd
+            $r.Add([pscustomobject]@{ tipo = 'run'; nome = $n; cmd = $cmd; exe = $exe; ap = $par[1][0]; ligado = (_Aprovado $par[1] $n); existe = (_Existe $exe) })
+        }
+    }
+    foreach ($par in @(@("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup", @("HKCU:\$($base)StartupFolder")), @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp", @("HKLM:\$($base)StartupFolder", "HKCU:\$($base)StartupFolder")))) {
+        foreach ($f in @(Get-ChildItem -LiteralPath $par[0] -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' })) {
+            $alvo = $f.FullName
+            if ($f.Extension -eq '.lnk') { $alvo = Tenta { (New-Object -ComObject WScript.Shell).CreateShortcut($f.FullName).TargetPath } $f.FullName; if (-not $alvo) { $alvo = $f.FullName } }
+            $r.Add([pscustomobject]@{ tipo = 'pasta'; nome = $f.Name; cmd = $f.FullName; exe = $alvo; ap = $par[1][0]; ligado = (_Aprovado $par[1] $f.Name); existe = (_Existe $alvo) })
+        }
+    }
+    # apps da Loja: só os que ainda estão instalados (o registro guarda o estado de apps que já saíram)
+    $inst = @{}; foreach ($pk in @(Tenta { Get-AppxPackage -ErrorAction Stop } @())) { $inst[[string]$pk.PackageFamilyName] = $true }
+    $sa = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData'
+    foreach ($pkg in @(Get-ChildItem -LiteralPath $sa -ErrorAction SilentlyContinue)) {
+        if ($inst.Count -and -not $inst.ContainsKey($pkg.PSChildName)) { continue }
+        foreach ($tk in @(Get-ChildItem -LiteralPath $pkg.PSPath -ErrorAction SilentlyContinue | Where-Object { $null -ne (Get-ItemProperty -LiteralPath $_.PSPath -Name State -ErrorAction SilentlyContinue) })) {
+            $st = (Get-ItemProperty -LiteralPath $tk.PSPath -Name State).State
+            $r.Add([pscustomobject]@{ tipo = 'loja'; nome = ($pkg.PSChildName -replace '_.*$', '') + ' (' + $tk.PSChildName + ')'; cmd = $pkg.PSChildName; exe = ''; ap = $tk.PSPath; ligado = ($st -eq 2 -or $st -eq 4); existe = $true })
+        }
+    }
+    # tarefas agendadas no logon, fora as do Windows e as do próprio Katharos
+    foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notmatch '^\\Microsoft\\' -and $_.TaskName -notmatch '^Katharos' -and @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled -ne $false }).Count -gt 0 })) {
+        $exe = [Environment]::ExpandEnvironmentVariables((@($tk.Actions | ForEach-Object { [string]$_.Execute }) | Select-Object -First 1))
+        $r.Add([pscustomobject]@{ tipo = 'tarefa'; nome = $tk.TaskName; cmd = (@($tk.Actions | ForEach-Object { [string]$_.Execute }) -join ' '); exe = $exe; ap = ($tk.TaskPath + $tk.TaskName); ligado = $true; existe = (_Existe ($exe.Trim('"'))) })
+    }
+    return ,$r.ToArray()
+}
+'''
+
+MEDIDAS_PS = TEMP_GPU_PS + TEMP_PS + INICIO_PS + r'''
 $os = Get-CimInstance Win32_OperatingSystem
 $amostras = @()
 for ($i = 0; $i -lt 4; $i++) {
@@ -2324,17 +2389,8 @@ $vramUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformance
 $boot = Tenta { $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction Stop; [int](([xml]$e.ToXml()).Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text' } $null
 $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $mem = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop } $null
-$run = 0
-foreach ($par in @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run','HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'), @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'), @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32'))) {
-    $it = Tenta { Get-Item $par[0] -ErrorAction Stop } $null
-    $ap = Tenta { Get-Item $par[1] -ErrorAction Stop } $null
-    if (-not $it) { continue }
-    foreach ($n in $it.GetValueNames()) { if (-not $n) { continue }; $b = $null; if ($ap) { $b = $ap.GetValue($n) }; if (-not ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] % 2) -eq 1)) { $run++ } }
-}
-foreach ($par in @(@("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup", 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder'), @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp", 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder'))) {
-    $ap = Tenta { Get-Item $par[1] -ErrorAction Stop } $null
-    foreach ($f in @(Get-ChildItem -LiteralPath $par[0] -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' })) { $b = $null; if ($ap) { $b = $ap.GetValue($f.Name) }; if (-not ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] % 2) -eq 1)) { $run++ } }
-}
+$li = ListaInicio
+$run = @($li | Where-Object { $_.ligado -and $_.existe }).Count
 Dado 'medidas' @{
     data = (Get-Date).ToString('s')
     uptime_h = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalHours, 2)
@@ -2571,6 +2627,16 @@ Start-Sleep -Seconds 4
 $nucleos = [Environment]::ProcessorCount
 $top = foreach ($p in Get-Process) { try { if ($a.ContainsKey($p.Id)) { [pscustomobject]@{ n = $p.ProcessName; cpu = [math]::Round(($p.TotalProcessorTime.TotalMilliseconds - $a[$p.Id]) / 40 / $nucleos, 1); mb = [math]::Round($p.WorkingSet64 / 1MB) } } } catch {} }
 $porNome = $top | Group-Object n | ForEach-Object { [pscustomobject]@{ n = $_.Name; cpu = [math]::Round(($_.Group | Measure-Object cpu -Sum).Sum, 1); mb = [math]::Round(($_.Group | Measure-Object mb -Sum).Sum); qtd = $_.Count } }
+# quem é cada um: a descrição e a empresa que o próprio arquivo do programa declara (o mesmo que o Gerenciador de Tarefas mostra).
+# Path usa a consulta limitada do Windows (a do Gerenciador de Tarefas); a descrição é lida do arquivo, não do processo.
+$inf = @{}
+foreach ($x in @(@($porNome | Sort-Object cpu -Descending | Select-Object -First 8) + @($porNome | Sort-Object mb -Descending | Select-Object -First 8))) {
+    if (-not $x -or $inf.ContainsKey($x.n)) { continue }
+    $cam = Tenta { (Get-Process -Name $x.n -ErrorAction Stop | Where-Object { $_.Path } | Select-Object -First 1).Path } $null
+    $vi = $null; if ($cam) { $vi = Tenta { [Diagnostics.FileVersionInfo]::GetVersionInfo($cam) } $null }
+    $inf[$x.n] = @{ desc = $(if ($vi) { ([string]$vi.FileDescription).Trim() } else { '' }); emp = $(if ($vi) { ([string]$vi.CompanyName).Trim() } else { '' }); pasta = $(if ($cam) { Split-Path $cam -Parent } else { '' }) }
+}
+$porNome = @($porNome | ForEach-Object { $i = $inf[$_.n]; if ($i) { $_ | Add-Member -NotePropertyName desc -NotePropertyValue $i.desc -PassThru | Add-Member -NotePropertyName emp -NotePropertyValue $i.emp -PassThru | Add-Member -NotePropertyName pasta -NotePropertyValue $i.pasta -PassThru } else { $_ } })
 Dado 'top_cpu' (Lista ($porNome | Sort-Object cpu -Descending | Select-Object -First 8))
 Dado 'top_ram' (Lista ($porNome | Sort-Object mb -Descending | Select-Object -First 8))
 
@@ -3042,7 +3108,7 @@ def raiox_dados(p, m, d, achados, queixas):
         'inicializacao': [f'{i.get("nome")} ({i.get("onde")})' for i in lista(d.get('inicializacao'))],
         'boot': [f'{b.get("tipo")}: {b.get("nome")}, {br(b.get("s"), 1)} s em média ({b.get("vezes")}x)' for b in lista(d.get('boot'))],
         'top': [[x.get('n'), f'{br(x.get("cpu"), 1)}%', f'{x.get("mb")} MB'] for x in lista(d.get('top_ram'))],
-        'nao_reconhecidos': [str(x.get('n')) for x in lista(d.get('top_cpu')) + lista(d.get('top_ram')) if not quem_e(x.get('n'))][:12],
+        'nao_reconhecidos': [str(x.get('n')) for x in lista(d.get('top_cpu')) + lista(d.get('top_ram')) if not quem_e(x.get('n')) and not x.get('desc')][:12],
         'hardware': {'pentes': lista(pf(p, 'ram.pentes')), 'video': lista(pf(p, 'video')), 'tela': pf(p, 'tela'), 'trim': pf(p, 'disco.trim')},
         'programas': [str(x) for x in lista(d.get('programas'))][:300],
         'bios': f'{saude.get("bios", "")} {str(saude.get("bios_data", ""))[:10]}'.strip(),
@@ -3094,7 +3160,7 @@ def ferramenta_raiox(ctx, args):
     if tops:
         t.titulo('quem mais gasta agora')
         t.tabela(['processo', 'CPU', 'RAM', 'o que é'],
-                 [[str(x.get('n')), br(x.get('cpu'), 1) + '%', f'{x.get("mb")} MB', (quem_e(x.get('n')) or ('não conheço este',))[0]] for x in tops],
+                 [[str(x.get('n')), br(x.get('cpu'), 1) + '%', f'{x.get("mb")} MB', o_que_e(x)] for x in tops],
                  alinha='edde')
 
     nomes = dict(QUEIXAS)
@@ -3268,13 +3334,26 @@ PROCESSOS = {
 }
 
 
+def o_que_e(x):
+    """O que é um processo do raio-x: o que o Katharos conhece; se não conhece, o que o próprio arquivo declara (descrição e empresa)."""
+    q = quem_e(x.get('n'))
+    if q:
+        return q[0]
+    desc, emp = str(x.get('desc') or '').strip(), str(x.get('emp') or '').strip()
+    if desc and emp and emp.lower() not in desc.lower():
+        return f'{desc}, de {emp}'
+    if desc or emp:
+        return desc or f'um programa de {emp}'
+    return 'não conheço este'
+
+
 def explica_processos(lista_proc, campo, unidade, limite=3):
     """'chrome 12% (o Google Chrome), xyz 4%': os primeiros de uma lista do raio-x, com o que cada um é."""
     partes = []
     for x in lista_proc[:limite]:
-        q = quem_e(x.get('n'))
+        q = o_que_e(x)
         valor = f'{br(x.get(campo), 1 if unidade == "%" else 0)}{" " if unidade != "%" else ""}{unidade}'
-        partes.append(f'{x.get("n")} {valor}' + (f' ({q[0]})' if q else ''))
+        partes.append(f'{x.get("n")} {valor}' + (f' ({q})' if q != 'não conheço este' else ''))
     return ', '.join(partes)
 # ──────────────────────────────────────────────────────────────────────────────
 # O dicionário grande: mais processos conhecidos, por família. Cada linha: (nomes, o que é, o que fazer, comando).
@@ -3703,13 +3782,43 @@ def _detalhe_item(t, it):
         t.paragrafo('não volta com o "desfazer" (reinstale se precisar)', 8, 'apagado')
 
 
+def confere_itens(ctx, itens, pacote_=None):
+    """Antes de aplicar: roda os itens em modo teste (nada muda) e marca em cada um it.ja = True (o PC já está assim),
+    False (ainda falta) ou None (não dá para conferir sem aplicar: itens de Python, que rodam sozinhos, ou que deram erro).
+    Guarda em ctx.ja para não conferir duas vezes na mesma sessão."""
+    cache = getattr(ctx, 'ja', None)
+    if cache is None:
+        cache = ctx.ja = {}
+    vs = []
+    for i in itens:
+        chave = (pacote_ or getattr(i, 'pacote', None) or '', i.id)
+        if chave in cache:
+            i.ja = cache[chave]
+            continue
+        i.ja = None
+        if i.ps and not i.py and not i.sozinho:
+            vs.append((chave, i))
+    if not WINDOWS or not vs:
+        return
+    corpo = '\n'.join('$__p = $script:PLANOS; $__e = $false\ntry {\n' + i.ps + '\n} catch { $__e = $true }\n'
+                      'Dado ' + psq('ja:' + i.id) + ' $(if ($__e) { $null } else { $script:PLANOS -eq $__p })' for _, i in vs)
+    s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(vs) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
+    for chave, i in vs:
+        v = s.dados.get('ja:' + i.id)
+        i.ja = v if isinstance(v, bool) else None
+        cache[chave] = i.ja
+
+
 def _linha_item(t, it, i):
     """Uma linha por item: marca, número e nome. Depois do nome, em palavras, o que pede atenção: "tem aviso" e "sem volta"."""
-    marca = t.p('✓', 'verde', True) if it.marcado else t.p('○', 'apagado')
+    ja = getattr(it, 'ja', None) is True
+    marca = t.p('✓', 'verde', True) if it.marcado else (t.p('●', 'verde') if ja else t.p('○', 'apagado'))
     extras = [x for x in (('tem aviso' if it.alerta else ''), ('' if it.reverte else 'sem volta')) if x]
     cauda = ''.join(' · ' + x for x in extras)
-    nome = corta(it.titulo, max(10, t.largura - 9 - len(cauda)))
-    return f'  {marca} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if it.marcado else "sub")}{t.p(cauda, "amarelo")}'
+    feito = ' · já feito' if ja else ''
+    nome = corta(it.titulo, max(10, t.largura - 9 - len(cauda) - len(feito)))
+    return (f'  {marca} {t.p(f"{i:>2}", "destaque", True)}  {t.p(nome, "texto" if it.marcado else "sub")}'
+            f'{t.p(feito, "verde")}{t.p(cauda, "amarelo")}')
 
 
 def ordem_de_tela(itens, agrupar=True):
@@ -3774,11 +3883,21 @@ def escolhe_itens(ctx, itens, modo, args, titulo='o que fazer', manter_marcas=Fa
     ou None se voltou. A explicação de um item aparece com "? número" (ou de todos, com "c").
     agrupar=False para listas que não são itens de um pacote (as etapas do turbo)."""
     t = ctx.t
+    if agrupar and WINDOWS and any(i.ps for i in itens):
+        t.nota('  conferindo o que já está feito neste PC (nada muda)…')
+        confere_itens(ctx, itens)
     if not manter_marcas:
         marca_por_modo(itens, modo)
+        for i in itens:   # o que o PC já tem não vem marcado: aplicar de novo não muda nada
+            if getattr(i, 'ja', None) is True:
+                i.marcado = False
+    n_ja = sum(getattr(i, 'ja', None) is True for i in itens)
     completa = config('explicacao') == 'completa'
     originais, itens = itens, ordem_de_tela(itens, agrupar)   # a tela numera pelos grupos; a aplicação segue a ordem original
-    t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}' + (f' · o modo {modo} marcou {sum(i.marcado for i in itens)}' if not manter_marcas else ''))
+    t.titulo(f'{titulo} · {pl(len(itens), "item", "itens")}' + (f' · {n_ja} já feitos' if n_ja else '')
+             + (f' · o modo {modo} marcou {sum(i.marcado for i in itens)}' if not manter_marcas else ''))
+    if n_ja and not manter_marcas:
+        t.nota(f'  {pl(n_ja, "item já está feito", "itens já estão feitos")} neste PC (● verde): não vêm marcados.')
     interativo = t.interativo and not getattr(args, 'sim', False)
     desenha_itens(t, itens, completa, zero='voltar' if interativo else '', agrupar=agrupar)
     if not interativo:
@@ -4986,35 +5105,8 @@ Desliga-Tarefas '\\Microsoft\\Office\\Office Actions Server' | Out-Null''',
 
 # ═══════════════════════════════ inicialização ═══════════════════════════════
 
-LISTA_INICIO_PS = r'''
-$__r = New-Object System.Collections.Generic.List[object]
-$__ap = @{
-  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-  'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run' = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32'
-}
-function _Ligado([string]$Ap, [string]$Nome) { $b = Tenta { (Get-Item -LiteralPath $Ap -ErrorAction Stop).GetValue($Nome) } $null; if ($b -is [byte[]] -and $b.Length -gt 0) { return (($b[0] % 2) -eq 0) }; return $true }
-foreach ($k in $__ap.Keys) {
-  $it = Tenta { Get-Item -LiteralPath $k -ErrorAction Stop } $null
-  if (-not $it) { continue }
-  foreach ($n in $it.GetValueNames()) { if ($n) { $__r.Add([pscustomobject]@{ tipo = 'run'; nome = $n; cmd = [string]$it.GetValue($n); ap = $__ap[$k]; ligado = (_Ligado $__ap[$k] $n) }) } }
-}
-foreach ($par in @(@("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup", 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder'), @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp", 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder'))) {
-  foreach ($f in @(Get-ChildItem -LiteralPath $par[0] -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' })) {
-    $__r.Add([pscustomobject]@{ tipo = 'pasta'; nome = $f.Name; cmd = $f.FullName; ap = $par[1]; ligado = (_Ligado $par[1] $f.Name) })
-  }
-}
-$__sa = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData'
-foreach ($pkg in @(Get-ChildItem -LiteralPath $__sa -ErrorAction SilentlyContinue)) {
-  foreach ($tk in @(Get-ChildItem -LiteralPath $pkg.PSPath -ErrorAction SilentlyContinue | Where-Object { $null -ne (Get-ItemProperty -LiteralPath $_.PSPath -Name State -ErrorAction SilentlyContinue) })) {
-    $st = (Get-ItemProperty -LiteralPath $tk.PSPath -Name State).State
-    $__r.Add([pscustomobject]@{ tipo = 'loja'; nome = ($pkg.PSChildName -replace '_.*$', '') + ' (' + $tk.PSChildName + ')'; cmd = $pkg.PSChildName; ap = $tk.PSPath; ligado = ($st -eq 2 -or $st -eq 4) })
-  }
-}
-foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notmatch '^\\Microsoft\\' -and @($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' }).Count -gt 0 })) {
-  $__r.Add([pscustomobject]@{ tipo = 'tarefa'; nome = $tk.TaskName; cmd = (@($tk.Actions | ForEach-Object { [string]$_.Execute }) -join ' '); ap = ($tk.TaskPath + $tk.TaskName); ligado = $true })
-}
-Dado 'inicio' (Lista $__r.ToArray())
+LISTA_INICIO_PS = INICIO_PS + r'''
+Dado 'inicio' (Lista (ListaInicio))
 '''
 
 # (padrão no nome ou comando, nível, por quê). O primeiro que casar vale.
@@ -5129,7 +5221,7 @@ def itens_inicializacao(ctx):
     impactos = {}
     exes = {}
     for e in lista(s.dados.get('inicio')):
-        if e.get('ligado'):
+        if e.get('ligado') and e.get('existe') is not False:
             exes[e.get('nome', '')] = re.sub(r'^"([^"]+)".*$', r'\1', e.get('cmd', '')).split(' -')[0]
     boot = []
     if exes and WINDOWS:
@@ -5139,7 +5231,7 @@ def itens_inicializacao(ctx):
         r = roda_ps(ctx.t, ps_monta(ASSINATURA_PS, lista=ps_lista(sorted(set(exes.values())))), 'assinaturas', minutos=3, mostra=False)
         assin = {x.get('exe'): x for x in lista(r.dados.get('assinaturas')) if isinstance(x, dict)}
     for e in lista(s.dados.get('inicio')):
-        if not e.get('ligado'):
+        if not e.get('ligado') or e.get('existe') is False:   # programa que já saiu do PC não abre nada
             continue
         nome, cmd, tipo = e.get('nome', ''), e.get('cmd', ''), e.get('tipo')
         nivel, porque = _classe_inicio(nome, cmd)
@@ -6894,7 +6986,8 @@ def cuidado_empresa(ctx, args, pac):
     modo = getattr(args, 'modo', None) or config('modo')
     if not pc_gerenciado(ctx.perfil or {}) or pac.nome in ('limpar', 'reparar', 'grandes'):
         return True, modo
-    t.aviso('Este PC parece ser gerenciado por uma empresa ou escola (domínio, Intune ou conta de trabalho). A organização pode '
+    porque = pf(ctx.perfil or {}, 'pc.gerenciado_por') or 'domínio, Intune ou conta de trabalho'
+    t.aviso(f'Este PC é gerenciado por uma empresa ou escola ({porque}). A organização pode '
             'desfazer estas mudanças, e mexer em serviços e políticas pode violar a política de TI.')
     if not getattr(args, 'modo', None) and modo != 'seguro':
         modo = 'seguro'
@@ -6980,6 +7073,52 @@ def verifica_pacote(ctx, nome, ids=None):
         return []
     s = roda_ps(ctx.t, '\n'.join(_envolve(i) for i in its), f'verifica-{nome}', minutos=8, teste=True, mostra=False, mult=ctx.mult)
     return list(s.planos)
+
+
+def ferramenta_aplicado(ctx, args):
+    """A lista do que este PC já tem, área por área: confere item por item em modo teste (nada muda)."""
+    t = ctx.t
+    t.aba('o que já está feito neste PC, área por área (feito pelo Katharos, por você ou por outro programa)')
+    t.paragrafo('Cada ajuste é conferido do jeito que seria aplicado, só que sem gravar nada: se o PC já está como o ajuste deixaria, '
+                'ele conta como feito. Ajustes que só dá para saber aplicando (remover apps, limpar) ficam de fora.', 2, 'sub')
+    if not precisa_admin(ctx, args):
+        return 1
+    perfil_pc(ctx)
+    reg = estado().get('pacotes') or {}
+    areas = [n for n in REAPLICA if n in PACOTES]
+    res = []
+    with Progresso(t, len(areas), 'conferindo') as pr:
+        for n in areas:
+            pr.atual = PACOTES[n].titulo
+            its = [i for i in (PACOTES[n].itens(ctx) or []) if i]
+            for i in its:
+                i.pacote = n
+            its, _ = aplica_protegidos(n, its)
+            confere_itens(ctx, its, n)
+            res.append((n, its))
+            pr.avanca(PACOTES[n].titulo)
+    tot_ja = tot_falta = 0
+    for n, its in res:
+        ja = [i for i in its if i.ja is True]
+        falta = [i for i in its if i.ja is False]
+        tot_ja, tot_falta = tot_ja + len(ja), tot_falta + len(falta)
+        if not ja and not falta:
+            continue
+        pelo = set((reg.get(n) or {}).get('itens', [])) if not (reg.get(n) or {}).get('revertido') else set()
+        t.titulo(f'{PACOTES[n].titulo} · {len(ja)} de {len(ja) + len(falta)} feitos')
+        for i in ja:
+            t.escreve('  ' + t.p('✓', 'verde', True) + ' ' + t.p(corta(i.titulo, t.largura - 24), 'texto')
+                      + t.p('  pelo Katharos' if i.id in pelo else '  já estava assim', 'apagado'))
+        for i in falta:
+            nv = {1: 'seguro', 2: 'equilibrado', 3: 'extremo'}.get(i.nivel, 'opcional')
+            t.escreve('  ' + t.p('○', 'apagado') + ' ' + t.p(corta(i.titulo, t.largura - 24), 'sub') + t.p(f'  falta ({nv})', 'apagado'))
+    t.titulo('resumo', caixa=True)
+    t.chaves([('já feitos', t.p(str(tot_ja), 'verde')), ('faltam', str(tot_falta))])
+    t.fecha_caixa()
+    if tot_falta:
+        t.nota('  para fazer o que falta: katharos turbo (ou abra a área, como katharos privacidade). O que já está feito não vem marcado.')
+    rel_eventos([{'tipo': 'aplicado', 'texto': f'{tot_ja} ajustes já feitos, {tot_falta} faltando'}])
+    return 0
 
 
 def ferramenta_verificar(ctx, args):
@@ -7478,6 +7617,8 @@ def selecao_do_perfil(ctx, selecao):
         if nome not in PACOTES:
             continue
         its = [i for i in (PACOTES[nome].itens(ctx) or []) if i]
+        for i in its:
+            i.pacote = nome
         if isinstance(ids, str):
             if not ids.startswith('@') or ids[1:] not in MODOS:
                 continue
@@ -7507,6 +7648,8 @@ def personaliza_selecao(ctx, args, selecao):
         if nome not in PACOTES:
             continue
         its = [i for i in (PACOTES[nome].itens(ctx) or []) if i]
+        for i in its:
+            i.pacote = nome
         quer = {str(x) for x in ids} if not isinstance(ids, str) else {i.id for i in its if ids.startswith('@') and ids[1:] in MODOS
                                                                          and (i.nivel and i.nivel <= NIVEL_MODO[ids[1:]])}
         for i in its:
@@ -7535,6 +7678,8 @@ def personaliza_selecao(ctx, args, selecao):
             t.aviso(f'"{corta(r, 20)}" não é um pacote da lista.')
             continue
         its = [i for i in (PACOTES[nome].itens(ctx) or []) if i]
+        for i in its:
+            i.pacote = nome
         ja = set(nova.get(nome, []))
         for i in its:
             i.marcado = i.id in ja
@@ -9144,10 +9289,31 @@ def ferramenta_turbo(ctx, args):
     else:
         plano['etapas'] += ['medir-depois']
 
+    # antes de mostrar o plano: o que de cada etapa este PC já tem (modo teste, nada muda)
+    resumo_ja = {}
+    etapas_pac = [e for e in plano['etapas'] if e in PACOTES]
+    if WINDOWS and etapas_pac and not args.teste:
+        with Progresso(t, len(etapas_pac), 'conferindo o que já está feito') as pr:
+            for e in etapas_pac:
+                pr.atual = PACOTES[e].titulo
+                its = _itens_da_etapa(ctx, plano, e, filtra_ja=False)
+                confere_itens(ctx, its, e)
+                resumo_ja[e] = (sum(getattr(x, 'ja', None) is True for x in its), len(its))
+                pr.avanca(PACOTES[e].titulo)
+
     def mostra_plano():
         t.titulo('plano')
-        t.passos([('pendente', e if e not in PACOTES else PACOTES[e].titulo,
-                   ('' if e not in plano['itens'] else pl(len(plano['itens'][e]), 'item', 'itens'))) for e in plano['etapas']])
+        def det(e):
+            if e in plano['itens']:
+                return pl(len(plano['itens'][e]), 'item', 'itens')
+            if e in resumo_ja:
+                ja, tot = resumo_ja[e]
+                if tot and ja == tot:
+                    return 'tudo já feito: pula'
+                return f'{tot - ja} a fazer' + (f', {ja} já feitos' if ja else '')
+            return ''
+        t.passos([('ok' if e in resumo_ja and resumo_ja[e][1] and resumo_ja[e][0] == resumo_ja[e][1] else 'pendente',
+                   e if e not in PACOTES else PACOTES[e].titulo, det(e)) for e in plano['etapas']])
 
     def revisa():
         for i in escolhidos:
@@ -9155,6 +9321,8 @@ def ferramenta_turbo(ctx, args):
                 t.titulo(f'revisar: {PACOTES[i.id].titulo}')
                 t.paragrafo(PACOTES[i.id].explica, 2, 'sub')
                 its = [x for x in (PACOTES[i.id].itens(ctx) or []) if x]
+                for x in its:
+                    x.pacote = i.id
                 if not its:
                     t.nota('nada a fazer aqui neste PC.')
                     continue
@@ -9198,15 +9366,22 @@ def ferramenta_turbo(ctx, args):
     return executa_turbo(ctx, args, plano)
 
 
-def _itens_da_etapa(ctx, plano, etapa):
+def _itens_da_etapa(ctx, plano, etapa, filtra_ja=True):
     its = [x for x in (PACOTES[etapa].itens(ctx) or []) if x]
+    for x in its:
+        x.pacote = etapa
     its, _ = aplica_protegidos(etapa, its)
     aplica_alertas(etapa, its)
     if etapa in plano.get('itens', {}):
         ids = set(plano['itens'][etapa])
-        return [x for x in its if x.id in ids]
-    marca_por_modo(its, plano['modo'])
-    return [x for x in its if x.marcado]
+        its = [x for x in its if x.id in ids]
+    else:
+        marca_por_modo(its, plano['modo'])
+        its = [x for x in its if x.marcado]
+    if filtra_ja:   # o que já foi conferido como feito nesta sessão não roda de novo
+        cache = getattr(ctx, 'ja', None) or {}
+        its = [x for x in its if cache.get((etapa, x.id)) is not True]
+    return its
 
 
 def executa_turbo(ctx, args, plano):
@@ -13481,6 +13656,7 @@ GRUPOS = [
         ('socorro', 'o PC ficou estranho: volta tudo de uma vez', 'ferramenta_socorro'),
         ('retomar', 'termina o que ficou pela metade', 'ferramenta_retomar'),
         ('restaurar', 'pontos de restauração do Windows', 'ferramenta_restaurar'),
+        ('aplicado', 'a lista do que este PC já tem feito, área por área', 'ferramenta_aplicado'),
         ('verificar', 'confere se o que foi aplicado continua valendo', 'ferramenta_verificar'),
         ('estado', 'o que já foi aplicado neste PC', 'ferramenta_estado'),
     ]),
@@ -13536,7 +13712,7 @@ COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (--parar tira)', 'ferramenta_bandeja')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'bandeja', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'aplicado', 'bandeja', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 def roda_ferramenta(ctx, args, abre=True):
@@ -13662,6 +13838,7 @@ def monta_parser():
     org.add_argument('--atalhos', action='store_true', help='também junta os atalhos numa pasta')
     org.add_argument('--desfazer', action='store_true', help='põe de volta o que a última organização moveu')
     sub.add_parser('steam', parents=[depois], help='Steam e CS2: só lê e orienta, sem tocar nos jogos')
+    sub.add_parser('aplicado', parents=[depois], help='a lista do que este PC já tem feito, área por área')
     sub.add_parser('verificar', parents=[depois], help='confere se o que foi aplicado continua valendo')
     sub.add_parser('cartao', parents=[depois], help='antes e depois, num cartão')
     re_ = sub.add_parser('relatorio', parents=[depois], help='o relatório único: copiar, salvar ou apagar')

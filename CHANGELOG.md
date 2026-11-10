@@ -18,6 +18,16 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.4.0 · 10 de novembro de 2026
+
+O Katharos sabe o que já está feito no PC antes de mexer.
+
+- **Já feito antes de aplicar**: antes de cada lista de ajustes, o Katharos confere item por item em modo teste (nada muda). O que o PC já tem aparece com ● verde e "já feito" e não vem marcado. No turbo, o plano mostra quantos ajustes de cada etapa faltam e quantos já estão feitos; etapa toda feita é pulada.
+- **Lista do que já está aplicado** (`aplicado`): área por área, cada ajuste feito (pelo Katharos ou que já estava assim) e o que falta, com o nível de cada um.
+- **Inicialização certa**: não conta mais programa que já foi desinstalado, app da Loja que saiu do PC, nem as tarefas do próprio Katharos; e respeita o "desativado" do Gerenciador de Tarefas guardado no usuário ou na máquina. Atalhos da pasta Inicializar são conferidos pelo programa para onde apontam.
+- **PC de empresa só quando é**: domínio, Azure AD ou gestão remota com conta de trabalho. A conta pessoal da Microsoft deixava rastro parecido e dava aviso falso. O aviso agora diz o motivo.
+- **Processos**: quem o Katharos não conhece aparece com a descrição e a empresa que o próprio arquivo declara, como no Gerenciador de Tarefas.
+
 ## 2.3.0 · 10 de novembro de 2026
 
 Identificação do PC mais completa e segundo plano mais esperto.

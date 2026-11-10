@@ -622,6 +622,33 @@ class TestBenchmark(unittest.TestCase):
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
 
 
+class TestJaFeito(unittest.TestCase):
+    def test_confere_marca_o_que_ja_esta_feito_e_nao_marca_de_novo(self):
+        a = k.Item('a', 'A', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'a' 1")
+        b = k.Item('b', 'B', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'b' 1")
+        c = k.Item('c', 'C', 'x', nivel=1, py=lambda *x: None)
+        s = k.Saida(); s.dados = {'ja:a': True, 'ja:b': False}
+        ctx = mock.Mock(t=mock.Mock(), mult=1.0, ja=None)
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s) as r:
+            k.confere_itens(ctx, [a, b, c], 'x')
+            self.assertTrue(r.call_args.kwargs.get('teste'), 'a conferência roda em modo teste: nada muda')
+        self.assertIs(a.ja, True); self.assertIs(b.ja, False); self.assertIsNone(c.ja)
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps') as r:
+            k.confere_itens(ctx, [a, b], 'x')
+            r.assert_not_called()   # a mesma sessão não confere duas vezes
+
+    def test_inicializacao_ignora_programa_que_saiu_e_marca_dupla(self):
+        self.assertIn('existe', k.INICIO_PS)
+        self.assertIn('Get-AppxPackage', k.INICIO_PS, 'app da Loja desinstalado não conta')
+        self.assertIn("-notmatch '^Katharos'", k.INICIO_PS, 'as tarefas do próprio Katharos não contam')
+        self.assertIn('ListaInicio', k.MEDIDAS_PS)
+
+    def test_pc_de_empresa_so_com_gestao_de_verdade(self):
+        self.assertIn("'MS DM Server'", k.PERFIL_PS)
+        self.assertIn('EnrollmentState', k.PERFIL_PS)
+        self.assertIn('gerenciado_por', k.PERFIL_PS)
+
+
 class TestBandeja(unittest.TestCase):
     def test_icone_le_a_ultima_amostra_e_roda_sem_administrador(self):
         self.assertIn('NotifyIcon', k.BANDEJA_PS)
