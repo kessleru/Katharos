@@ -18,6 +18,14 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.2.0 · 10 de novembro de 2026
+
+Ícone perto do relógio, leituras mais certas e o terminal com a cara da landing.
+
+- **Ícone na bandeja** (`bandeja`): com o modo contínuo ligado, o Katharos mostra um ícone perto do relógio. Clicar abre o menu com CPU, RAM, disco e temperatura da CPU e da GPU da última leitura, e atalhos: abrir o Katharos, o painel, o raio-x, medir agora, pausar a leitura por 1 hora, abrir a pasta dos dados e desfazer. Avisa uma vez por hora se passar de 90 °C. O ícone não mede nada sozinho e roda como o seu usuário, sem administrador. `bandeja --parar` tira.
+- **Leituras como o Gerenciador de Tarefas**: CPU pela utilidade (conta o turbo), RAM em uso sem a memória em espera (antes parecia quase cheia) e disco pelo tempo ativo (antes podia passar de 100 %).
+- **Tema novo do terminal**: o mesmo da landing, fundo quase preto, texto cor de osso e destaque âmbar. Em terminal de fundo claro, o tema Pergaminho. A janela do Katharos abre já com o fundo escuro.
+
 ## 2.1.0 · 10 de novembro de 2026
 
 Temperatura da CPU e da GPU em mais PCs.

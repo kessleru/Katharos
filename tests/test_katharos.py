@@ -622,6 +622,31 @@ class TestBenchmark(unittest.TestCase):
         self.assertEqual(list(d.glob('*')), [], 'o arquivo de teste tem de ser apagado')
 
 
+class TestBandeja(unittest.TestCase):
+    def test_icone_le_a_ultima_amostra_e_roda_sem_administrador(self):
+        self.assertIn('NotifyIcon', k.BANDEJA_PS)
+        self.assertIn('Local\\KatharosBandeja', k.BANDEJA_PS, 'um ícone só por sessão')
+        self.assertNotIn('Get-CimInstance', k.BANDEJA_PS, 'o ícone não mede nada: só lê o arquivo da amostra')
+        fonte = Path(k.__file__).read_text(encoding='utf-8')
+        trecho = fonte[fonte.index('def instala_bandeja'):fonte.index('def remove_bandeja')]
+        self.assertIn('-RunLevel Limited', trecho)
+        self.assertIn('pythonw.exe', trecho)
+
+    def test_ultima_amostra_e_pausa(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)):
+            k.grava_ultima_amostra({'cpu': 12.0, 'temp': 47})
+            import json
+            a = json.loads((Path(d) / k.ULTIMA_AMOSTRA).read_text(encoding='utf-8'))
+            self.assertEqual(a['cpu'], 12.0)
+            self.assertIn('quando', a)
+            self.assertFalse(k.leitura_pausada())
+            (Path(d) / k.PAUSA_ARQ).write_text('2999-01-01T00:00:00', encoding='ascii')
+            self.assertTrue(k.leitura_pausada())
+            (Path(d) / k.PAUSA_ARQ).write_text('2000-01-01T00:00:00', encoding='ascii')
+            self.assertFalse(k.leitura_pausada())
+
+
 class TestSegundoPlano(unittest.TestCase):
     def test_recente_h(self):
         from datetime import datetime, timedelta
