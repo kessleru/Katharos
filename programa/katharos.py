@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '2.4.0'
+VERSAO = '2.5.0'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -2619,7 +2619,7 @@ def ferramenta_medir(ctx, args):
 
 # ─────────────── raio-x: diagnóstico completo ───────────────
 
-DIAG_PS = r'''
+DIAG_PS = INICIO_PS + r'''
 $dias60 = (Get-Date).AddDays(-60)
 Vivo 'processos que mais gastam'
 $a = @{}; foreach ($p in Get-Process) { try { $a[$p.Id] = $p.TotalProcessorTime.TotalMilliseconds } catch {} }
@@ -2629,8 +2629,12 @@ $top = foreach ($p in Get-Process) { try { if ($a.ContainsKey($p.Id)) { [pscusto
 $porNome = $top | Group-Object n | ForEach-Object { [pscustomobject]@{ n = $_.Name; cpu = [math]::Round(($_.Group | Measure-Object cpu -Sum).Sum, 1); mb = [math]::Round(($_.Group | Measure-Object mb -Sum).Sum); qtd = $_.Count } }
 # quem é cada um: a descrição e a empresa que o próprio arquivo do programa declara (o mesmo que o Gerenciador de Tarefas mostra).
 # Path usa a consulta limitada do Windows (a do Gerenciador de Tarefas); a descrição é lida do arquivo, não do processo.
+# cuidado com ban: com um anti-cheat rodando (jogo aberto), nem esta consulta leve é feita; os nomes bastam
 $inf = @{}
+$antiCheat = @('easyanticheat', 'easyanticheat_eos', 'beservice', 'vgc', 'vgtray', 'faceit', 'faceitclient', 'faceit-ac', 'battleye', 'eac_launcher')
+$comAC = [bool](@($top | Where-Object { $antiCheat -contains ([string]$_.n).ToLower() }).Count)
 foreach ($x in @(@($porNome | Sort-Object cpu -Descending | Select-Object -First 8) + @($porNome | Sort-Object mb -Descending | Select-Object -First 8))) {
+    if ($comAC) { break }
     if (-not $x -or $inf.ContainsKey($x.n)) { continue }
     $cam = Tenta { (Get-Process -Name $x.n -ErrorAction Stop | Where-Object { $_.Path } | Select-Object -First 1).Path } $null
     $vi = $null; if ($cam) { $vi = Tenta { [Diagnostics.FileVersionInfo]::GetVersionInfo($cam) } $null }
@@ -2656,14 +2660,8 @@ if ($wmiCpu -gt 1.5) {
 Dado 'wmi' @{ cpu = [double]$wmiCpu; clientes = (Lista $wmi) }
 
 Vivo 'inicializacao'
-$ini = @()
-foreach ($k in @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run','usuario'), @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run','todos'), @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run','todos (32 bits)'))) {
-    $it = Tenta { Get-Item $k[0] -ErrorAction Stop }
-    if ($it) { foreach ($n in $it.GetValueNames()) { if ($n) { $ini += [pscustomobject]@{ nome = $n; onde = $k[1]; cmd = [string]$it.GetValue($n) } } } }
-}
-foreach ($pp in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup", "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp")) {
-    foreach ($f in @(Get-ChildItem -LiteralPath $pp -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' })) { $ini += [pscustomobject]@{ nome = $f.BaseName; onde = 'pasta Inicializar'; cmd = $f.FullName } }
-}
+# só o que abre de verdade: desativado no Gerenciador de Tarefas e programa que já saiu do PC não contam
+$ini = @(ListaInicio | ForEach-Object { $_ } | Where-Object { $_.ligado -and $_.existe } | ForEach-Object { [pscustomobject]@{ nome = $(if ($_.tipo -eq 'pasta') { [IO.Path]::GetFileNameWithoutExtension($_.nome) } else { $_.nome }); onde = $_.tipo; cmd = $_.cmd } })
 Dado 'inicializacao' (Lista $ini)
 
 Vivo 'boot'
@@ -2715,7 +2713,8 @@ Dado 'smart' (Lista $smart)
 $falha = [bool](Tenta { Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop | Where-Object PredictFailure } $null)
 $crash = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41,1001,6008; StartTime = $dias60 } -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Kernel-Power|BugCheck|EventLog' }).Count
 $telaAzul = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting','BugCheck'; StartTime = $dias60 } -ErrorAction SilentlyContinue).Count
-$discoErr = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'disk','Ntfs','storahci','stornvme','iaStorA'; Level = 1,2,3; StartTime = $dias60 } -ErrorAction SilentlyContinue).Count
+# só erros (nível 1 e 2): avisos de pendrive tirado sem ejetar e de nova tentativa de leitura são ruído e davam alarme falso
+$discoErr = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'disk','Ntfs','storahci','stornvme','iaStorA'; Level = 1,2; StartTime = $dias60 } -ErrorAction SilentlyContinue).Count
 $devs = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.ConfigManagerErrorCode -ne 0 } | ForEach-Object { [pscustomobject]@{ nome = [string]$_.Name; classe = [string]$_.PNPClass; codigo = [int]$_.ConfigManagerErrorCode } })
 $erros = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Level = 1,2; StartTime = (Get-Date).AddDays(-7) } -ErrorAction SilentlyContinue | Group-Object ProviderName | Sort-Object Count -Descending | Select-Object -First 6 | ForEach-Object { [pscustomobject]@{ fonte = $_.Name; qtd = $_.Count } })
 $bios = Tenta { Get-CimInstance Win32_BIOS } $null
@@ -2861,6 +2860,9 @@ def analisa(p, m, d):
         A.append(Achado(2, ['boot', 'tudo'], 'Boot demorado', f'Último boot: {br(boots[0], 0)} s. Mais atrasaram: {culpados or "sem registro"}.',
                         'Inicialização, serviços de terceiros com início atrasado e, em HD, otimização do boot.', 'disco'))
     ativos = [a for a in lista(p.get('antivirus')) if a.get('ativo')]
+    modo_def = str(pf(p, 'defender.modo', '') or '').lower()
+    if 'passive' in modo_def or 'passivo' in modo_def or 'edr' in modo_def or pf(p, 'defender.tempo_real') is False:
+        ativos = [a for a in ativos if 'defender' not in str(a.get('nome', '')).lower()]   # o Defender só olha: não briga com o outro
     terceiros = [a for a in ativos if 'defender' not in str(a.get('nome', '')).lower()]
     if len(ativos) > 1:
         A.append(Achado(3, ['lento', 'tudo', 'jogos'], 'Dois antivírus ativos ao mesmo tempo',
@@ -2869,11 +2871,11 @@ def analisa(p, m, d):
     elif terceiros and re.search(r'mcafee|norton|avast|avg|avira', terceiros[0].get('nome', ''), re.I):
         A.append(Achado(2, ['lento', 'tudo'], 'Antivírus de fábrica ou gratuito pesado', terceiros[0]['nome'],
                         'O Defender do Windows protege bem e pesa menos. Remover só se você não pagou por ele.', 'programas'))
-    if not ativos and not pf(p, 'defender.tempo_real'):
+    if not ativos and not pf(p, 'defender.tempo_real') and not lista(p.get('antivirus')):
         A.append(Achado(3, ['tudo'], 'PC sem proteção em tempo real', 'Nenhum antivírus ativo.',
                         'Abra Segurança do Windows e ligue a proteção em tempo real (o katharos nunca desliga isso).'))
     cpu = m.get('cpu')
-    if cpu is not None and cpu > 15:
+    if cpu is not None and cpu > 20 and (pf(p, 'sistema.uptime_h', 1) or 0) >= 0.17:
         tops = lista(d.get('top_cpu'))
         top = explica_processos(tops, 'cpu', '%')
         q = quem_e(tops[0].get('n')) if tops else None
@@ -2968,11 +2970,13 @@ def analisa(p, m, d):
         A.append(Achado(2, ['calor', 'bateria', 'lento', 'tudo'], 'WMI gastando CPU parado',
                         f'WmiPrvSE com {br(w.get("cpu"), 1)}% de CPU. Quem mais consulta: {cli or "não registrado"}.',
                         'Normalmente é software de fabricante (centrais de jogo, assistentes de suporte). Atualizar ou deixar em manual.', 'servicos'))
-    if m.get('limite') is not None and m['limite'] < 95:
+    na_bateria = bool(pf(p, 'pc.notebook') and (d.get('energia') or {}).get('na_bateria'))
+    if m.get('limite') is not None and m['limite'] < 85 and not na_bateria:
         A.append(Achado(2, ['calor', 'lento', 'jogos', 'tudo'], 'Processador sendo limitado',
-                        f'Limite de desempenho em {br(m["limite"], 0)}%.',
+                        f'O Windows diz que o processador está limitado a {br(m["limite"], 0)}% do que poderia (contador "% Performance Limit")'
+                        + (f', com {br(m["temperatura"], 0)} °C.' if m.get('temperatura') else '.'),
                         'Calor (poeira, pasta térmica), carregador fraco ou plano de energia. Limpe as saídas de ar.'))
-    if (m.get('temperatura') or 0) >= 80:
+    if (m.get('temperatura') or 0) >= (80 if m.get('temp_fonte') not in (None, 'zona térmica') else 90):
         A.append(Achado(2, ['calor', 'tudo'], 'Temperatura alta em repouso', f'{br(m["temperatura"], 0)} °C (lido por: {m.get("temp_fonte") or "zona térmica"}).',
                         'Limpar ventoinhas; em notebook, usar o plano "fresco" (mínimo de CPU 5% e turbo eficiente).', 'energia'))
     trocas = lista(saude.get('trocas_plano'))
@@ -2997,7 +3001,7 @@ def analisa(p, m, d):
                         + (f', {azuis} com tela azul.' if azuis else ' (nenhuma tela azul: pode ser queda de energia ou botão de desligar segurado).'),
                         'Reparar o sistema e conferir drivers, fonte e temperatura.', 'reparar'))
     if (saude.get('erros_disco') or 0) > 5:
-        A.append(Achado(2, ['tudo'], 'Erros de disco no registro de eventos', f'{saude["erros_disco"]} em 60 dias.', 'Verificar o disco (chkdsk).', 'reparar'))
+        A.append(Achado(2, ['tudo'], 'Erros de disco no registro de eventos', f'{saude["erros_disco"]} erros (não avisos) dos drivers de disco nos últimos 60 dias, no Visualizador de Eventos.', 'Verificar o disco (chkdsk).', 'reparar'))
     devs = lista(saude.get('dispositivos'))
     if devs:
         A.append(Achado(1, ['tudo'], 'Dispositivos com problema', ', '.join(f'{x.get("nome")} (código {x.get("codigo")})' for x in devs[:4]),
@@ -3281,8 +3285,8 @@ PROCESSOS = {
     'outlook': ('o Outlook', 'normal enquanto sincroniza', ''),
     'olk': ('o Outlook novo', 'normal enquanto sincroniza', ''),
     # jogos e lojas
-    'steam': ('a Steam', 'tire da inicialização se não joga todo dia', 'steam'),
-    'steamwebhelper': ('as páginas dentro da Steam', 'o modo "pouco desempenho" da Steam reduz', 'steam'),
+    'steam': ('a Steam', 'tire da inicialização se não joga todo dia', 'inicializacao'),
+    'steamwebhelper': ('as páginas dentro da Steam', 'o modo "pouco desempenho" da Steam reduz', ''),
     'epicgameslauncher': ('a loja da Epic', 'tire da inicialização', 'inicializacao'),
     'epicwebhelper': ('as páginas dentro da loja da Epic', 'feche a loja depois de abrir o jogo', ''),
     'battle.net': ('a Battle.net', 'tire da inicialização', 'inicializacao'),
@@ -3327,7 +3331,7 @@ PROCESSOS = {
     'code': ('o Visual Studio Code', 'extensões pesam: veja "Developer: Show Running Extensions"', ''),
     'python': ('um programa em Python', 'é algo que você ou outro programa abriu', ''),
     'java': ('um programa em Java', 'é algo que você ou outro programa abriu', ''),
-    'javaw': ('um programa em Java (o Minecraft, por exemplo)', 'ajuste a memória no launcher', 'minecraft'),
+    'javaw': ('um programa em Java (o Minecraft, por exemplo)', 'ajuste a memória no launcher', ''),
     'docker desktop': ('o Docker Desktop', 'feche quando não usa: ele mantém uma máquina virtual ligada', ''),
     'com.docker.backend': ('o Docker Desktop', 'feche quando não usa: ele mantém uma máquina virtual ligada', ''),
     'devenv': ('o Visual Studio', 'normal enquanto compila ou indexa', ''),
@@ -3432,7 +3436,7 @@ FAMILIAS = [
      'sincronização de arquivos na nuvem', 'gasta CPU enquanto sincroniza; os arquivos só sobem com ele aberto', 'inicializacao'),
     ('veeam.endpoint.tray acronistrueimage macriumservice reflectmonitor', 'um programa de backup', 'deixe: é o seu backup', ''),
     # ── jogos: lojas e auxiliares ──
-    ('steamservice gameoverlayui steamerrorreporter', 'a Steam', 'a sobreposição pode ser desligada nas configurações dela', 'steam'),
+    ('steamservice gameoverlayui steamerrorreporter', 'a Steam', 'a sobreposição pode ser desligada nas configurações dela', ''),
     ('epicgameslauncher unrealcefsubprocess epiconlineservices epiconlineservicesuserhelper eosoverlayrenderer-win64-shipping',
      'a loja da Epic', 'feche depois de abrir o jogo; tire da inicialização', 'inicializacao'),
     ('agent battle.net blizzardbrowser blizzarderror', 'a Battle.net', 'tire da inicialização', 'inicializacao'),
@@ -3444,7 +3448,7 @@ FAMILIAS = [
     ('rockstarservice launcher socialclubhelper', 'o launcher da Rockstar', 'abre só com o jogo', ''),
     ('amazon games itch playnite heroic lutris prismlauncher curseforge overwolf overwolfbrowser overwolfhelper',
      'um launcher ou gerenciador de jogos', _INI, 'inicializacao'),
-    ('minecraftlauncher minecraft tlauncher', 'o launcher do Minecraft', 'pode fechar depois que o jogo abre', 'minecraft'),
+    ('minecraftlauncher minecraft tlauncher', 'o launcher do Minecraft', 'pode fechar depois que o jogo abre', ''),
     ('medal medalencoder outplayed', 'gravador de jogadas', 'grava o tempo todo: desligue se não usa', 'inicializacao'),
     ('wallpaper32 wallpaper64 wallpaperservice32 rainmeter lively', 'papel de parede animado ou widgets', 'gasta GPU o tempo todo: pause quando joga', 'inicializacao'),
     ('rtss msiafterburner hwinfo64 hwinfo32 hwmonitor coretemp aida64 cpuz gpu-z fancontrol', 'monitor de hardware',
@@ -3620,7 +3624,7 @@ PREFIXOS = [
     ('logi', 'um programa da Logitech', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
     ('corsair', 'um programa da Corsair', 'conhecido por gastar CPU: feche quando não precisa', 'inicializacao'),
     ('steelseries', 'um programa da SteelSeries', _INI, 'inicializacao'),
-    ('steam', 'a Steam', 'tire da inicialização se não joga todo dia', 'steam'),
+    ('steam', 'a Steam', 'tire da inicialização se não joga todo dia', 'inicializacao'),
     ('epic', 'a loja da Epic', 'tire da inicialização', 'inicializacao'),
     ('riot', 'o cliente da Riot', 'tire da inicialização', 'inicializacao'),
     ('ubisoft', 'a Ubisoft Connect', 'tire da inicialização', 'inicializacao'),
@@ -3638,7 +3642,7 @@ PREFIXOS = [
 ]
 # o fim do nome diz o que o programa está fazendo, mesmo sem saber de quem é
 SUFIXOS = [
-    ('-win64-shipping', 'um jogo feito na Unreal Engine', 'é o jogo em si: veja "unreal" e "jogos"', 'jogos'),
+    ('-win64-shipping', 'um jogo feito na Unreal Engine', 'é o jogo em si: "jogar" ajusta o Windows para ele', 'jogar'),
     ('-wingdk-shipping', 'um jogo da Microsoft Store feito na Unreal Engine', 'é o jogo em si', 'jogos'),
     ('crashhandler', 'o relator de erros de um programa', 'normal', ''),
     ('crashreporter', 'o relator de erros de um programa', 'normal', ''),
@@ -3663,11 +3667,6 @@ def quem_e(nome):
         return None
     if n in PROCESSOS:
         return PROCESSOS[n]
-    for jogo, exes in CATALOGO_JOGOS:
-        if any(n == e.lower()[:-4] for e in exes):
-            return (f'o jogo {jogo}', 'é o jogo em si: veja "jogar"', 'jogos')
-    if any(n == e.lower()[:-4] for e in EXE_COM_ANTICHEAT):
-        return ('um jogo com anti-cheat', 'o Katharos não mexe em jogo com anti-cheat de terceiros', '')
     for sufixo, oque, faz, cmd in SUFIXOS:
         if n.endswith(sufixo) and len(n) > len(sufixo):
             return (oque, faz, cmd)
@@ -3708,6 +3707,7 @@ class Pacote:
 
 
 PACOTES = {}
+SEM_ITENS = {}   # pacote -> o que dizer quando não há nada a fazer neste PC
 
 
 def pacote(nome, titulo, resumo, explica, reversivel=True, admin=True):
@@ -5571,100 +5571,7 @@ GPU_PS = r'''foreach ($__c in @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Co
   if ($__d -match '«fab»') { $__k = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\' + $__c.PSChildName; «reg» }
 }'''
 
-# Prioridade alta só para jogos SEM anti-cheat de terceiros (VAC da Valve não conta: ele só procura programa injetado no jogo).
-# Jogos com Vanguard, EasyAntiCheat, BattlEye, Javelin, Ricochet, Hyperion, Warden etc. ficam de fora de propósito: nenhuma chave
-# do Katharos aponta para eles.
-# Catálogo: um jogo por linha, (nome, [executáveis]). Só entra jogo sem anti-cheat de terceiros (VAC, que só olha programa
-# injetado no jogo, e o anti-cheat próprio de um jogo, como o da Warframe, não impedem). Antes de incluir um jogo, confira
-# a página dele na Steam ou no site oficial. Se um nome de .exe estiver errado, a chave simplesmente não vale para nada.
-CATALOGO = [
-    ('Valve e competitivos', [
-        ('Counter-Strike 2', ['cs2.exe']), ('Dota 2', ['dota2.exe']), ('Deadlock', ['deadlock.exe']),
-        ('Team Fortress 2', ['tf_win64.exe']), ('Left 4 Dead 2', ['left4dead2.exe']), ('Portal 2 e jogos Source', ['portal2.exe', 'hl2.exe']),
-        ("Garry's Mod", ['gmod.exe'])]),
-    ('RPG e mundo aberto', [
-        ('Cyberpunk 2077', ['Cyberpunk2077.exe']), ('Red Dead Redemption 2', ['RDR2.exe']), ('Hogwarts Legacy', ['HogwartsLegacy.exe']),
-        ('Starfield', ['Starfield.exe']), ("Baldur's Gate 3", ['bg3.exe', 'bg3_dx11.exe']), ('The Witcher 3', ['witcher3.exe']),
-        ('Skyrim Special Edition', ['SkyrimSE.exe']), ('Fallout 4', ['Fallout4.exe']), ('Sekiro', ['sekiro.exe']),
-        ('God of War', ['GoW.exe']), ('Horizon Zero Dawn', ['HorizonZeroDawn.exe']),
-        ('Resident Evil 4', ['re4.exe']), ('Resident Evil Village', ['re8.exe']), ('Control', ['Control_DX12.exe', 'Control_DX11.exe']),
-        ('Divinity: Original Sin 2', ['EoCApp.exe']), ('Stray', ['Stray-Win64-Shipping.exe']),
-        ('Diablo IV', ['Diablo IV.exe']), ('Monster Hunter Wilds', ['MonsterHunterWilds.exe']), ('Monster Hunter World', ['MonsterHunterWorld.exe']),
-        ('Path of Exile', ['PathOfExile_x64.exe', 'PathOfExileSteam.exe']),
-        ('God of War Ragnarök', ['GoWR.exe']), ('Horizon Forbidden West', ['HorizonForbiddenWest.exe']), ('Ghost of Tsushima', ['GhostOfTsushima.exe']),
-        ("Marvel's Spider-Man", ['Spider-Man.exe', 'MilesMorales.exe', 'Spider-Man2.exe']), ('The Last of Us Part I', ['tlou-i.exe']),
-        ('Death Stranding', ['ds.exe']), ('Days Gone', ['DaysGone.exe']), ('Ratchet & Clank', ['RiftApart.exe']), ('Returnal', ['Returnal-Win64-Shipping.exe']),
-        ('Dark Souls III', ['DarkSoulsIII.exe']), ('Dark Souls Remastered', ['DarkSoulsRemastered.exe']), ('Lies of P', ['LOP-Win64-Shipping.exe']),
-        ('Black Myth: Wukong', ['b1-Win64-Shipping.exe']), ('Alan Wake 2', ['AlanWake2.exe']), ('Metro Exodus', ['MetroExodus.exe']),
-        ("Assassin's Creed (Origins, Odyssey, Valhalla)", ['ACOrigins.exe', 'ACOdyssey.exe', 'ACValhalla.exe']),
-        ('Tomb Raider (trilogia)', ['TombRaider.exe', 'ROTTR.exe', 'SOTTR.exe']), ('Kingdom Come: Deliverance', ['KingdomCome.exe']),
-        ("Dragon's Dogma 2", ['DD2.exe']), ('Resident Evil 2 e 3', ['re2.exe', 're3.exe']), ('Devil May Cry 5', ['DevilMayCry5.exe']),
-        ('Persona 5 Royal', ['P5R.exe']), ('Final Fantasy XIV', ['ffxiv_dx11.exe']), ('Final Fantasy XVI', ['ffxvi.exe']),
-        ('Guild Wars 2', ['Gw2-64.exe']), ('The Elder Scrolls Online', ['eso64.exe']), ('Borderlands 2 e 3', ['Borderlands2.exe', 'Borderlands3.exe']),
-        ('BioShock Infinite', ['BioShockInfinite.exe']), ('Disco Elysium', ['disco.exe']), ('Outer Wilds', ['OuterWilds.exe']),
-        ("No Man's Sky", ['NMS.exe']), ('Grim Dawn', ['Grim Dawn.exe']), ('Last Epoch', ['Last Epoch.exe'])]),
-    ('Corrida e simulação', [
-        ('Forza Horizon 5', ['ForzaHorizon5.exe']), ('Forza Horizon 4', ['ForzaHorizon4.exe']),
-        ('Euro Truck Simulator 2', ['eurotrucks2.exe']), ('American Truck Simulator', ['amtrucks.exe']),
-        ('Assetto Corsa', ['acs.exe']), ('Assetto Corsa Competizione', ['AC2-Win64-Shipping.exe']), ('BeamNG.drive', ['BeamNG.drive.x64.exe']),
-        ('Microsoft Flight Simulator', ['FlightSimulator.exe', 'FlightSimulator2024.exe']),
-        ('Need for Speed Heat', ['NeedForSpeedHeat.exe']), ('Elite Dangerous', ['EliteDangerous64.exe']), ('Kerbal Space Program', ['KSP_x64.exe']),
-        ('The Sims 4', ['TS4_x64.exe']), ('Planet Zoo', ['PlanetZoo.exe']), ('Farming Simulator 22 e 25', ['FarmingSimulator2022Game.exe', 'FarmingSimulator2025Game.exe'])]),
-    ('Estratégia e construção', [
-        ('Civilization VI', ['CivilizationVI.exe', 'CivilizationVI_DX12.exe']), ('Cities: Skylines', ['Cities.exe']),
-        ('Hearts of Iron IV', ['hoi4.exe']), ('Crusader Kings III', ['ck3.exe']), ('Stellaris', ['stellaris.exe']),
-        ('Total War: Warhammer III', ['Warhammer3.exe']), ('Factorio', ['factorio.exe']), ('Satisfactory', ['FactoryGame-Win64-Shipping.exe']),
-        ('Hearthstone', ['Hearthstone.exe']),
-        ('Age of Empires II: Definitive Edition', ['AoE2DE_s.exe']), ('Age of Empires IV', ['RelicCardinal.exe']), ('Europa Universalis IV', ['eu4.exe']),
-        ('Victoria 3', ['victoria3.exe']), ('XCOM 2', ['XCom2.exe']), ('Frostpunk', ['Frostpunk.exe']), ('RimWorld', ['RimWorldWin64.exe']),
-        ('Oxygen Not Included', ['OxygenNotIncluded.exe']), ('Dyson Sphere Program', ['DSPGAME.exe']), ('Manor Lords', ['ManorLords-Win64-Shipping.exe']),
-        ('Kenshi', ['kenshi_x64.exe']), ('Slay the Spire', ['SlayTheSpire.exe']), ('Balatro', ['Balatro.exe'])]),
-    ('Sobrevivência e cooperativo', [
-        ('Minecraft (Bedrock)', ['Minecraft.Windows.exe']), ('Palworld', ['Palworld-Win64-Shipping.exe']), ('Valheim', ['valheim.exe']),
-        ('Subnautica', ['Subnautica.exe', 'SubnauticaZero.exe']), ('Terraria', ['Terraria.exe']), ('Stardew Valley', ['Stardew Valley.exe']),
-        ('Phasmophobia', ['Phasmophobia.exe']), ('Lethal Company', ['Lethal Company.exe']), ('Among Us', ['Among Us.exe']),
-        ('Risk of Rain 2', ['Risk of Rain 2.exe']),
-        ('Deep Rock Galactic', ['FSD-Win64-Shipping.exe']), ('Raft', ['Raft.exe']), ('The Forest', ['TheForest.exe']),
-        ('Sons of the Forest', ['SonsOfTheForest.exe']), ('Project Zomboid', ['ProjectZomboid64.exe']), ("Don't Starve Together", ['dontstarve_steam_x64.exe']),
-        ('Half-Life: Alyx', ['hlvr.exe'])]),
-    ('Ação e independentes', [
-        ('Warframe', ['Warframe.x64.exe']), ('Hades', ['Hades.exe']), ('Hades II', ['Hades2.exe']),
-        ('Hollow Knight', ['hollow_knight.exe']), ('Celeste', ['Celeste.exe']), ('Cuphead', ['Cuphead.exe']),
-        ('Vampire Survivors', ['VampireSurvivors.exe']),
-        ('DOOM e DOOM Eternal', ['DOOMx64vk.exe', 'DOOMx64.exe', 'DOOMEternalx64vk.exe']), ('Dead Cells', ['deadcells.exe']),
-        ('Hollow Knight: Silksong', ['Hollow Knight Silksong.exe']), ('Ori and the Will of the Wisps', ['oriwotw.exe']),
-        ('The Binding of Isaac', ['isaac-ng.exe']), ('Enter the Gungeon', ['EtG.exe']), ('Noita', ['noita.exe']), ('Brotato', ['Brotato.exe']),
-        ('Undertale', ['UNDERTALE.exe']), ('Geometry Dash', ['GeometryDash.exe']), ('osu!', ['osu!.exe']), ('Dave the Diver', ['DaveTheDiver.exe'])]),
-]
-CATALOGO_JOGOS = [j for _, jogos in CATALOGO for j in jogos]
-JOGOS_EXE = [e for _, exes in CATALOGO_JOGOS for e in exes]
-# exemplos de executáveis de jogos COM anti-cheat de terceiros: o teste garante que nenhum deles entra no catálogo
-EXE_COM_ANTICHEAT = ['VALORANT-Win64-Shipping.exe', 'LeagueClient.exe', 'League of Legends.exe', 'FortniteClient-Win64-Shipping.exe',
-                     'r5apex.exe', 'RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'TslGame.exe', 'EscapeFromTarkov.exe', 'destiny2.exe',
-                     'RustClient.exe', 'RobloxPlayerBeta.exe', 'GenshinImpact.exe', 'eldenring.exe', 'RocketLeague.exe',
-                     'helldivers2.exe', 'DeadByDaylight-Win64-Shipping.exe', 'FallGuys_client_game.exe', 'ModernWarfare.exe',
-                     'cod.exe', 'BF2042.exe', 'bf1.exe', 'FIFA23.exe', 'FC25.exe', 'Overwatch.exe', 'Marvel-Win64-Shipping.exe',
-                     'GTA5.exe', 'GTA5_Enhanced.exe', 'HaloInfinite.exe', 'MCC-Win64-Shipping.exe', 'SoTGame.exe', 'ArkAscended.exe', 'ShooterGame.exe',
-                     'DayZ_x64.exe', '7DaysToDie.exe', 'FarCry5.exe', 'FarCry6.exe', 'WatchDogs2.exe', 'Bannerlord.exe', 'StarCitizen.exe', 'aces.exe',
-                     'NarakaBladepoint.exe', 'HuntGame.exe', 'armoredcore6.exe', 'NewWorld.exe', 'LOSTARK.exe', 'ZenlessZoneZero.exe', 'StarRail.exe',
-                     'Discovery.exe', 'SquadGame.exe', 'arma3_x64.exe', 'DeltaForceClient-Win64-Shipping.exe', 'bf6.exe', 'FC26.exe', 'F1_24.exe',
-                     'nightreign.exe', 'ThroneAndLiberty.exe', 'Enlisted.exe', 'PaladinsSteam.exe', 'SMITE.exe', 'Brawlhalla.exe',
-                     'MultiVersus-Win64-Shipping.exe', 'TheFinals.exe', 'XDefiant.exe', 'Spectre-Win64-Shipping.exe', 'Warzone.exe']
-JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Destiny 2, Call of Duty, Rust, Roblox, Genshin, Elden Ring, Rocket League, Helldivers 2, EA FC e outros'
-ANTICHEAT_NOMES = [x.strip() for x in JOGOS_ANTICHEAT.replace(' e outros', '').split(',')]
-
-
-def _nota_jogos_achados():
-    """'achei Cyberpunk 2077, Hades' para o item de prioridade: o que da lista está mesmo neste PC."""
-    try:
-        achados, _ = jogos_do_catalogo()
-    except Exception as e:
-        LOG.escreve(f'procurar jogos do catálogo falhou: {e!r}')
-        return ''
-    return ('achei ' + resumo_jogos_achados(achados)) if achados else ''
-
-
-@pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, prioridades e ajustes de latência',
+@pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, entrada e latência: vale para qualquer jogo',
         'Ajustes que os otimizadores de jogos usam, com a verdade sobre cada um: alguns ajudam sempre, outros só em casos específicos, '
         'e alguns são quase placebo (está escrito). Desligar segurança do Windows (VBS, Integridade de Memória) não está aqui de propósito: '
         'é troca de segurança, não ajuste.')
@@ -5673,9 +5580,6 @@ def itens_jogos(ctx):
     j = joga(p)
     mm = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
     gc = 'HKCU:\\System\\GameConfigStore'
-    ifeo = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options'
-    prio = '\n'.join(R(f'{ifeo}\\{e}\\PerfOptions', 'CpuPriorityClass', 3) for e in JOGOS_EXE)
-    prio_ac = '\n'.join(R(f'{ifeo}\\{e}\\PerfOptions', 'CpuPriorityClass', 3) for e in EXE_COM_ANTICHEAT)
     nagle = r'''foreach ($__i in @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' -ErrorAction SilentlyContinue)) {
   $__v = Get-ItemProperty -LiteralPath $__i.PSPath -ErrorAction SilentlyContinue
   if ($__v.DhcpIPAddress -or ($__v.IPAddress -and [string]$__v.IPAddress -ne '0.0.0.0')) {
@@ -5691,18 +5595,17 @@ def itens_jogos(ctx):
              'minutos o tempo todo).', 'pequeno em PC forte; mais perceptível em PC fraco', 'Win+Alt+G e gravação pela Game Bar param', 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', 'AppCaptureEnabled', 0), R(gc, 'GameDVR_Enabled', 0),
                 R(f'{HKLM_POL}\\GameDVR', 'AllowGameDVR', 0))),
-        Item('prioridade-jogos', 'prioridade alta para jogos conhecidos', f'{len(CATALOGO_JOGOS)} jogos conhecidos (CS2, Dota 2, Minecraft, Cyberpunk, Baldur\'s Gate 3, Hades e outros, '
-             'todos sem anti-cheat de terceiros) abrem sempre com prioridade alta de CPU, por uma opção oficial do Windows. '
-             f'Jogos com anti-cheat de terceiros ({JOGOS_ANTICHEAT}) ficam de fora de propósito.',
-             'pequeno, e só quando algo disputa a CPU com o jogo', 'em PC fraco, música e Discord podem engasgar durante o jogo',
-             2 if j else 3, prio, minutos=4, nota=_nota_jogos_achados()),
-        Item('prioridade-jogos-ac', 'prioridade alta também para jogos com anti-cheat (opcional)', 'Mesma opção oficial do Windows do item acima, para jogos '
-             f'que usam anti-cheat de terceiros ({JOGOS_ANTICHEAT}). É um valor de registro lido pelo Windows quando o jogo abre: nada abre, '
-             'injeta ou toca no processo do jogo, e é o método que o Process Lasso indica para jogos protegidos. Nenhum anti-cheat publica que '
-             'proíbe ou que aceita isso, então o risco não é zero. Fica desligado por padrão; quem marca assume a decisão.',
-             'pequeno, e só quando algo disputa a CPU com o jogo', 'em PC fraco, música e Discord podem engasgar; sem garantia de que o anti-cheat aceite',
-             0, prio_ac, minutos=4,
-             alerta='anti-cheat rígido (Vanguard, FACEIT) pode reclamar de qualquer mudança no sistema; se o jogo reclamar, rode "desfazer"'),
+        Item('directx-jogos', 'jogos em janela e VRR otimizados', 'Liga as duas opções de Configurações > Sistema > Tela > Gráficos: '
+             '"Otimizações para jogos em janela" (o jogo em janela ou sem borda passa a apresentar quadros como em tela cheia) e '
+             '"Otimizações para taxa de atualização variável". Mantém as outras opções que você já tinha ali (como o HDR automático).',
+             'menos atraso e mais FPS em jogo em janela ou sem borda (DirectX 10 e 11)', 'nenhum conhecido; desligue nas Configurações se um jogo antigo reclamar', 1,
+             r"""$__k = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
+$__a = (Get-ItemProperty -LiteralPath $__k -Name DirectXUserGlobalSettings -ErrorAction SilentlyContinue).DirectXUserGlobalSettings
+$__d = [ordered]@{}
+foreach ($__p in ("$__a" -split ';')) { if ($__p -match '^\s*([^=]+?)\s*=\s*(.*)$') { $__d[$Matches[1]] = $Matches[2] } }
+$__d['SwapEffectUpgradeEnable'] = '1'; $__d['VRROptimizeEnable'] = '1'
+$__n = ((@($__d.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value })) -join ';') + ';'
+Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos em janela e de VRR' | Out-Null""") if pf(p, 'so.win11') else None,
         Item('mmcss', 'agendador multimídia: menos CPU reservada ao fundo', 'Baixa a reserva de CPU para tarefas de fundo de 20% para 10% '
              '(SystemResponsiveness) e põe a tarefa "Games" do agendador multimídia em categoria High. Só isso: a Microsoft documenta que '
              '"GPU Priority" e "SFIO Priority" não são usados, então eles não são tocados. Só vale para jogos que usam o MMCSS.',
@@ -6958,8 +6861,6 @@ ALERTA_ITEM = {
     ('jogos', 'hags'): 'mexe no agendador de GPU; se um jogo com anti-cheat reclamar ou a imagem falhar, desfaça este item',
     ('jogos', 'timer'): 'mexe no temporizador do sistema; se um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'mmcss'): 'mexe no agendador de multimídia; se um jogo com anti-cheat reclamar depois, desfaça este item',
-    ('jogos', 'prioridade-jogos-ac'): 'muda a prioridade de jogos com anti-cheat; se algum reclamar depois, desfaça este item',
-    ('jogos', 'prioridade-jogos'): 'muda a prioridade de processos de jogos; se um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'fse'): 'muda como jogos em tela cheia são tratados; se um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'gpu-nvidia'): 'mexe na energia da placa de vídeo; se o driver ou um jogo com anti-cheat reclamar depois, desfaça este item',
     ('jogos', 'gpu-amd'): 'mexe na energia da placa de vídeo; se o driver ou um jogo com anti-cheat reclamar depois, desfaça este item',
@@ -8208,693 +8109,6 @@ def ferramenta_organizar(ctx, args):
     t.ok(f'{pl(len(movidos), "arquivo movido", "arquivos movidos")} para {PASTA_ORGANIZADO}' + (f'; {falhas} em uso ficaram onde estavam' if falhas else '') + '.')
     t.nota('  para voltar tudo: katharos organizar --desfazer')
     return 0
-# ███████████████████████████████████████████████████████████████████████████
-#
-#   QUAIS JOGOS ESTÃO NESTE PC
-#   só lê: o registro, as listas da Steam, da Epic, da GOG, da Ubisoft, da EA, da Riot e do Xbox e os nomes dos arquivos nas pastas de instalação.
-#   Nunca abre o jogo, o processo dele nem arquivo dentro dele.
-#
-# ███████████████████████████████████████████████████████████████████████████
-
-def _steam_pastas():
-    """As bibliotecas da Steam deste PC (a pasta dela e as outras de libraryfolders.vdf), ou None se não há Steam.
-    Só lê o registro e esse arquivo."""
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam') as ch:
-            raiz = Path(str(winreg.QueryValueEx(ch, 'SteamPath')[0]))
-    except (ImportError, OSError):
-        return None
-    pastas = [raiz]
-    try:
-        vdf = (raiz / 'steamapps' / 'libraryfolders.vdf').read_text(encoding='utf-8', errors='replace')
-        pastas += [Path(p.replace('\\\\', '\\')) for p in re.findall(r'"path"\s+"([^"]+)"', vdf)]
-    except OSError:
-        pass
-    return pastas
-
-
-def _cs2_instalado():
-    """True/False se a Steam diz que o CS2 (app 730) está instalado."""
-    return any((p / 'steamapps' / 'appmanifest_730.acf').is_file() for p in (_steam_pastas() or []))
-
-
-def jogos_neste_pc():
-    """{comando: True/False} para os pacotes de um jogo só: se o jogo foi achado neste PC. Fora do Windows, vazio."""
-    if not WINDOWS:
-        return {}
-    out = {}
-    try:
-        out['steam'] = _steam_pastas() is not None
-        out['cs2'] = _cs2_instalado()
-        out['minecraft'] = os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt'))
-        out['unreal'] = any(_ue_instalado(pasta) for _, _, pasta, _ in UE_JOGOS)
-    except Exception as e:
-        LOG.escreve(f'procurar jogos falhou: {e!r}')
-    return {c: v for c, v in out.items() if v is not None}
-
-
-
-_CACHE_JOGOS = {}
-
-
-def _pastas_de_instalacao():
-    """Pastas onde há jogos instalados: bibliotecas da Steam (cada installdir), Epic, GOG, Ubisoft, EA, Riot,
-    Xbox / Microsoft Store e o InstallLocation que os programas deixam no registro do Windows. Só lê listas e registro; nenhuma pasta de jogo é aberta aqui."""
-    achadas = set()
-    for p in _steam_pastas() or []:
-        try:
-            for acf in (p / 'steamapps').glob('appmanifest_*.acf'):
-                m = re.search(r'"installdir"\s+"([^"]+)"', acf.read_text(encoding='utf-8', errors='replace'))
-                if m:
-                    achadas.add(p / 'steamapps' / 'common' / m.group(1))
-        except OSError:
-            continue
-    try:
-        epic = Path(os.path.expandvars(r'%ProgramData%\Epic\EpicGamesLauncher\Data\Manifests'))
-        for it in epic.glob('*.item'):
-            d = le_json(it, None)
-            if isinstance(d, dict) and d.get('InstallLocation'):
-                achadas.add(Path(str(d['InstallLocation'])))
-    except OSError:
-        pass
-    try:
-        import winreg
-        HKLM, HKCU = winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER
-        for raiz, chave in ((HKLM, r'SOFTWARE\WOW6432Node\GOG.com\Games'),
-                            (HKLM, r'SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs'),
-                            (HKLM, r'SOFTWARE\WOW6432Node\EA Games'), (HKLM, r'SOFTWARE\EA Games'),
-                            (HKLM, r'SOFTWARE\WOW6432Node\Electronic Arts'), (HKLM, r'SOFTWARE\Electronic Arts'),
-                            (HKLM, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
-                            (HKLM, r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'),
-                            (HKCU, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')):
-            try:
-                with winreg.OpenKey(raiz, chave) as pai:
-                    for i in range(winreg.QueryInfoKey(pai)[0]):
-                        try:
-                            with winreg.OpenKey(pai, winreg.EnumKey(pai, i)) as sub:
-                                for nome in ('path', 'InstallLocation', 'InstallDir', 'Install Dir'):
-                                    try:
-                                        v = str(winreg.QueryValueEx(sub, nome)[0]).strip().strip('"')
-                                    except OSError:
-                                        continue
-                                    if v:
-                                        achadas.add(Path(v))
-                        except OSError:
-                            continue
-            except OSError:
-                continue
-    except ImportError:
-        pass
-    achadas.update(_pastas_xbox())
-    achadas.update(_pastas_riot())
-    return [p for p in achadas if str(p) not in ('', '.')]
-
-
-def _pastas_xbox(raizes=None):
-    """As pastas dos jogos do app Xbox / Microsoft Store: em cada disco, a pasta que o arquivo .GamingRoot aponta
-    (ou "XboxGames", o padrão). Cada subpasta é um jogo. Só lê o .GamingRoot e a lista de pastas."""
-    if raizes is None:
-        raizes = [f'{letra}:\\' for letra in 'CDEFGHIJKLMNOPQRSTUVWXYZ'] if WINDOWS else []
-    achadas = set()
-    for raiz in raizes:
-        nomes = {'XboxGames'}
-        try:
-            with open(os.path.join(raiz, '.GamingRoot'), 'rb') as f:   # "RGBX" + 4 bytes + o nome da pasta em UTF-16
-                nome = f.read(600)[8:].decode('utf-16-le', errors='ignore').split('\x00')[0].strip('\\/ ')
-            if nome and '..' not in nome and ':' not in nome:
-                nomes.add(nome)
-        except OSError:
-            pass
-        for nome in nomes:
-            try:
-                with os.scandir(os.path.join(raiz, nome)) as it:
-                    achadas.update(Path(e.path) for e in it if e.is_dir(follow_symlinks=False))
-            except OSError:
-                continue
-    return achadas
-
-
-def _pastas_riot(base=None):
-    """As pastas dos jogos da Riot, pelo que o cliente dela anota em ProgramData. Só lê esses arquivos de texto."""
-    base = Path(base) if base else Path(os.path.expandvars(r'%ProgramData%\Riot Games\Metadata'))
-    achadas = set()
-    try:
-        for arq in base.glob('*/*.product_settings.yaml'):
-            m = re.search(r'product_install_full_path:\s*"?([^"\r\n]+)', arq.read_text(encoding='utf-8', errors='replace'))
-            if m:
-                achadas.add(Path(m.group(1).strip().replace('/', os.sep)))
-    except OSError:
-        pass
-    return achadas
-
-
-def _nomes_de_exe(pasta, profundidade=3, teto=1500):
-    """Os nomes (minúsculos) dos .exe de uma pasta e das subpastas até a profundidade dada. Só lê nomes de arquivo."""
-    nomes, pilha, n = set(), [(str(pasta), 0)], 0
-    while pilha and n < teto:
-        atual, prof = pilha.pop()
-        try:
-            with os.scandir(atual) as it:
-                for e in it:
-                    n += 1
-                    if e.is_file(follow_symlinks=False) and e.name.lower().endswith('.exe'):
-                        nomes.add(e.name.lower())
-                    elif prof < profundidade and e.is_dir(follow_symlinks=False):
-                        pilha.append((e.path, prof + 1))
-        except OSError:
-            continue
-    return nomes
-
-
-def jogos_do_catalogo(pastas=None):
-    """(nomes dos jogos do catálogo achados neste PC, quantos jogos com anti-cheat de terceiros também estão aqui).
-    Compara o NOME dos executáveis nas pastas de instalação com o catálogo; sem pastas (fora do Windows), devolve vazio."""
-    if pastas is None:
-        if not WINDOWS:
-            return [], 0
-        if 'catalogo' in _CACHE_JOGOS:
-            return _CACHE_JOGOS['catalogo']
-        pastas = _pastas_de_instalacao()
-        guardar = True
-    else:
-        guardar = False
-    exes, inicio = set(), time.time()
-    sistema = os.path.expandvars('%WINDIR%').lower()
-    for p in pastas:
-        if time.time() - inicio > 10:   # PC com muita coisa instalada: melhor um resultado parcial do que a tela travada
-            break
-        txt = str(p).lower().rstrip('\\/')
-        if len(txt) <= 3 or (WINDOWS and sistema and txt.startswith(sistema)):   # raiz do disco e pasta do Windows não são de jogo
-            continue
-        exes |= _nomes_de_exe(p)
-    achados = [nome for nome, lista_exe in CATALOGO_JOGOS if any(e.lower() in exes for e in lista_exe)]
-    com_ac = len({e.lower() for e in EXE_COM_ANTICHEAT} & exes)
-    r = (achados, com_ac)
-    if guardar:
-        _CACHE_JOGOS['catalogo'] = r
-    return r
-
-
-def resumo_jogos_achados(achados, limite=6):
-    """'Cyberpunk 2077, Hades e mais 3', ou '' se não há nenhum."""
-    if not achados:
-        return ''
-    if len(achados) <= limite:
-        return ', '.join(achados)
-    return ', '.join(achados[:limite]) + f' e mais {len(achados) - limite}'
-
-
-
-# ═══════════════ Minecraft: Java Edition ═══════════════
-# O arquivo options.txt é o que o menu Configurações de Vídeo grava: uma linha "chave:valor" por opção.
-# Regra deste pacote (e de qualquer pacote de jogo que entrar depois): só mexe em chave que o próprio menu do jogo grava,
-# com valor que o menu aceita, só em linha que já existe no arquivo, e só para BAIXAR custo (nunca sobe nada).
-# Fonte das chaves e dos limites: https://minecraft.wiki/w/Options.txt
-MC_OPCOES = {
-    # chave: (como mexe, valor)   'max' = no máximo; 'min' = no mínimo; 'set' = este valor
-    'renderDistance': ('max', 10),        # 2 a 32, padrão 12
-    'simulationDistance': ('max', 8),     # 5 a 32, padrão 12 (desde a 1.18)
-    'biomeBlendRadius': ('max', 1),       # 0 a 7, padrão 2
-    'particles': ('min', 1),              # 0 todas, 1 reduzidas, 2 mínimas
-    'entityShadows': ('set', 'false'),
-    'graphicsMode': ('max', 1),           # 0 rápido, 1 elaborado, 2 deslumbrante
-}
-MC_OPCOES_FRACO = {
-    'renderDistance': ('max', 6),
-    'simulationDistance': ('max', 5),
-    'graphicsMode': ('max', 0),
-    'renderClouds': ('set', 'false'),
-}
-MC_CHAVES_CONFIRMADAS = {'maxFps', 'renderDistance', 'simulationDistance', 'graphicsMode', 'particles', 'entityShadows', 'biomeBlendRadius',
-                         'enableVsync', 'mipmapLevels', 'renderClouds', 'ao', 'entityDistanceScaling'}
-
-
-def opcoes_txt_ps(nome, id_desfazer, caminho_ps, aberto_ps, regras, sep=':'):
-    """PowerShell que ajusta um arquivo de opções 'chave«sep»valor' (sep ':' ou '='), só em linhas que existem, só para baixo, com cópia antes.
-    Mantém o BOM UTF-8 se o arquivo tinha; recusa UTF-16 (não reescreve o que não entende)."""
-    alvo = '@{ ' + '; '.join(f"'{k}' = @('{m}', '{v}')" for k, (m, v) in regras.items()) + ' }'
-    return r"""
-«aberto»
-$__a = «caminho»
-if (-not (Test-Path -LiteralPath $__a)) { Aviso '«nome»: arquivo de opcoes nao encontrado (abra o jogo uma vez e feche)'; return }
-$__r = «alvo»
-$__bytes = [IO.File]::ReadAllBytes($__a)
-if ($__bytes.Length -ge 2 -and (($__bytes[0] -eq 0xFF -and $__bytes[1] -eq 0xFE) -or ($__bytes[0] -eq 0xFE -and $__bytes[1] -eq 0xFF))) { Aviso '«nome»: o arquivo esta em UTF-16; nao mexi para nao estragar'; return }
-$__bom = ($__bytes.Length -ge 3 -and $__bytes[0] -eq 0xEF -and $__bytes[1] -eq 0xBB -and $__bytes[2] -eq 0xBF)
-$__t = [IO.File]::ReadAllText($__a)
-$__achou = $false
-$__fim = if ($__t -match "`r`n") { "`r`n" } else { "`n" }
-$__mudou = $false
-$__novo = foreach ($__l in ($__t -split "`r?`n")) {
-  if ($__l -match '^([^«sep»]+)«sep»(.*)$' -and $__r.ContainsKey($Matches[1])) {
-    $__k = $Matches[1]; $__v = $Matches[2]; $__m = $__r[$__k][0]; $__x = $__r[$__k][1]; $__achou = $true
-    if ($__m -eq 'set') { if ($__v -ne $__x) { $__l = $__k + '«sep»' + $__x; $__mudou = $true } }
-    else {
-      $__n = 0.0
-      if ([double]::TryParse($__v, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$__n)) {
-        $__lim = [double]::Parse($__x, [Globalization.CultureInfo]::InvariantCulture)
-        if (($__m -eq 'max' -and $__n -gt $__lim) -or ($__m -eq 'min' -and $__n -lt $__lim)) { $__l = $__k + '«sep»' + $__x; $__mudou = $true }
-      }
-    }
-  }
-  $__l
-}
-if (-not $__achou) { Aviso '«nome»: nenhuma das opcoes esperadas esta no arquivo (nada foi mexido)'; return }
-if (-not $__mudou) { Ok '«nome»: as opcoes ja estavam leves'; return }
-if ($TESTE) { Plano ('ajustar ' + $__a); return }
-$__b = $__a + '.katharos.bak'
-if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a -Destination $__b }
-[IO.File]::WriteAllText($__a, ($__novo -join $__fim), (New-Object Text.UTF8Encoding $__bom))
-Guarda-Desfazer ('«id»|' + $__a) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a -replace "'", "''") + "' -Force")
-Feito ('«nome»: opcoes ajustadas (copia em ' + (Split-Path -Leaf $__a) + '.katharos.bak)')""".replace('«aberto»', aberto_ps).replace('«caminho»', caminho_ps).replace(
-        '«alvo»', alvo).replace('«sep»', sep).replace('«nome»', nome).replace('«id»', id_desfazer)
-
-
-@pacote('minecraft', 'Minecraft', 'Minecraft Java: distância de renderização e partículas no options.txt',
-        'Edita o options.txt do Minecraft Java Edition (pasta .minecraft padrão), o mesmo arquivo que o menu Configurações de Vídeo grava. '
-        'Só muda opções que o menu oferece, com valores que o menu aceita, só em linhas que já existem, e só para baixo: o que já estava '
-        'mais leve fica como está. O jogo precisa estar fechado e o arquivo ganha uma cópia (.katharos.bak). Launchers com pasta própria '
-        '(Prism, CurseForge, modpacks) não são tocados. Bedrock não entra: as chaves dele não foram confirmadas.')
-def itens_minecraft(ctx):
-    if WINDOWS and not os.path.exists(os.path.expandvars('%APPDATA%\\.minecraft\\options.txt')):
-        return []   # sem o jogo, a tela diz que não achou (SEM_ITENS) em vez de oferecer itens que não fariam nada
-    aberto = r"""if (@(Get-Process javaw, java -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match 'Minecraft' }).Count) { Aviso 'feche o Minecraft antes: ele regrava as opcoes ao sair'; return }"""
-    caminho = r"(Join-Path $env:APPDATA '.minecraft\options.txt')"
-    leve = '& {\n' + opcoes_txt_ps('Minecraft', 'minecraft-opcoes', caminho, aberto, MC_OPCOES) + '\n}'
-    fraco = '& {\n' + opcoes_txt_ps('Minecraft', 'minecraft-opcoes', caminho, aberto, {**MC_OPCOES, **MC_OPCOES_FRACO}) + '\n}'
-    return [
-        Item('mc-fps', 'Minecraft: opções de vídeo mais leves', 'Distância de renderização no máximo 10 e de simulação 8, mistura de bioma 1, '
-             'partículas reduzidas, sombras de entidades desligadas e gráficos "Deslumbrante" passando para "Elaborado". '
-             'Só baixa: o que já era menor fica. Resolução, FOV e controles ficam como estão.',
-             'a distância de renderização é o que mais pesa; o ganho varia com o PC e com mods',
-             'o mundo ao longe aparece mais perto; partículas menores', 2, leve),
-        Item('mc-fps-fraco', 'Minecraft: opções para PC fraco (a mais)', 'Tudo do item anterior, e também distância de renderização no máximo 6, '
-             'simulação 5, gráficos "Rápido" (folhas simples) e nuvens desligadas.',
-             'mais FPS em PC fraco ou com placa integrada', 'o jogo fica bem mais simples e o horizonte, curto', 3, fraco, conflita=('mc-fps',)),
-    ]
-
-# ███████████████████████████████████████████████████████████████████████████
-#   STEAM E CS2: SÓ LÊ E ORIENTA
-#   Regra: nada aqui toca em arquivo de jogo, na memória do jogo ou na Steam.
-#   O VAC procura programa estranho enganchado no jogo; o Katharos mexe só no Windows.
-# ███████████████████████████████████████████████████████████████████████████
-
-STEAM_PS = r'''
-$sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
-if (-not $sp) { $sp = Tenta { [string](Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam' -ErrorAction Stop).InstallPath } $null }
-if ($sp) { $sp = $sp -replace '/', '\' }
-$libs = @()
-if ($sp -and (Test-Path -LiteralPath $sp)) {
-  $libs += $sp
-  $vdf = Join-Path $sp 'steamapps\libraryfolders.vdf'
-  if (Test-Path -LiteralPath $vdf) {
-    foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw -ErrorAction SilentlyContinue), '"path"\s+"([^"]+)"')) { $libs += ($m.Groups[1].Value -replace '\\\\', '\') }
-  }
-}
-$libs = @($libs | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Sort-Object -Unique)
-$bib = @(); $jogos = @()
-foreach ($l in $libs) {
-  $letra = ([string]$l).Substring(0, 1)
-  $tipo = Tenta { $d = Get-Partition -DriveLetter $letra -ErrorAction Stop | Get-Disk -ErrorAction Stop; $f = Get-PhysicalDisk -ErrorAction Stop | Where-Object { [string]$_.DeviceId -eq [string]$d.Number } | Select-Object -First 1; @{ midia = [string]$f.MediaType; barramento = [string]$f.BusType } } @{ midia = ''; barramento = '' }
-  $vol = Tenta { Get-Volume -DriveLetter $letra -ErrorAction Stop } $null
-  $bib += [pscustomobject]@{ pasta = [string]$l; midia = $tipo.midia; barramento = $tipo.barramento; livre = $(if ($vol) { [int64]$vol.SizeRemaining } else { 0 }); total = $(if ($vol) { [int64]$vol.Size } else { 0 }) }
-  foreach ($a in @(Get-ChildItem -LiteralPath (Join-Path $l 'steamapps') -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)) {
-    $t = Get-Content -LiteralPath $a.FullName -Raw -ErrorAction SilentlyContinue
-    $nome = if ($t -match '"name"\s+"([^"]+)"') { $Matches[1] } else { '' }
-    $id = if ($t -match '"appid"\s+"(\d+)"') { $Matches[1] } else { '' }
-    $tam = if ($t -match '"SizeOnDisk"\s+"(\d+)"') { [int64]$Matches[1] } else { 0 }
-    $jogos += [pscustomobject]@{ nome = $nome; appid = $id; bytes = $tam; pasta = [string]$l }
-  }
-}
-$cs2 = ''
-foreach ($l in $libs) { $c = Join-Path $l 'steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe'; if (Test-Path -LiteralPath $c) { $cs2 = $c; break } }
-$pref = ''
-if ($cs2) { $pref = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction Stop).$cs2 } '' }
-$vid = @{}
-if ($sp) {
-  $vf = @(Get-ChildItem -Path (Join-Path $sp 'userdata\*\730\local\cfg\cs2_video.txt') -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1)
-  if ($vf.Count) { foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vf[0].FullName -Raw -ErrorAction SilentlyContinue), '"(setting\.[a-z_0-9]+)"\s+"([^"]*)"')) { $vid[$m.Groups[1].Value] = $m.Groups[2].Value } }
-}
-$run = Tenta { [bool]((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction Stop).PSObject.Properties.Name -contains 'Steam') } $false
-$hz = @(Tenta { Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.CurrentRefreshRate } | ForEach-Object { [pscustomobject]@{ placa = [string]$_.Name; hz = [int]$_.CurrentRefreshRate } } } @())
-$dvr = Tenta { [int](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' -ErrorAction Stop).AppCaptureEnabled } $null
-$plano = Tenta { [string](powercfg /getactivescheme) } ''
-Dado 'steam' @{ pasta = $sp; bibliotecas = (Lista $bib); jogos = (Lista $jogos); cs2 = $cs2; cs2_gpu = $pref; abre_com_windows = $run; telas = (Lista $hz); dvr = $dvr; plano = $plano; video = $vid }
-'''
-
-CS2_APPID = '730'
-
-
-def _gb(b):
-    return gb((b or 0) / 1024 ** 3)
-
-
-def avalia_steam(d, p):
-    """[(impacto, título, explicação, comando ou '')] a partir do que o STEAM_PS leu."""
-    A = []
-    libs = [b for b in (d.get('bibliotecas') or []) if isinstance(b, dict)]
-    jogos = [j for j in (d.get('jogos') or []) if isinstance(j, dict)]
-    cs2 = str(d.get('cs2') or '')
-
-    def lib_de(pasta):
-        for b in libs:
-            if str(b.get('pasta', '')).lower() == str(pasta).lower():
-                return b
-        return {}
-    if cs2:
-        b = next((x for x in libs if cs2.lower().startswith(str(x.get('pasta', '')).lower())), {})
-        if str(b.get('midia')).upper() == 'HDD':
-            A.append((3, 'CS2 está num HD', 'Mapas e texturas carregam devagar e o jogo engasga quando lê o disco.',
-                      'Steam › CS2 › Propriedades › Arquivos instalados › Mover pasta de instalação, para um SSD.'))
-        if str(b.get('barramento')).upper() == 'USB':
-            A.append((2, 'CS2 está num disco USB', 'Disco externo é mais lento e pode desconectar no meio da partida.',
-                      'Mova para um disco interno pela própria Steam (Propriedades › Arquivos instalados).'))
-    for b in libs:
-        tot, livre = b.get('total') or 0, b.get('livre') or 0
-        if tot and livre / tot < .08:
-            A.append((2, f'biblioteca {tela(str(b.get("pasta")))} quase cheia', f'Só {_gb(livre)} livres: atualização de jogo pode falhar.',
-                      'rode "limpar" ou "grandes", ou desinstale um jogo parado pela Steam.'))
-    hz = [x for x in (d.get('telas') or []) if isinstance(x, dict)]
-    if any((x.get('hz') or 0) in (59, 60) for x in hz):
-        A.append((2, 'tela a 60 Hz', 'Se o seu monitor é de 144 Hz ou mais, o Windows pode estar usando só 60.',
-                  'Configurações › Sistema › Tela › Tela avançada › Taxa de atualização. No CS2, use a mesma taxa.'))
-    if d.get('dvr') == 1:
-        A.append((2, 'gravação em segundo plano ligada', 'A Game Bar grava os últimos minutos o tempo todo.', 'jogos'))
-    if re.search(r'economia|power saver|equilibrado|balanced', str(d.get('plano') or ''), re.I) and not pf(p, 'pc.notebook'):
-        A.append((1, 'plano de energia comum', 'Em PC de mesa, o plano de alto desempenho segura o clock em jogo.', 'energia'))
-    if d.get('abre_com_windows'):
-        A.append((1, 'Steam abre com o Windows', 'Ela fica rodando e atualizando jogos mesmo quando você não vai jogar.',
-                  'inicializacao (ou Steam › Configurações › Interface › "Executar a Steam ao iniciar o computador")'))
-    if cs2 and len(lista(p.get('gpus'))) >= 2 and not str(d.get('cs2_gpu') or '').startswith('GpuPreference=2'):
-        A.append((2, 'CS2 sem placa de vídeo definida', 'Neste PC há duas placas; o Windows pode abrir o jogo na integrada.',
-                  'Configurações › Sistema › Tela › Gráficos › cs2.exe › Alto desempenho.'))
-    v = d.get('video') if isinstance(d.get('video'), dict) else {}
-
-    def num(chave):
-        try:
-            return int(float(str(v.get(chave))))
-        except (TypeError, ValueError):
-            return None
-    if num('setting.msaa_samples') in (4, 8):
-        A.append((3, 'CS2 com MSAA 4x ou 8x', 'É uma das opções de vídeo que mais pesam. O CMAA2 deixa a borda lisa com custo bem menor.',
-                  'cs2 (aplica o preset de FPS) ou Configurações › Vídeo › Modo de antisserrilhamento.'))
-    if num('setting.mat_vsync') == 1:
-        A.append((2, 'CS2 com V-Sync ligado', 'Aumenta o atraso entre o clique e a imagem.',
-                  'cs2 (desliga) ou Configurações › Vídeo › Sincronização vertical.'))
-    if num('setting.videocfg_ao_detail') not in (None, 0):
-        A.append((2, 'CS2 com oclusão de ambiente', 'Só acrescenta sombra de contato (visual) e custa FPS.',
-                  'cs2 (desliga) ou Configurações › Vídeo › Oclusão de ambiente.'))
-    if num('setting.r_low_latency') == 0 and pf(p, 'tem.nvidia'):
-        A.append((1, 'NVIDIA Reflex desligado no CS2', 'Não muda o visual e reduz o atraso entre o clique e a tela.',
-                  'cs2 (liga) ou Configurações › Vídeo › NVIDIA Reflex.'))
-    return sorted(A, key=lambda a: -a[0]), jogos, libs
-
-
-DICAS_CS2 = [
-    ('Na Steam (você muda, é permitido)', [
-        'Configurações › Downloads: desligue "Permitir downloads durante o jogo".',
-        'Configurações › Interface: desligue "Executar a Steam ao iniciar o computador" se não joga todo dia.',
-        'Configurações › Biblioteca: "Modo de baixo desempenho" deixa a Steam mais leve em PC fraco.',
-        'Overlay da Steam: desligar é opcional. Ligado não dá VAC; desligado pesa um pouco menos.',
-    ]),
-    ('Opções de inicialização do CS2', [
-        'Steam › CS2 › Propriedades › Geral. Quase todas as opções antigas (-threads, -tickrate, -freq) '
-        'não fazem nada no CS2 ou já são o padrão. Pode deixar em branco.',
-    ]),
-    ('Dentro do CS2 (Configurações › Vídeo)', [
-        'Resolução e taxa de atualização iguais às do monitor. Resolução menor é o maior ganho de FPS que existe, mas muda a imagem: o Katharos não mexe nisso.',
-        'NVIDIA Reflex ligado (placas NVIDIA) ou Anti-Lag 2 (placas AMD): menos atraso entre o clique e a tela.',
-        'MSAA, oclusão de ambiente, shader e partículas pesam e quase não ajudam a ver o inimigo: baixe esses primeiro.',
-        'Sombras globais em Média ou Alta: a sombra do inimigo aparece antes dele. Não baixe.',
-        'V-Sync desligado. Se a tela "rasgar", limite os FPS um pouco acima da taxa do monitor.',
-    ]),
-    ('O que dá ban (e o Katharos não faz)', [
-        'Programa que injeta código no jogo, troca DLLs do jogo ou lê a memória dele: VAC.',
-        '"FPS boosters" que mexem nos arquivos do CS2 ou "limpam" a pasta do jogo: risco de VAC e de corromper o jogo.',
-        'Se algo pede para desligar o anti-cheat ou rodar junto com o jogo para "otimizar", não use.',
-        'O Katharos só lê a Steam e só muda configurações do Windows. Nenhum arquivo do jogo é tocado.',
-    ]),
-]
-
-
-def ferramenta_steam(ctx, args):
-    t = ctx.t
-    t.aba('Steam e CS2: o que está atrapalhando, sem tocar no jogo')
-    t.paragrafo('Só leio: onde estão seus jogos, em que tipo de disco, a taxa da tela e o que a Steam faz no fundo. '
-                'Nada aqui muda arquivo de jogo, então não existe risco de VAC.', 2, 'sub')
-    if not WINDOWS:
-        t.erro('O katharos só funciona no Windows.')
-        return 1
-    perfil_pc(ctx)
-    with Progresso(t, None, 'lendo a Steam') as pr:
-        s = roda_ps(t, STEAM_PS, 'steam', minutos=2, mostra=False, pr=pr)
-    d = s.dados.get('steam') or {}
-    if not d.get('pasta'):
-        t.nota('  Não achei a Steam neste PC. As dicas de Windows para jogos estão em "jogos".')
-        return 0
-    achados, jogos, libs = avalia_steam(d, ctx.perfil or {})
-    if libs:
-        t.titulo('bibliotecas')
-    for b in libs:
-        midia = str(b.get('midia') or '?').upper().replace('UNSPECIFIED', '?')
-        cor = 'vermelho' if midia == 'HDD' else ('verde' if midia == 'SSD' else 'apagado')
-        t.item('·', 'apagado', corta_esq(tela(str(b.get('pasta'))), 40), t.p(midia, cor) + t.p(f'  {_gb(b.get("livre"))} livres', 'apagado'))
-    if jogos:
-        t.titulo('maiores jogos instalados')
-        for j in sorted(jogos, key=lambda x: -(x.get('bytes') or 0))[:8]:
-            nome = tela(str(j.get('nome') or '?'))
-            t.item('·', 'destaque' if str(j.get('appid')) == CS2_APPID else 'apagado', corta(nome, 40), t.p(_gb(j.get('bytes')), 'apagado'))
-    t.titulo('o que encontrei' if achados else 'tudo certo')
-    if not achados:
-        t.ok('Nada atrapalhando do lado do Windows e da Steam.')
-    for imp, tit, expl, faz in achados:
-        icone, cor = {3: ('■', 'vermelho'), 2: ('●', 'amarelo'), 1: ('·', 'azul')}[imp]
-        cmd = faz if faz in COMANDOS else ''
-        t.item(icone, cor, tit, t.p(cmd, 'destaque') if cmd else '')
-        t.paragrafo(expl, 6, 'sub')
-        if faz and not cmd:
-            t.paragrafo(faz, 6, 'apagado')
-    for titulo, linhas in DICAS_CS2:
-        t.titulo(titulo.lower())
-        for ln in linhas:
-            t.paragrafo('· ' + ln, 4, 'sub')
-    rel_secao('steam', {'bibliotecas': [{k: b.get(k) for k in ('midia', 'barramento', 'livre', 'total')} for b in libs],
-                        'jogos': len(jogos), 'cs2': bool(d.get('cs2')),
-                        'achados': [{'impacto': a[0], 'titulo': a[1]} for a in achados]})
-    return 0
-
-
-# ─────────────── pacote cs2: só o que é permitido ───────────────
-# Tudo aqui é configuração do Windows para o cs2.exe ou um .cfg com comandos normais do próprio jogo
-# (nenhum com a marca "cheat"). Nada abre, troca ou apaga arquivo do jogo, e nada roda junto com ele.
-# Fonte dos comandos: lista oficial de variáveis do CS2 na wiki de desenvolvedores da Valve.
-
-ACHA_CS2 = r'''
-$__sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
-$__libs = @()
-if ($__sp) { $__sp = $__sp -replace '/', '\'; $__libs += $__sp
-  $__v = Join-Path $__sp 'steamapps\libraryfolders.vdf'
-  if (Test-Path -LiteralPath $__v) { foreach ($__m in [regex]::Matches((Get-Content -LiteralPath $__v -Raw), '"path"\s+"([^"]+)"')) { $__libs += ($__m.Groups[1].Value -replace '\\\\', '\') } } }
-$CS2 = ''; $CS2CFG = ''
-foreach ($__l in ($__libs | Select-Object -Unique)) {
-  $__b = Join-Path $__l 'steamapps\common\Counter-Strike Global Offensive\game'
-  if (Test-Path -LiteralPath (Join-Path $__b 'bin\win64\cs2.exe')) { $CS2 = Join-Path $__b 'bin\win64\cs2.exe'; $CS2CFG = Join-Path $__b 'csgo\cfg'; break }
-}
-if (-not $CS2) { Aviso 'CS2 nao encontrado nas bibliotecas da Steam'; return }
-'''
-
-CFG_CS2 = '''// katharos.cfg: criado pelo Katharos. Só comandos normais do CS2, nenhum precisa de sv_cheats.
-// Para valer: Steam > CS2 > Propriedades > Opções de inicialização: +exec katharos
-// Para tirar: apague este arquivo (ou rode "katharos desfazer cs2").
-fps_max_ui 60            // menus a 60 FPS: a placa esfria fora da partida
-cl_autohelp 0            // sem dicas de ajuda na tela
-gameinstructor_enable 0  // sem lições para jogador novo
-'''
-
-
-# Chaves do cs2_video.txt, conferidas em arquivos públicos de configuração (gucu112/cs2-config) e no menu Vídeo do jogo.
-# Só o valor de uma chave que JÁ existe no arquivo é trocado; chave ausente fica como está.
-# Fica de fora de propósito: resolução (muda a imagem), sombras globais e textura de modelo (ajudam a ver o inimigo).
-VIDEO_CS2 = {                                   # preset de FPS (equilibrado)
-    'setting.msaa_samples': '0',                # sem MSAA
-    'setting.r_csgo_cmaa_enable': '1',          # CMAA2 no lugar: borda lisa, custo baixo
-    'setting.mat_vsync': '0',                   # V-Sync desligado
-    'setting.videocfg_ao_detail': '0',          # oclusão de ambiente desligada
-    'setting.videocfg_particle_detail': '0',    # partículas baixas
-    'setting.shaderquality': '0',               # shader baixo
-    'setting.videocfg_dynamic_shadows': '0',    # sombras dinâmicas: só o sol
-    'setting.videocfg_fsr_detail': '0',         # sem upscaling FSR (borra a imagem)
-}
-VIDEO_CS2_FRACO = {                             # a mais, para PC fraco (pouca VRAM ou GPU antiga)
-    'setting.videocfg_texture_detail': '0',     # texturas baixas: menos VRAM
-    'setting.r_texturefilteringquality': '0',   # filtro bilinear
-    'setting.videocfg_shadow_quality': '1',     # sombras em Média (não vai abaixo disso)
-}
-VIDEO_CS2_REFLEX = {'setting.r_low_latency': '1'}   # NVIDIA Reflex ligado (sem o Boost, que gasta mais energia)
-
-CFG_CS2_MEDIR = '''// katharos-medir.cfg: criado pelo Katharos. Mostra o tempo entre quadros e o ping na tela (os mesmos do menu Jogo > Telemetria).
-// Para ligar: abra o console do CS2 e digite  exec katharos-medir
-// Para desligar: digite  exec katharos-medir-off
-cl_hud_telemetry_frametime_show 2
-cl_hud_telemetry_ping_show 2
-'''
-CFG_CS2_MEDIR_OFF = '''// katharos-medir-off.cfg: volta a telemetria ao padrão do jogo.
-cl_hud_telemetry_frametime_show 1
-cl_hud_telemetry_ping_show 1
-'''
-
-
-def video_cs2_ps(alvo):
-    """PowerShell que troca só chaves já existentes do cs2_video.txt, com cópia antes (a primeira cópia é a que o desfazer restaura)."""
-    return r"""
-if (Get-Process cs2 -ErrorAction SilentlyContinue) { Aviso 'feche o CS2 antes: ele regrava o arquivo de video ao sair'; return }
-$__sp = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamPath } $null
-if (-not $__sp) { Aviso 'Steam nao encontrada'; return }
-$__arqs = @(Get-ChildItem -Path (Join-Path ($__sp -replace '/', '\') 'userdata\*\730\local\cfg\cs2_video.txt') -ErrorAction SilentlyContinue)
-if (-not $__arqs.Count) { Aviso 'cs2_video.txt nao encontrado: abra o CS2 uma vez e feche'; return }
-$__alvo = «alvo»
-foreach ($__a in $__arqs) {
-  $__t = [IO.File]::ReadAllText($__a.FullName)
-  $__n = $__t
-  foreach ($__k in $__alvo.Keys) { $__n = [regex]::Replace($__n, '("' + [regex]::Escape($__k) + '"\s+")[^"]*(")', ('${1}' + $__alvo[$__k] + '${2}')) }
-  if ($__n -eq $__t) { Ok ('video do CS2 ja estava assim: ' + $__a.Directory.Parent.Parent.Parent.Name); continue }
-  if ($TESTE) { Plano ('ajustar ' + $__a.FullName); continue }
-  $__b = $__a.FullName + '.katharos.bak'
-  if (-not (Test-Path -LiteralPath $__b)) { Copy-Item -LiteralPath $__a.FullName -Destination $__b }
-  [IO.File]::WriteAllText($__a.FullName, $__n, (New-Object Text.UTF8Encoding $false))
-  Guarda-Desfazer ('cs2-video|' + $__a.FullName) ("Copy-Item -LiteralPath '" + ($__b -replace "'", "''") + "' -Destination '" + ($__a.FullName -replace "'", "''") + "' -Force")
-  Feito ('video do CS2 ajustado: ' + $__a.Directory.Parent.Parent.Parent.Name)
-}""".replace('«alvo»', '@{ ' + '; '.join(f"'{k}' = '{v}'" for k, v in alvo.items()) + ' }')
-
-
-@pacote('cs2', 'CS2', 'Counter-Strike 2: vídeo para FPS, placa certa, tela cheia e um .cfg só com comandos do jogo',
-        'Ajustes para o CS2 que não arriscam VAC: configurações do Windows para o cs2.exe e arquivos de configuração '
-        'com comandos que o próprio jogo aceita. Os únicos arquivos tocados são os de configuração do seu usuário (vídeo e um .cfg à parte), '
-        'com cópia antes. Arquivo do jogo, textura e memória ficam intocados. Céu preto não está aqui: no CS2 os comandos de céu exigem '
-        'sv_cheats, e o caminho que sobra é trocar textura, que servidores oficiais bloqueiam e pode dar ban.')
-def itens_cs2(ctx):
-    p = ctx.perfil or {}
-    if 'Steam' not in lista(pf(p, 'jogos', [])):
-        return []
-    hibrido = len(lista(p.get('gpus'))) >= 2
-    gpu = ACHA_CS2 + r'''
-$__a = Tenta { [string](Get-ItemProperty 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' -ErrorAction Stop).$CS2 } ''
-if ($__a -notmatch 'GpuPreference=2') { $__n = (($__a -replace 'GpuPreference=\d;', '') + 'GpuPreference=2;'); Set-Valor 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences' $CS2 $__n 'String' 'cs2.exe na placa dedicada' | Out-Null }'''
-    fso = ACHA_CS2 + r'''
-$__k = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers'
-$__a = Tenta { [string](Get-ItemProperty $__k -ErrorAction Stop).$CS2 } ''
-if ($__a -notmatch 'DISABLEDXMAXIMIZEDWINDOWEDMODE') { $__n = ('~ ' + (($__a -replace '^~\s*', '') + ' DISABLEDXMAXIMIZEDWINDOWEDMODE').Trim()); Set-Valor $__k $CS2 $__n 'String' 'cs2.exe sem otimizacoes de tela inteira' | Out-Null }'''
-    janela = r'''
-$__k = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
-$__a = Tenta { [string](Get-ItemProperty $__k -ErrorAction Stop).DirectXUserGlobalSettings } ''
-if ($__a -notmatch 'SwapEffectUpgradeEnable=1') { $__n = (($__a -replace 'SwapEffectUpgradeEnable=\d;', '') + 'SwapEffectUpgradeEnable=1;'); Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizacoes para jogos em janela' | Out-Null }'''
-    cfg = ACHA_CS2 + r'''
-$__f = Join-Path $CS2CFG 'katharos.cfg'
-if (Test-Path -LiteralPath $__f) { Ok 'katharos.cfg ja existe'; return }
-if ($TESTE) { Plano ('criar ' + $__f); return }
-[IO.File]::WriteAllText($__f, «cfg», (New-Object Text.UTF8Encoding $false))
-Guarda-Desfazer 'cs2-cfg' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "' -ErrorAction SilentlyContinue")
-Feito 'katharos.cfg criado; ponha +exec katharos nas opcoes de inicializacao do CS2' '''.replace('«cfg»', psq(CFG_CS2))
-    video = video_cs2_ps(VIDEO_CS2)
-    video_fraco = video_cs2_ps({**VIDEO_CS2, **VIDEO_CS2_FRACO})
-    reflex = video_cs2_ps(VIDEO_CS2_REFLEX)
-    medir = ACHA_CS2 + r'''
-$__f = Join-Path $CS2CFG 'katharos-medir.cfg'; $__g = Join-Path $CS2CFG 'katharos-medir-off.cfg'
-if ((Test-Path -LiteralPath $__f) -and (Test-Path -LiteralPath $__g)) { Ok 'katharos-medir ja existe'; return }
-if ($TESTE) { Plano ('criar ' + $__f + ' e ' + $__g); return }
-[IO.File]::WriteAllText($__f, «ligar», (New-Object Text.UTF8Encoding $false))
-[IO.File]::WriteAllText($__g, «desligar», (New-Object Text.UTF8Encoding $false))
-Guarda-Desfazer 'cs2-medir' ("Remove-Item -LiteralPath '" + ($__f -replace "'", "''") + "','" + ($__g -replace "'", "''") + "' -ErrorAction SilentlyContinue")
-Feito 'criados katharos-medir.cfg e katharos-medir-off.cfg; no console do CS2 digite: exec katharos-medir' '''.replace('«ligar»', psq(CFG_CS2_MEDIR)).replace('«desligar»', psq(CFG_CS2_MEDIR_OFF))
-    # cada item roda num bloco próprio: o "return" do ACHA_CS2 sai só do item, não do script inteiro
-    gpu, janela, fso, cfg, video, video_fraco, reflex, medir = ('& {\n' + x + '\n}' for x in (gpu, janela, fso, cfg, video, video_fraco, reflex, medir))
-    return [
-        Item('gpu-cs2', 'CS2 na placa de vídeo dedicada', 'O mesmo que Configurações › Tela › Gráficos › cs2.exe › Alto desempenho. '
-             'Em notebook com duas placas, o Windows às vezes abre o jogo na integrada.', 'muito mais FPS se ele estava na integrada',
-             'mais consumo de bateria durante o jogo', 2, gpu) if hibrido else None,
-        Item('janela-otim', 'otimizações para jogos em janela', 'Opção do Windows 11 (Configurações › Tela › Gráficos) que dá ao modo '
-             '"tela cheia em janela" a latência da tela cheia de verdade.', 'menos atraso no modo janela sem bordas',
-             'nenhum conhecido; alguns jogos antigos ignoram', 2, janela) if pf(p, 'so.win11') else None,
-        Item('fso-cs2', 'CS2 sem otimizações de tela inteira', 'A opção da aba Compatibilidade do cs2.exe. Em alguns PCs reduz o '
-             'atraso em tela cheia, em outros piora: teste uma partida e desfaça se não sentir diferença.', 'às vezes menos atraso',
-             'às vezes Alt+Tab mais lento ou tela piscando', 0, fso),
-        Item('video-cs2', 'vídeo do CS2 no preset de FPS', 'Ajusta o arquivo de vídeo do jogo (o mesmo que o menu Vídeo grava): '
-             'MSAA desligado com CMAA2 no lugar, V-Sync desligado, oclusão de ambiente, partículas e shader no baixo, sombras dinâmicas só do sol '
-             'e sem upscaling FSR. Resolução, sombras globais e textura ficam como estão, porque ajudam a ver o inimigo. '
-             'Faz cópia antes; o CS2 precisa estar fechado.',
-             'o MSAA 4x sozinho pode custar 10 a 20% do FPS; o resto varia com o PC', 'o jogo fica menos bonito (fumaça, reflexos e bordas mais simples)', 2, video),
-        Item('video-cs2-fraco', 'vídeo do CS2 para PC fraco (a mais)', 'Tudo do preset de FPS, e também texturas baixas, filtro bilinear e sombras '
-             'em Média (nunca abaixo disso). Para placa antiga ou com pouca memória de vídeo. Faz cópia antes; o CS2 precisa estar fechado.',
-             'menos uso de memória de vídeo e mais FPS em placa antiga', 'texturas mais borradas de perto', 3, video_fraco,
-             conflita=('video-cs2',)),
-        Item('reflex-cs2', 'NVIDIA Reflex ligado no CS2', 'Liga o Reflex (sem o Boost) no arquivo de vídeo do jogo, o mesmo que Configurações › Vídeo › '
-             'NVIDIA Reflex. Não muda a imagem.', 'menos atraso quando a placa é o gargalo; com FPS muito alto, pouca diferença', 'um pouco mais de consumo da placa', 2, reflex)
-        if pf(p, 'tem.nvidia') else None,
-        Item('medir-cs2', 'tempo entre quadros e ping na tela do CS2', 'Cria dois arquivos de configuração: um liga o contador de tempo entre '
-             'quadros e o ping na tela (os mesmos do menu de telemetria do jogo) e outro desliga. Você digita no console: exec katharos-medir.',
-             'dá para ver se uma mudança ajudou, com número', 'nada; só vale se você digitar o comando no jogo', 0, medir),
-        Item('cfg-cs2', 'katharos.cfg com comandos do próprio jogo', 'Cria um arquivo à parte (não mexe no seu autoexec) com '
-             'menus a 60 FPS e sem dicas de ajuda. Para valer, você põe +exec katharos nas opções de inicialização.',
-             'placa mais fria nos menus; tela mais limpa', 'nada; o arquivo só vale se você mandar o jogo carregar', 2, cfg),
-    ]
-
-# ═══════════════ Jogos Unreal Engine (GameUserSettings.ini) ═══════════════
-# Jogos feitos na Unreal Engine gravam a qualidade gráfica no GameUserSettings.ini, na seção [ScalabilityGroups], chaves "sg.*".
-# Cada chave vai de 0 (baixo) a 3 (épico) nos menus (a Epic lista 0 a 3 em
-# https://dev.epicgames.com/documentation/en-us/unreal-engine/scalability-reference-for-unreal-engine ; o 4 "cinematográfico" só aparece em console
-# ou em jogos que o oferecem). O PCGamingWiki confirma o arquivo e que o jogo grava "sg.*" nele (Satisfactory).
-# Mesmas regras do Minecraft: só chave que já existe no arquivo, só para BAIXAR (nunca sobe), jogo fechado, cópia .katharos.bak.
-# Só entra jogo sem anti-cheat de terceiros e com o caminho do arquivo confirmado em fonte pública.
-UE_REGRAS = {
-    'sg.ViewDistanceQuality': ('max', 2),
-    'sg.ShadowQuality': ('max', 2),
-    'sg.EffectsQuality': ('max', 2),
-    'sg.PostProcessQuality': ('max', 2),
-    'sg.FoliageQuality': ('max', 2),
-}
-UE_CHAVES_DOCUMENTADAS = {'sg.ViewDistanceQuality', 'sg.ShadowQuality', 'sg.EffectsQuality', 'sg.PostProcessQuality', 'sg.FoliageQuality',
-                          'sg.TextureQuality', 'sg.AntiAliasingQuality', 'sg.ResolutionQuality', 'sg.ShadingQuality'}
-# id, título, pasta em %LOCALAPPDATA% (a que o PCGamingWiki indica), fonte
-UE_JOGOS = [
-    ('satisfactory', 'Satisfactory', r'FactoryGame\Saved\Config\WindowsNoEditor', 'https://www.pcgamingwiki.com/wiki/Satisfactory'),
-    ('stray', 'Stray', r'Hk_project\Saved\Config\WindowsNoEditor', 'https://www.pcgamingwiki.com/wiki/Stray'),
-]
-
-
-def _ue_instalado(pasta):
-    """No Windows, só oferece o jogo que tem o arquivo de configuração; fora dele (testes, prévia) mostra todos."""
-    return (not WINDOWS) or os.path.exists(os.path.expandvars('%LOCALAPPDATA%\\' + pasta + '\\GameUserSettings.ini'))
-
-
-@pacote('unreal', 'jogos Unreal Engine', 'Satisfactory e Stray: qualidade gráfica no arquivo do jogo',
-        'Jogos feitos na Unreal Engine gravam a qualidade gráfica no GameUserSettings.ini. Para cada jogo instalado da lista, este pacote baixa '
-        'distância de visão, sombras, efeitos, pós-processamento e vegetação de "Épico" para "Alto", só se estiverem acima disso, só em linhas '
-        'que já existem no arquivo, com o jogo fechado e uma cópia (.katharos.bak). Texturas, resolução e suavização de bordas não são tocadas. '
-        'Só entram jogos sem anti-cheat de terceiros e com o local do arquivo confirmado em fonte pública.')
-def itens_unreal(ctx):
-    aberto = (r"""if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '-Win64-Shipping$|-WinGDK-Shipping$' }).Count) """
-              r"""{ Aviso 'feche o jogo antes: ele regrava as opcoes ao sair'; return }""")
-    itens = []
-    for id_, nome, pasta, _ in UE_JOGOS:
-        if not _ue_instalado(pasta):
-            continue
-        caminho = f"(Join-Path $env:LOCALAPPDATA {psq(pasta + chr(92) + 'GameUserSettings.ini')})"
-        itens.append(Item('ue-' + id_, f'{nome}: gráficos de "Épico" para "Alto"',
-                          f'Ajusta o GameUserSettings.ini do {nome}: distância de visão, sombras, efeitos, pós-processamento e vegetação '
-                          'no máximo "Alto" (2). O que já estava mais baixo fica. Texturas, resolução e suavização não mudam.',
-                          'sombras e efeitos em "Épico" pesam bastante; o ganho varia com o PC (meça com o contador de FPS do jogo)',
-                          'sombras e longe do horizonte um pouco menos detalhados', 2,
-                          '& {\n' + opcoes_txt_ps(nome, 'ue-' + id_, caminho, aberto, UE_REGRAS, sep='=') + '\n}'))
-    return itens
-
-
-# Pacote de um jogo sem nada a fazer: diz o que não foi achado, em vez de um "nada a fazer" seco.
-SEM_ITENS = {
-    'cs2': 'Não achei a Steam neste PC, então não há o que ajustar no CS2. Instale e abra o jogo uma vez, e volte aqui.',
-    'minecraft': 'Não achei o Minecraft Java neste PC (o options.txt fica em %APPDATA%\\.minecraft). Abra o jogo uma vez e volte aqui.',
-    'unreal': 'Não achei Satisfactory nem Stray neste PC. Abra o jogo uma vez (ele cria o arquivo de opções) e volte aqui.',
-}
 
 
 # ───────────────────────────── ícone do Katharos (ICO com 5 tamanhos, embutido) ─────────────────────────────
@@ -9210,6 +8424,51 @@ def escolhe_modo(t, args):
 
 ETAPAS_FIXAS = ('medir-antes', 'medir-depois', 'reinicio', 'agendar')
 
+# Para que o turbo otimiza. Nada é de um jogo específico: tudo vale para qualquer jogo.
+# jogos: o que ajuda FPS e latência sem custo para o resto do PC. jogos-max: tudo o que pode dar FPS, aceitando mais consumo,
+# mais calor e menos efeitos (plano de energia máximo, placa de vídeo sempre no estado de desempenho, temporizador fino...).
+FOCOS = [
+    ('geral', 'uso geral', 'o PC inteiro mais leve, sem prioridade para jogos'),
+    ('jogos', 'jogos', 'mais FPS e menos atraso em qualquer jogo, sem perder nada no resto do PC'),
+    ('jogos-max', 'jogos no máximo', 'tudo o que pode dar FPS: plano de energia máximo, efeitos visuais desligados, placa de vídeo '
+                  'sempre no desempenho e menos atraso de entrada e de rede. Gasta mais energia e esquenta mais'),
+]
+FOCO_ITENS = {   # itens do pacote "jogos" que cada foco põe, além dos que o modo marca
+    'jogos': {'modo-jogo', 'gamedvr', 'aderencia', 'mouse', 'hags', 'directx-jogos'},
+    'jogos-max': {'modo-jogo', 'gamedvr', 'aderencia', 'mouse', 'teclado', 'hags', 'directx-jogos', 'mmcss', 'primeiro-plano', 'rede-jogos', 'timer',
+                  'gpu-nvidia', 'gpu-amd'},
+}
+FOCO_ETAPAS = {'jogos': ('jogos', 'energia'), 'jogos-max': ('jogos', 'energia', 'visual', 'servicos')}
+FOCO_EXTREMO = {'jogos-max': ('energia', 'visual')}   # nestas etapas o foco máximo marca como no modo extremo
+
+
+def escolhe_foco(t, args):
+    f = getattr(args, 'foco', None)
+    if f in dict((x[0], x) for x in FOCOS):
+        return f
+    t.titulo('para quê')
+    for i, (nome, rot, txt) in enumerate(FOCOS, 1):
+        t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(rot, "texto", True)}')
+        t.paragrafo(txt + '.', 6, 'sub')
+    t.escreve()
+    if getattr(args, 'sim', False) or not t.interativo:
+        return 'geral'
+    r = t.pergunta('para quê: 1, 2 ou 3 (Enter = uso geral)').strip().lower()
+    return {'1': 'geral', '2': 'jogos', '3': 'jogos-max'}.get(r, r if r in dict((x[0], x) for x in FOCOS) else 'geral')
+
+
+def ferramenta_jogar(ctx, args):
+    """O turbo com foco em jogos: pergunta só entre jogos e jogos no máximo."""
+    t = ctx.t
+    if getattr(args, 'foco', None) not in ('jogos', 'jogos-max'):
+        t.titulo('otimizar para jogos')
+        for i, (nome, rot, txt) in enumerate(FOCOS[1:], 1):
+            t.escreve(f'  {t.p(f"{i:>2}", "destaque", True)}  {t.p(rot, "texto", True)}')
+            t.paragrafo(txt + '.', 6, 'sub')
+        r = '1' if (getattr(args, 'sim', False) or not t.interativo) else t.pergunta('1 ou 2 (Enter = jogos)').strip().lower()
+        args.foco = 'jogos-max' if r in ('2', 'max', 'maximo', 'máximo', 'jogos-max') else 'jogos'
+    return ferramenta_turbo(ctx, args)
+
 
 def le_plano(arq):
     """O plano de um turbo anterior: um .json com etapas, ou o relatório único (.md) de onde ele veio. Só vale o que o
@@ -9263,6 +8522,7 @@ def ferramenta_turbo(ctx, args):
         grava_json(ARQ_TURBO, plano)
         return executa_turbo(ctx, args, plano)
     modo = escolhe_modo(t, args)
+    foco = escolhe_foco(t, args)
     t.escreve()
     itens = []
     for nome in ORDEM_TURBO:
@@ -9271,6 +8531,8 @@ def ferramenta_turbo(ctx, args):
         nota = ''
         if nome == 'jogos' and joga(p):
             n, nota = 2, 'tem jogos instalados'
+        if nome in FOCO_ETAPAS.get(foco, ()):
+            n, nota = 1, f'foco: {dict((x[0], x[1]) for x in FOCOS)[foco]}'
         if nome == 'navegador' and config('navegador') == 'brave':
             n = 1
         itens.append(Item(nome, pac.titulo, pac.explica, pac.resumo, '', n, nota=nota))
@@ -9282,7 +8544,7 @@ def ferramenta_turbo(ctx, args):
     if not escolhidos:
         t.nota('nada escolhido.')
         return 0
-    plano = {'criado': agora_iso(), 'modo': modo, 'etapas': ['medir-antes'] + [i.id for i in escolhidos if i.id != 'reinicio'],
+    plano = {'criado': agora_iso(), 'modo': modo, 'foco': foco, 'etapas': ['medir-antes'] + [i.id for i in escolhidos if i.id != 'reinicio'],
              'itens': {}, 'feitas': [], 'tentativas': {}, 'concluido': False}
     if any(i.id == 'reinicio' for i in escolhidos):
         plano['etapas'] += ['reinicio', 'medir-depois']
@@ -9376,7 +8638,12 @@ def _itens_da_etapa(ctx, plano, etapa, filtra_ja=True):
         ids = set(plano['itens'][etapa])
         its = [x for x in its if x.id in ids]
     else:
-        marca_por_modo(its, plano['modo'])
+        foco = plano.get('foco') or 'geral'
+        marca_por_modo(its, 'extremo' if etapa in FOCO_EXTREMO.get(foco, ()) else plano['modo'])
+        if etapa == 'jogos':
+            for x in its:
+                if x.id in FOCO_ITENS.get(foco, ()):
+                    x.marcado = True
         its = [x for x in its if x.marcado]
     if filtra_ja:   # o que já foi conferido como feito nesta sessão não roda de novo
         cache = getattr(ctx, 'ja', None) or {}
@@ -10843,7 +10110,7 @@ def projecao_enchimento(serie, minimo=6):
 # é isso que permite gráfico de temperatura de meses sem arquivo gigante.
 #
 # CUIDADO COM JOGOS (anti-cheat): o coletor só lê contadores de desempenho e WMI do sistema. Nunca abre o processo de um jogo, nunca lê
-# memória, nunca injeta DLL, não instala driver nem overlay. Enquanto um jogo conhecido (ou um anti-cheat) estiver aberto, ele nem olha
+# memória, nunca injeta DLL, não instala driver nem overlay. Enquanto há jogo aberto (anti-cheat, sobreposição de jogo de uma loja ou GPU acima de 60 %), ele nem olha
 # a lista de processos para saber quem consome, nem chama a ferramenta da placa de vídeo: só CPU, RAM, disco, temperatura da zona térmica
 # e bateria do sistema. Com `config coleta-em-jogo pausar` ele não coleta nada enquanto houver jogo aberto.
 HORAS_MAX = 24 * 400
@@ -10852,17 +10119,22 @@ TAREFA_AMOSTRA = 'Katharos - amostra leve'
 INTERVALO_AMOSTRA_MIN = 15
 # nomes de processo (minúsculas, sem .exe) que contam como "há jogo aberto": o catálogo + exemplos com anti-cheat + processos de anti-cheat conhecidos
 ANTICHEAT_PROCESSOS = ['easyanticheat', 'easyanticheat_eos', 'beservice', 'vgc', 'vgtray', 'faceit', 'faceitclient', 'faceit-ac', 'battleye', 'eac_launcher']
+# processos que só existem com um jogo aberto: a sobreposição das lojas (Steam, Epic, EA, Ubisoft, Xbox, NVIDIA e AMD in-game)
+SOBREPOSICOES_DE_JOGO = ['gameoverlayui', 'gameoverlayui64', 'eosoverlayrenderer-win64-shipping', 'igo64', 'igoproxy64', 'upc_overlay', 'uplay_r1_loader64',
+                         'gamebarftserver', 'nvsphelper64', 'amdow']
+GPU_EM_JOGO = 60   # % de GPU 3D: acima disso, conta como jogo aberto mesmo sem sobreposição
 
 
 def nomes_de_jogo():
-    return sorted({re.sub(r'\.exe$', '', x.lower()) for x in list(JOGOS_EXE) + list(EXE_COM_ANTICHEAT)} | set(ANTICHEAT_PROCESSOS))
+    return sorted(set(ANTICHEAT_PROCESSOS) | set(SOBREPOSICOES_DE_JOGO))
 
 
 AMOSTRA_PS = r'''
 $__pausar = «pausar»
 $__jogos = @(«jogos»)
 $__nomes = @([System.Diagnostics.Process]::GetProcesses() | ForEach-Object { $_.ProcessName.ToLower() })
-$__emJogo = [bool](@($__nomes | Where-Object { $__jogos -contains $_ }).Count)
+$__gpuU = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
+$__emJogo = [bool](@($__nomes | Where-Object { $__jogos -contains $_ }).Count) -or ($null -ne $__gpuU -and $__gpuU -ge «gpu»)
 if ($__emJogo -and $__pausar) { Dado 'amostra' @{ em_jogo = $true; pausado = $true }; return }
 $__cpuS = @()
 for ($i = 0; $i -lt 3; $i++) {
@@ -10878,7 +10150,6 @@ $__ramU = $(if ($null -ne $__memD) { [math]::Max(0, $__ramT - $__memD) } else { 
 $__tt = LeTemperaturas (-not $__emJogo)   # em jogo: só sensores do sistema; o driver de vídeo e a NVIDIA ficam para fora de jogo
 $__temp = $__tt.cpu
 $__disco = Tenta { [math]::Max(0, [math]::Min(100, 100 - [double](Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop).PercentIdleTime)) } $null
-$__gpuU = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
 $__bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
 $a = @{ em_jogo = $__emJogo; ram_pct = [math]::Round($__ramU / $__ramT * 100, 1); ram_gb = [math]::Round($__ramU, 2) }
 if ($__cpuS.Count) { $a.cpu = [math]::Round(($__cpuS | Measure-Object -Average).Average, 1) }
@@ -11073,7 +10344,7 @@ def amostra_leve(ctx, args=None):
     if not WINDOWS:
         return None
     pausar = config('coleta-em-jogo', 'segura') == 'pausar'
-    corpo = ps_monta(AMOSTRA_PS, pausar='$true' if pausar else '$false', jogos=', '.join(psq(n) for n in nomes_de_jogo()))
+    corpo = ps_monta(AMOSTRA_PS, pausar='$true' if pausar else '$false', jogos=', '.join(psq(n) for n in nomes_de_jogo()), gpu=str(GPU_EM_JOGO))
     s = roda_ps(ctx.t, corpo, 'amostra', minutos=1, mostra=False)
     a = s.dados.get('amostra')
     if isinstance(a, dict):
@@ -13363,7 +12634,6 @@ SINONIMOS = {
     'engasgo': ('jogo', 'dvr', 'latencia'), 'stutter': ('jogo', 'dvr'), 'travadinha': ('jogo', 'dvr'), 'gravacao': ('dvr', 'captura'),
     'xbox': ('xbox', 'game bar', 'dvr'), 'gamebar': ('game bar', 'dvr'), 'placa': ('gpu', 'video'), 'gpu': ('gpu', 'video'),
     'nvidia': ('nvidia', 'gpu'), 'amd': ('amd', 'radeon', 'gpu'), 'radeon': ('amd', 'radeon'), 'shader': ('shader',), 'shaders': ('shader',),
-    'counter': ('cs2',), 'csgo': ('cs2',), 'cs': ('cs2',), 'mine': ('minecraft',), 'unreal': ('unreal',), 'steam': ('steam',),
     'tela-cheia': ('tela cheia', 'fullscreen'), 'fullscreen': ('tela cheia',), 'hz': ('taxa', 'monitor'), 'vsync': ('vsync', 'sincroniza'),
     'input': ('latencia', 'mouse'), 'prioridade': ('prioridade',),
     # calor, energia, bateria
@@ -13635,13 +12905,7 @@ GRUPOS = [
         ('energia', 'plano de energia, turbo e USB', 'pacote'),
         ('disco', 'menos escrita, boot mais rápido', 'pacote'),
         ('rede', 'DNS mais rápido e medição de ping', 'pacote'),
-    ]),
-    ('jogos', 'Comece por "jogos", que ajusta o Windows para qualquer jogo. Depois, o jogo que você joga.', [
-        ('jogos', 'o Windows para jogar: Modo de Jogo, prioridade, latência', 'pacote'),
-        ('cs2', 'CS2: vídeo para FPS, placa certa e .cfg', 'pacote'),
-        ('minecraft', 'Minecraft Java: distância e partículas', 'pacote'),
-        ('unreal', 'Satisfactory e Stray: gráficos no arquivo do jogo', 'pacote'),
-        ('steam', 'Steam: disco, tela e o que atrapalha (só lê)', 'ferramenta_steam'),
+        ('jogos', 'FPS e latência em qualquer jogo: Modo de Jogo, entrada', 'pacote'),
     ]),
     ('manutenção', 'quando algo quebra ou envelhece', [
         ('reparar', 'DISM, SFC, chkdsk, rede e Update', 'pacote'),
@@ -13681,22 +12945,18 @@ MENU = [
     ('raiox', 'nota do PC e o que fazer primeiro (só lê)'),
     ('turbo', 'otimiza tudo de uma vez, no modo que você escolher'),
     ('escolher', 'otimiza por área: você escolhe a área e os itens'),
-    ('jogar', 'otimiza para jogos: o Windows e cada jogo deste PC'),
+    ('jogar', 'otimiza para jogos: mais FPS e menos atraso em qualquer jogo'),
     ('painel', 'gráficos do PC ao longo do tempo, no navegador'),
     ('desfazer', 'volta qualquer mudança'),
     ('mais', 'medir, acompanhar, segurança, preferências...'),
 ]
-TELAS = ('escolher', 'jogar', 'mais')
-GRUPO_JOGAR = 'jogos'   # a tela "jogar" é este grupo inteiro: o pacote do Windows, os de cada jogo e a conferência da Steam
+TELAS = ('escolher', 'mais')
 
 
 def grupos_da_tela(tela):
     """Os grupos de uma tela do menu: "escolher" = só as áreas com itens para marcar; "mais" = as ferramentas
     que não estão no menu de abertura. Grupo vazio some."""
     no_menu = {c for c, _ in MENU}
-    if tela == 'jogar':
-        return [(g, e, [(c, d) for c, d, _ in its]) for g, e, its in GRUPOS if g == GRUPO_JOGAR]
-    no_menu |= {c for g, _, its in GRUPOS if g == GRUPO_JOGAR for c, _, _ in its}   # o que é de jogo fica só em "jogar"
     out = []
     for titulo, expl, itens in GRUPOS:
         if tela == 'escolher':
@@ -13709,6 +12969,7 @@ def grupos_da_tela(tela):
 
 
 COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
+COMANDOS['jogar'] = ('otimiza para jogos: mais FPS e menos atraso em qualquer jogo', 'ferramenta_jogar')
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (--parar tira)', 'ferramenta_bandeja')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
@@ -13806,6 +13067,11 @@ def monta_parser():
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
     tb.add_argument('--continuar', action='store_true', help='continua um turbo pela metade (a tarefa agendada usa)')
     tb.add_argument('--plano', metavar='ARQUIVO', help='usa as escolhas salvas de outro turbo (para repetir em outros PCs, sem perguntas)')
+    tb.add_argument('--foco', choices=['geral', 'jogos', 'jogos-max'], help='para quê: uso geral, jogos ou jogos no máximo')
+    jg = sub.add_parser('jogar', parents=[depois], help='otimiza para jogos: mais FPS e menos atraso em qualquer jogo')
+    jg.add_argument('--foco', choices=['jogos', 'jogos-max'], help='jogos ou jogos no máximo')
+    jg.add_argument('--continuar', action='store_true', help=argparse.SUPPRESS)
+    jg.add_argument('--plano', help=argparse.SUPPRESS)
     for cmd, desc, f in (x for _, _, itens in GRUPOS for x in itens):
         if f == 'pacote':
             sub.add_parser(cmd, parents=[depois], help=desc)
@@ -13837,7 +13103,6 @@ def monta_parser():
     org.add_argument('--dias', type=int, help='deixa quieto o que foi mexido nos últimos N dias (padrão 1)')
     org.add_argument('--atalhos', action='store_true', help='também junta os atalhos numa pasta')
     org.add_argument('--desfazer', action='store_true', help='põe de volta o que a última organização moveu')
-    sub.add_parser('steam', parents=[depois], help='Steam e CS2: só lê e orienta, sem tocar nos jogos')
     sub.add_parser('aplicado', parents=[depois], help='a lista do que este PC já tem feito, área por área')
     sub.add_parser('verificar', parents=[depois], help='confere se o que foi aplicado continua valendo')
     sub.add_parser('cartao', parents=[depois], help='antes e depois, num cartão')
@@ -13858,7 +13123,7 @@ def monta_parser():
 
 def _defaults(args):
     for k, v in (('pastas', []), ('mb', None), ('agora', False), ('remover', False), ('pacotes', []), ('chave', None),
-                 ('valor', None), ('continuar', False), ('plano', None), ('agendada', False), ('queixas', None), ('salvar', None),
+                 ('valor', None), ('continuar', False), ('plano', None), ('foco', None), ('agendada', False), ('queixas', None), ('salvar', None),
                  ('copiar', False), ('codigo', False), ('filtro', None), ('dias', None), ('atalhos', False), ('desfazer', False),
                  ('zerar', False), ('acao', None), ('alvo', None)):
         if not hasattr(args, k):
@@ -13973,12 +13238,10 @@ def menu(ctx, parser, args, tela=None):
     primeira_vez(ctx)
     while True:
         usados = estado().get('usado', {})
-        if tela == 'jogar':
-            grupo = grupos_da_tela('jogar')[0]
         t.limpa()
         t.logo('KATHAROS')
         extra = ' · '.join(x for x in ((f'modo {config("modo")}' if config('modo') != PADROES['modo'] else ''), ('sem administrador' if WINDOWS and not eh_admin() else '')) if x)
-        t.cabecalho('início' if not tela else (tela if not grupo or tela == 'jogar' else f'{tela} › {grupo[0]}'), extra, app=APP)
+        t.cabecalho('início' if not tela else (tela if not grupo else f'{tela} › {grupo[0]}'), extra, app=APP)
         if not WINDOWS:
             t.aviso('Este computador não é Windows: dá para ver o menu, mas os comandos só funcionam no Windows.')
         quando = {c: ha_quanto_iso(q) for c, q in usados.items()}
@@ -13999,26 +13262,7 @@ def menu(ctx, parser, args, tela=None):
                 t.paragrafo(grupo[1], 2, 'apagado')
                 t.escreve()
             lista = grupo[2]
-            if tela == 'jogar':   # só o que este PC tem: "jogos" (o Windows) vale para todos; o resto, se o jogo foi achado
-                if WINDOWS and 'catalogo' not in _CACHE_JOGOS:
-                    t.nota('procurando os jogos instalados neste PC (só lê os nomes das pastas)...', 2)
-                achados = jogos_neste_pc()
-                lista = [(c, d) for c, d in lista if achados.get(c, True) or c == 'jogos']
-                lista_ok, com_ac = jogos_do_catalogo()
             por_numero = t.menu_itens([('', '', lista)], quando, zero='voltar')
-            if tela == 'jogar':
-                t.nota('O que aparece é o que este PC tem. Se o seu jogo não aparece, digite o nome: cs2, minecraft ou unreal.', 2)
-                if WINDOWS:
-                    t.escreve()
-                    if lista_ok:
-                        t.paragrafo(f'Jogos da lista do Katharos achados aqui ({len(lista_ok)}): {resumo_jogos_achados(lista_ok)}. '
-                                    'A prioridade alta do pacote "jogos" vale para eles.', 2, 'sub')
-                    else:
-                        t.paragrafo('Não achei jogos da lista do Katharos na Steam, na Epic, na GOG, na Ubisoft, na EA, no Xbox nem entre os programas instalados.', 2, 'apagado')
-                    if com_ac:
-                        t.paragrafo(f'Também achei {pl(com_ac, "jogo", "jogos")} com anti-cheat de terceiros: o Katharos não mexe neles '
-                                    '(só se você marcar o item opcional do pacote "jogos").', 2, 'apagado')
-                t.escreve()
         else:
             t.paragrafo('Escolha uma área. Dentro dela os itens já vêm marcados pelo modo, e você tira ou põe o que quiser.'
                         if tela == 'escolher' else 'As outras ferramentas, por assunto.', 2, 'apagado')
@@ -14036,7 +13280,7 @@ def menu(ctx, parser, args, tela=None):
         if escolha == '' and passo and not tela:   # Enter segue o próximo passo
             escolha = passo[0]
         if escolha in ('', '0', 'q', 'sair', 'v', 'voltar'):
-            if grupo and tela != 'jogar':
+            if grupo:
                 grupo = None
             elif tela:
                 grupo = None

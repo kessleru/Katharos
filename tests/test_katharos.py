@@ -165,87 +165,14 @@ class TestMenuEnxuto(unittest.TestCase):
             for c, _ in itens:
                 self.assertNotEqual(k.COMANDOS[c][1], 'pacote', c)
 
-    def test_jogar_junta_tudo_de_jogo_num_lugar_so(self):
-        (titulo, expl, itens), = k.grupos_da_tela('jogar')
-        cmds = [c for c, _ in itens]
-        for c in ('jogos', 'cs2', 'minecraft', 'unreal', 'steam'):
-            self.assertIn(c, cmds)
-        self.assertEqual(cmds[0], 'jogos', 'o Windows vem primeiro')
-        self.assertTrue(expl)
-        for tela in ('escolher', 'mais'):
-            for _, _, its in k.grupos_da_tela(tela):
-                self.assertFalse({c for c, _ in its} & set(cmds), f'{tela} repete o que é de jogo')
 
-    def test_pacote_de_jogo_vazio_diz_o_que_nao_achou(self):
-        for c in ('cs2', 'minecraft', 'unreal'):
-            self.assertIn('Não achei', k.SEM_ITENS[c])
-        achados = k.jogos_neste_pc()
-        if k.WINDOWS:   # no Windows responde sim ou não para cada jogo; fora dele não afirma nada
-            self.assertEqual(set(achados), {'steam', 'cs2', 'minecraft', 'unreal'})
-            self.assertTrue(all(isinstance(v, bool) for v in achados.values()))
-        else:
-            self.assertEqual(achados, {})
 
-    def tela_jogar(self, achados, windows=False):
-        import io, contextlib
-        t = k.Terminal(True, True)
-        ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf), mock.patch.object(k, 'jogos_neste_pc', lambda: achados), \
-                mock.patch.object(k, 'jogos_do_catalogo', lambda: (['Hades'], 1)), mock.patch.object(k, 'primeira_vez', lambda c: None), mock.patch.object(k, 'estado', lambda: {}), \
-                mock.patch.object(k, 'WINDOWS', windows), mock.patch.object(k, 'eh_admin', lambda: True), \
-                mock.patch.dict(k._CACHE_JOGOS, {'catalogo': (['Hades'], 1)}), \
-                mock.patch('builtins.input', side_effect=['4', '0', '0']):
-            k.menu(ctx, k.monta_parser(), type('A', (), {})())
-        return buf.getvalue()
 
-    def test_jogar_mostra_so_os_jogos_que_este_pc_tem(self):
-        n = [c for c, _ in k.MENU].index('jogar') + 1
-        self.assertEqual(n, 4)
-        txt = self.tela_jogar({'steam': True, 'cs2': True, 'minecraft': False, 'unreal': False})
-        self.assertIn('cs2', txt)
-        self.assertIn('steam', txt)
-        self.assertNotIn('minecraft  ', txt)
-        self.assertNotIn('unreal  ', txt)
-        self.assertIn('jogos', txt, 'o Windows aparece sempre')
 
-    def test_jogar_lista_os_jogos_do_catalogo_achados_e_o_anticheat(self):
-        txt = self.tela_jogar({'steam': True, 'cs2': False, 'minecraft': False, 'unreal': False}, windows=True)
-        self.assertIn('Hades', txt)
-        self.assertIn('anti-cheat de terceiros', txt)
-        self.assertIn('achados aqui (1)', txt)
 
-    def test_jogar_sem_nenhum_jogo_ainda_tem_o_windows(self):
-        txt = self.tela_jogar({'steam': False, 'cs2': False, 'minecraft': False, 'unreal': False})
-        self.assertIn('o Windows para jogar', txt)
-        self.assertNotIn('cs2   ', txt)
 
-    def test_acha_jogos_do_catalogo_pelo_nome_do_exe_e_conta_anticheat(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as d:
-            a = Path(d) / 'Cyberpunk 2077' / 'bin' / 'x64'
-            a.mkdir(parents=True)
-            (a / 'Cyberpunk2077.exe').write_bytes(b'')
-            b = Path(d) / 'Apex'
-            b.mkdir()
-            (b / 'r5apex.exe').write_bytes(b'')
-            (Path(d) / 'Outro').mkdir()
-            (Path(d) / 'Outro' / 'notepad.exe').write_bytes(b'')
-            achados, com_ac = k.jogos_do_catalogo([Path(d) / 'Cyberpunk 2077', b, Path(d) / 'Outro', Path(d) / 'nao existe'])
-        self.assertEqual(achados, ['Cyberpunk 2077'])
-        self.assertEqual(com_ac, 1)
-        self.assertEqual(k.jogos_do_catalogo([]), ([], 0))
 
-    def test_so_lista_jogo_do_catalogo_e_nunca_um_exe_qualquer(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / 'setup.exe').write_bytes(b'')
-            self.assertEqual(k.jogos_do_catalogo([Path(d)])[0], [])
 
-    def test_resumo_dos_jogos_achados(self):
-        self.assertEqual(k.resumo_jogos_achados([]), '')
-        self.assertEqual(k.resumo_jogos_achados(['A', 'B']), 'A, B')
-        self.assertEqual(k.resumo_jogos_achados(list('ABCDEFGHI')), 'A, B, C, D, E, F e mais 3')
 
     def test_dicas_mostram_poucas_teclas_separadas_por_bolinha(self):
         import io, contextlib
@@ -371,92 +298,8 @@ class TestEscolhaDeItens(unittest.TestCase):
         self.assertEqual(r, [])
 
 
-class TestJogosECS2(unittest.TestCase):
-    """O catálogo e o pacote do CS2 só mexem no que foi confirmado em fonte."""
-    def test_catalogo_nao_tem_exe_com_anticheat(self):
-        self.assertFalse(set(k.JOGOS_EXE) & set(k.EXE_COM_ANTICHEAT))
-
-    def test_catalogo_sem_repeticao_e_sem_jogo_que_nao_existe_mais(self):
-        nomes = [n for n, _ in k.CATALOGO_JOGOS]
-        self.assertEqual(len(nomes), len(set(nomes)))
-        self.assertEqual(len(k.JOGOS_EXE), len(set(k.JOGOS_EXE)))
-        self.assertNotIn('csgo.exe', k.JOGOS_EXE)
-
-    def test_item_de_prioridade_com_anticheat_e_opt_in(self):
-        its = {i.id: i for _, i in ITENS}
-        item = its['prioridade-jogos-ac']
-        self.assertEqual(item.nivel, 0)
-        self.assertTrue(item.alerta)
-        for modo in k.MODOS:   # nenhum modo marca sozinho
-            lista = [i for n, i in todos_itens() if n == 'jogos']
-            k.marca_por_modo(lista, modo)
-            self.assertNotIn('prioridade-jogos-ac', [i.id for i in lista if i.marcado], modo)
-
-    def test_itens_novos_do_cs2_existem(self):
-        ids = {i.id for _, i in ITENS}
-        for novo in ('video-cs2', 'video-cs2-fraco', 'reflex-cs2', 'medir-cs2', 'prioridade-jogos-ac'):
-            self.assertIn(novo, ids)
-
-    def test_video_cs2_so_troca_chaves_conhecidas_e_nunca_a_resolucao(self):
-        todas = {**k.VIDEO_CS2, **k.VIDEO_CS2_FRACO, **k.VIDEO_CS2_REFLEX}
-        for chave in todas:
-            self.assertNotRegex(chave, r'defaultres|fullscreen|aspectratio|refreshrate|display')
-        self.assertFalse(set(k.VIDEO_CS2) & set(k.VIDEO_CS2_FRACO))
-
-    def test_video_cs2_faz_copia_antes_e_exige_jogo_fechado(self):
-        its = {i.id: i for _, i in ITENS}
-        self.assertIn('.katharos.bak', its['video-cs2'].ps)
-        self.assertIn('cs2', its['video-cs2'].ps.lower())
 
 
-class TestPacotesDeJogo(unittest.TestCase):
-    """Regras de todo pacote que edita arquivo de configuração de jogo."""
-    def test_minecraft_so_usa_chaves_confirmadas_e_so_baixa(self):
-        for regras in (k.MC_OPCOES, k.MC_OPCOES_FRACO):
-            self.assertFalse(set(regras) - k.MC_CHAVES_CONFIRMADAS, 'chave do Minecraft sem fonte')
-            for chave, (como, valor) in regras.items():
-                self.assertIn(como, ('max', 'min', 'set'))
-        self.assertNotIn('maxFps', {**k.MC_OPCOES, **k.MC_OPCOES_FRACO}, 'o teto de FPS não é mexido')
-
-    def test_nenhum_script_de_jogo_grava_com_bom(self):
-        """Set-Content -Encoding UTF8 grava BOM no PowerShell 5.1; arquivo de jogo (Java, cfg da Valve) pode não aceitar."""
-        for pac, it in ITENS:
-            if pac in ('cs2', 'minecraft', 'unreal'):
-                self.assertNotRegex(it.ps or '', r'Set-Content[^\n]*-Encoding\s+UTF8', f'{pac}/{it.id}')
-                self.assertNotRegex(it.ps or '', r'Out-File', f'{pac}/{it.id}')
-
-    def test_pacote_de_jogo_faz_copia_e_exige_jogo_fechado(self):
-        for pac, it in ITENS:
-            if pac in ('minecraft', 'unreal'):
-                self.assertIn('.katharos.bak', it.ps)
-                self.assertIn('Get-Process', it.ps)
-                self.assertIn('Guarda-Desfazer', it.ps)
-                self.assertIn('UTF8Encoding $__bom', it.ps)
-                self.assertIn('UTF-16', it.ps, 'não reescreve arquivo em codificação que não entende')
-
-    def test_unreal_so_usa_chaves_documentadas_so_baixa_e_so_jogo_com_fonte(self):
-        self.assertFalse(set(k.UE_REGRAS) - k.UE_CHAVES_DOCUMENTADAS)
-        self.assertTrue(all(como == 'max' for como, _ in k.UE_REGRAS.values()), 'só baixa')
-        self.assertTrue(all(valor <= 2 for _, valor in k.UE_REGRAS.values()), 'de Épico (3) para Alto (2), no máximo')
-        for id_, nome, pasta, fonte in k.UE_JOGOS:
-            self.assertTrue(fonte.startswith('https://'), nome)
-            self.assertNotIn(nome, k.JOGOS_ANTICHEAT, f'{nome} tem anti-cheat de terceiros')
-        antigo = k._ue_instalado
-        k._ue_instalado = lambda pasta: True   # no Windows de verdade só aparece o jogo instalado; aqui conferimos todos
-        try:
-            itens = [i for i in k.PACOTES['unreal'].itens(Ctx) if i]
-        finally:
-            k._ue_instalado = antigo
-        self.assertEqual({i.id for i in itens}, {'ue-' + j[0] for j in k.UE_JOGOS})
-        for i in itens:
-            self.assertIn('^([^=]+)=(.*)$', i.ps)
-            self.assertNotIn('sg.TextureQuality', i.ps)
-            self.assertNotIn('sg.AntiAliasingQuality', i.ps)
-
-    def test_pacote_de_jogo_esta_no_menu(self):
-        cmds = [c for _, _, its in k.GRUPOS for c, _, _ in its]
-        self.assertIn('minecraft', cmds)
-        self.assertIn('unreal', cmds)
 
 
 class TestMenu(unittest.TestCase):
@@ -642,6 +485,8 @@ class TestJaFeito(unittest.TestCase):
         self.assertIn('Get-AppxPackage', k.INICIO_PS, 'app da Loja desinstalado não conta')
         self.assertIn("-notmatch '^Katharos'", k.INICIO_PS, 'as tarefas do próprio Katharos não contam')
         self.assertIn('ListaInicio', k.MEDIDAS_PS)
+        self.assertIn('ListaInicio', k.DIAG_PS, 'o raio-x conta a inicialização do mesmo jeito')
+        self.assertIn('$_.ligado -and $_.existe', k.DIAG_PS)
 
     def test_pc_de_empresa_so_com_gestao_de_verdade(self):
         self.assertIn("'MS DM Server'", k.PERFIL_PS)
@@ -1199,9 +1044,10 @@ class TestHoras(unittest.TestCase):
             self.assertGreater(ps.index(so_fora), fora, f'{so_fora} só pode rodar fora de jogo')
         self.assertIn('$__pausar', ps)
 
-    def test_nomes_de_jogo_cobrem_catalogo_anticheat_e_exemplos(self):
+    def test_jogo_aberto_sem_catalogo_anticheat_sobreposicao_ou_gpu(self):
         n = k.nomes_de_jogo()
-        for esperado in ('cs2', 'valorant-win64-shipping', 'easyanticheat', 'vgc', 'faceitclient'):
+        self.assertIn('«gpu»', k.AMOSTRA_PS)
+        for esperado in ('gameoverlayui', 'easyanticheat', 'vgc', 'faceitclient'):
             self.assertIn(esperado, n)
         self.assertTrue(all(x == x.lower() and not x.endswith('.exe') for x in n))
 
@@ -1828,32 +1674,6 @@ class TestBusca(unittest.TestCase):
         self.assertIn('buscar', k.COMANDOS)
 
 
-class TestJogosDeOutrasLojas(unittest.TestCase):
-    def test_xbox_pela_pasta_padrao_e_pelo_gamingroot(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / 'XboxGames' / 'Forza Horizon 5' / 'Content').mkdir(parents=True)
-            (Path(d) / 'Jogos' / 'Halo').mkdir(parents=True)
-            (Path(d) / '.GamingRoot').write_bytes(b'RGBX\x01\x00\x00\x00' + 'Jogos'.encode('utf-16-le') + b'\x00\x00')
-            nomes = {p.name for p in k._pastas_xbox([d])}
-        self.assertEqual(nomes, {'Forza Horizon 5', 'Halo'})
-
-    def test_gamingroot_estranho_nao_sai_da_unidade(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / '.GamingRoot').write_bytes(b'RGBX\x01\x00\x00\x00' + '..\\..\\Windows'.encode('utf-16-le') + b'\x00\x00')
-            self.assertEqual(k._pastas_xbox([d]), set())
-        self.assertEqual(k._pastas_xbox(['/pasta/que/nao/existe']), set())
-
-    def test_riot_pelo_arquivo_do_cliente(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as d:
-            m = Path(d) / 'valorant.live'
-            m.mkdir()
-            (m / 'valorant.live.product_settings.yaml').write_text('x: 1\nproduct_install_full_path: "C:/Riot Games/VALORANT/live"\n', encoding='utf-8')
-            achadas = k._pastas_riot(d)
-        self.assertEqual(len(achadas), 1)
-        self.assertIn('VALORANT', str(next(iter(achadas))))
 
 
 class TestDicionarioEFluxo(unittest.TestCase):
@@ -1867,8 +1687,6 @@ class TestDicionarioEFluxo(unittest.TestCase):
             self.assertTrue(not cmd or cmd in k.COMANDOS, f'{nome} aponta para {cmd}')
 
     def test_quem_e_por_nome_jogo_dono_e_funcao(self):
-        self.assertIn('Cyberpunk', k.quem_e('Cyberpunk2077.exe')[0])
-        self.assertIn('anti-cheat', k.quem_e('r5apex.exe')[0])
         self.assertIn('ASUS', k.quem_e('AsusNovoPrograma.exe')[0])
         self.assertIn('atualizador', k.quem_e('QualquerUpdater.exe')[0])
         self.assertIn('Unreal', k.quem_e('JogoNovo-Win64-Shipping.exe')[0])
@@ -1890,10 +1708,6 @@ class TestDicionarioEFluxo(unittest.TestCase):
             self.assertNotIn(k._classe_inicio(nome.replace('Helper', ''), '')[1], ('programa que você abre quando quiser',), nome)
         self.assertEqual(k._classe_inicio('Coisa Qualquer', 'C:\\x\\coisa.exe')[1], generico)
 
-    def test_catalogo_cresceu_sem_jogo_com_anticheat(self):
-        self.assertGreaterEqual(len(k.CATALOGO_JOGOS), 120)
-        self.assertFalse({e.lower() for e in k.JOGOS_EXE} & {e.lower() for e in k.EXE_COM_ANTICHEAT})
-        self.assertEqual(len(k.JOGOS_EXE), len({e.lower() for e in k.JOGOS_EXE}), 'executável repetido no catálogo')
 
     def test_proximo_passo_segue_o_caminho_de_quem_chega(self):
         agora = datetime(2026, 11, 9, 12, 0, 0)
@@ -2376,7 +2190,7 @@ class TestAutenticidade(_CasaTemporaria):
 
 class TestSiteSuave(unittest.TestCase):
     def test_rolagem_suave_vem_do_proprio_site_e_respeita_reduzir_movimento(self):
-        for nome in ('index.html', 'jogos.html'):
+        for nome in ('index.html',):
             h = (RAIZ / 'docs' / nome).read_text(encoding='utf-8')
             self.assertIn('src="lenis.min.js"', h)
             self.assertIn('prefers-reduced-motion: reduce', h)
@@ -2384,3 +2198,37 @@ class TestSiteSuave(unittest.TestCase):
             self.assertNotRegex(h, r'html \{[^}]*scroll-behavior: smooth')
         for arq in ('lenis.min.js', 'lenis.css', 'lenis-LICENSE.txt'):
             self.assertTrue((RAIZ / 'docs' / arq).is_file(), arq)
+
+
+class TestFocoJogos(unittest.TestCase):
+    def test_nada_de_jogo_especifico(self):
+        for some in ('cs2', 'minecraft', 'unreal', 'steam'):
+            self.assertNotIn(some, k.PACOTES)
+            self.assertNotIn(some, k.COMANDOS)
+        for nome in ('CATALOGO_JOGOS', 'JOGOS_EXE', 'EXE_COM_ANTICHEAT'):
+            self.assertFalse(hasattr(k, nome), nome)
+        ids = {i.id for i in k.PACOTES['jogos'].itens(mock.Mock(perfil=k.PC_MODELO)) if i}
+        self.assertNotIn('prioridade-jogos', ids)
+
+    def test_foco_jogos_marca_os_itens_gerais_de_fps(self):
+        ctx = mock.Mock(perfil=k.PC_MODELO, ja={})
+        for foco in ('jogos', 'jogos-max'):
+            plano = {'modo': 'seguro', 'foco': foco, 'itens': {}}
+            ids = {i.id for i in k._itens_da_etapa(ctx, plano, 'jogos')}
+            self.assertTrue(k.FOCO_ITENS[foco] & ids <= ids)
+            self.assertIn('modo-jogo', ids)
+        geral = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'seguro', 'foco': 'geral', 'itens': {}}, 'jogos')}
+        maximo = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'seguro', 'foco': 'jogos-max', 'itens': {}}, 'jogos')}
+        self.assertTrue(geral < maximo, 'o máximo põe mais que o geral')
+
+    def test_jogar_esta_no_menu_e_no_parser(self):
+        self.assertIn('jogar', dict(k.MENU))
+        self.assertIn('jogar', k.COMANDOS)
+
+
+class TestSemBan(unittest.TestCase):
+    def test_nada_toca_em_jogo(self):
+        fonte = Path(k.__file__).read_text(encoding='utf-8')
+        for proibido in ('Image File Execution Options', 'CpuPriorityClass', 'ReadProcessMemory', 'WriteProcessMemory', 'CreateRemoteThread', 'VirtualAllocEx'):
+            self.assertNotIn(proibido, fonte, proibido)
+        self.assertIn('$comAC', k.DIAG_PS, 'com anti-cheat aberto o raio-x não consulta os processos')

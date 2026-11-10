@@ -18,6 +18,17 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.5.0 · 10 de novembro de 2026
+
+Jogos sem pacote por jogo, e menos alarme falso.
+
+- **Otimização para jogos é uma escolha**: o `turbo` pergunta para quê (uso geral, jogos ou jogos no máximo) e o `jogar` vai direto às duas de jogo. "Jogos" põe Modo de Jogo, sem gravação de fundo, mouse sem aceleração, agendamento de GPU e energia de desempenho. "Jogos no máximo" põe ainda energia no máximo, efeitos visuais desligados, placa de vídeo sempre no desempenho, temporizador fino e menos atraso de rede e de entrada. Tudo vale para qualquer jogo.
+- **Item novo, para qualquer jogo** (Windows 11): otimizações para jogos em janela e para taxa de atualização variável, as mesmas das Configurações de gráficos, sem apagar as outras opções que já estavam lá.
+- **Cuidado com ban**: nada muda por executável de jogo (a prioridade por jogo saiu junto com o catálogo) e, com um anti-cheat aberto, o raio-x não consulta nem o caminho dos processos.
+- **Saíram os pacotes de um jogo só e o catálogo**: `cs2`, `minecraft`, `unreal`, `steam`, a prioridade por jogo conhecido e a tela de jogos do menu. O pacote `jogos` fica na área de desempenho, com o que vale para todos.
+- **"Há jogo aberto" sem catálogo**: a coleta de fundo reconhece jogo aberto pelo anti-cheat, pela sobreposição de jogo das lojas (Steam, Epic, EA, Ubisoft, Xbox, NVIDIA, AMD) ou pela GPU acima de 60 %.
+- **Menos aviso falso no raio-x**: a contagem de inicialização do raio-x passa a ignorar o que está desativado no Gerenciador de Tarefas e programa que já saiu (antes contava tudo do registro); o Defender em modo passivo não conta mais como segundo antivírus; "processador limitado" só abaixo de 85 % e fora da bateria; temperatura pela zona térmica só alerta a partir de 90 °C; CPU ocupada parada só acima de 20 % e com o PC ligado há 10 minutos; erros de disco contam só erros, não avisos de pendrive.
+
 ## 2.4.0 · 10 de novembro de 2026
 
 O Katharos sabe o que já está feito no PC antes de mexer.

@@ -26,17 +26,7 @@ Cada item do Katharos é um `Item(...)` em `programa/katharos.py`. Para entrar, 
 
 O que **não** entra, em nenhum modo: desligar o Defender, o firewall, o UAC, o SmartScreen, o Windows Update, a memória virtual, o BitLocker, a Restauração do Sistema ou a Integridade de Memória. O teste `test_nenhum_script_mexe_nas_protecoes` falha se um script fizer isso.
 
-Em jogos, o Katharos só muda configurações do Windows e arquivos de configuração do usuário. Nada de arquivo ou memória do jogo, e nenhuma mudança por executável em jogo com anti-cheat de terceiros.
-
-### Adicionar um jogo ao catálogo
-
-O catálogo fica em `CATALOGO`, em `programa/katharos.py`: uma lista de categorias, cada uma com `(nome do jogo, [executáveis])`. Para entrar:
-
-1. O jogo **não pode usar anti-cheat de terceiros** (Vanguard, EasyAntiCheat, BattlEye, FACEIT). Se usa, ele vai para `EXE_COM_ANTICHEAT` e fica fora da prioridade padrão.
-2. O nome do `.exe` precisa estar certo (veja no Gerenciador de Tarefas, em Detalhes, com o jogo aberto).
-3. Um teste confere que nenhum executável está nas duas listas.
-
-Um **pacote próprio** (como o do CS2 e o do Minecraft) é outra coisa e pede mais: o arquivo de configuração que o jogo grava sozinho, chaves confirmadas em fonte pública (link no pull request), só valores que o menu do jogo aceita, só em linhas que já existem, só para baixar custo, com o jogo fechado e cópia antes, e gravação sem BOM. Em jogo com anti-cheat, só como item opcional.
+Em jogos, o Katharos só muda configurações do Windows que valem para qualquer jogo. Nada de ajuste para um jogo específico, nada de arquivo ou memória de jogo e nada que rode junto com ele.
 
 ### Rodando os testes
 
