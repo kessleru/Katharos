@@ -5,7 +5,7 @@ novo a cada versão, a escolha entre a versão com janelas e a de terminal no si
 vivo. Junto: **o painel sai do HTML e vai para dentro da interface**, e melhorias no raio-x e nas otimizações. Este arquivo é o plano e o registro:
 cada tarefa tem um código; quando ficar pronta, marque `[x]`, anote no **Registro** (fim do arquivo) a data, a versão e o commit.
 
-**Estado:** planejado, nada implementado.
+**Estado:** em andamento no ramo `v4` do GitHub (backup e ensaios no Windows do CI); nada vai para a `main` nem vira release até a **4.0.0**, que sai de uma vez com tudo.
 
 | fase | o quê | estado |
 |---|---|---|
@@ -170,7 +170,7 @@ Protocolo `katharos api` (rascunho; fechar na tarefa 1.1):
 ## 3. Tarefas por fase
 
 ### Fase 0: base e protótipos
-- [ ] **0.1** Pôr `partes/` (as fontes do `katharos.py`), `arte/` (gerador e modelo do site) e o script de montagem no repositório, com um
+- [x] **0.1** Pôr `partes/` (as fontes do `katharos.py`), `arte/` (gerador e modelo do site) e o script de montagem no repositório, com um
   teste que falha se o `katharos.py` não for exatamente a soma das partes. Hoje elas só existem numa sessão; o outro chat editou o
   `katharos.py` direto, e o trabalho precisou ser recortado à mão.
 - [ ] **0.2** Reorganizar o repositório: `motor/` (Python), `app/` (C#), `site/` (Astro), `exe/` (o Katharos.exe atual, até a fase 3).
@@ -469,3 +469,4 @@ Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pess
 | 10 nov 2026 | fase 2c: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | 3.1.2 | 014ff01 | pedido do usuário (itens 1, 2, 3 e 5 das sugestões) |
 | 10 nov 2026 | 2c.12 a 2c.15: notebook na tomada e na bateria, desligado por padrão | 3.1.2 | d7107c3 (local) | pedido do usuário (item 6); não publicar |
 | 10 nov 2026 | D10 e fase 1b: motor de inteligência novo (I1 a I25), com tudo o que ele faz na interface | 3.1.2 | (este commit, local) | pedido do usuário; não publicar |
+| 10 nov 2026 | 0.1 fonte no repositório: `partes/`, `arte/gera_site.py`, `arte/site.html`, `scripts/monta.sh`, teste da soma | 3.1.2 | ramo v4 | |

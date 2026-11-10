@@ -14,3 +14,8 @@ CHANGELOG.md export-ignore
 CONTRIBUTING.md export-ignore
 *.py text eol=lf
 *.txt text eol=lf
+partes export-ignore
+arte export-ignore
+exe export-ignore
+planos export-ignore
+scripts export-ignore

@@ -2649,3 +2649,14 @@ class TestSegundoPlano(_CasaTemporaria):
         self.assertIn('eldenring', texto)
         self.assertIn('placa de vídeo no limite', texto)
         self.assertIn('A placa de vídeo é o limite agora', texto)
+
+
+class TestFonte(unittest.TestCase):
+    """A fonte está no repositório: o katharos.py publicado é exatamente a soma das partes, na ordem do nome."""
+
+    def test_katharos_py_e_a_soma_das_partes(self):
+        partes = sorted((RAIZ / 'partes').glob('*.py'))
+        self.assertGreater(len(partes), 20)
+        soma = b''.join(p.read_bytes() for p in partes)
+        self.assertEqual(soma, (RAIZ / 'programa' / 'katharos.py').read_bytes(),
+                         'programa/katharos.py não bate com partes/: rode bash scripts/monta.sh (e nunca edite o katharos.py direto)')
