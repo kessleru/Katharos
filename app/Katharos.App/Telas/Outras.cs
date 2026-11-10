@@ -155,7 +155,7 @@ public class Desfazer : Tela
 public class Configuracoes : Tela
 {
     // as que importam para quem usa as janelas, na ordem de uso (as de aparência do terminal ficam na CLI)
-    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo" };
+    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes" };
 
     protected override async Task Carrega()
     {

@@ -69,7 +69,13 @@ public class Inicio : Tela
                 Botao("Desfazer", false, () => Abre("desfazer")).Com(b => Grid.SetColumn(b, 1)),
             }
         });
-        Monta(cab, passo, numeros, lista, ultima);
+        Control? versao = Atualizacao.VersaoPronta is string v ? S(new Avalonia.Controls.Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 18),
+            Children = { new StackPanel { Spacing = 2, Children = { T($"Versão {v} pronta", null, Tema.Osso, 15).Com(t => t.FontWeight = Avalonia.Media.FontWeight.SemiBold), T("Já baixada. Reinicia em segundos e nada do que você fez se perde.", "rotulo") } },
+                         Botao("Reiniciar agora", false, () => Atualizacao.Aplica()).Com(b => Avalonia.Controls.Grid.SetColumn(b, 1)) },
+        }) : null;
+        Monta(cab, versao, passo, numeros, lista, ultima);
     }
 
     static Control Proximo(string titulo, string texto, params Button[] botoes)

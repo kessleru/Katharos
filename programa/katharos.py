@@ -1078,7 +1078,7 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1093,6 +1093,8 @@ DESCR_CONFIG = {
     'tempo-real': ('ritmo do segundo plano', 'de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10'),
     'energia-automatica': ('notebook: plano de energia sozinho na tomada e na bateria', 'nao (padrão) ou sim: o segundo plano troca o plano de '
                            'energia quando você liga ou tira o carregador (escolhe os planos ao ligar; desligar volta o plano de antes)'),
+    'atualizacoes': ('atualizações do Katharos com janelas', 'avisar (padrão): baixa a versão nova e pergunta antes de reiniciar; automatico: '
+                     'troca quando você fechar; nunca: não confere'),
     'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
@@ -7738,7 +7740,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).

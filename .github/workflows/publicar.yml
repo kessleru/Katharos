@@ -136,8 +136,82 @@ jobs:
           if ($LASTEXITCODE) { exit 1 }
       - uses: actions/upload-artifact@v4
         with: { name: fotos-da-interface, path: '${{ runner.temp }}/fotos' }
+  instalador:
+    # O Katharos com janelas, instalável: o aplicativo (.NET 10, sem precisar instalar o .NET), o motor (katharos.py e katharos.ps1),
+    # o Katharos.exe do segundo plano, o PresentMon e o Python embutido (versão e SHA-256 fixos), empacotados pelo Velopack. No ensaio,
+    # instala de verdade, em silêncio, e confere que o motor instalado responde com o Python que veio junto.
+    needs: executavel
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PY_VERSAO: '3.14.10'
+      PY_SHA256: '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
+      PM_VERSAO: v2.6.0
+      VPK_VERSAO: '1.2.161'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+      - uses: actions/download-artifact@v4
+        with: { name: executavel, path: artefato }
+      - name: monta a pasta do aplicativo
+        shell: pwsh
+        run: |
+          $V = (Select-String -Path programa\katharos.py -Pattern "^VERSAO = '([^']+)'").Matches[0].Groups[1].Value
+          "V=$V" >> $env:GITHUB_ENV
+          dotnet publish app/Katharos.App/Katharos.App.csproj -c Release -r win-x64 --self-contained -o pub -p:Version=$V
+          if ($LASTEXITCODE) { exit 1 }
+          New-Item -ItemType Directory -Force pub\motor\programa | Out-Null
+          Copy-Item programa\katharos.py, programa\katharos.ps1 pub\motor\programa\
+          Copy-Item KATHAROS.bat, SHA256SUMS.txt, LICENSE pub\motor\
+          Copy-Item artefato\Katharos.exe pub\motor\
+          # PresentMon: a mesma versão e a mesma impressão digital do zip
+          $nome = gh api "repos/GameTechDev/PresentMon/releases/tags/$env:PM_VERSAO" --jq '[.assets[].name | select(test("x64\\.exe$"; "i")) | select(test("setup|install|capture"; "i") | not)][0]'
+          gh release download $env:PM_VERSAO -R GameTechDev/PresentMon -p $nome -D pm
+          $esperado = (Select-String -Path exe\Katharos.cs -Pattern 'PRESENTMON_SHA256 = "([0-9a-f]{64})"').Matches[0].Groups[1].Value
+          if ((Get-FileHash "pm\$nome" -Algorithm SHA256).Hash.ToLower() -ne $esperado) { Write-Host '::error::PresentMon com impressão digital diferente'; exit 1 }
+          Copy-Item "pm\$nome" pub\motor\PresentMon.exe
+          Invoke-WebRequest "https://raw.githubusercontent.com/GameTechDev/PresentMon/$env:PM_VERSAO/LICENSE.txt" -OutFile pub\motor\PresentMon-LICENSE.txt
+          # Python embutido (python.org), conferido pelo SHA-256 fixo
+          Invoke-WebRequest "https://www.python.org/ftp/python/$env:PY_VERSAO/python-$env:PY_VERSAO-embed-amd64.zip" -OutFile py.zip
+          if ((Get-FileHash py.zip -Algorithm SHA256).Hash.ToLower() -ne $env:PY_SHA256) { Write-Host '::error::Python embutido com SHA-256 diferente'; exit 1 }
+          Expand-Archive py.zip pub\python
+          $r = & pub\python\python.exe pub\motor\programa\katharos.py api versao
+          Write-Host $r
+          if ($r -notmatch '"ok": true') { Write-Host '::error::o Python embutido não rodou o motor'; exit 1 }
+          Get-ChildItem pub -Recurse -File | Measure-Object -Property Length -Sum | ForEach-Object { Write-Host ("pasta do aplicativo: {0:N1} MB" -f ($_.Sum / 1MB)) }
+      - name: empacota (Velopack)
+        shell: pwsh
+        run: |
+          dotnet tool install -g vpk --version $env:VPK_VERSAO
+          New-Item -ItemType Directory -Force releases | Out-Null
+          # a versão anterior publicada, para gerar o pacote de diferença (na primeira versão com instalador não há nenhuma)
+          vpk download github --repoUrl https://github.com/kessleru/Katharos --token $env:GH_TOKEN -o releases
+          vpk pack --packId Katharos --packVersion $env:V --packDir pub --mainExe Katharos.exe --packTitle Katharos --packAuthors kessleru `
+            --icon app\Katharos.App\Assets\katharos.ico -o releases
+          if ($LASTEXITCODE) { exit 1 }
+          Get-ChildItem releases | Format-Table Name, @{n='MB'; e={'{0:N1}' -f ($_.Length / 1MB)}}
+      - name: instala de verdade, em silêncio, e confere
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $setup = Get-ChildItem releases\*Setup.exe | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '--silent' -PassThru
+          $p | Wait-Process -Timeout 240
+          $casa = Join-Path $env:LOCALAPPDATA 'Katharos\current'
+          foreach ($f in 'Katharos.exe', 'motor\programa\katharos.py', 'motor\Katharos.exe', 'motor\PresentMon.exe', 'python\python.exe') {
+            if (-not (Test-Path (Join-Path $casa $f))) { Write-Host "::error::instalado sem $f"; exit 1 }
+          }
+          $r = & (Join-Path $casa 'python\python.exe') (Join-Path $casa 'motor\programa\katharos.py') api versao
+          Write-Host $r
+          if ($r -notmatch '"ok": true') { Write-Host '::error::o motor instalado não respondeu'; exit 1 }
+          Get-Process Katharos -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$casa*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Write-Host 'instalado e conferido'
+      - uses: actions/upload-artifact@v4
+        with: { name: instalador, path: releases }
   publicar:
-    needs: [executavel, interface]
+    needs: [executavel, interface, instalador]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -148,6 +222,8 @@ jobs:
         with: { python-version: '3.12' }
       - uses: actions/download-artifact@v4
         with: { name: executavel, path: saida/exe }
+      - uses: actions/download-artifact@v4
+        with: { name: instalador, path: saida/instalador }
       - name: PresentMon (medida de FPS, Intel, licença MIT), versão fixa
         env: { PM_VERSAO: v2.6.0 }
         run: |
@@ -192,6 +268,9 @@ jobs:
           (cd saida/z && zip -q -X ../Katharos.zip Katharos/Katharos.exe Katharos/PresentMon.exe Katharos/PresentMon-LICENSE.txt)
           cp programa/katharos.py saida/katharos.py
           (cd saida && sha256sum katharos.py Katharos.zip > SHA256SUMS-release.txt && (cd z && sha256sum Katharos/Katharos.exe Katharos/PresentMon.exe) >> SHA256SUMS-release.txt)
+          # o instalador (Velopack): Setup, pacote completo (e de diferença, quando há versão anterior) e o índice que a atualização lê
+          ls -la saida/instalador
+          (cd saida/instalador && sha256sum *Setup.exe *.nupkg >> ../SHA256SUMS-release.txt)
           unzip -l saida/Katharos.zip
           python .github/scripts/notas_release.py "${{ steps.v.outputs.versao }}" "$(sha256sum programa/katharos.py | cut -d' ' -f1)" > notas.md
           cat saida/SHA256SUMS-release.txt
@@ -200,13 +279,15 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
+            saida/instalador/*Setup.exe
+            saida/instalador/*.nupkg
             saida/Katharos.zip
             saida/exe/Katharos.exe
             saida/katharos.py
       - name: cria a release
         if: env.PUBLICA == 'true'
         run: |
-          gh release create "${{ steps.v.outputs.tag }}" saida/Katharos.zip saida/katharos.py saida/SHA256SUMS-release.txt \
+          gh release create "${{ steps.v.outputs.tag }}" saida/instalador/* saida/Katharos.zip saida/katharos.py saida/SHA256SUMS-release.txt \
             --title "Katharos ${{ steps.v.outputs.versao }}" --notes-file notas.md --target "$GITHUB_SHA" --latest ${{ steps.v.outputs.pre }}
       - name: ensaio
         if: env.PUBLICA != 'true'

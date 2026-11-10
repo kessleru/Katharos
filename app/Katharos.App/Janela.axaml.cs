@@ -29,6 +29,12 @@ public partial class Janela : Window
         KeyDown += (_, e) => { if (e.Key == Key.Escape && caixaFechavel && resposta != null) Responde(false); };
         Closing += async (_, _) => await Servico.Fecha();
         Mostra("inicio");
+        Opened += async (_, _) =>
+        {
+            try { var c = await Servico.Le("config_ler"); await Atualizacao.Confere(c?["atualizacoes"].S("valor", "avisar") ?? "avisar"); }
+            catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
+        };
+        Atualizacao.Mudou += () => Dispatcher.UIThread.Post(() => { if (this.FindControl<ContentControl>("Tela")!.Content is Inicio i) _ = i.Recarrega(); });
     }
 
     IEnumerable<Button> Botoes() => this.FindControl<StackPanel>("Nav")!.Children.OfType<Button>().Append(this.FindControl<Button>("BtConfig")!);

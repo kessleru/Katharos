@@ -30,7 +30,9 @@ public static class Servico
         await abrindo.WaitAsync();
         try { elevado ??= await MotorElevado.Abre(); elevado.Caiu += _ => elevado = null; }
         finally { abrindo.Release(); }
-        return await elevado.Pede(metodo, p, evento);
+        Atualizacao.Ocupado = true;   // nada de trocar de versão no meio de uma mudança
+        try { return await elevado.Pede(metodo, p, evento); }
+        finally { Atualizacao.Ocupado = false; }
     }
 
     public static async Task Fecha()
