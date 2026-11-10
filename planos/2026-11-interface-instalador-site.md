@@ -423,17 +423,17 @@ Update ou Defender rodando, indexação, bateria e plano de energia, calor (o ch
 uso pesado com um de uso leve.
 
 Tarefas:
-- [ ] **2e.1** **Contexto em toda medida**: junto de cada leitura e de cada benchmark, o que pode distorcer: tempo ligado, minutos desde o
+- [x] **2e.1** **Contexto em toda medida**: junto de cada leitura e de cada benchmark, o que pode distorcer: tempo ligado, minutos desde o
   boot, quantos processos e quais os 5 que mais gastam, RAM dos programas da pessoa x RAM do sistema, Windows Update, Defender e indexação
   ativos, na bateria ou na tomada, plano de energia, temperatura, jogo aberto.
-- [ ] **2e.2** **Separar o sistema dos programas da pessoa**: a métrica que o Katharos promete melhorar é a do sistema (Windows, serviços,
+- [x] **2e.2** **Separar o sistema dos programas da pessoa**: a métrica que o Katharos promete melhorar é a do sistema (Windows, serviços,
   o que abre sozinho), não a do navegador aberto. RAM e processos passam a ter as duas partes, e a comparação usa a do sistema.
-- [ ] **2e.3** **Descartar leituras sujas**: minutos com atualização instalando, verificação do Defender, os primeiros 10 minutos depois do
+- [x] **2e.3** **Descartar leituras sujas**: minutos com atualização instalando, verificação do Defender, os primeiros 10 minutos depois do
   boot e boots logo depois de uma atualização do Windows não entram na linha de base nem na comparação (ficam guardados, marcados).
-- [ ] **2e.4** **Comparar o comparável**: antes e depois só entre situações parecidas (mesmo contexto, faixa de tempo ligado, de processos e
+- [x] **2e.4** **Comparar o comparável**: antes e depois só entre situações parecidas (mesmo contexto, faixa de tempo ligado, de processos e
   de carga), pareando as janelas; diferença com intervalo de confiança (bootstrap) em vez de um número solto; "sem diferença" quando a
   margem engole o efeito.
-- [ ] **2e.5** **Benchmark em condições de bancada**: antes de medir, o Katharos confere e mostra o que vai atrapalhar (programas pesados
+- [x] **2e.5** **Benchmark em condições de bancada**: antes de medir, o Katharos confere e mostra o que vai atrapalhar (programas pesados
   abertos, atualização rodando, bateria, PC quente) e **pergunta** se a pessoa quer fechar os que ele lista (nunca fecha sozinho); espera
   a CPU ficar ociosa (ex.: abaixo de 10 % por 30 s), pausa o próprio segundo plano, faz uma rodada de aquecimento, roda várias vezes,
   usa a mediana, descarta os pontos fora da curva e diz a variação. Se a variação for grande, repete ou avisa que o resultado é fraco.
@@ -523,14 +523,35 @@ Tarefas a mais desta reformulação:
 - **Python embutido** desatualizado com falha de segurança. Mitigação: a versão vem fixada no build e sobe a cada release do Python.
 - **Tamanho do site** com bibliotecas de componentes. Mitigação: ilhas do Astro, só o que é usado, meta de peso na fase 0.
 
-## 6. Regras que continuam valendo
+## 6. Segurança do PC acima de tudo (pedido de 10 nov)
+Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado ou derrubar o processo errado. Regras:
+- **Processos**: o Katharos nunca encerra processo sozinho. Quando um programa atrapalha (benchmark, RAM cheia), ele diz qual é e a
+  pessoa fecha. Processos do Windows (sessão 0, `csrss`, `winlogon`, `lsass`, `svchost`, `dwm`, `explorer`…) nunca aparecem como
+  "feche este". Nada de `Stop-Process`, `taskkill` ou `TerminateProcess` em código de medida (teste).
+- **Arquivos**: limpeza só em caminhos da lista conhecida, nunca na raiz de um disco, nunca em pastas do sistema ou da pessoa (já
+  existe: recusa caminho vazio, raiz e pastas protegidas); arquivo da pessoa vai para a Lixeira ou volta com desfazer; nada de apagar
+  por padrão amplo (`*.*` numa pasta inteira) fora dos caches conhecidos.
+- **O que pode dar tela azul ou não ligar**: nada de driver, BCD (`bcdedit`), modo de inicialização, assinatura de driver, memória
+  virtual, serviços críticos (lista fixa no código, com teste), registro de classes de dispositivo, ou desligar proteções (lista
+  `PROIBIDO` dos testes). Ponto de restauração antes de qualquer pacote e desfazer exato de cada valor.
+- **Serviço desligado**: só se o PC não usa o recurso (o perfil confirma) e sempre com volta no desfazer; serviços dos quais o Windows
+  depende para ligar, logar, atualizar ou proteger nunca entram.
+- **Mudança arriscada** pergunta "manter alterações?" e desfaz sozinha se a pessoa não responder (já existe: `config confirmar`).
+
+- [ ] **S1** Revisão de segurança antes da 4.0.0: ler todos os itens e scripts com essas regras na mão (um agente separado revisa, sem ter
+  escrito o código), rodar a ida e volta de cada pacote (aplicar e desfazer) num Windows descartável do CI e comparar o registro e os
+  serviços antes e depois.
+- [ ] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
+  teste.
+
+## 7. Regras que continuam valendo
 - Mostrar cada mudança antes, desfazer tudo, ponto de restauração, nunca mexer em arquivo pessoal sem desfazer.
 - Só três modos (seguro, equilibrado, extremo), com jogos dentro de cada um; escolher item por item sempre possível.
 - Nada específico por jogo; nada que abra, leia ou injete em processo de jogo; nada de driver de sensor (anti-cheat).
 - O Python do motor não acessa a rede: download fica com o PowerShell ou com o C#.
 - Commits sem linha de coautoria. Versões pela regra MAIOR.MENOR.CORREÇÃO do CHANGELOG. Cada release conferida (tag, hashes, download).
 
-## 7. Fontes
+## 8. Fontes
 - [Velopack no NuGet](https://www.nuget.org/packages/Velopack), [atualizações por diferença](https://docs.velopack.io/packaging/deltas)
 - [Opções de assinatura da Microsoft](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options),
   [termos da SignPath Foundation](https://signpath.org/terms)
@@ -559,3 +580,5 @@ Tarefas a mais desta reformulação:
 | 10 nov 2026 | I4 confiança pelos dados (uma sessão só não conclui nada); I5 previsão x resultado (`conselheiro_feitos`, "o que eu previ e o que aconteceu"); I6 "ajudou?" e "não me importa" no ícone e na CLI | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | fases 2d (versões do Windows) e 2e (medidas fiéis) no plano | 3.1.2 | ramo v4 | pedidos do usuário |
 | 10 nov 2026 | 2d.1 a 2d.5: `28-windows.py` (versões, fim de suporte, edição, UCPD, arquitetura), aviso no raio-x, só modo seguro em build antiga e Server, telemetria e anúncios honestos por edição, `Set-Valor` ciente do UCPD, matriz de testes (8 builds x 5 edições), sem WMIC | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | 2e.1 a 2e.5: contexto em cada minuto (tempo ligado, processos, RAM do sistema x da conta, manutenção, top 5), minuto sujo fora da conta, diferença com margem (bootstrap), benchmark com bancada (mostra, pede, espera a CPU, pausa o segundo plano; nunca fecha nada) | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | seção de segurança do PC (S1, S2) no plano | 3.1.2 | ramo v4 | pedido do usuário |

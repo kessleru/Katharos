@@ -15,7 +15,7 @@ REGRAS_MOTOR = {
     'freio_desempenho': 75, 'freio_cpu_min': 40,
     'ram_cheia': 90, 'vram_cheia': 95, 'disco_cheio': 95, 'calor_cpu': 90, 'calor_gpu': 85,
     # quanto da janela precisa estar no limite para virar conclusão
-    'janela_s': 30, 'janela_min_leituras': 3, 'fracao_calor': 0.5, 'fracao_freio': 0.6, 'fracao_gargalo': 0.6, 'fracao_vram': 0.6, 'fracao_ram': 0.8, 'fracao_disco': 0.8,
+    'janela_s': 30, 'janela_min_leituras': 3, 'minutos_depois_do_boot': 10, 'fracao_calor': 0.5, 'fracao_freio': 0.6, 'fracao_gargalo': 0.6, 'fracao_vram': 0.6, 'fracao_ram': 0.8, 'fracao_disco': 0.8,
     'cpu_ocupada': 85, 'fracao_cpu_ocupada': 0.8,
     # o que conta como jogo aberto e como a sessão fecha
     'jogo_gpu_min': 20, 'jogo_gpu_ativo': 5, 'jogo_segundos_comecar': 10, 'jogo_segundos_fechar': 30, 'sessao_principal_min': 0.2,

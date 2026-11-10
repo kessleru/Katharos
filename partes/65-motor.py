@@ -9,6 +9,7 @@
 #     perde peso. A sua resposta ("ajudou?", "não me importa") também conta.
 METRICAS_BASE = {   # métrica do minuto: (nome, unidade, diferença mínima que importa, comando que investiga)
     'cpu': ('a CPU', '%', 8, 'raiox'), 'ram': ('a RAM', '%', 8, 'memoria'), 'disco': ('o disco ocupado', '%', 10, 'raiox'),
+    'ram_sistema_gb': ('a RAM dos serviços do Windows', 'GB', 0.4, 'servicos'),
     'temp_cpu': ('a temperatura da CPU', '°C', 5, 'painel'), 'temp_gpu': ('a temperatura da placa de vídeo', '°C', 5, 'painel'),
 }
 BASE_DIAS = 14
@@ -37,6 +38,11 @@ def contexto_do_minuto(m):
     return 'jogo' if m.get('jogo') else 'sem_jogo'
 
 
+def limpo(m):
+    """Minuto que vale para medir: sem manutenção do Windows rodando (atualização, Defender, indexação) e não logo depois do boot."""
+    return not m.get('sujo')
+
+
 def linha_de_base(minutos, metrica, contexto, ate=None, dias=BASE_DIAS):
     """O normal desta métrica neste PC: mediana, dispersão robusta (MAD) e a faixa de 10 a 90 %, dos minutos ANTES de `ate`.
     None se ainda não há dado bastante (menos de 3 dias diferentes ou 300 minutos)."""
@@ -46,7 +52,7 @@ def linha_de_base(minutos, metrica, contexto, ate=None, dias=BASE_DIAS):
     for m in minutos:
         dt = m.get('_dt')
         x = m.get(metrica)
-        if dt is None or not (de <= dt < ate) or not isinstance(x, (int, float)) or contexto_do_minuto(m) != contexto:
+        if dt is None or not (de <= dt < ate) or not isinstance(x, (int, float)) or contexto_do_minuto(m) != contexto or not limpo(m):
             continue
         v.append(float(x))
         dias_vistos.add(dt.date())
@@ -108,7 +114,7 @@ def r_fora_do_normal(ev):
             continue   # calor tem limite absoluto (regra própria); aqui é o que muda em relação ao normal
         base = linha_de_base(mins, met, 'sem_jogo', ate=corte)
         recente = [float(m[met]) for m in mins if m.get('_dt') and m['_dt'] >= corte and isinstance(m.get(met), (int, float))
-                   and contexto_do_minuto(m) == 'sem_jogo']
+                   and contexto_do_minuto(m) == 'sem_jogo' and limpo(m)]
         if not base or len(recente) < 60:
             continue
         med = _mediana_lista(recente)
@@ -131,7 +137,19 @@ def r_fora_do_normal(ev):
 
 def _janela(minutos, chave, contexto, de, ate):
     return [float(m[chave]) for m in minutos if m.get('_dt') and de <= m['_dt'] < ate and isinstance(m.get(chave), (int, float))
-            and contexto_do_minuto(m) == contexto]
+            and contexto_do_minuto(m) == contexto and limpo(m)]
+
+
+def intervalo_da_diferenca(a, b, rodadas=400, semente=7):
+    """Diferença das medianas (depois - antes) com intervalo de 90 % por reamostragem (bootstrap). Devolve (diferença, baixo, alto)."""
+    import random
+    r = random.Random(semente)
+    base = _mediana_lista(b) - _mediana_lista(a)
+    difs = []
+    for _ in range(rodadas):
+        difs.append(_mediana_lista([r.choice(b) for _ in b]) - _mediana_lista([r.choice(a) for _ in a]))
+    difs.sort()
+    return base, difs[int(0.05 * (rodadas - 1))], difs[int(0.95 * (rodadas - 1))]
 
 
 def _limite_sessoes(sessoes, chave, de, ate):
@@ -153,9 +171,10 @@ def mede_previsao(prev, quando, minutos, sessoes, dias=7):
     if len(a) < minimo or len(b) < minimo:
         return 'cedo para dizer', None, None
     ma, mb = _mediana_lista(a), _mediana_lista(b)
-    ruido = 1.4826 * (_mediana_lista([abs(x - ma) for x in a]) or 0)
-    real, esperado = mb - ma, float(prev.get('delta') or 0)
-    if abs(real) <= max(ruido, 1.0):
+    real, baixo, alto = intervalo_da_diferenca(a[-2000:], b[-2000:])
+    esperado = float(prev.get('delta') or 0)
+    menor = (METRICAS_BASE.get(prev['chave']) or (0, 0, 2.0))[2] / 2   # a menor diferença que importa nesta métrica
+    if baixo <= 0 <= alto or abs(real) < menor:   # a margem engole o efeito: não dá para dizer que mudou
         return 'sem diferença', ma, mb
     if esperado and (real > 0) != (esperado > 0):
         return 'piorou', ma, mb

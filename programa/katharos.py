@@ -9872,6 +9872,69 @@ def bateria_fraca(ctx):
     return bool(d) and not d.get('ligada') and (d.get('carga') or 100) < 30
 
 
+def condicoes_de_bancada(a=None):
+    """O que pode atrapalhar a medida agora, lido do segundo plano (agora.json). Nunca fecha nada: só diz.
+    Devolve {'qualidade': 'boa'|'fraca'|'desconhecida', 'motivos': [...], 'cpu', 'top', 'manutencao', 'na_bateria'}."""
+    a = a if a is not None else le_agora()
+    if not a:
+        return {'qualidade': 'desconhecida', 'motivos': ['o segundo plano não está ligado: não deu para conferir o que está rodando']}
+    cx = a.get('contexto') or {}
+    motivos = []
+    if (a.get('cpu') or 0) >= 15:
+        motivos.append(f'CPU em {br(a.get("cpu"), 0)} % antes de começar' + (f' ({cx.get("top")})' if cx.get('top') else ''))
+    if cx.get('manutencao'):
+        motivos.append(f'manutenção do Windows rodando: {cx["manutencao"]}')
+    if a.get('na_bateria'):
+        motivos.append('na bateria')
+    if (cx.get('ligado_h') or 99) * 60 < REGRAS_MOTOR['minutos_depois_do_boot']:
+        motivos.append('o PC acabou de ligar')
+    if a.get('jogo'):
+        motivos.append('jogo aberto')
+    if (a.get('temp_cpu') or 0) >= REGRAS_MOTOR['calor_cpu'] - 10:
+        motivos.append(f'CPU quente ({br(a.get("temp_cpu"), 0)} °C)')
+    return {'qualidade': 'fraca' if motivos else 'boa', 'motivos': motivos, 'cpu': a.get('cpu'), 'top': cx.get('top'),
+            'manutencao': cx.get('manutencao'), 'na_bateria': bool(a.get('na_bateria'))}
+
+
+def prepara_bancada(ctx, espera_s=60):
+    """Antes de medir: mostra o que atrapalha, pede (não obriga) para fechar programas pesados, espera a CPU sossegar e pausa o
+    próprio segundo plano. Nunca fecha processo nenhum. Devolve as condições finais (vão junto do resultado)."""
+    t = ctx.t
+    c = condicoes_de_bancada()
+    if c['qualidade'] == 'fraca':
+        t.titulo('antes de medir')
+        for m in c['motivos']:
+            t.item('○', 'amarelo', m)
+        if t.interativo:
+            t.paragrafo('Para o resultado mostrar o efeito do Katharos (e não o de um programa aberto), feche o que puder da lista acima '
+                        'e aperte Enter. O Katharos não fecha nada sozinho.', 2, 'apagado')
+            t.pergunta('Enter para medir')
+    if le_agora():   # espera a CPU sossegar (até 1 min), lendo o segundo plano
+        fim = time.time() + espera_s
+        calma = 0
+        while time.time() < fim:
+            a = le_agora() or {}
+            calma = calma + 1 if (a.get('cpu') or 0) < 15 and not (a.get('contexto') or {}).get('manutencao') else 0
+            if calma >= 5:
+                break
+            time.sleep(1)
+        c = condicoes_de_bancada()
+    try:   # o próprio segundo plano para de ler durante a medida (a pausa volta sozinha em 10 min)
+        (CASA / PAUSA_ARQ).write_text((datetime.now() + timedelta(minutes=10)).isoformat(timespec='seconds'), encoding='ascii')
+        c['pausou_segundo_plano'] = True
+    except OSError:
+        pass
+    return c
+
+
+def solta_bancada(c):
+    if c.get('pausou_segundo_plano'):
+        try:
+            (CASA / PAUSA_ARQ).unlink()
+        except OSError:
+            pass
+
+
 def ferramenta_benchmark(ctx, args):
     t = ctx.t
     rapido = not getattr(args, 'completo', False)
@@ -9897,12 +9960,21 @@ def ferramenta_benchmark(ctx, args):
         leve = True
         t.nota(f'  Modo leve do teste ({apertado}): arquivos menores e uma etapa de cada vez.')
     t.escreve()
-    atual = roda_bench(t, rapido=rapido, leve=leve, multi=not rapido)
+    cond = prepara_bancada(ctx)
+    try:
+        atual = roda_bench(t, rapido=rapido, leve=leve, multi=not rapido)
+    finally:
+        solta_bancada(cond)
     salvos = bench_salvos()
-    antes = le_json(salvos[-1], {}).get('medidas') if salvos else None
+    anterior = le_json(salvos[-1], {}) if salvos else {}
+    antes = anterior.get('medidas') if salvos else None
+    fracas = [x for x in (cond, anterior.get('condicoes') or {}) if x.get('qualidade') == 'fraca']
+    if antes and fracas:
+        t.aviso('Comparação fraca: ' + ('esta medida' if fracas[0] is cond else 'a medida anterior') + ' foi feita com ' +
+                '; '.join(fracas[0].get('motivos') or []) + '. Repita com o PC parado para um resultado firme.')
     quando = salvos[-1].stem[:16].replace('_', ' ') if salvos else ''
     mostra_bench(t, atual, antes, 'o benchmark anterior (' + quando + ')' if antes else '')
-    dados = {'versao': VERSAO, 'quando': agora_iso(), 'pc': nome_do_pc(), 'leve': leve, 'medidas': atual,
+    dados = {'versao': VERSAO, 'quando': agora_iso(), 'pc': nome_do_pc(), 'leve': leve, 'medidas': atual, 'condicoes': cond,
              'perfil_aplicado': (estado().get('perfil') or '')}
     grava_json(pasta('benchmarks') / f'{datetime.now():%Y-%m-%d_%H-%M-%S}.json', dados)
     try:
@@ -10741,7 +10813,7 @@ REGRAS_MOTOR = {
     'freio_desempenho': 75, 'freio_cpu_min': 40,
     'ram_cheia': 90, 'vram_cheia': 95, 'disco_cheio': 95, 'calor_cpu': 90, 'calor_gpu': 85,
     # quanto da janela precisa estar no limite para virar conclusão
-    'janela_s': 30, 'janela_min_leituras': 3, 'fracao_calor': 0.5, 'fracao_freio': 0.6, 'fracao_gargalo': 0.6, 'fracao_vram': 0.6, 'fracao_ram': 0.8, 'fracao_disco': 0.8,
+    'janela_s': 30, 'janela_min_leituras': 3, 'minutos_depois_do_boot': 10, 'fracao_calor': 0.5, 'fracao_freio': 0.6, 'fracao_gargalo': 0.6, 'fracao_vram': 0.6, 'fracao_ram': 0.8, 'fracao_disco': 0.8,
     'cpu_ocupada': 85, 'fracao_cpu_ocupada': 0.8,
     # o que conta como jogo aberto e como a sessão fecha
     'jogo_gpu_min': 20, 'jogo_gpu_ativo': 5, 'jogo_segundos_comecar': 10, 'jogo_segundos_fechar': 30, 'sessao_principal_min': 0.2,
@@ -12563,6 +12635,7 @@ def avisa_propostas(e, ctx=None):
 #     perde peso. A sua resposta ("ajudou?", "não me importa") também conta.
 METRICAS_BASE = {   # métrica do minuto: (nome, unidade, diferença mínima que importa, comando que investiga)
     'cpu': ('a CPU', '%', 8, 'raiox'), 'ram': ('a RAM', '%', 8, 'memoria'), 'disco': ('o disco ocupado', '%', 10, 'raiox'),
+    'ram_sistema_gb': ('a RAM dos serviços do Windows', 'GB', 0.4, 'servicos'),
     'temp_cpu': ('a temperatura da CPU', '°C', 5, 'painel'), 'temp_gpu': ('a temperatura da placa de vídeo', '°C', 5, 'painel'),
 }
 BASE_DIAS = 14
@@ -12591,6 +12664,11 @@ def contexto_do_minuto(m):
     return 'jogo' if m.get('jogo') else 'sem_jogo'
 
 
+def limpo(m):
+    """Minuto que vale para medir: sem manutenção do Windows rodando (atualização, Defender, indexação) e não logo depois do boot."""
+    return not m.get('sujo')
+
+
 def linha_de_base(minutos, metrica, contexto, ate=None, dias=BASE_DIAS):
     """O normal desta métrica neste PC: mediana, dispersão robusta (MAD) e a faixa de 10 a 90 %, dos minutos ANTES de `ate`.
     None se ainda não há dado bastante (menos de 3 dias diferentes ou 300 minutos)."""
@@ -12600,7 +12678,7 @@ def linha_de_base(minutos, metrica, contexto, ate=None, dias=BASE_DIAS):
     for m in minutos:
         dt = m.get('_dt')
         x = m.get(metrica)
-        if dt is None or not (de <= dt < ate) or not isinstance(x, (int, float)) or contexto_do_minuto(m) != contexto:
+        if dt is None or not (de <= dt < ate) or not isinstance(x, (int, float)) or contexto_do_minuto(m) != contexto or not limpo(m):
             continue
         v.append(float(x))
         dias_vistos.add(dt.date())
@@ -12662,7 +12740,7 @@ def r_fora_do_normal(ev):
             continue   # calor tem limite absoluto (regra própria); aqui é o que muda em relação ao normal
         base = linha_de_base(mins, met, 'sem_jogo', ate=corte)
         recente = [float(m[met]) for m in mins if m.get('_dt') and m['_dt'] >= corte and isinstance(m.get(met), (int, float))
-                   and contexto_do_minuto(m) == 'sem_jogo']
+                   and contexto_do_minuto(m) == 'sem_jogo' and limpo(m)]
         if not base or len(recente) < 60:
             continue
         med = _mediana_lista(recente)
@@ -12685,7 +12763,19 @@ def r_fora_do_normal(ev):
 
 def _janela(minutos, chave, contexto, de, ate):
     return [float(m[chave]) for m in minutos if m.get('_dt') and de <= m['_dt'] < ate and isinstance(m.get(chave), (int, float))
-            and contexto_do_minuto(m) == contexto]
+            and contexto_do_minuto(m) == contexto and limpo(m)]
+
+
+def intervalo_da_diferenca(a, b, rodadas=400, semente=7):
+    """Diferença das medianas (depois - antes) com intervalo de 90 % por reamostragem (bootstrap). Devolve (diferença, baixo, alto)."""
+    import random
+    r = random.Random(semente)
+    base = _mediana_lista(b) - _mediana_lista(a)
+    difs = []
+    for _ in range(rodadas):
+        difs.append(_mediana_lista([r.choice(b) for _ in b]) - _mediana_lista([r.choice(a) for _ in a]))
+    difs.sort()
+    return base, difs[int(0.05 * (rodadas - 1))], difs[int(0.95 * (rodadas - 1))]
 
 
 def _limite_sessoes(sessoes, chave, de, ate):
@@ -12707,9 +12797,10 @@ def mede_previsao(prev, quando, minutos, sessoes, dias=7):
     if len(a) < minimo or len(b) < minimo:
         return 'cedo para dizer', None, None
     ma, mb = _mediana_lista(a), _mediana_lista(b)
-    ruido = 1.4826 * (_mediana_lista([abs(x - ma) for x in a]) or 0)
-    real, esperado = mb - ma, float(prev.get('delta') or 0)
-    if abs(real) <= max(ruido, 1.0):
+    real, baixo, alto = intervalo_da_diferenca(a[-2000:], b[-2000:])
+    esperado = float(prev.get('delta') or 0)
+    menor = (METRICAS_BASE.get(prev['chave']) or (0, 0, 2.0))[2] / 2   # a menor diferença que importa nesta métrica
+    if baixo <= 0 <= alto or abs(real) < menor:   # a margem engole o efeito: não dá para dizer que mudou
         return 'sem diferença', ma, mb
     if esperado and (real > 0) != (esperado > 0):
         return 'piorou', ma, mb

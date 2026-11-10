@@ -254,6 +254,7 @@ namespace KatharosApp
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
         [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int estado);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool DestroyIcon(IntPtr h);
+        [DllImport("kernel32.dll")] public static extern ulong GetTickCount64();
 
         // temperatura da placa de vídeo pelo driver (D3DKMT): o mesmo dado da aba Desempenho do Gerenciador de Tarefas
         [StructLayout(LayoutKind.Sequential)] struct LUID { public uint Low; public int High; }
@@ -530,6 +531,8 @@ namespace KatharosApp
         public int TopGpuPid; public double TopGpu;
         public int PrimeiroPlanoPid; public bool TelaCheia; public bool AntiCheat;
         public string Jogo; public int JogoPid;
+        // contexto (2e): o que pode distorcer a medida
+        public double? UptimeH, RamSistemaGb, RamContaGb; public int? Processos; public string Manutencao, Top;
         public double? VramPct { get { return (VramGb.HasValue && VramTotalGb.HasValue && VramTotalGb.Value > 0) ? (double?)(VramGb.Value / VramTotalGb.Value * 100) : null; } }
     }
 
@@ -541,6 +544,12 @@ namespace KatharosApp
         readonly Categoria gpuMem = new Categoria("GPU Adapter Memory");
         readonly Categoria rede = new Categoria("Network Interface");
         readonly Categoria zona = new Categoria("Thermal Zone Information");
+        readonly Categoria procs = new Categoria("Process");
+        DateTime proxCtx = DateTime.MinValue; string ctxManut, ctxTop; double? ctxRamSis, ctxRamConta;
+        public Dictionary<int, int> Sessoes = new Dictionary<int, int>();
+        // o que, rodando, deixa a medida suja: atualização, Defender verificando, indexação, manutenção do Windows
+        static readonly string[] MANUTENCAO = { "tiworker", "trustedinstaller", "mousocoreworker", "wuauclt", "usoclient", "msmpeng", "mpcmdrun",
+            "searchindexer", "searchprotocolhost", "compattelrunner", "dismhost", "msiexec", "defrag", "cleanmgr", "sihclient" };
         double baseMhz;
         double? vramTotal;
         DateTime proxLhm = DateTime.MinValue, proxD3d = DateTime.MinValue, proxSmi = DateTime.MinValue, proxProc = DateTime.MinValue, proxUltima = DateTime.MinValue;
@@ -725,6 +734,10 @@ namespace KatharosApp
             try { int st; if (Nat.SHQueryUserNotificationState(out st) == 0) a.TelaCheia = st == 2 || st == 3 || st == 4; } catch { }
             if (agora >= proxProc) { proxProc = agora.AddSeconds(5); LeNomes(); }
             foreach (var n in cfg.NomesJogo) if (NomesVistos.Contains(n)) { a.AntiCheat = true; break; }
+            try { a.UptimeH = Nat.GetTickCount64() / 3600000.0; } catch (Exception e) { Falha("tempo ligado", e); }
+            a.Processos = Nomes.Count;
+            if (agora >= proxCtx) { proxCtx = agora.AddSeconds(10); LeContexto(); }
+            a.Manutencao = ctxManut; a.Top = ctxTop; a.RamSistemaGb = ctxRamSis; a.RamContaGb = ctxRamConta;
             return a;
         }
 
@@ -735,20 +748,50 @@ namespace KatharosApp
             if (falhas.Add(fonte)) Log.Escreve("leitura de " + fonte + " falhou: " + e.GetType().Name + ": " + e.Message);
         }
 
-        // só os nomes: GetProcesses lê a lista do sistema, não abre processo nenhum
+        // só os nomes e a sessão: GetProcesses lê a lista do sistema, não abre processo nenhum
         void LeNomes()
         {
-            var nomes = new Dictionary<int, string>(); var vistos = new HashSet<string>();
+            var nomes = new Dictionary<int, string>(); var vistos = new HashSet<string>(); var sess = new Dictionary<int, int>();
             try
             {
                 foreach (var p in Process.GetProcesses())
                 {
-                    try { string n = p.ProcessName; nomes[p.Id] = n; vistos.Add(n.ToLowerInvariant()); } catch { }
+                    try { string n = p.ProcessName; nomes[p.Id] = n; vistos.Add(n.ToLowerInvariant()); sess[p.Id] = p.SessionId; } catch { }
                     p.Dispose();
                 }
             }
             catch { }
-            Nomes = nomes; NomesVistos = vistos;
+            Nomes = nomes; NomesVistos = vistos; Sessoes = sess;
+        }
+
+        // contadores por processo (o mesmo do Monitor de Desempenho): CPU e memória privada de cada um, sem abrir processo nenhum.
+        // Separa a RAM dos serviços do Windows (sessão 0) da RAM da sua conta, e acha quem está fazendo manutenção agora.
+        void LeContexto()
+        {
+            try
+            {
+                var c = procs.Le("% Processor Time", "Working Set - Private", "ID Process");
+                if (!c.ContainsKey("ID Process") || c["ID Process"].Count == 0) return;
+                var cpu = c["% Processor Time"]; var ws = c["Working Set - Private"]; int nucleos = Math.Max(1, Environment.ProcessorCount);
+                double sis = 0, conta = 0; var manut = new List<string>(); var top = new List<KeyValuePair<string, double>>();
+                foreach (var kv in c["ID Process"])
+                {
+                    string inst = kv.Key; int pid = (int)kv.Value;
+                    if (inst == "_Total" || inst == "Idle" || pid == 0) continue;
+                    string nome = inst; int h = nome.IndexOf('#'); if (h > 0) nome = nome.Substring(0, h);
+                    double w; if (ws.TryGetValue(inst, out w)) { int se; if (Sessoes.TryGetValue(pid, out se) && se > 0) conta += w; else sis += w; }
+                    double u; if (!cpu.TryGetValue(inst, out u)) continue;
+                    u = u / nucleos;
+                    if (u >= 3 && Array.IndexOf(MANUTENCAO, nome.ToLowerInvariant()) >= 0 && !manut.Contains(nome)) manut.Add(nome);
+                    if (u >= 1) top.Add(new KeyValuePair<string, double>(nome, u));
+                }
+                top.Sort(delegate (KeyValuePair<string, double> x, KeyValuePair<string, double> y) { return y.Value.CompareTo(x.Value); });
+                var t5 = new List<string>(); foreach (var t in top) { if (t5.Count >= 5) break; t5.Add(t.Key + " " + Math.Round(t.Value, 0).ToString(K.INV) + "%"); }
+                ctxManut = manut.Count > 0 ? string.Join(", ", manut.ToArray()) : null;
+                ctxTop = t5.Count > 0 ? string.Join(", ", t5.ToArray()) : null;
+                ctxRamSis = sis / 1073741824.0; ctxRamConta = conta / 1073741824.0;
+            }
+            catch (Exception e) { Falha("contexto", e); }
         }
 
         void LeLhm()
@@ -984,6 +1027,7 @@ namespace KatharosApp
     class Minuto
     {
         public DateTime Inicio; int n; double sCpu, sGpu, sRam, sDisco, sRede; double mCpu, mGpu, mNuc, mTc = -1, mTg = -1, mVram; double mDesemp = 1000; public string Jogo;
+        int nManut, nBat, nProc; double sProc, sRamSis, sRamConta, minUp = double.MaxValue; int nRamSis; readonly HashSet<string> manut = new HashSet<string>();
         public Minuto(DateTime t) { Inicio = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0); }
         public void Soma(Amostra a)
         {
@@ -999,6 +1043,11 @@ namespace KatharosApp
             if (a.VramPct.HasValue) mVram = Math.Max(mVram, a.VramPct.Value);
             if (a.CpuDesempenho.HasValue && a.Cpu >= 40) mDesemp = Math.Min(mDesemp, a.CpuDesempenho.Value);
             if (a.Jogo != null) Jogo = a.Jogo;
+            if (a.Manutencao != null) { nManut++; foreach (var x in a.Manutencao.Split(',')) manut.Add(x.Trim()); }
+            if (a.NaBateria) nBat++;
+            if (a.Processos.HasValue) { sProc += a.Processos.Value; nProc++; }
+            if (a.RamSistemaGb.HasValue) { sRamSis += a.RamSistemaGb.Value; sRamConta += a.RamContaGb ?? 0; nRamSis++; }
+            if (a.UptimeH.HasValue) minUp = Math.Min(minUp, a.UptimeH.Value);
         }
         public string Linha()
         {
@@ -1013,6 +1062,14 @@ namespace KatharosApp
             if (mVram > 0) d["vram"] = Math.Round(mVram, 0);
             if (mDesemp < 1000) d["desempenho_min"] = Math.Round(mDesemp, 0);
             if (Jogo != null) d["jogo"] = Jogo;
+            // contexto: o que pode distorcer este minuto. "sujo" = manutenção do Windows rodando em boa parte dele ou logo depois do boot;
+            // fica guardado, mas a linha de base e as comparações não usam
+            if (nProc > 0) d["processos"] = Math.Round(sProc / nProc, 0);
+            if (nRamSis > 0) { d["ram_sistema_gb"] = Math.Round(sRamSis / nRamSis, 2); d["ram_conta_gb"] = Math.Round(sRamConta / nRamSis, 2); }
+            if (minUp < double.MaxValue) d["ligado_h"] = Math.Round(minUp, 2);
+            if (manut.Count > 0) d["manutencao"] = string.Join(", ", new List<string>(manut).ToArray());
+            if (nBat > n / 2) d["bateria"] = true;
+            if (nManut * 3 >= n || (minUp < double.MaxValue && minUp * 60 < Lim.G("minutos_depois_do_boot"))) d["sujo"] = true;
             return new JavaScriptSerializer().Serialize(d);
         }
     }
@@ -1199,6 +1256,10 @@ namespace KatharosApp
             d["rede_baixa_mbs"] = K.R(a.RedeBaixa, 3); d["rede_sobe_mbs"] = K.R(a.RedeSobe, 3);
             d["temp_cpu"] = K.R(a.TempCpu, 0); d["temp_cpu_fonte"] = a.TempCpuFonte; d["temp_gpu"] = K.R(a.TempGpu, 0); d["temp_gpu_fonte"] = a.TempGpuFonte;
             if (a.Bateria.HasValue) { d["bateria"] = a.Bateria; d["na_bateria"] = a.NaBateria; }
+            var cx = new Dictionary<string, object>();
+            cx["ligado_h"] = K.R(a.UptimeH, 2); cx["processos"] = a.Processos; cx["ram_sistema_gb"] = K.R(a.RamSistemaGb, 2); cx["ram_conta_gb"] = K.R(a.RamContaGb, 2);
+            cx["manutencao"] = a.Manutencao; cx["top"] = a.Top;
+            d["contexto"] = cx;
             if (Sessao != null)
             {
                 var j = new Dictionary<string, object>();

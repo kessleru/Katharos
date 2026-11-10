@@ -30,6 +30,7 @@
  "jogo_gpu_min": 20,
  "jogo_segundos_comecar": 10,
  "jogo_segundos_fechar": 30,
+ "minutos_depois_do_boot": 10,
  "ram_cheia": 90,
  "repouso_cpu": 60,
  "repouso_cpu_fracao": 0.25,

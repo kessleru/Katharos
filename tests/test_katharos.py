@@ -2855,3 +2855,52 @@ class TestVersoesDoWindows(unittest.TestCase):
         fonte = (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8')
         chamadas = [l for l in fonte.splitlines() if re.search(r'\bwmic(\.exe)?\s', l, re.I) and 'wmiprvse' not in l.lower()]
         self.assertEqual([l for l in chamadas if not l.strip().startswith('#') and "'wmic'" not in l and '"wmic"' not in l], [])
+
+
+class TestMedidasFieis(unittest.TestCase):
+    """2e: medida suja (manutenção do Windows, logo depois do boot) não entra na conta; diferença só com margem."""
+
+    def test_minuto_sujo_fica_fora_da_linha_de_base(self):
+        from datetime import timedelta as _td
+        agora = datetime(2026, 11, 10, 12)
+        limpos = [{'_dt': agora - _td(minutes=10 * i), 'cpu': 10 + i % 3} for i in range(1, 800)]
+        sujos = [{'_dt': agora - _td(minutes=10 * i + 5), 'cpu': 90, 'sujo': True} for i in range(1, 800)]
+        b = k.linha_de_base(limpos + sujos, 'cpu', 'sem_jogo', agora)
+        self.assertLess(b['mediana'], 15)
+
+    def test_margem_engole_efeito_pequeno(self):
+        from datetime import timedelta as _td
+        quando = datetime(2026, 11, 3, 12)
+        prev = {'fonte': 'minutos', 'chave': 'cpu', 'delta': -10, 'un': '%'}
+        antes = [{'_dt': quando - _td(minutes=i), 'cpu': 20 + (i * 7) % 15} for i in range(1, 300)]
+        depois = [{'_dt': quando + _td(minutes=i), 'cpu': 19.5 + (i * 7) % 15} for i in range(1, 300)]
+        self.assertEqual(k.mede_previsao(prev, quando, antes + depois, [])[0], 'sem diferença')
+        d, lo, hi = k.intervalo_da_diferenca([1, 2, 3, 4, 5] * 20, [11, 12, 13, 14, 15] * 20)
+        self.assertTrue(lo > 5 and hi < 15 and d == 10)
+
+    def test_exe_grava_o_contexto_de_cada_medida(self):
+        cs = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+        for campo in ('d["sujo"]', 'd["ram_sistema_gb"]', 'd["ligado_h"]', 'd["manutencao"]', 'd["contexto"]', '"Process"'):
+            self.assertIn(campo, cs)
+        self.assertIn('minutos_depois_do_boot', k.REGRAS_MOTOR)
+
+
+class TestBancada(unittest.TestCase):
+    """2e.5: o benchmark diz o que atrapalha, nunca fecha processo, e a comparação avisa quando foi feita em condição ruim."""
+
+    def test_condicoes(self):
+        boa = {'cpu': 3, 'contexto': {'ligado_h': 5}}
+        self.assertEqual(k.condicoes_de_bancada(boa)['qualidade'], 'boa')
+        ruim = {'cpu': 40, 'na_bateria': True, 'contexto': {'ligado_h': 0.05, 'manutencao': 'TiWorker', 'top': 'chrome 30%'}}
+        c = k.condicoes_de_bancada(ruim)
+        self.assertEqual(c['qualidade'], 'fraca')
+        self.assertEqual(len(c['motivos']), 4)
+        self.assertIn('chrome', c['motivos'][0])
+        with mock.patch.object(k, 'le_agora', return_value=None):
+            self.assertEqual(k.condicoes_de_bancada()['qualidade'], 'desconhecida')
+
+    def test_bancada_nunca_fecha_processo(self):
+        import inspect
+        fonte = inspect.getsource(k.prepara_bancada) + inspect.getsource(k.condicoes_de_bancada)
+        for proibido in ('Stop-Process', 'taskkill', '.kill(', 'terminate(', 'TerminateProcess'):
+            self.assertNotIn(proibido, fonte)

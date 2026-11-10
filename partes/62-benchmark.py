@@ -184,6 +184,69 @@ def bateria_fraca(ctx):
     return bool(d) and not d.get('ligada') and (d.get('carga') or 100) < 30
 
 
+def condicoes_de_bancada(a=None):
+    """O que pode atrapalhar a medida agora, lido do segundo plano (agora.json). Nunca fecha nada: só diz.
+    Devolve {'qualidade': 'boa'|'fraca'|'desconhecida', 'motivos': [...], 'cpu', 'top', 'manutencao', 'na_bateria'}."""
+    a = a if a is not None else le_agora()
+    if not a:
+        return {'qualidade': 'desconhecida', 'motivos': ['o segundo plano não está ligado: não deu para conferir o que está rodando']}
+    cx = a.get('contexto') or {}
+    motivos = []
+    if (a.get('cpu') or 0) >= 15:
+        motivos.append(f'CPU em {br(a.get("cpu"), 0)} % antes de começar' + (f' ({cx.get("top")})' if cx.get('top') else ''))
+    if cx.get('manutencao'):
+        motivos.append(f'manutenção do Windows rodando: {cx["manutencao"]}')
+    if a.get('na_bateria'):
+        motivos.append('na bateria')
+    if (cx.get('ligado_h') or 99) * 60 < REGRAS_MOTOR['minutos_depois_do_boot']:
+        motivos.append('o PC acabou de ligar')
+    if a.get('jogo'):
+        motivos.append('jogo aberto')
+    if (a.get('temp_cpu') or 0) >= REGRAS_MOTOR['calor_cpu'] - 10:
+        motivos.append(f'CPU quente ({br(a.get("temp_cpu"), 0)} °C)')
+    return {'qualidade': 'fraca' if motivos else 'boa', 'motivos': motivos, 'cpu': a.get('cpu'), 'top': cx.get('top'),
+            'manutencao': cx.get('manutencao'), 'na_bateria': bool(a.get('na_bateria'))}
+
+
+def prepara_bancada(ctx, espera_s=60):
+    """Antes de medir: mostra o que atrapalha, pede (não obriga) para fechar programas pesados, espera a CPU sossegar e pausa o
+    próprio segundo plano. Nunca fecha processo nenhum. Devolve as condições finais (vão junto do resultado)."""
+    t = ctx.t
+    c = condicoes_de_bancada()
+    if c['qualidade'] == 'fraca':
+        t.titulo('antes de medir')
+        for m in c['motivos']:
+            t.item('○', 'amarelo', m)
+        if t.interativo:
+            t.paragrafo('Para o resultado mostrar o efeito do Katharos (e não o de um programa aberto), feche o que puder da lista acima '
+                        'e aperte Enter. O Katharos não fecha nada sozinho.', 2, 'apagado')
+            t.pergunta('Enter para medir')
+    if le_agora():   # espera a CPU sossegar (até 1 min), lendo o segundo plano
+        fim = time.time() + espera_s
+        calma = 0
+        while time.time() < fim:
+            a = le_agora() or {}
+            calma = calma + 1 if (a.get('cpu') or 0) < 15 and not (a.get('contexto') or {}).get('manutencao') else 0
+            if calma >= 5:
+                break
+            time.sleep(1)
+        c = condicoes_de_bancada()
+    try:   # o próprio segundo plano para de ler durante a medida (a pausa volta sozinha em 10 min)
+        (CASA / PAUSA_ARQ).write_text((datetime.now() + timedelta(minutes=10)).isoformat(timespec='seconds'), encoding='ascii')
+        c['pausou_segundo_plano'] = True
+    except OSError:
+        pass
+    return c
+
+
+def solta_bancada(c):
+    if c.get('pausou_segundo_plano'):
+        try:
+            (CASA / PAUSA_ARQ).unlink()
+        except OSError:
+            pass
+
+
 def ferramenta_benchmark(ctx, args):
     t = ctx.t
     rapido = not getattr(args, 'completo', False)
@@ -209,12 +272,21 @@ def ferramenta_benchmark(ctx, args):
         leve = True
         t.nota(f'  Modo leve do teste ({apertado}): arquivos menores e uma etapa de cada vez.')
     t.escreve()
-    atual = roda_bench(t, rapido=rapido, leve=leve, multi=not rapido)
+    cond = prepara_bancada(ctx)
+    try:
+        atual = roda_bench(t, rapido=rapido, leve=leve, multi=not rapido)
+    finally:
+        solta_bancada(cond)
     salvos = bench_salvos()
-    antes = le_json(salvos[-1], {}).get('medidas') if salvos else None
+    anterior = le_json(salvos[-1], {}) if salvos else {}
+    antes = anterior.get('medidas') if salvos else None
+    fracas = [x for x in (cond, anterior.get('condicoes') or {}) if x.get('qualidade') == 'fraca']
+    if antes and fracas:
+        t.aviso('Comparação fraca: ' + ('esta medida' if fracas[0] is cond else 'a medida anterior') + ' foi feita com ' +
+                '; '.join(fracas[0].get('motivos') or []) + '. Repita com o PC parado para um resultado firme.')
     quando = salvos[-1].stem[:16].replace('_', ' ') if salvos else ''
     mostra_bench(t, atual, antes, 'o benchmark anterior (' + quando + ')' if antes else '')
-    dados = {'versao': VERSAO, 'quando': agora_iso(), 'pc': nome_do_pc(), 'leve': leve, 'medidas': atual,
+    dados = {'versao': VERSAO, 'quando': agora_iso(), 'pc': nome_do_pc(), 'leve': leve, 'medidas': atual, 'condicoes': cond,
              'perfil_aplicado': (estado().get('perfil') or '')}
     grava_json(pasta('benchmarks') / f'{datetime.now():%Y-%m-%d_%H-%M-%S}.json', dados)
     try:
