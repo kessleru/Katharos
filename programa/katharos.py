@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '2.2.0'
+VERSAO = '2.3.0'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -2099,13 +2099,17 @@ $notebook = [bool]$bat -or (@($chassi | Where-Object { $_ -in 8,9,10,11,12,14,18
 $tablet = (@($chassi | Where-Object { $_ -in 30,31,32 }).Count -gt 0) -or [bool](Tenta { Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name ConvertibleSlateMode -ErrorAction Stop })
 
 # disco do sistema
-$tipoC = 'desconhecido'; $barC = ''; $saudeC = ''
+$tipoC = 'desconhecido'; $barC = ''; $saudeC = ''; $modeloC = ''; $desgC = $null; $tempC = $null; $horasC = $null; $errC = $null
 try {
     $part = Get-Partition -DriveLetter C -ErrorAction Stop
     $pd = Get-PhysicalDisk | Where-Object { $_.DeviceId -eq [string]$part.DiskNumber } | Select-Object -First 1
-    if ($pd) { $tipoC = [string]$pd.MediaType; $barC = [string]$pd.BusType; $saudeC = [string]$pd.HealthStatus }
+    if ($pd) { $tipoC = [string]$pd.MediaType; $barC = [string]$pd.BusType; $saudeC = [string]$pd.HealthStatus; $modeloC = ([string]$pd.FriendlyName).Trim()
+        $rc = Tenta { $pd | Get-StorageReliabilityCounter -ErrorAction Stop } $null
+        if ($rc) { $desgC = $rc.Wear; $tempC = $rc.Temperature; $horasC = $rc.PowerOnHours; $errC = [long]$rc.ReadErrorsUncorrected + [long]$rc.WriteErrorsUncorrected } }
     if ($tipoC -eq 'Unspecified' -and $barC -eq 'NVMe') { $tipoC = 'SSD' }
+    if ($tipoC -eq 'Unspecified' -and $modeloC -match 'SSD|NVMe|Solid') { $tipoC = 'SSD' }
 } catch {}
+$discos = @(Tenta { Get-PhysicalDisk -ErrorAction Stop | Sort-Object DeviceId | ForEach-Object { [pscustomobject]@{ modelo = ([string]$_.FriendlyName).Trim(); tipo = [string]$_.MediaType; barramento = [string]$_.BusType; gb = [math]::Round([double]$_.Size / 1GB, 0); saude = [string]$_.HealthStatus } } } @())
 $ld = Tenta { Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" }
 $livreC = 0; $totalC = 0; if ($ld) { $livreC = [math]::Round($ld.FreeSpace / 1GB, 1); $totalC = [math]::Round($ld.Size / 1GB, 1) }
 
@@ -2145,7 +2149,22 @@ $pf = Tenta { Get-CimInstance Win32_PageFileSetting } $null
 $pfAuto = Tenta { (Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile } $true
 $mm = Tenta { (Get-MMAgent -ErrorAction Stop).MemoryCompression } $null
 $pentesL = @($pentes | ForEach-Object { [pscustomobject]@{ gb = [math]::Round([double]$_.Capacity / 1GB, 0); mhz = [int]$_.ConfiguredClockSpeed; mhz_max = [int]$_.Speed; fab = ([string]$_.Manufacturer).Trim(); modelo = ([string]$_.PartNumber).Trim() } })
-$video = @(Tenta { Get-CimInstance Win32_VideoController -ErrorAction Stop | ForEach-Object { [pscustomobject]@{ nome = [string]$_.Name; driver = [string]$_.DriverVersion; driver_data = $(if ($_.DriverDate) { ([datetime]$_.DriverDate).ToString('s') } else { '' }); basico = ([string]$_.Name -match 'Basic Display|Basic Render|sico da Microsoft') } } } @())
+# o AdapterRAM do WMI para em 4 GB; o registro do driver de vídeo guarda o tamanho certo
+$vram = @{}
+Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object {
+    $r = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+    if ($r -and $r.DriverDesc) {
+        $q = $r.'HardwareInformation.qwMemorySize'; if ($null -eq $q) { $q = $r.'HardwareInformation.MemorySize' }
+        if ($q -is [byte[]]) { $bb = [byte[]](@($q) + @(0, 0, 0, 0, 0, 0, 0, 0)); $q = [BitConverter]::ToUInt64($bb, 0) }
+        if ($q) { $vram[([string]$r.DriverDesc).Trim()] = [math]::Round([double]$q / 1GB, 1) }
+    }
+}
+$placa = Tenta { Get-CimInstance Win32_BaseBoard | Select-Object -First 1 }
+$bios = Tenta { Get-CimInstance Win32_BIOS | Select-Object -First 1 }
+$tiposRam = @{ 20 = 'DDR'; 21 = 'DDR2'; 24 = 'DDR3'; 26 = 'DDR4'; 29 = 'LPDDR3'; 30 = 'LPDDR4'; 34 = 'DDR5'; 35 = 'LPDDR5' }
+$tipoRam = ''; foreach ($pm in $pentes) { $c = [int]$pm.SMBIOSMemoryType; if ($tiposRam.ContainsKey($c)) { $tipoRam = $tiposRam[$c]; break } }
+$memDisp = Tenta { [double](Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop).AvailableMBytes / 1024 } $null
+$video = @(Tenta { Get-CimInstance Win32_VideoController -ErrorAction Stop | ForEach-Object { $nm = ([string]$_.Name).Trim(); [pscustomobject]@{ nome = $nm; vram_gb = $(if ($vram.ContainsKey($nm)) { $vram[$nm] } elseif ([double]$_.AdapterRAM -gt 0) { [math]::Round([double]$_.AdapterRAM / 1GB, 1) } else { $null }); integrada = ($nm -match 'Intel\(R\) (UHD|HD|Iris)|Intel.*Graphics$|AMD Radeon\(TM\) Graphics|Radeon\(TM\) (Vega|[0-9]+M) |Radeon Graphics$|Vega [0-9]+ Graphics'); driver = [string]$_.DriverVersion; driver_data = $(if ($_.DriverDate) { ([datetime]$_.DriverDate).ToString('s') } else { '' }); basico = ([string]$_.Name -match 'Basic Display|Basic Render|sico da Microsoft') } } } @())
 $tela = Tenta {
     Add-Type -Namespace Katharos -Name Tela -ErrorAction Stop -MemberDefinition '
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)] public struct DEVMODE { [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra; public int dmFields; public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput; public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public int dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight; public int dmDisplayFlags; public int dmDisplayFrequency; public int dmICMMethod; public int dmICMIntent; public int dmMediaType; public int dmDitherType; public int dmReserved1; public int dmReserved2; public int dmPanningWidth; public int dmPanningHeight; }
@@ -2175,10 +2194,11 @@ $gerenciado = $mdm -or $aad -or [bool]$cs.PartOfDomain
 
 Dado 'perfil' @{
     so = @{ nome = [string]$os.Caption; versao = [string]$cv.DisplayVersion; build = $build; win11 = ($build -ge 22000); edicao = [string]$cv.EditionID; idioma = (Get-Culture).Name; instalado = ([string]$os.InstallDate) }
-    pc = @{ fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; bateria = [bool]$bat }
-    cpu = @{ nome = ([string]$cpu.Name).Trim(); nucleos = [int]$cpu.NumberOfCores; threads = [int]$cpu.NumberOfLogicalProcessors; mhz = [int]$cpu.MaxClockSpeed }
-    ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1); slots = $slots; ocupados = $pentes.Count; pentes = (Lista $pentesL) }
-    disco = @{ tipo = $tipoC; barramento = $barC; saude = $saudeC; livre = $livreC; total = $totalC; trim = $trim }
+    pc = @{ placa = $(if ($placa) { (([string]$placa.Manufacturer).Trim() + ' ' + ([string]$placa.Product).Trim()).Trim() } else { '' }); bios = $(if ($bios) { ([string]$bios.SMBIOSBIOSVersion).Trim() } else { '' }); bios_data = $(if ($bios -and $bios.ReleaseDate) { ([datetime]$bios.ReleaseDate).ToString('yyyy-MM-dd') } else { '' }); fabricante = ([string]$cs.Manufacturer).Trim(); modelo = ([string]$cs.Model).Trim(); notebook = $notebook; tablet = $tablet; dominio = [bool]$cs.PartOfDomain; gerenciado = $gerenciado; bateria = [bool]$bat }
+    cpu = @{ nome = (([string]$cpu.Name).Trim() -replace '\s+', ' '); nucleos = [int]$cpu.NumberOfCores; threads = [int]$cpu.NumberOfLogicalProcessors; mhz = [int]$cpu.MaxClockSpeed; l3_mb = [math]::Round([double]$cpu.L3CacheSize / 1024, 0); virtualizacao = [bool]$cpu.VirtualizationFirmwareEnabled; fabricante = ([string]$cpu.Manufacturer).Trim() }
+    ram = @{ total = [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 1); usada = $(if ($null -ne $memDisp) { [math]::Round([math]::Max(0, [double]$os.TotalVisibleMemorySize / 1MB - $memDisp), 1) } else { [math]::Round(([double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory) / 1MB, 1) }); tipo = $tipoRam; slots = $slots; ocupados = $pentes.Count; pentes = (Lista $pentesL) }
+    disco = @{ tipo = $tipoC; barramento = $barC; saude = $saudeC; livre = $livreC; total = $totalC; trim = $trim; modelo = $modeloC; desgaste = $desgC; temperatura = $tempC; horas = $horasC; erros = $errC }
+    discos = (Lista $discos)
     gpus = (Lista $gpus)
     video = (Lista $video)
     tela = $tela
@@ -2299,6 +2319,8 @@ for ($i = 0; $i -lt 4; $i++) {
 function Media($c) { $v = @($amostras | ForEach-Object { $_.$c } | Where-Object { $null -ne $_ }); if ($v.Count) { [math]::Round(($v | Measure-Object -Average).Average, 1) } else { $null } }
 $tt = LeTemperaturas $true
 $temp = $tt.cpu
+$gpuUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
+$vramUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory -ErrorAction Stop); if ($g.Count) { [math]::Round(([double]($g | Measure-Object -Property DedicatedUsage -Maximum).Maximum) / 1GB, 2) } else { $null } } $null
 $boot = Tenta { $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction Stop; [int](([xml]$e.ToXml()).Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text' } $null
 $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $mem = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop } $null
@@ -2329,6 +2351,8 @@ Dado 'medidas' @{
     temperatura = $temp
     temp_fonte = $tt.cpu_fonte
     temperatura_gpu = $tt.gpu
+    gpu_uso = $gpuUso
+    vram_usada = $vramUso
     temp_gpu_fonte = $tt.gpu_fonte
     boot_s = $(if ($boot) { [math]::Round($boot / 1000, 1) } else { $null })
 }
@@ -2362,6 +2386,52 @@ PERFIL_VAZIO = {'so': {'win11': False, 'build': 0, 'nome': '', 'versao': '', 'ed
                 'cpu': {}, 'ram': {'total': 8, 'usada': 0}, 'disco': {'tipo': 'SSD', 'livre': 100, 'total': 200},
                 'gpus': [], 'tem': {}, 'jogos': [], 'oem_gamer': [], 'antivirus': [], 'defender': {},
                 'energia': {}, 'memoria': {}, 'sistema': {}}
+
+
+def texto_cpu(p):
+    n = re.sub(r'\((R|TM)\)|CPU @.*$|\s+Processor$', '', str(pf(p, 'cpu.nome', '') or '').strip()).strip()
+    nuc, thr = pf(p, 'cpu.nucleos', 0) or 0, pf(p, 'cpu.threads', 0) or 0
+    extra = [f'{nuc} núcleos, {thr} threads' if nuc else '', f'L3 {pf(p, "cpu.l3_mb")} MB' if pf(p, 'cpu.l3_mb') else '']
+    return ' · '.join(x for x in [n] + extra if x)
+
+
+def texto_ram(p):
+    tipo = pf(p, 'ram.tipo') or ''
+    pentes = [x for x in lista(pf(p, 'ram.pentes')) if isinstance(x, dict)]
+    mhz = max((x.get('mhz') or 0 for x in pentes), default=0)
+    canal = ''
+    if len(pentes) == 1:
+        canal = 'um pente só (canal simples)'
+    elif len(pentes) >= 2:
+        canal = f'{len(pentes)} pentes'
+    partes = [gb(pf(p, 'ram.total')), ' '.join(x for x in (tipo, f'{mhz} MHz' if mhz else '') if x), canal,
+              f'{pf(p, "ram.ocupados", "?")} de {pf(p, "ram.slots", "?")} slots']
+    return ' · '.join(x for x in partes if x)
+
+
+def texto_disco(p):
+    partes = [' '.join(x for x in (str(pf(p, 'disco.tipo', '') or ''), str(pf(p, 'disco.barramento', '') or '')) if x), str(pf(p, 'disco.modelo') or ''),
+              f'{gb(pf(p, "disco.livre"))} livres de {gb(pf(p, "disco.total"))}']
+    d = pf(p, 'disco.desgaste')
+    if isinstance(d, (int, float)) and d > 0:
+        partes.append(f'{br(d, 0)} % de desgaste')
+    tc = pf(p, 'disco.temperatura')
+    if isinstance(tc, (int, float)) and 0 < tc < 100:
+        partes.append(f'{br(tc, 0)} °C')
+    return ' · '.join(x for x in partes if x)
+
+
+def texto_video(p):
+    vs = [v for v in lista(pf(p, 'video')) if isinstance(v, dict) and v.get('nome')]
+    if not vs:
+        return ', '.join(lista(p.get('gpus')))
+    return ', '.join(v['nome'] + (f' ({br(v["vram_gb"], 0 if v["vram_gb"] >= 2 else 1)} GB)' if isinstance(v.get('vram_gb'), (int, float)) and v['vram_gb'] > 0 else '')
+                     + (' integrada' if v.get('integrada') else '') for v in vs)
+
+
+def texto_placa(p):
+    b = pf(p, 'pc.bios')
+    return str(pf(p, 'pc.placa') or '') + (f' · BIOS {b}' + (f' de {pf(p, "pc.bios_data")}' if pf(p, 'pc.bios_data') else '') if b else '')
 
 
 def pf(p, caminho, padrao=None):
@@ -2438,7 +2508,8 @@ LINHAS_MEDIDA = [
     ('disco_ativo', 'disco ocupado', '%', 'menor'),
     ('processos', 'processos', '', 'menor'), ('servicos', 'serviços rodando', '', 'menor'),
     ('inicializacao', 'abrem com o Windows', '', 'menor'), ('livre_c', 'livre em C:', 'GB', 'maior'),
-    ('temperatura', 'temperatura', '°C', 'menor'), ('boot_s', 'último boot', 's', 'menor'),
+    ('temperatura', 'temperatura da CPU', '°C', 'menor'), ('temperatura_gpu', 'temperatura da GPU', '°C', 'menor'),
+    ('gpu_uso', 'GPU em uso', '%', 'menor'), ('vram_usada', 'memória de vídeo em uso', 'GB', 'menor'), ('boot_s', 'último boot', 's', 'menor'),
 ]
 
 
@@ -2810,6 +2881,17 @@ def analisa(p, m, d):
                             f'{v.get("nome")}: driver {v.get("driver")} de {str(v.get("driver_data"))[:10]} (há {br(meses, 0)} meses).',
                             'Jogos novos dependem de driver novo. Baixe no site da NVIDIA ou da AMD (o Katharos não baixa nada).'))
             break
+    desg, terr, tdisco = pf(p, 'disco.desgaste'), pf(p, 'disco.erros'), pf(p, 'disco.temperatura')
+    if isinstance(terr, (int, float)) and terr > 0:
+        A.append(Achado(3, ['disco', 'lento', 'tudo'], 'O disco do sistema tem erros de leitura ou gravação',
+                        f'{int(terr)} erros que o próprio disco não conseguiu corrigir (contador de confiabilidade do Windows).',
+                        'Faça cópia dos seus arquivos agora e planeje trocar o disco. Erros que o disco não corrige costumam aumentar.'))
+    elif isinstance(desg, (int, float)) and desg >= 80:
+        A.append(Achado(2, ['disco', 'tudo'], 'SSD perto do fim da vida útil', f'Desgaste em {br(desg, 0)} % pelo próprio SSD.',
+                        'Ainda funciona, mas mantenha cópia dos seus arquivos e planeje a troca.'))
+    if isinstance(tdisco, (int, float)) and 65 <= tdisco < 100:
+        A.append(Achado(1, ['calor', 'disco'], 'Disco quente', f'{br(tdisco, 0)} °C no disco do sistema.',
+                        'SSD NVMe acima de 70 °C perde velocidade para se proteger. Um dissipador ou mais ventilação no gabinete resolve.'))
     if eh_ssd(p) and pf(p, 'disco.trim') is False:
         A.append(Achado(2, ['lento', 'tudo'], 'TRIM desligado no SSD',
                         'O Windows não está avisando o SSD sobre os blocos livres.',
@@ -2989,10 +3071,11 @@ def ferramenta_raiox(ctx, args):
     t.chaves([
         ('modelo', f'{pf(p, "pc.fabricante", "")} {pf(p, "pc.modelo", "")}'.strip() + (' · notebook' if pf(p, 'pc.notebook') else ' · desktop')),
         ('Windows', f'{pf(p, "so.nome", "")} {pf(p, "so.versao", "")}'.replace('Microsoft ', '')),
-        ('processador', str(pf(p, 'cpu.nome', '')).replace('(R)', '').replace('(TM)', '')),
-        ('RAM', f'{gb(pf(p, "ram.total"))} · {pf(p, "ram.ocupados", "?")} de {pf(p, "ram.slots", "?")} slots'),
-        ('disco C:', f'{pf(p, "disco.tipo", "")} {pf(p, "disco.barramento", "")} · {gb(pf(p, "disco.livre"))} livres'),
-        ('vídeo', ', '.join(lista(p.get('gpus')))),
+        ('processador', texto_cpu(p)),
+        ('RAM', texto_ram(p)),
+        ('disco C:', texto_disco(p)),
+        ('vídeo', texto_video(p)),
+    ] + ([('placa-mãe', texto_placa(p))] if pf(p, 'pc.placa') else []) + [
     ])
     t.titulo('em repouso')
     mostra_medidas(t, m)
@@ -10203,9 +10286,13 @@ function Atualiza {
     $lUso.Text = 'CPU ' + $(if ($null -ne $cpu) { "$cpu %" } else { '-' }) + '    RAM ' + $(if ($null -ne $ram) { "$ram %" } else { '-' }) + $(if ($null -ne $a.disco) { '    disco ' + (N $a.disco) + ' %' } else { '' })
     $lTemp.Text = 'temperatura: CPU ' + $(if ($null -ne $tc) { "$tc °C" } else { 'sem sensor' }) + '    GPU ' + $(if ($null -ne $tg) { "$tg °C" } else { '-' })
     $q = $null; try { $q = [datetime]$a.quando } catch {}
-    $lQuando.Text = if ($q) { 'última leitura às ' + $q.ToString('HH:mm') + $(if ($a.em_jogo) { ' (com jogo aberto)' } else { '' }) } else { '' }
-    if (Pausada) { $lQuando.Text = 'leitura pausada' }
+    $velha = $q -and ((Get-Date) - $q).TotalMinutes -gt 40
+    if (Pausada) { $lQuando.Text = 'leitura pausada (volta sozinha em até 1 hora)' }
+    elseif ($velha) { $lQuando.Text = 'sem leitura desde ' + $q.ToString('dd/MM HH:mm') + ': abra o Katharos e rode "agendar"' }
+    elseif ($q) { $prox = [math]::Max(1, [math]::Ceiling(15 - ((Get-Date) - $q).TotalMinutes)); $lQuando.Text = 'lido às ' + $q.ToString('HH:mm') + $(if ($a.em_jogo) { ' com jogo aberto' } else { '' }) + ", próxima em ~$prox min" }
+    else { $lQuando.Text = '' }
     $dica = 'Katharos: CPU ' + $(if ($null -ne $cpu) { "$cpu%" } else { '-' }) + $(if ($null -ne $tc) { ", $tc °C" } elseif ($null -ne $ram) { ", RAM $ram%" } else { '' })
+    if ($velha -and -not (Pausada)) { $dica = 'Katharos: sem leitura desde ' + $q.ToString('HH:mm') }
     $ni.Text = $dica.Substring(0, [math]::Min(63, $dica.Length))
     # calor de verdade: avisa uma vez por hora
     $quente = @(@($tc, $tg) | Where-Object { $null -ne $_ -and $_ -ge 90 })
@@ -10282,11 +10369,16 @@ Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal 
 Start-ScheduledTask -TaskName «nome» -ErrorAction SilentlyContinue
 Feito 'ícone do Katharos ligado perto do relógio'
 ''', exe=psq(exe), arg=psq(arg), nome=psq(TAREFA_BANDEJA))
-    s = roda_ps(ctx.t, corpo, 'agendar-icone', minutos=1)
-    return 0 if (s.ok and not s.erros) else 1
+    s = roda_ps(ctx.t, corpo, 'agendar-icone', minutos=1, mostra=False)
+    ok = s.ok and not s.erros
+    if ok:
+        marca_estado('bandeja', 'sim')
+    return 0 if ok else 1
 
 
-def remove_bandeja(ctx):
+def remove_bandeja(ctx, por_pedido=False):
+    if por_pedido:
+        marca_estado('bandeja', 'nao')   # a pessoa tirou: a coleta não põe de volta sozinha
     roda_ps(ctx.t, f'''Unregister-ScheduledTask -TaskName {psq(TAREFA_BANDEJA)} -Confirm:$false -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {{ "$($_.CommandLine)" -like '*\\.katharos\\bandeja.ps1*' }} | ForEach-Object {{ Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }}''',
             'remover-icone', minutos=1, mostra=False)
@@ -10320,7 +10412,7 @@ def ferramenta_bandeja(ctx, args):
         t.erro('só funciona no Windows.')
         return 1
     if getattr(args, 'parar', False):
-        remove_bandeja(ctx)
+        remove_bandeja(ctx, por_pedido=True)
         t.ok('Ícone fechado e tirado da inicialização. A coleta de 15 min continua (agendar --remover desliga).')
         return 0
     if getattr(args, 'agendada', False):
@@ -10825,6 +10917,19 @@ def ferramenta_amostrar(ctx, args):
     if agendada:
         if leitura_pausada():   # o ícone pausou por 1 hora
             return 0
+        if WINDOWS and not estado().get('bandeja'):   # coleta ligada numa versão sem ícone: liga o ícone uma vez (a tarefa é do seu usuário)
+            try:
+                instala_bandeja(ctx)
+            except Exception as e:
+                LOG.escreve(f'ícone: {e!r}')
+            if not estado().get('bandeja'):
+                marca_estado('bandeja', 'falhou')
+        try:   # versão nova: o ícone passa a usar o script dela na próxima vez que abrir
+            b = bandeja_arq()
+            if b.is_file() and f"$VERSAO = '{VERSAO}'" not in b.read_text(encoding='utf-8-sig', errors='replace'):
+                escreve_bandeja()
+        except OSError:
+            pass
         prioridade_baixa()
     a = amostra_leve(ctx, args)
     if agendada:

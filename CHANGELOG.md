@@ -18,6 +18,15 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.3.0 · 10 de novembro de 2026
+
+Identificação do PC mais completa e segundo plano mais esperto.
+
+- **Identificação**: memória de vídeo de verdade (o Windows mostrava no máximo 4 GB) e se a placa é integrada; tipo e velocidade da RAM (DDR4, DDR5...) e quantos pentes; modelo do disco, desgaste, temperatura e horas ligado; todos os discos do PC; placa-mãe e versão da BIOS; cache e núcleos do processador. O raio-x mostra tudo em "este PC".
+- **Avisos novos no raio-x**: disco com erros que ele mesmo não corrige (faça cópia e troque), SSD perto do fim da vida útil e disco quente.
+- **Medidas**: temperatura da GPU, uso da GPU e memória de vídeo em uso entram no `medir` e no raio-x.
+- **Segundo plano**: o ícone diz quando foi a última leitura e quando vem a próxima, e avisa se a coleta parou. Quem já tinha a coleta ligada ganha o ícone sozinho na próxima leitura. Ao atualizar o Katharos, o ícone passa a usar a versão nova.
+
 ## 2.2.0 · 10 de novembro de 2026
 
 Ícone perto do relógio, leituras mais certas e o terminal com a cara da landing.
