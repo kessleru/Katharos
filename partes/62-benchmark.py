@@ -192,8 +192,10 @@ def condicoes_de_bancada(a=None):
         return {'qualidade': 'desconhecida', 'motivos': ['o segundo plano não está ligado: não deu para conferir o que está rodando']}
     cx = a.get('contexto') or {}
     motivos = []
+    # dos que mais gastam, só os programas da pessoa entram como "dá para fechar"; processo do Windows nunca
+    fechaveis = [x.strip() for x in (cx.get('top') or '').split(',') if x.strip() and pode_sugerir_fechar(x.strip().rsplit(' ', 1)[0])]
     if (a.get('cpu') or 0) >= 15:
-        motivos.append(f'CPU em {br(a.get("cpu"), 0)} % antes de começar' + (f' ({cx.get("top")})' if cx.get('top') else ''))
+        motivos.append(f'CPU em {br(a.get("cpu"), 0)} % antes de começar' + (f' (programas seus: {", ".join(fechaveis)})' if fechaveis else ''))
     if cx.get('manutencao'):
         motivos.append(f'manutenção do Windows rodando: {cx["manutencao"]}')
     if a.get('na_bateria'):
@@ -204,7 +206,7 @@ def condicoes_de_bancada(a=None):
         motivos.append('jogo aberto')
     if (a.get('temp_cpu') or 0) >= REGRAS_MOTOR['calor_cpu'] - 10:
         motivos.append(f'CPU quente ({br(a.get("temp_cpu"), 0)} °C)')
-    return {'qualidade': 'fraca' if motivos else 'boa', 'motivos': motivos, 'cpu': a.get('cpu'), 'top': cx.get('top'),
+    return {'qualidade': 'fraca' if motivos else 'boa', 'motivos': motivos, 'cpu': a.get('cpu'), 'top': cx.get('top'), 'fechaveis': fechaveis,
             'manutencao': cx.get('manutencao'), 'na_bateria': bool(a.get('na_bateria'))}
 
 

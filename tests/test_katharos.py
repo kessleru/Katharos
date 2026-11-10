@@ -2896,6 +2896,8 @@ class TestBancada(unittest.TestCase):
         self.assertEqual(c['qualidade'], 'fraca')
         self.assertEqual(len(c['motivos']), 4)
         self.assertIn('chrome', c['motivos'][0])
+        sis = k.condicoes_de_bancada({'cpu': 50, 'contexto': {'ligado_h': 5, 'top': 'svchost 30%, MsMpEng 10%, chrome 9%'}})
+        self.assertEqual(sis['fechaveis'], ['chrome 9%'], 'processo do Windows nunca aparece como "feche"')
         with mock.patch.object(k, 'le_agora', return_value=None):
             self.assertEqual(k.condicoes_de_bancada()['qualidade'], 'desconhecida')
 
@@ -2904,3 +2906,16 @@ class TestBancada(unittest.TestCase):
         fonte = inspect.getsource(k.prepara_bancada) + inspect.getsource(k.condicoes_de_bancada)
         for proibido in ('Stop-Process', 'taskkill', '.kill(', 'terminate(', 'TerminateProcess'):
             self.assertNotIn(proibido, fonte)
+
+
+class TestProcessosProtegidos(unittest.TestCase):
+    """S2: uma lista só de processos que o Katharos nunca encerra nem sugere fechar."""
+
+    def test_lista_unica_e_completa(self):
+        for n in ('csrss', 'winlogon', 'lsass', 'svchost', 'dwm', 'explorer', 'msmpeng', 'audiodg', 'tiworker', 'python'):
+            self.assertIn(n, k.NUNCA_ENCERRAR)
+        self.assertFalse(k.pode_sugerir_fechar('svchost.exe'))
+        self.assertFalse(k.pode_sugerir_fechar(''))
+        self.assertTrue(k.pode_sugerir_fechar('chrome'))
+        fonte = (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8')
+        self.assertEqual(fonte.count('NUNCA_ENCERRAR = {'), 1, 'a lista de processos protegidos fica num lugar só')

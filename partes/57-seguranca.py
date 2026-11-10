@@ -459,8 +459,7 @@ def ferramenta_seguranca(ctx, args):
 
 # ─────────────── portas abertas ───────────────
 
-NUNCA_ENCERRAR = {'system', 'idle', 'registry', 'smss', 'csrss', 'wininit', 'winlogon', 'services', 'lsass', 'svchost', 'explorer', 'dwm',
-                  'msmpeng', 'securityhealthservice', 'fontdrvhost', 'spoolsv', 'wudfhost', 'sihost', 'taskhostw', 'dllhost', 'conhost', 'python', 'pythonw'}
+# NUNCA_ENCERRAR fica em 28-windows.py (lista única de processos protegidos)
 
 
 def ferramenta_portas(ctx, args):

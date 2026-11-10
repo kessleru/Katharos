@@ -33,7 +33,25 @@ EDICOES = {   # EditionID do registro → tipo
 }
 NOME_EDICAO = {'home': 'Home', 'pro': 'Pro', 'empresa': 'Enterprise', 'educacao': 'Education', 'ltsc': 'LTSC', 'iot': 'IoT',
                'server': 'Server', 'se': 'SE', '': ''}
-UCPD_PROTEGIDOS = ('TaskbarDa',)   # valores que o UCPD (Windows 11 24H2 e 10 atualizado) não deixa gravar: a política que funciona fica no item
+UCPD_PROTEGIDOS = ('TaskbarDa',)
+# Processos que o Katharos nunca encerra e nunca sugere fechar (lista única: portas, benchmark, memória, raio-x, interface).
+# Encerrar qualquer um destes pode travar o PC, deslogar, derrubar o som, a tela ou a proteção, ou dar tela azul.
+NUNCA_ENCERRAR = {
+    'system', 'idle', 'registry', 'smss', 'csrss', 'wininit', 'winlogon', 'services', 'lsass', 'lsaiso', 'svchost', 'explorer', 'dwm',
+    'memory compression', 'secure system', 'fontdrvhost', 'spoolsv', 'wudfhost', 'sihost', 'taskhostw', 'dllhost', 'conhost', 'ctfmon',
+    'audiodg', 'runtimebroker', 'searchhost', 'searchindexer', 'startmenuexperiencehost', 'shellexperiencehost', 'textinputhost',
+    'applicationframehost', 'lockapp', 'logonui', 'userinit', 'dashost', 'wlanext', 'smartscreen', 'securityhealthservice',
+    'securityhealthsystray', 'msmpeng', 'nissrv', 'mpdefendercoreservice', 'mpcmdrun', 'msiexec', 'trustedinstaller', 'tiworker',
+    'mousocoreworker', 'wuauclt', 'usoclient', 'python', 'pythonw', 'py', 'powershell', 'pwsh', 'katharos',
+}
+
+
+def pode_sugerir_fechar(nome):
+    """Só programa da pessoa: nunca processo do Windows, da proteção, da atualização ou do próprio Katharos."""
+    n = (nome or '').strip().lower()
+    if n.endswith('.exe'):
+        n = n[:-4]
+    return bool(n) and n not in NUNCA_ENCERRAR   # valores que o UCPD (Windows 11 24H2 e 10 atualizado) não deixa gravar: a política que funciona fica no item
 
 
 def edicao_tipo(edition_id):

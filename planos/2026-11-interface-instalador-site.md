@@ -541,7 +541,7 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 - [ ] **S1** Revisão de segurança antes da 4.0.0: ler todos os itens e scripts com essas regras na mão (um agente separado revisa, sem ter
   escrito o código), rodar a ida e volta de cada pacote (aplicar e desfazer) num Windows descartável do CI e comparar o registro e os
   serviços antes e depois.
-- [ ] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
+- [x] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
   teste.
 
 ## 7. Regras que continuam valendo
@@ -582,3 +582,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | 2d.1 a 2d.5: `28-windows.py` (versões, fim de suporte, edição, UCPD, arquitetura), aviso no raio-x, só modo seguro em build antiga e Server, telemetria e anúncios honestos por edição, `Set-Valor` ciente do UCPD, matriz de testes (8 builds x 5 edições), sem WMIC | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | 2e.1 a 2e.5: contexto em cada minuto (tempo ligado, processos, RAM do sistema x da conta, manutenção, top 5), minuto sujo fora da conta, diferença com margem (bootstrap), benchmark com bancada (mostra, pede, espera a CPU, pausa o segundo plano; nunca fecha nada) | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | seção de segurança do PC (S1, S2) no plano | 3.1.2 | ramo v4 | pedido do usuário |
+| 10 nov 2026 | S2 lista única de processos protegidos (`NUNCA_ENCERRAR` em `28-windows.py`, ampliada) e `pode_sugerir_fechar`; a bancada do benchmark só sugere fechar programa da pessoa | 3.1.2 | ramo v4 | |

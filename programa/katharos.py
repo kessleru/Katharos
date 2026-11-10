@@ -2178,7 +2178,25 @@ EDICOES = {   # EditionID do registro → tipo
 }
 NOME_EDICAO = {'home': 'Home', 'pro': 'Pro', 'empresa': 'Enterprise', 'educacao': 'Education', 'ltsc': 'LTSC', 'iot': 'IoT',
                'server': 'Server', 'se': 'SE', '': ''}
-UCPD_PROTEGIDOS = ('TaskbarDa',)   # valores que o UCPD (Windows 11 24H2 e 10 atualizado) não deixa gravar: a política que funciona fica no item
+UCPD_PROTEGIDOS = ('TaskbarDa',)
+# Processos que o Katharos nunca encerra e nunca sugere fechar (lista única: portas, benchmark, memória, raio-x, interface).
+# Encerrar qualquer um destes pode travar o PC, deslogar, derrubar o som, a tela ou a proteção, ou dar tela azul.
+NUNCA_ENCERRAR = {
+    'system', 'idle', 'registry', 'smss', 'csrss', 'wininit', 'winlogon', 'services', 'lsass', 'lsaiso', 'svchost', 'explorer', 'dwm',
+    'memory compression', 'secure system', 'fontdrvhost', 'spoolsv', 'wudfhost', 'sihost', 'taskhostw', 'dllhost', 'conhost', 'ctfmon',
+    'audiodg', 'runtimebroker', 'searchhost', 'searchindexer', 'startmenuexperiencehost', 'shellexperiencehost', 'textinputhost',
+    'applicationframehost', 'lockapp', 'logonui', 'userinit', 'dashost', 'wlanext', 'smartscreen', 'securityhealthservice',
+    'securityhealthsystray', 'msmpeng', 'nissrv', 'mpdefendercoreservice', 'mpcmdrun', 'msiexec', 'trustedinstaller', 'tiworker',
+    'mousocoreworker', 'wuauclt', 'usoclient', 'python', 'pythonw', 'py', 'powershell', 'pwsh', 'katharos',
+}
+
+
+def pode_sugerir_fechar(nome):
+    """Só programa da pessoa: nunca processo do Windows, da proteção, da atualização ou do próprio Katharos."""
+    n = (nome or '').strip().lower()
+    if n.endswith('.exe'):
+        n = n[:-4]
+    return bool(n) and n not in NUNCA_ENCERRAR   # valores que o UCPD (Windows 11 24H2 e 10 atualizado) não deixa gravar: a política que funciona fica no item
 
 
 def edicao_tipo(edition_id):
@@ -7486,8 +7504,7 @@ def ferramenta_seguranca(ctx, args):
 
 # ─────────────── portas abertas ───────────────
 
-NUNCA_ENCERRAR = {'system', 'idle', 'registry', 'smss', 'csrss', 'wininit', 'winlogon', 'services', 'lsass', 'svchost', 'explorer', 'dwm',
-                  'msmpeng', 'securityhealthservice', 'fontdrvhost', 'spoolsv', 'wudfhost', 'sihost', 'taskhostw', 'dllhost', 'conhost', 'python', 'pythonw'}
+# NUNCA_ENCERRAR fica em 28-windows.py (lista única de processos protegidos)
 
 
 def ferramenta_portas(ctx, args):
@@ -9880,8 +9897,10 @@ def condicoes_de_bancada(a=None):
         return {'qualidade': 'desconhecida', 'motivos': ['o segundo plano não está ligado: não deu para conferir o que está rodando']}
     cx = a.get('contexto') or {}
     motivos = []
+    # dos que mais gastam, só os programas da pessoa entram como "dá para fechar"; processo do Windows nunca
+    fechaveis = [x.strip() for x in (cx.get('top') or '').split(',') if x.strip() and pode_sugerir_fechar(x.strip().rsplit(' ', 1)[0])]
     if (a.get('cpu') or 0) >= 15:
-        motivos.append(f'CPU em {br(a.get("cpu"), 0)} % antes de começar' + (f' ({cx.get("top")})' if cx.get('top') else ''))
+        motivos.append(f'CPU em {br(a.get("cpu"), 0)} % antes de começar' + (f' (programas seus: {", ".join(fechaveis)})' if fechaveis else ''))
     if cx.get('manutencao'):
         motivos.append(f'manutenção do Windows rodando: {cx["manutencao"]}')
     if a.get('na_bateria'):
@@ -9892,7 +9911,7 @@ def condicoes_de_bancada(a=None):
         motivos.append('jogo aberto')
     if (a.get('temp_cpu') or 0) >= REGRAS_MOTOR['calor_cpu'] - 10:
         motivos.append(f'CPU quente ({br(a.get("temp_cpu"), 0)} °C)')
-    return {'qualidade': 'fraca' if motivos else 'boa', 'motivos': motivos, 'cpu': a.get('cpu'), 'top': cx.get('top'),
+    return {'qualidade': 'fraca' if motivos else 'boa', 'motivos': motivos, 'cpu': a.get('cpu'), 'top': cx.get('top'), 'fechaveis': fechaveis,
             'manutencao': cx.get('manutencao'), 'na_bateria': bool(a.get('na_bateria'))}
 
 
