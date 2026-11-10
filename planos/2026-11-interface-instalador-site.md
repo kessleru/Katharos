@@ -176,11 +176,11 @@ Protocolo `katharos api` (rascunho; fechar na tarefa 1.1):
   teste que falha se o `katharos.py` não for exatamente a soma das partes. Hoje elas só existem numa sessão; o outro chat editou o
   `katharos.py` direto, e o trabalho precisou ser recortado à mão.
 - [ ] **0.2** Reorganizar o repositório: `motor/` (Python), `app/` (C#), `site/` (Astro), `exe/` (o Katharos.exe atual, até a fase 3).
-- [ ] **0.3** Protótipo do Velopack: um app vazio em .NET 10 empacotado com `vpk pack`, publicado numa release de teste, instalado num
+- [x] **0.3** Protótipo do Velopack: um app vazio em .NET 10 empacotado com `vpk pack`, publicado numa release de teste, instalado num
   Windows limpo, atualizado de 0.0.1 para 0.0.2 por diferença. Medir o tamanho do instalador e da diferença.
 - [ ] **0.4** Protótipo Avalonia 11 + Native AOT: uma tela no visual do Katharos (escuro, âmbar), texto com acentos, escala de 100 % a 200 %,
   leitor de tela (Narrador) e o tamanho do executável. Se falhar, D2 vira WPF.
-- [ ] **0.5** Protótipo do Python embutido rodando o `katharos.py` (sem pip, sem rede) e o `katharos.ps1` achando esse Python.
+- [x] **0.5** Protótipo do Python embutido rodando o `katharos.py` (sem pip, sem rede) e o `katharos.ps1` achando esse Python.
 - [ ] **0.6** Protótipo do site: Astro + shadcn/ui + Magic UI no GitHub Pages, com a primeira dobra do site atual reproduzida, para medir
   peso (meta: abaixo de 200 KB de JavaScript na primeira carga) e Lighthouse (meta: 90+ em desempenho e 100 em acessibilidade).
 - [ ] **0.7** Registrar as decisões confirmadas (ou trocadas) neste arquivo e no cofre do Obsidian (`04 • Decisions`), com a pesquisa em
@@ -476,9 +476,9 @@ Tarefas:
 - [ ] **3.4** A versão CLI continua com o `Katharos.exe` atual (ou passa a usar o mesmo projeto compilado em modo leve: decidir aqui).
 
 ### Fase 4: instalador e atualização
-- [ ] **4.1** `vpk pack` com o aplicativo, o motor e o Python embutido; atalho no menu Iniciar e na área de trabalho; desinstalação que
+- [x] **4.1** `vpk pack` com o aplicativo, o motor e o Python embutido; atalho no menu Iniciar e na área de trabalho; desinstalação que
   pergunta se apaga `~/.katharos` (por padrão, não apaga: são os backups do desfazer).
-- [ ] **4.2** Atualização: confere ao abrir e uma vez por dia (o segundo plano faz isso em silêncio), baixa a diferença, avisa "versão X
+- [x] **4.2** Atualização: confere ao abrir e uma vez por dia (o segundo plano faz isso em silêncio), baixa a diferença, avisa "versão X
   pronta, reinicie" e aplica. Configurável: automático, avisar ou nunca. Nunca atualiza no meio de uma aplicação (trava enquanto o motor
   elevado estiver ocupado).
 - [ ] **4.3** Ao atualizar, rodar a migração de dados que já existe (`68-versoes.py`) e reabrir o segundo plano.
@@ -654,3 +654,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | 2.0 protótipo da interface (Início, Otimizar, Ao vivo) no design do site, UX primeiro, sem imagem de enfeite; fotos sem janela | 3.1.2 | ramo v4 | aguardando aprovação |
 | 10 nov 2026 | Fase 1: `katharos api` (JSON por linha; leitura e mudança com progresso e conferência depois; contrato congelado em `tests/api/contrato.json`) e motor elevado por pipe com senha da sessão | 3.1.2 | ramo v4 | testes 330, CI Windows |
 | 10 nov 2026 | Fase 2: todas as telas ligadas ao motor (Início, Raio-x, Otimizar com aplicar e "manter ou desfazer" em 90 s, Ao vivo pelo agora.json, Jogos, Sugestões, Desfazer, Configurações, aviso de uso); job `interface` no CI compila, desenha as 9 telas e conversa com o motor | 3.1.2 | ramo v4 | CI Windows |
+| 10 nov 2026 | Fase 4: instalador Velopack (Setup de 68,7 MB; app .NET 10 sem precisar instalar o .NET, motor, segundo plano, PresentMon e Python 3.14.10 embutido conferido por SHA-256), instalado em silêncio no Windows do CI e motor instalado respondendo; atualização pelo GitHub (avisar, automático ou nunca; nunca no meio de uma mudança) | 3.1.2 | ramo v4 | CI Windows |
