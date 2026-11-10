@@ -2549,17 +2549,33 @@ class TestSegundoPlano(_CasaTemporaria):
         self.assertEqual((r['sessoes'], r['horas'], r['principal']), (2, 2.0, 'cpu'))
         self.assertEqual(r['limites'], {'cpu': 45, 'gpu': 20})
 
+    def _tres(self, jogo, minutos, limites, principal, **kw):
+        from datetime import datetime as _dt
+        out = []
+        for d in (5, 6, 7):
+            s = self._sessao(jogo, f'2026-11-0{d}T20:00:00', minutos, limites, principal, **kw)
+            s['_dt'] = _dt(2026, 11, d, 20)
+            out.append(s)
+        return out
+
+    def test_uma_sessao_so_nao_basta_para_concluir(self):
+        """I4: pouco dado vira "ainda não sei", nunca proposta."""
+        ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': True,
+              'agora': datetime(2026, 11, 10), 'perfil': {}, 'segundo_plano': True, 'minutos': [],
+              'sessoes': [self._sessao('jogo', '2026-11-05T20:00:00', 120, {'cpu': 90}, 'cpu')]}
+        self.assertFalse({x['id'] for x in k.gera_sugestoes(ev)} & {'jogo-cpu', 'jogo-freio', 'jogo-ram'})
+
     def test_central_aprende_com_as_sessoes(self):
         ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': True,
               'agora': datetime(2026, 11, 10), 'perfil': {}, 'segundo_plano': True, 'minutos': [],
-              'sessoes': [self._sessao('jogo', '2026-11-05T20:00:00', 120, {'cpu': 40, 'freio': 30, 'ram': 20}, 'cpu', desempenho_min=61)]}
+              'sessoes': self._tres('jogo', 40, {'cpu': 40, 'freio': 30, 'ram': 20}, 'cpu', desempenho_min=61)}
         ids = {x['id'] for x in k.gera_sugestoes(ev)}
         self.assertTrue({'jogo-cpu', 'jogo-freio', 'jogo-ram'} <= ids, ids)
         for x in k.gera_sugestoes(ev):
             self.assertTrue(not x['comando'] or x['comando'].split()[0] in k.COMANDOS, x['comando'])
         ev['sessoes'] = [self._sessao('jogo', '2026-11-05T20:00:00', 30, {'cpu': 90}, 'cpu')]   # menos de 1 h jogada: cedo para concluir
         self.assertFalse({x['id'] for x in k.gera_sugestoes(ev)} & {'jogo-cpu', 'jogo-freio'})
-        ev['sessoes'] = [self._sessao('jogo', '2026-11-05T20:00:00', 120, {'gpu': 85}, 'gpu')]   # placa no limite: só informa
+        ev['sessoes'] = self._tres('jogo', 40, {'gpu': 85}, 'gpu')   # placa no limite: só informa
         sug = [x for x in k.gera_sugestoes(ev) if x['id'].startswith('jogo')]
         self.assertEqual([(x['id'], x['tipo']) for x in sug], [('jogo-gpu', 'info')])
 
@@ -2684,7 +2700,91 @@ class TestRegrasDoMotor(unittest.TestCase):
     def test_central_usa_as_regras(self):
         ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': True,
               'agora': datetime(2026, 11, 10), 'perfil': {}, 'segundo_plano': True, 'minutos': [],
-              'sessoes': [{'jogo': 'j', 'inicio': '2026-11-05T20:00:00', 'min': 120, 'tempo_no_limite': {'cpu': 20}, 'principal': 'cpu'}]}
+              'sessoes': [{'jogo': 'j', 'inicio': f'2026-11-0{d}T20:00:00', 'min': 40, 'tempo_no_limite': {'cpu': 20}, 'principal': 'cpu',
+                           '_dt': datetime(2026, 11, d, 20)} for d in (5, 6, 7)]}
         self.assertNotIn('jogo-cpu', {x['id'] for x in k.gera_sugestoes(ev)})
         with mock.patch.dict(k.REGRAS_MOTOR, {'central_cpu': 15}):
             self.assertIn('jogo-cpu', {x['id'] for x in k.gera_sugestoes(ev)})
+
+
+class TestMotorAprende(_CasaTemporaria):
+    """I3 a I6: o normal deste PC, confiança pelos dados, previsão x resultado e a resposta da pessoa."""
+
+    def _minutos(self, dias, valor, ate, metrica='cpu', jogo=None, ruido=2):
+        from datetime import timedelta as _td
+        out = []
+        for d in range(dias):
+            for m in range(0, 24 * 60, 10):
+                dt = ate - _td(days=d + 1) + _td(minutes=m)
+                out.append({'_dt': dt, metrica: valor + (m % 3 - 1) * ruido, 'jogo': jogo})
+        return out
+
+    def test_linha_de_base_precisa_de_3_dias(self):
+        agora = datetime(2026, 11, 10, 12)
+        self.assertIsNone(k.linha_de_base(self._minutos(2, 20, agora), 'cpu', 'sem_jogo', agora))
+        b = k.linha_de_base(self._minutos(5, 20, agora), 'cpu', 'sem_jogo', agora)
+        self.assertEqual(b['mediana'], 20)
+        self.assertGreaterEqual(b['dias'], 5)
+        self.assertIsNone(k.linha_de_base(self._minutos(5, 20, agora), 'cpu', 'jogo', agora), 'contexto separado: sem jogo não vira normal do jogo')
+
+    def test_confianca_pelos_dados(self):
+        self.assertIsNone(k.confianca(2, 0, 0))
+        self.assertIsNone(k.confianca(500, 0, 1), 'um episódio só, num dia só: ainda não sei')
+        self.assertEqual(k.confianca(40, 3, 0), 'alta')
+        self.assertEqual(k.confianca(40, 3, 0, fonte_boa=False), 'média')
+        self.assertEqual(k.confianca(12, 2, 0), 'média')
+        self.assertEqual(k.confianca(5, 1, 0), 'baixa')
+
+    def test_fora_do_normal_deste_pc(self):
+        from datetime import timedelta as _td
+        agora = datetime(2026, 11, 10, 12)
+        corte = agora - _td(hours=24)
+        mins = self._minutos(7, 12, corte) + [{'_dt': agora - _td(minutes=i), 'cpu': 41} for i in range(1, 300)]
+        ev = {'minutos': mins, 'agora': agora}
+        sug = k.r_fora_do_normal(ev)
+        self.assertEqual([x['id'] for x in sug], ['normal-cpu'])
+        self.assertIn('12', sug[0]['porque'])
+        self.assertLess(sug[0]['previsao']['delta'], 0)
+        mins_normais = self._minutos(7, 12, corte) + [{'_dt': agora - _td(minutes=i), 'cpu': 14} for i in range(1, 300)]
+        self.assertEqual(k.r_fora_do_normal({'minutos': mins_normais, 'agora': agora}), [])
+
+    def test_previsao_x_resultado(self):
+        from datetime import timedelta as _td
+        quando = datetime(2026, 11, 3, 12)
+        prev = {'fonte': 'minutos', 'chave': 'cpu', 'contexto': 'sem_jogo', 'delta': -20, 'un': '%', 'texto': 'voltar perto de 12 %'}
+        antes = [{'_dt': quando - _td(minutes=i), 'cpu': 40 + i % 3} for i in range(1, 200)]
+        caiu = [{'_dt': quando + _td(minutes=i), 'cpu': 14 + i % 3} for i in range(1, 200)]
+        subiu = [{'_dt': quando + _td(minutes=i), 'cpu': 60 + i % 3} for i in range(1, 200)]
+        self.assertEqual(k.mede_previsao(prev, quando, antes + caiu, [])[0], 'como previsto')
+        self.assertEqual(k.mede_previsao(prev, quando, antes + subiu, [])[0], 'piorou')
+        self.assertEqual(k.mede_previsao(prev, quando, antes, [])[0], 'cedo para dizer')
+        self.assertEqual(k.mede_previsao(prev, quando, antes + [dict(m, cpu=m['cpu'] - 25) for m in antes[:0]] + caiu, [])[0], 'como previsto')
+
+    def test_resposta_muda_o_peso(self):
+        k.responde('x', 'nao-importa')
+        k.responde('y', 'nao')
+        e = k.estado()
+        self.assertEqual(k.peso_da_resposta(e, 'x'), 0)
+        self.assertLess(k.peso_da_resposta(e, 'y'), 1)
+        self.assertEqual(k.peso_da_resposta(e, 'z'), 1)
+        with self.assertRaises(ValueError):
+            k.responde('x', 'talvez')
+        ev = {'amostras': [], 'benchs': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'dispensadas': {}, 'vistas': {}, 'fundo_ligado': False,
+              'agora': datetime(2026, 11, 10), 'perfil': {}, 'respostas': {'ligar-fundo': {'resposta': 'nao-importa'}}}
+        self.assertNotIn('ligar-fundo', {x['id'] for x in k.gera_sugestoes(ev)})
+        self.assertEqual(k.monta_parser().parse_args(['conselheiro', '--resposta', 'jogo-cpu', 'sim']).resposta, ['jogo-cpu', 'sim'])
+
+    def test_feito_guarda_a_previsao(self):
+        e = k.estado()
+        e['conselheiro_vistas'] = {'jogo-cpu': {'quando': '2026-11-01T10:00:00', 'comando': 'turbo', 'titulo': 'A CPU segura seus jogos',
+                                                'previsao': {'fonte': 'sessoes', 'chave': 'cpu', 'delta': -10, 'un': '% do tempo', 'texto': 'menos'}}}
+        k.salva_estado(e)
+        k.marca_propostas_feitas('turbo')
+        self.assertIn('jogo-cpu', k.estado()['conselheiro_feitos'])
+        self.assertIn('turbo', k.MUDAM_O_PC)
+        self.assertIn('privacidade', k.MUDAM_O_PC)
+
+    def test_exe_pensa_no_fim_da_sessao(self):
+        cs = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+        self.assertIn('SessaoFechou', cs)
+        self.assertIn('Pensa("fim de sessão de jogo")', cs)

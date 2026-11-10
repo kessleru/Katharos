@@ -23,9 +23,9 @@ def regra(f):
     return f
 
 
-def _sug(id_, titulo, porque, comando, conf, impacto='', risco='', pontos_impacto=3, risco_n=0, metrica='', tipo='acao'):
+def _sug(id_, titulo, porque, comando, conf, impacto='', risco='', pontos_impacto=3, risco_n=0, metrica='', tipo='acao', previsao=None):
     return {'id': id_, 'titulo': titulo, 'porque': porque, 'comando': comando, 'confianca': conf, 'impacto': impacto, 'risco': risco,
-            'impacto_n': pontos_impacto, 'risco_n': risco_n, 'metrica': metrica, 'tipo': tipo,
+            'impacto_n': pontos_impacto, 'risco_n': risco_n, 'metrica': metrica, 'tipo': tipo, 'previsao': previsao,
             'pontos': round(pontos_impacto * PESO_CONF[conf] / (1 + risco_n), 2)}
 
 
@@ -54,7 +54,8 @@ def coleta_evidencias(ctx=None, agora=None):
             'dispensadas': e.get('conselheiro_dispensadas') or {}, 'vistas': e.get('conselheiro_vistas') or {},
             'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')) or e.get('segundo_plano') == 'sim',
             'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {},
-            'sessoes': le_sessoes(30, agora), 'minutos': le_minutos(24 * 7, agora), 'segundo_plano': e.get('segundo_plano') == 'sim'}
+            'sessoes': le_sessoes(30, agora), 'minutos': le_minutos(24 * BASE_DIAS + 24, agora), 'segundo_plano': e.get('segundo_plano') == 'sim',
+            'respostas': e.get('conselheiro_respostas') or {}, 'feitos': e.get('conselheiro_feitos') or {}}
 
 
 # ───────── regras ─────────
@@ -82,28 +83,39 @@ def r_jogos_gargalo(ev):
     lim, h, n = r['limites'], br(r['horas'], 1), r['sessoes']
     base = f'Em {n} {"sessão" if n == 1 else "sessões"} de jogo ({h} h), '
     out = []
+    dias = len({s['_dt'].date() for s in ev.get('sessoes') or [] if s.get('_dt')})
+    conf = confianca(int(r['horas'] * 60), dias, n)   # cada minuto jogado é uma leitura; repetição = sessões
+    if not conf:
+        return []
+    conf_info = conf
+    def prev(chave, quanto):
+        return {'fonte': 'sessoes', 'chave': chave, 'delta': -quanto, 'un': '% do tempo', 'texto': f'menos tempo com {NOMES_LIMITE.get(chave, chave)}'}
     if lim.get('cpu', 0) >= REGRAS_MOTOR['central_cpu']:
         out.append(_sug('jogo-cpu', 'A CPU segura seus jogos',
                         base + f'um núcleo da CPU ficou no limite com a placa de vídeo sobrando em {br(lim["cpu"], 0)} % do tempo. '
-                        'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', 'alta',
-                        'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao'))
+                        'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', conf,
+                        'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao',
+                        previsao=prev('cpu', lim['cpu'] / 3)))
         out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
-                        'fica disputando ela durante o jogo.', 'inicializacao', 'média', 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0))
+                        'fica disputando ela durante o jogo.', 'inicializacao', {'alta': 'média'}.get(conf, 'baixa'), 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0,
+                        previsao=prev('cpu', lim['cpu'] / 4)))
     if lim.get('freio', 0) >= REGRAS_MOTOR['central_freio']:
         out.append(_sug('jogo-freio', 'A CPU freia durante os jogos',
                         base + f'com carga, ela rodou abaixo de 75 % da frequência normal em {br(lim["freio"], 0)} % do tempo'
                         + (f' (chegou a {br(r["desempenho_min"], 0)} %)' if r.get('desempenho_min') else '') +
-                        '. Isso é calor ou o plano de energia economizando.', 'energia', 'alta', 'plano de energia no máximo; se continuar, é calor (limpeza e pasta térmica)', 'mais consumo', 4, 1))
+                        '. Isso é calor ou o plano de energia economizando.', 'energia', conf, 'plano de energia no máximo; se continuar, é calor (limpeza e pasta térmica)', 'mais consumo', 4, 1,
+                        previsao=prev('freio', lim['freio'] / 2)))
     if lim.get('calor', 0) >= REGRAS_MOTOR['central_calor']:
         mx = max([x for x in (r.get('temp_cpu_max'), r.get('temp_gpu_max')) if x] or [0])
         out.append(_sug('jogo-calor', 'Seus jogos esquentam o PC além do seguro',
                         base + f'a temperatura passou do limite em {br(lim["calor"], 0)} % do tempo (máxima de {br(mx, 0)} °C). '
-                        'Acima disso o chip reduz a velocidade e o FPS cai sozinho.', 'painel', 'alta',
+                        'Acima disso o chip reduz a velocidade e o FPS cai sozinho.', 'painel', conf,
                         'o histórico mostra quando e quanto; poeira, ventoinha e pasta térmica resolvem de verdade', 'nenhum: só leitura', 4, 0))
     if lim.get('ram', 0) >= REGRAS_MOTOR['central_ram']:
         out.append(_sug('jogo-ram', 'A RAM enche durante os jogos',
                         base + f'a RAM passou de 90 % em {br(lim["ram"], 0)} % do tempo. Aí o Windows usa o disco no lugar e o jogo engasga.',
-                        'memoria', 'alta', 'mostra quem ocupa a RAM e o que dá para fechar ou tirar da inicialização', 'nenhum: só leitura', 4, 0))
+                        'memoria', conf, 'mostra quem ocupa a RAM e o que dá para fechar ou tirar da inicialização', 'nenhum: só leitura', 4, 0,
+                        previsao=prev('ram', lim['ram'] / 2)))
     if lim.get('vram', 0) >= REGRAS_MOTOR['central_vram']:
         out.append(_sug('jogo-vram', 'A memória da placa de vídeo enche nos jogos',
                         base + f'ela ficou acima de 95 % em {br(lim["vram"], 0)} % do tempo. Baixar a qualidade das texturas no jogo tira as travadas.',
@@ -116,7 +128,7 @@ def r_jogos_gargalo(ev):
         out.append(_sug('jogo-gpu', 'Seus jogos já usam tudo da placa de vídeo',
                         base + f'ela ficou no limite em {br(lim["gpu"], 0)} % do tempo, com a CPU sobrando. O PC já entrega o máximo dela: '
                         'mais FPS só baixando resolução ou qualidade no jogo (ou ativando DLSS/FSR, se o jogo tiver).',
-                        '', 'alta', 'nada a otimizar no Windows para isso', '', 2, 0, tipo='info'))
+                        '', conf_info, 'nada a otimizar no Windows para isso', '', 2, 0, tipo='info'))
     return out
 
 
@@ -131,11 +143,11 @@ def r_tempo_real_repouso(ev):
     if cpu_alta / len(mins) >= REGRAS_MOTOR['repouso_cpu_fracao']:
         out.append(_sug('repouso-cpu', 'Algo mantém a CPU ocupada fora dos jogos',
                         f'Na última semana, sem jogo aberto, a CPU ficou acima de 60 % em {br(100 * cpu_alta / len(mins), 0)} % dos minutos medidos.',
-                        'raiox', 'alta', 'o raio-x mostra quem gasta', 'nenhum: só leitura', 3, 0, 'cpu'))
+                        'raiox', confianca(len(mins), len({m['_dt'].date() for m in mins})) or 'baixa', 'o raio-x mostra quem gasta', 'nenhum: só leitura', 3, 0, 'cpu'))
     ram_alta = sum(1 for m in mins if isinstance(m.get('ram'), (int, float)) and m['ram'] >= REGRAS_MOTOR['repouso_ram'])
     if ram_alta / len(mins) >= REGRAS_MOTOR['repouso_ram_fracao']:
         out.append(_sug('repouso-ram', 'A RAM vive cheia', f'Na última semana, a RAM ficou acima de 85 % em {br(100 * ram_alta / len(mins), 0)} % dos minutos medidos.',
-                        'memoria', 'alta', 'mostra quem ocupa e o que tirar da inicialização', 'nenhum: só leitura', 3, 0, 'ram'))
+                        'memoria', confianca(len(mins), len({m['_dt'].date() for m in mins})) or 'baixa', 'mostra quem ocupa e o que tirar da inicialização', 'nenhum: só leitura', 3, 0, 'ram'))
     return out
 
 
@@ -323,6 +335,10 @@ def gera_sugestoes(ev):
             LOG.escreve(f'regra {r.__name__} falhou: {ex!r}')
     dis = ev.get('dispensadas') or {}
     out = [x for x in out if not recente_h(dis.get(x['id']), 24 * DISPENSA_DIAS)]
+    resp = {'conselheiro_respostas': ev.get('respostas') or {}}
+    for x in out:   # a sua resposta muda o peso; "não me importa" tira de vez
+        x['pontos'] = round(x['pontos'] * peso_da_resposta(resp, x['id']), 2)
+    out = [x for x in out if x['pontos'] > 0 or x['tipo'] != 'acao']
     por_cmd = {}
     for x in sorted(out, key=lambda x: (ORDEM_CONF[x['confianca']], -x['pontos'], x['id'])):
         chave = x['comando'] or x['id']
@@ -339,7 +355,8 @@ def registra_vistas(e, sugestoes, agora=None):
     v = e.setdefault('conselheiro_vistas', {})
     for x in sugestoes:
         if x['tipo'] == 'acao' and x['id'] not in v:
-            v[x['id']] = {'quando': (agora or datetime.now()).replace(microsecond=0).isoformat(), 'comando': x['comando'], 'metrica': x['metrica'] or ALVO_METRICA.get(x['id'], '')}
+            v[x['id']] = {'quando': (agora or datetime.now()).replace(microsecond=0).isoformat(), 'comando': x['comando'], 'metrica': x['metrica'] or ALVO_METRICA.get(x['id'], ''),
+                          'titulo': x['titulo'], 'previsao': x.get('previsao')}
 
 
 def resultados_das_propostas(ev):
@@ -388,6 +405,16 @@ def ferramenta_conselheiro(ctx, args):
     e = estado()
     if getattr(args, 'exportar', False):
         return exporta_propostas(ctx)
+    resp = getattr(args, 'resposta', None)
+    if resp:
+        responde(resp[0], resp[1])
+        t.ok({'sim': 'Anotado: ajudou. Esse tipo de proposta ganha peso neste PC.', 'nao': 'Anotado: não ajudou. Ela perde peso neste PC.',
+              'nao-importa': 'Anotado: não te importa. Não proponho mais isso.'}[resp[1]])
+        try:
+            exporta_propostas(ctx)
+        except Exception as ex:
+            LOG.escreve(f'exportar depois da resposta: {ex!r}')
+        return 0
     alvo = getattr(args, 'dispensar', None)
     if alvo:
         dis = e.get('conselheiro_dispensadas') or {}
@@ -407,6 +434,14 @@ def ferramenta_conselheiro(ctx, args):
                 t.item('●', 'verde' if ver == 'melhorou' else 'amarelo', f'{titulo} ({quando:%d/%m})', f'{rot}: {br(a, casas)} → {br(b, casas)}{(" " + un) if un else ""} ({ver})')
             else:
                 t.item('○', 'apagado', f'{titulo} ({quando:%d/%m})', f'{rot}: {ver}')
+    prevs = [r for r in resultados_previstos(e, ev.get('minutos') or [], ev.get('sessoes') or [], ev['agora'])]
+    if prevs:
+        t.titulo('o que eu previ e o que aconteceu')
+        cor_v = {'como previsto': 'verde', 'em parte': 'amarelo', 'sem diferença': 'apagado', 'piorou': 'vermelho', 'cedo para dizer': 'apagado'}
+        for r in prevs:
+            num = (f': {br(r["antes"], 0)} → {br(r["depois"], 0)} {r["un"]}' if r['antes'] is not None else '')
+            t.item('●', cor_v.get(r['veredito'], 'apagado'), f'{r["titulo"]} ({r["quando"]:%d/%m})', f'previ {r["previsto"]}; {r["veredito"]}{num}')
+        t.nota('    ajudou? "katharos conselheiro --resposta ID sim" (ou nao, ou nao-importa)', 4)
     sug = gera_sugestoes(ev)
     registra_vistas(e, sug)
     salva_estado(e)
@@ -427,6 +462,8 @@ def ferramenta_conselheiro(ctx, args):
             linhas.append(('o que muda', x['impacto']))
         if x['risco']:
             linhas.append(('risco', x['risco']))
+        if x.get('previsao'):
+            linhas.append(('o que espero', x['previsao'].get('texto') or ''))
         if x.get('tambem'):
             linhas.append(('também aponta', '; '.join(x['tambem'])))
         t.chaves(linhas, recuo=4)
@@ -439,7 +476,12 @@ def exporta_propostas(ctx=None):
     try:
         ev = coleta_evidencias(ctx)
         sug = gera_sugestoes(ev)
-        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]]}
+        escreve_linha_de_base(ev.get('minutos'), ev.get('agora'))
+        res = resultados_previstos({'conselheiro_feitos': ev.get('feitos') or {}}, ev.get('minutos') or [], ev.get('sessoes') or [], ev.get('agora'))
+        respondidas = ev.get('respostas') or {}
+        pendentes = [dict(r, quando=r['quando'].isoformat()) for r in res if r['veredito'] != 'cedo para dizer' and r['id'] not in respondidas]
+        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]],
+             'resultados': pendentes[:3]}
         tmp = CASA / 'propostas.json.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'propostas.json')

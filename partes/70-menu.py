@@ -180,6 +180,10 @@ COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)'
 SEM_ESTADO = {'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
+# comandos depois dos quais o motor de inteligência pensa de novo (evento "aplicou" ou "desfez")
+MUDAM_O_PC = {cmd for _, _, itens in GRUPOS for cmd, _, f in itens if f == 'pacote'} | {'turbo', 'desfazer', 'restaurar', 'retomar'}
+
+
 def roda_ferramenta(ctx, args, abre=True):
     t = ctx.t
     desc, f = COMANDOS[args.comando]
@@ -215,6 +219,12 @@ def roda_ferramenta(ctx, args, abre=True):
         if not cod and gasto > 5:
             e.setdefault('duracoes', {})[args.comando] = round(gasto)
         salva_estado(e)
+    if args.comando in MUDAM_O_PC and not getattr(args, 'teste', False):
+        try:   # o motor pensa logo depois de uma mudança (o ícone mostra as propostas novas), não no próximo relógio
+            marca_propostas_feitas(args.comando)
+            exporta_propostas(ctx)
+        except Exception as ex:
+            LOG.escreve(f'pensar depois de {args.comando}: {ex!r}')
     rel_fim(ctx, args, inicio)
     t.fim(('concluído em ' if not cod else 'terminou com pendências · ') + duracao(time.time() - inicio), 'ok' if not cod else 'aviso')
     return cod or 0
@@ -254,6 +264,7 @@ def monta_parser():
     sd.add_argument('--ultimo', action='store_true', help='mostra o último retrato em vez de ler os logs de novo')
     cs = sub.add_parser('conselheiro', parents=[depois], help='propõe mudanças com base nas medidas do segundo plano (não aplica nada)')
     cs.add_argument('--dispensar', metavar='ID', help='esconde uma proposta por 30 dias')
+    cs.add_argument('--resposta', nargs=2, metavar=('ID', 'RESPOSTA'), help='diz se uma proposta ajudou: sim, nao ou nao-importa')
     cs.add_argument('--exportar', action='store_true', help='só grava as propostas em ~/.katharos/propostas.json (o ícone do segundo plano mostra)')
     pn = sub.add_parser('painel', parents=[depois], help='gera o painel de gráficos (HTML) e abre no navegador')
     pn.add_argument('--nao-abrir', action='store_true', help='só gera o arquivo')

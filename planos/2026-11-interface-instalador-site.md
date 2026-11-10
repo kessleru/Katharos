@@ -220,16 +220,16 @@ Ajustes imediatos (antes da interface):
 - [x] **I1** **Regras como dados**: tirar os limites do `Katharos.cs` (`Regras`) e do `conselheiro` para `motor/regras.json`
   (métrica, condição, janela, duração mínima, nível, título, texto, comando). O C# e o Python leem o mesmo arquivo; um teste falha se um
   limite aparecer escrito no código.
-- [ ] **I2** **Pensar por evento**: no fim de cada sessão de jogo, depois de aplicar ou desfazer, ao mudar de driver ou depois de uma
+- [x] **I2** **Pensar por evento**: no fim de cada sessão de jogo, depois de aplicar ou desfazer, ao mudar de driver ou depois de uma
   atualização do Windows, o segundo plano chama o motor (`katharos conselheiro --exportar` hoje; o pipe depois). Sai o relógio de 1 hora.
-- [ ] **I3** **Linha de base por PC**: mediana e dispersão robusta (MAD) de cada métrica por contexto (repouso, jogo, bateria, faixa do
+- [x] **I3** **Linha de base por PC**: mediana e dispersão robusta (MAD) de cada métrica por contexto (repouso, jogo, bateria, faixa do
   dia), recalculada por dia, com pelo menos 3 dias de dado antes de usar. "Fora do normal deste PC" substitui os limites fixos de RAM,
   CPU, disco e rede; calor continua com limite absoluto de segurança.
-- [ ] **I4** **Confiança calculada**: a partir do número de amostras, da duração, de em quantas sessões ou dias se repetiu e da
+- [x] **I4** **Confiança calculada**: a partir do número de amostras, da duração, de em quantas sessões ou dias se repetiu e da
   confiança da fonte (sensor de verdade x zona térmica). Faixas: "ainda não sei", baixa, média, alta. Pouco dado nunca vira alarme.
-- [ ] **I5** **Previsão e resultado**: cada proposta e cada item aplicado guardam o que se espera (ex.: −5 °C em jogo, +5 a 10 % no 1 %
+- [x] **I5** **Previsão e resultado**: cada proposta e cada item aplicado guardam o que se espera (ex.: −5 °C em jogo, +5 a 10 % no 1 %
   low, −8 s de boot); o avaliador compara com o resultado medido e grava nas provas.
-- [ ] **I6** **"Ajudou?"** no painel do ícone e na CLI (`conselheiro --resposta ID sim|nao|nao-importa`). "Não me importa" para de propor
+- [x] **I6** **"Ajudou?"** no painel do ícone e na CLI (`conselheiro --resposta ID sim|nao|nao-importa`). "Não me importa" para de propor
   aquilo; "não ajudou" baixa o peso do item neste PC.
 
 Motor novo:
@@ -491,3 +491,6 @@ Tarefas a mais desta reformulação:
 | 10 nov 2026 | 0.1 fonte no repositório: `partes/`, `arte/gera_site.py`, `arte/site.html`, `scripts/monta.sh`, teste da soma | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | fase 6: mudança extrema no site mantendo o hero e a linha de design; skills do cofre e MCPs | 3.1.2 | ramo v4 | pedido do usuário |
 | 10 nov 2026 | I1 regras como dados: `REGRAS_MOTOR` única, `exe/regras.json` embutido, `Lim.G()` no C#, central usando as mesmas | 3.1.2 | ramo v4 | testes: sem limite no código das Regras do exe |
+| 10 nov 2026 | I2 pensar por evento (fim de sessão no exe; depois de aplicar e desfazer no Katharos; relógio vira reserva de 6 h) | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | I3 linha de base por PC (`65-motor.py`, `linha-de-base.json`, faixa do normal nos gráficos do ícone, regra "fora do normal deste PC") | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | I4 confiança pelos dados (uma sessão só não conclui nada); I5 previsão x resultado (`conselheiro_feitos`, "o que eu previ e o que aconteceu"); I6 "ajudou?" e "não me importa" no ícone e na CLI | 3.1.2 | ramo v4 | |

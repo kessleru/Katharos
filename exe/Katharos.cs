@@ -1045,6 +1045,7 @@ namespace KatharosApp
         int candidatoPid; DateTime candidatoDesde, semJogoDesde = DateTime.MaxValue;
         DateTime proxCfg = DateTime.Now.AddSeconds(30), proxRotacao = DateTime.MinValue;
         public event Action Atualizou;
+        public event Action SessaoFechou;
         public readonly object Trava = new object();
         volatile bool parar;
 
@@ -1150,6 +1151,7 @@ namespace KatharosApp
             Log.Escreve("jogo fechado: " + s.Jogo + ", " + Math.Round((s.Ultimo - s.Inicio).TotalMinutes, 1).ToString(K.INV) + " min");
             if ((s.Ultimo - s.Inicio).TotalMinutes < 1 || s.N < 5) return;
             Acrescenta("sessoes.jsonl", new JavaScriptSerializer().Serialize(s.Json()));
+            if (SessaoFechou != null) SessaoFechou();   // evento: a central pensa agora, com a sessão nova
         }
 
         void FechaMinuto()
@@ -1268,6 +1270,43 @@ namespace KatharosApp
         readonly List<KeyValuePair<RectangleF, string[]>> botoes = new List<KeyValuePair<RectangleF, string[]>>();
         int sobre = -1;
         List<string[]> propostas = new List<string[]>();
+        List<string[]> resultados = new List<string[]>();
+        Dictionary<string, double[]> faixas = new Dictionary<string, double[]>();
+        DateTime faixasLidas = DateTime.MinValue;
+
+        // o normal deste PC (linha de base que a central calcula), por métrica e contexto: a faixa de 10 a 90 %
+        void LeFaixas()
+        {
+            faixasLidas = DateTime.Now;
+            var f = new Dictionary<string, double[]>();
+            try
+            {
+                string arq = K.Arq("linha-de-base.json");
+                if (File.Exists(arq))
+                {
+                    var d = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(arq, Encoding.UTF8)) as Dictionary<string, object>;
+                    var ms = d != null && d.ContainsKey("metricas") ? d["metricas"] as Dictionary<string, object> : null;
+                    if (ms != null)
+                        foreach (var m in ms)
+                        {
+                            var ctxs = m.Value as Dictionary<string, object>; if (ctxs == null) continue;
+                            foreach (var c in ctxs)
+                            {
+                                var b = c.Value as Dictionary<string, object>; if (b == null || !b.ContainsKey("p10") || !b.ContainsKey("p90")) continue;
+                                f[m.Key + "|" + c.Key] = new[] { Convert.ToDouble(b["p10"], K.INV), Convert.ToDouble(b["p90"], K.INV) };
+                            }
+                        }
+                }
+            }
+            catch { }
+            faixas = f;
+        }
+
+        double[] Faixa(string metrica, bool jogo)
+        {
+            if ((DateTime.Now - faixasLidas).TotalMinutes > 5) LeFaixas();
+            double[] r; return faixas.TryGetValue(metrica + "|" + (jogo ? "jogo" : "sem_jogo"), out r) ? r : null;
+        }
         DateTime propostasLidas = DateTime.MinValue;
         readonly Icon marca;
 
@@ -1310,7 +1349,10 @@ namespace KatharosApp
         public void PreparaFoto()
         {
             Fontes();
-            propostas = new List<string[]> { new[] { "Desligar o que abre com o Windows e pesa no jogo", "inicializacao", "alta" } };
+            propostas = new List<string[]> { new[] { "Desligar o que abre com o Windows e pesa no jogo", "inicializacao", "alta", "jogo-cpu-inicio" } };
+            resultados = new List<string[]> { new[] { "jogo-freio", "plano de energia no máximo", "como previsto (31 → 4 % do tempo)" } };
+            faixas = new Dictionary<string, double[]> { { "cpu|jogo", new double[] { 30, 62 } }, { "ram|jogo", new double[] { 55, 70 } }, { "temp_cpu|jogo", new double[] { 62, 74 } } };
+            faixasLidas = DateTime.Now;
             propostasLidas = DateTime.Now;
             Width = (int)(400 * s);
             Height = AlturaDesejada();
@@ -1362,9 +1404,24 @@ namespace KatharosApp
                         foreach (var o in ps)
                         {
                             var x = o as Dictionary<string, object>; if (x == null) continue;
-                            l.Add(new[] { Convert.ToString(x["titulo"]), x.ContainsKey("comando") ? Convert.ToString(x["comando"]) : "", x.ContainsKey("confianca") ? Convert.ToString(x["confianca"]) : "" });
+                            l.Add(new[] { Convert.ToString(x["titulo"]), x.ContainsKey("comando") ? Convert.ToString(x["comando"]) : "",
+                                          x.ContainsKey("confianca") ? Convert.ToString(x["confianca"]) : "", x.ContainsKey("id") ? Convert.ToString(x["id"]) : "" });
                             if (l.Count >= 2) break;
                         }
+                    var rs = d != null && d.ContainsKey("resultados") ? d["resultados"] as object[] : null;
+                    var lr = new List<string[]>();
+                    if (rs != null)
+                        foreach (var o in rs)
+                        {
+                            var x = o as Dictionary<string, object>; if (x == null) continue;
+                            Func<string, string> c = delegate (string k) { return x.ContainsKey(k) && x[k] != null ? Convert.ToString(x[k], K.BR) : ""; };
+                            double a0, b0; string num = "";
+                            if (double.TryParse(c("antes"), NumberStyles.Float, K.BR, out a0) && double.TryParse(c("depois"), NumberStyles.Float, K.BR, out b0))
+                                num = " (" + K.Num(a0, 0) + " → " + K.Num(b0, 0) + " " + c("un") + ")";
+                            lr.Add(new[] { c("id"), c("titulo"), c("veredito") + num });
+                            break;
+                        }
+                    resultados = lr;
                 }
             }
             catch { }
@@ -1454,11 +1511,12 @@ namespace KatharosApp
                 if (a.TempCpu.HasValue) { valTemp = K.Num(a.TempCpu, 0) + " °C"; subTemp = "CPU · GPU " + (a.TempGpu.HasValue ? K.Num(a.TempGpu, 0) + " °C" : "-") + " · " + Curta(a.TempCpuFonte); }
                 else if (a.TempGpu.HasValue) { valTemp = K.Num(a.TempGpu, 0) + " °C"; subTemp = "placa de vídeo · CPU: abra Afterburner ou HWiNFO"; }
                 else { valTemp = "-"; subTemp = "abra MSI Afterburner, HWiNFO ou Core Temp"; }
-                y = Linha(g, pinta, y, pad, "cpu", K.Num(a.Cpu, 0) + " %", subCpu, hist, fCpu, 100, a.Cpu >= 90);
+                bool jg = ses != null;
+                y = Linha(g, pinta, y, pad, "cpu", K.Num(a.Cpu, 0) + " %", subCpu, hist, fCpu, 100, a.Cpu >= 90, Faixa("cpu", jg));
                 y = Linha(g, pinta, y, pad, "placa de vídeo", a.Gpu.HasValue ? K.Num(a.Gpu, 0) + " %" : "-", subGpu, hist, fGpu, 100, a.Gpu >= 95);
-                y = Linha(g, pinta, y, pad, "memória", K.Num(a.RamPct, 0) + " %", K.Num(a.RamGb, 1) + " de " + K.Num(a.RamTotalGb, 0) + " GB", hist, fRam, 100, a.RamPct >= 90);
-                y = Linha(g, pinta, y, pad, "temperatura", valTemp, subTemp, hist, fTemp, 100, a.TempCpu >= motor.Cfg.AvisoCpu || a.TempGpu >= motor.Cfg.AvisoGpu);
-                y = Linha(g, pinta, y, pad, "disco", K.Num(a.Disco, 0) + " %", "lê " + K.Num(a.DiscoLe, 1) + " · grava " + K.Num(a.DiscoGrava, 1) + " MB/s", hist, fDisco, 100, a.Disco >= 95);
+                y = Linha(g, pinta, y, pad, "memória", K.Num(a.RamPct, 0) + " %", K.Num(a.RamGb, 1) + " de " + K.Num(a.RamTotalGb, 0) + " GB", hist, fRam, 100, a.RamPct >= 90, Faixa("ram", jg));
+                y = Linha(g, pinta, y, pad, "temperatura", valTemp, subTemp, hist, fTemp, 100, a.TempCpu >= motor.Cfg.AvisoCpu || a.TempGpu >= motor.Cfg.AvisoGpu, a.TempCpu.HasValue ? Faixa("temp_cpu", jg) : Faixa("temp_gpu", jg));
+                y = Linha(g, pinta, y, pad, "disco", K.Num(a.Disco, 0) + " %", "lê " + K.Num(a.DiscoLe, 1) + " · grava " + K.Num(a.DiscoGrava, 1) + " MB/s", hist, fDisco, 100, a.Disco >= 95, Faixa("disco", jg));
                 y = Linha(g, pinta, y, pad, "rede", K.Num((a.RedeBaixa ?? 0) * 8, 1) + " Mb/s", "baixando · enviando " + K.Num((a.RedeSobe ?? 0) * 8, 1) + " Mb/s", hist, fRede, 0, false);
                 if (a.Bateria.HasValue && pinta) Texto(g, "bateria " + a.Bateria + " %" + (a.NaBateria ? ", fora da tomada" : ", na tomada"), fPequeno, Cor.Apagado, pad, y);
                 if (a.Bateria.HasValue) y += 18 * s;
@@ -1491,16 +1549,47 @@ namespace KatharosApp
                 if (pinta) Texto(g, "Nada a propor agora. Ela olha tudo de novo a cada hora.", fPequeno, Cor.Apagado, pad, y);
                 y += 20 * s;
             }
+            foreach (var r in resultados)
+            {   // a última proposta que você aplicou: o que previ e o que aconteceu, e a sua resposta
+                string txt = "Você aplicou: " + r[1] + ". Resultado: " + r[2] + ". Ajudou?";
+                var tr = g.MeasureString(txt, fPequeno, (int)(W - 2 * pad));
+                if (pinta) using (var b = new SolidBrush(Cor.Texto)) g.DrawString(txt, fPequeno, b, new RectangleF(pad, y, W - 2 * pad, tr.Height + 2));
+                y += tr.Height + 4 * s;
+                float bx = pad;
+                foreach (var op in new[] { new[] { "sim", "sim" }, new[] { "não", "nao" } })
+                {
+                    var tm = g.MeasureString(op[0], fRotulo);
+                    var rr = new RectangleF(bx, y, tm.Width + 16 * s, 22 * s);
+                    if (pinta)
+                    {
+                        bool h = sobre == botoes.Count;
+                        using (var pn = new Pen(h ? Cor.Ambar : Cor.LinhaForte)) g.DrawRectangle(pn, rr.X, rr.Y, rr.Width, rr.Height);
+                        Texto(g, op[0], fRotulo, h ? Cor.Ambar : Cor.Texto, rr.X + 8 * s, rr.Y + 3 * s);
+                        botoes.Add(new KeyValuePair<RectangleF, string[]>(rr, new[] { "@resp", r[0], op[1] }));
+                    }
+                    bx += rr.Width + 8 * s;
+                }
+                y += 30 * s;
+            }
             foreach (var p in propostas)
             {
                 var t = g.MeasureString(p[0], fTexto, (int)(W - 2 * pad));
                 if (pinta) using (var b = new SolidBrush(Cor.Texto)) g.DrawString(p[0], fTexto, b, new RectangleF(pad, y, W - 2 * pad, t.Height + 2));
                 y += t.Height + 1 * s;
-                if (!string.IsNullOrEmpty(p[1]))
-                {
-                    if (pinta) Texto(g, "katharos " + p[1], fMono, Cor.Ambar, pad, y);
-                    y += 18 * s;
+                if (!string.IsNullOrEmpty(p[1])) { if (pinta) Texto(g, "katharos " + p[1], fMono, Cor.Ambar, pad, y); }
+                if (p.Length > 3 && !string.IsNullOrEmpty(p[3]))
+                {   // "não me importa": a central para de propor isso
+                    string ni = "não me importa";
+                    var tm = g.MeasureString(ni, fPequeno);
+                    var rr = new RectangleF(W - pad - tm.Width, y, tm.Width, 18 * s);
+                    if (pinta)
+                    {
+                        bool h = sobre == botoes.Count;
+                        Texto(g, ni, fPequeno, h ? Cor.Osso : Cor.Apagado, rr.X, rr.Y);
+                        botoes.Add(new KeyValuePair<RectangleF, string[]>(rr, new[] { "@resp", p[3], "nao-importa" }));
+                    }
                 }
+                if (!string.IsNullOrEmpty(p[1]) || (p.Length > 3 && !string.IsNullOrEmpty(p[3]))) y += 18 * s;
                 y += 6 * s;
             }
             // botões
@@ -1533,6 +1622,11 @@ namespace KatharosApp
 
         float Linha(Graphics g, bool pinta, float y, float pad, string rotulo, string valor, string sub, List<Amostra> hist, Func<Amostra, double?> f, double teto, bool alerta)
         {
+            return Linha(g, pinta, y, pad, rotulo, valor, sub, hist, f, teto, alerta, null);
+        }
+
+        float Linha(Graphics g, bool pinta, float y, float pad, string rotulo, string valor, string sub, List<Amostra> hist, Func<Amostra, double?> f, double teto, bool alerta, double[] faixa)
+        {
             float W = Width, h = 50 * s;
             if (pinta)
             {
@@ -1548,6 +1642,11 @@ namespace KatharosApp
                 double max = teto;
                 if (teto <= 0) { max = 0.1; foreach (var v in pts) if (!double.IsNaN(v) && v > max) max = v; }
                 using (var p = new Pen(Cor.Linha)) g.DrawLine(p, gx, gy + gh, gx + gw, gy + gh);
+                if (faixa != null && max > 0)
+                {   // o normal deste PC: faixa clara atrás da linha
+                    float y1 = gy + gh - (float)(Math.Min(1, faixa[1] / max) * gh), y2 = gy + gh - (float)(Math.Min(1, faixa[0] / max) * gh);
+                    using (var b = new SolidBrush(Color.FromArgb(48, Cor.Osso))) g.FillRectangle(b, gx, y1, gw, Math.Max(1.5f * s, y2 - y1));
+                }
                 if (pts.Count >= 2)
                 {
                     var linha = new List<PointF>();
@@ -1621,6 +1720,7 @@ namespace KatharosApp
             ni.Icon = marcaPequena; ni.Text = "Katharos"; ni.ContextMenuStrip = menu; ni.Visible = true;
             ni.MouseUp += delegate (object o, MouseEventArgs e) { if (e.Button == MouseButtons.Left) AlternaPainel(); };
             motor.Atualizou += delegate { try { ui.BeginInvoke(new Action(Atualiza)); } catch { } };
+            motor.SessaoFechou += delegate { Pensa("fim de sessão de jogo"); };
             fio = new Thread(motor.Roda); fio.IsBackground = true; fio.Name = "leitura"; fio.Start();
             new Thread(EsperaSinais) { IsBackground = true }.Start();
             if (mostrar) ui.BeginInvoke(new Action(delegate { painel.Mostra(); }));
@@ -1752,7 +1852,16 @@ namespace KatharosApp
             catch { }
         }
 
-        void Abre(string[] args) { Abridor.Abre(args); }
+        void Abre(string[] args)
+        {
+            if (args.Length == 3 && args[0] == "@resp")
+            {   // a sua resposta vai para a central, que pensa de novo e reexporta
+                Log.Escreve("resposta: " + args[1] + " = " + args[2]);
+                Abridor.Escondido(motor.Cfg, "conselheiro --resposta " + K.Q(args[1]) + " " + args[2] + " --sem-cor");
+                return;
+            }
+            Abridor.Abre(args);
+        }
 
         void Atualiza()
         {
@@ -1785,13 +1894,19 @@ namespace KatharosApp
                     ni.ShowBalloonTip(8000, "Katharos: " + c.Titulo, c.Texto, c.Nivel >= 2 ? ToolTipIcon.Warning : ToolTipIcon.Info);
                     break;
                 }
-            // a central de inteligência pensa de novo a cada hora, com as medidas novas
+            // a central pensa nos eventos (fim de sessão; o Katharos pensa ao aplicar e desfazer); este relógio é só a reserva
             if (DateTime.Now >= proxPropostas)
             {
-                proxPropostas = DateTime.Now.AddHours(1);
-                if (ses == null) Abridor.Escondido(motor.Cfg, "conselheiro --exportar --sem-cor");
+                if (ses == null) Pensa("reserva de 6 h");
                 else proxPropostas = DateTime.Now.AddMinutes(10);
             }
+        }
+
+        void Pensa(string porque)
+        {
+            proxPropostas = DateTime.Now.AddHours(6);
+            Log.Escreve("central pensando: " + porque);
+            Abridor.Escondido(motor.Cfg, "conselheiro --exportar --sem-cor");
         }
 
         void TrocaIcone(string est)

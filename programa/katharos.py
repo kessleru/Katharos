@@ -11944,9 +11944,9 @@ def regra(f):
     return f
 
 
-def _sug(id_, titulo, porque, comando, conf, impacto='', risco='', pontos_impacto=3, risco_n=0, metrica='', tipo='acao'):
+def _sug(id_, titulo, porque, comando, conf, impacto='', risco='', pontos_impacto=3, risco_n=0, metrica='', tipo='acao', previsao=None):
     return {'id': id_, 'titulo': titulo, 'porque': porque, 'comando': comando, 'confianca': conf, 'impacto': impacto, 'risco': risco,
-            'impacto_n': pontos_impacto, 'risco_n': risco_n, 'metrica': metrica, 'tipo': tipo,
+            'impacto_n': pontos_impacto, 'risco_n': risco_n, 'metrica': metrica, 'tipo': tipo, 'previsao': previsao,
             'pontos': round(pontos_impacto * PESO_CONF[conf] / (1 + risco_n), 2)}
 
 
@@ -11975,7 +11975,8 @@ def coleta_evidencias(ctx=None, agora=None):
             'dispensadas': e.get('conselheiro_dispensadas') or {}, 'vistas': e.get('conselheiro_vistas') or {},
             'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')) or e.get('segundo_plano') == 'sim',
             'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {},
-            'sessoes': le_sessoes(30, agora), 'minutos': le_minutos(24 * 7, agora), 'segundo_plano': e.get('segundo_plano') == 'sim'}
+            'sessoes': le_sessoes(30, agora), 'minutos': le_minutos(24 * BASE_DIAS + 24, agora), 'segundo_plano': e.get('segundo_plano') == 'sim',
+            'respostas': e.get('conselheiro_respostas') or {}, 'feitos': e.get('conselheiro_feitos') or {}}
 
 
 # ───────── regras ─────────
@@ -12003,28 +12004,39 @@ def r_jogos_gargalo(ev):
     lim, h, n = r['limites'], br(r['horas'], 1), r['sessoes']
     base = f'Em {n} {"sessão" if n == 1 else "sessões"} de jogo ({h} h), '
     out = []
+    dias = len({s['_dt'].date() for s in ev.get('sessoes') or [] if s.get('_dt')})
+    conf = confianca(int(r['horas'] * 60), dias, n)   # cada minuto jogado é uma leitura; repetição = sessões
+    if not conf:
+        return []
+    conf_info = conf
+    def prev(chave, quanto):
+        return {'fonte': 'sessoes', 'chave': chave, 'delta': -quanto, 'un': '% do tempo', 'texto': f'menos tempo com {NOMES_LIMITE.get(chave, chave)}'}
     if lim.get('cpu', 0) >= REGRAS_MOTOR['central_cpu']:
         out.append(_sug('jogo-cpu', 'A CPU segura seus jogos',
                         base + f'um núcleo da CPU ficou no limite com a placa de vídeo sobrando em {br(lim["cpu"], 0)} % do tempo. '
-                        'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', 'alta',
-                        'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao'))
+                        'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', conf,
+                        'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao',
+                        previsao=prev('cpu', lim['cpu'] / 3)))
         out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
-                        'fica disputando ela durante o jogo.', 'inicializacao', 'média', 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0))
+                        'fica disputando ela durante o jogo.', 'inicializacao', {'alta': 'média'}.get(conf, 'baixa'), 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0,
+                        previsao=prev('cpu', lim['cpu'] / 4)))
     if lim.get('freio', 0) >= REGRAS_MOTOR['central_freio']:
         out.append(_sug('jogo-freio', 'A CPU freia durante os jogos',
                         base + f'com carga, ela rodou abaixo de 75 % da frequência normal em {br(lim["freio"], 0)} % do tempo'
                         + (f' (chegou a {br(r["desempenho_min"], 0)} %)' if r.get('desempenho_min') else '') +
-                        '. Isso é calor ou o plano de energia economizando.', 'energia', 'alta', 'plano de energia no máximo; se continuar, é calor (limpeza e pasta térmica)', 'mais consumo', 4, 1))
+                        '. Isso é calor ou o plano de energia economizando.', 'energia', conf, 'plano de energia no máximo; se continuar, é calor (limpeza e pasta térmica)', 'mais consumo', 4, 1,
+                        previsao=prev('freio', lim['freio'] / 2)))
     if lim.get('calor', 0) >= REGRAS_MOTOR['central_calor']:
         mx = max([x for x in (r.get('temp_cpu_max'), r.get('temp_gpu_max')) if x] or [0])
         out.append(_sug('jogo-calor', 'Seus jogos esquentam o PC além do seguro',
                         base + f'a temperatura passou do limite em {br(lim["calor"], 0)} % do tempo (máxima de {br(mx, 0)} °C). '
-                        'Acima disso o chip reduz a velocidade e o FPS cai sozinho.', 'painel', 'alta',
+                        'Acima disso o chip reduz a velocidade e o FPS cai sozinho.', 'painel', conf,
                         'o histórico mostra quando e quanto; poeira, ventoinha e pasta térmica resolvem de verdade', 'nenhum: só leitura', 4, 0))
     if lim.get('ram', 0) >= REGRAS_MOTOR['central_ram']:
         out.append(_sug('jogo-ram', 'A RAM enche durante os jogos',
                         base + f'a RAM passou de 90 % em {br(lim["ram"], 0)} % do tempo. Aí o Windows usa o disco no lugar e o jogo engasga.',
-                        'memoria', 'alta', 'mostra quem ocupa a RAM e o que dá para fechar ou tirar da inicialização', 'nenhum: só leitura', 4, 0))
+                        'memoria', conf, 'mostra quem ocupa a RAM e o que dá para fechar ou tirar da inicialização', 'nenhum: só leitura', 4, 0,
+                        previsao=prev('ram', lim['ram'] / 2)))
     if lim.get('vram', 0) >= REGRAS_MOTOR['central_vram']:
         out.append(_sug('jogo-vram', 'A memória da placa de vídeo enche nos jogos',
                         base + f'ela ficou acima de 95 % em {br(lim["vram"], 0)} % do tempo. Baixar a qualidade das texturas no jogo tira as travadas.',
@@ -12037,7 +12049,7 @@ def r_jogos_gargalo(ev):
         out.append(_sug('jogo-gpu', 'Seus jogos já usam tudo da placa de vídeo',
                         base + f'ela ficou no limite em {br(lim["gpu"], 0)} % do tempo, com a CPU sobrando. O PC já entrega o máximo dela: '
                         'mais FPS só baixando resolução ou qualidade no jogo (ou ativando DLSS/FSR, se o jogo tiver).',
-                        '', 'alta', 'nada a otimizar no Windows para isso', '', 2, 0, tipo='info'))
+                        '', conf_info, 'nada a otimizar no Windows para isso', '', 2, 0, tipo='info'))
     return out
 
 
@@ -12052,11 +12064,11 @@ def r_tempo_real_repouso(ev):
     if cpu_alta / len(mins) >= REGRAS_MOTOR['repouso_cpu_fracao']:
         out.append(_sug('repouso-cpu', 'Algo mantém a CPU ocupada fora dos jogos',
                         f'Na última semana, sem jogo aberto, a CPU ficou acima de 60 % em {br(100 * cpu_alta / len(mins), 0)} % dos minutos medidos.',
-                        'raiox', 'alta', 'o raio-x mostra quem gasta', 'nenhum: só leitura', 3, 0, 'cpu'))
+                        'raiox', confianca(len(mins), len({m['_dt'].date() for m in mins})) or 'baixa', 'o raio-x mostra quem gasta', 'nenhum: só leitura', 3, 0, 'cpu'))
     ram_alta = sum(1 for m in mins if isinstance(m.get('ram'), (int, float)) and m['ram'] >= REGRAS_MOTOR['repouso_ram'])
     if ram_alta / len(mins) >= REGRAS_MOTOR['repouso_ram_fracao']:
         out.append(_sug('repouso-ram', 'A RAM vive cheia', f'Na última semana, a RAM ficou acima de 85 % em {br(100 * ram_alta / len(mins), 0)} % dos minutos medidos.',
-                        'memoria', 'alta', 'mostra quem ocupa e o que tirar da inicialização', 'nenhum: só leitura', 3, 0, 'ram'))
+                        'memoria', confianca(len(mins), len({m['_dt'].date() for m in mins})) or 'baixa', 'mostra quem ocupa e o que tirar da inicialização', 'nenhum: só leitura', 3, 0, 'ram'))
     return out
 
 
@@ -12244,6 +12256,10 @@ def gera_sugestoes(ev):
             LOG.escreve(f'regra {r.__name__} falhou: {ex!r}')
     dis = ev.get('dispensadas') or {}
     out = [x for x in out if not recente_h(dis.get(x['id']), 24 * DISPENSA_DIAS)]
+    resp = {'conselheiro_respostas': ev.get('respostas') or {}}
+    for x in out:   # a sua resposta muda o peso; "não me importa" tira de vez
+        x['pontos'] = round(x['pontos'] * peso_da_resposta(resp, x['id']), 2)
+    out = [x for x in out if x['pontos'] > 0 or x['tipo'] != 'acao']
     por_cmd = {}
     for x in sorted(out, key=lambda x: (ORDEM_CONF[x['confianca']], -x['pontos'], x['id'])):
         chave = x['comando'] or x['id']
@@ -12260,7 +12276,8 @@ def registra_vistas(e, sugestoes, agora=None):
     v = e.setdefault('conselheiro_vistas', {})
     for x in sugestoes:
         if x['tipo'] == 'acao' and x['id'] not in v:
-            v[x['id']] = {'quando': (agora or datetime.now()).replace(microsecond=0).isoformat(), 'comando': x['comando'], 'metrica': x['metrica'] or ALVO_METRICA.get(x['id'], '')}
+            v[x['id']] = {'quando': (agora or datetime.now()).replace(microsecond=0).isoformat(), 'comando': x['comando'], 'metrica': x['metrica'] or ALVO_METRICA.get(x['id'], ''),
+                          'titulo': x['titulo'], 'previsao': x.get('previsao')}
 
 
 def resultados_das_propostas(ev):
@@ -12309,6 +12326,16 @@ def ferramenta_conselheiro(ctx, args):
     e = estado()
     if getattr(args, 'exportar', False):
         return exporta_propostas(ctx)
+    resp = getattr(args, 'resposta', None)
+    if resp:
+        responde(resp[0], resp[1])
+        t.ok({'sim': 'Anotado: ajudou. Esse tipo de proposta ganha peso neste PC.', 'nao': 'Anotado: não ajudou. Ela perde peso neste PC.',
+              'nao-importa': 'Anotado: não te importa. Não proponho mais isso.'}[resp[1]])
+        try:
+            exporta_propostas(ctx)
+        except Exception as ex:
+            LOG.escreve(f'exportar depois da resposta: {ex!r}')
+        return 0
     alvo = getattr(args, 'dispensar', None)
     if alvo:
         dis = e.get('conselheiro_dispensadas') or {}
@@ -12328,6 +12355,14 @@ def ferramenta_conselheiro(ctx, args):
                 t.item('●', 'verde' if ver == 'melhorou' else 'amarelo', f'{titulo} ({quando:%d/%m})', f'{rot}: {br(a, casas)} → {br(b, casas)}{(" " + un) if un else ""} ({ver})')
             else:
                 t.item('○', 'apagado', f'{titulo} ({quando:%d/%m})', f'{rot}: {ver}')
+    prevs = [r for r in resultados_previstos(e, ev.get('minutos') or [], ev.get('sessoes') or [], ev['agora'])]
+    if prevs:
+        t.titulo('o que eu previ e o que aconteceu')
+        cor_v = {'como previsto': 'verde', 'em parte': 'amarelo', 'sem diferença': 'apagado', 'piorou': 'vermelho', 'cedo para dizer': 'apagado'}
+        for r in prevs:
+            num = (f': {br(r["antes"], 0)} → {br(r["depois"], 0)} {r["un"]}' if r['antes'] is not None else '')
+            t.item('●', cor_v.get(r['veredito'], 'apagado'), f'{r["titulo"]} ({r["quando"]:%d/%m})', f'previ {r["previsto"]}; {r["veredito"]}{num}')
+        t.nota('    ajudou? "katharos conselheiro --resposta ID sim" (ou nao, ou nao-importa)', 4)
     sug = gera_sugestoes(ev)
     registra_vistas(e, sug)
     salva_estado(e)
@@ -12348,6 +12383,8 @@ def ferramenta_conselheiro(ctx, args):
             linhas.append(('o que muda', x['impacto']))
         if x['risco']:
             linhas.append(('risco', x['risco']))
+        if x.get('previsao'):
+            linhas.append(('o que espero', x['previsao'].get('texto') or ''))
         if x.get('tambem'):
             linhas.append(('também aponta', '; '.join(x['tambem'])))
         t.chaves(linhas, recuo=4)
@@ -12360,7 +12397,12 @@ def exporta_propostas(ctx=None):
     try:
         ev = coleta_evidencias(ctx)
         sug = gera_sugestoes(ev)
-        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]]}
+        escreve_linha_de_base(ev.get('minutos'), ev.get('agora'))
+        res = resultados_previstos({'conselheiro_feitos': ev.get('feitos') or {}}, ev.get('minutos') or [], ev.get('sessoes') or [], ev.get('agora'))
+        respondidas = ev.get('respostas') or {}
+        pendentes = [dict(r, quando=r['quando'].isoformat()) for r in res if r['veredito'] != 'cedo para dizer' and r['id'] not in respondidas]
+        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]],
+             'resultados': pendentes[:3]}
         tmp = CASA / 'propostas.json.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'propostas.json')
@@ -12387,6 +12429,226 @@ def avisa_propostas(e, ctx=None):
     except Exception as ex:
         LOG.escreve(f'conselheiro falhou: {ex!r}')
         return []
+
+# ─────────────── motor de inteligência: o normal deste PC, confiança pelos dados, previsão x resultado, sua resposta ───────────────
+# A central (65-conselheiro) propõe; este módulo dá a ela três coisas que ela não tinha:
+#   · LINHA DE BASE: o normal de cada métrica neste PC, por contexto (com ou sem jogo), a partir dos minutos que o Katharos.exe grava.
+#     "Fora do normal deste PC" substitui limite fixo onde limite fixo engana (RAM de 8 GB x 64 GB). Calor continua com limite absoluto.
+#   · CONFIANÇA PELOS DADOS: quantas leituras, em quantos dias, quantas vezes se repetiu e se a fonte é boa. Pouco dado = "ainda não sei"
+#     (a regra não propõe nada), nunca alarme.
+#   · PREVISÃO E RESULTADO: cada proposta diz o que espera mudar; depois de aplicada, o motor mede e compara. O que não ajudou neste PC
+#     perde peso. A sua resposta ("ajudou?", "não me importa") também conta.
+METRICAS_BASE = {   # métrica do minuto: (nome, unidade, diferença mínima que importa, comando que investiga)
+    'cpu': ('a CPU', '%', 8, 'raiox'), 'ram': ('a RAM', '%', 8, 'memoria'), 'disco': ('o disco ocupado', '%', 10, 'raiox'),
+    'temp_cpu': ('a temperatura da CPU', '°C', 5, 'painel'), 'temp_gpu': ('a temperatura da placa de vídeo', '°C', 5, 'painel'),
+}
+BASE_DIAS = 14
+BASE_DIAS_MIN = 3
+BASE_MINUTOS_MIN = 300
+RESPOSTAS = ('sim', 'nao', 'nao-importa')
+
+
+def _mediana_lista(v):
+    v = sorted(v)
+    n = len(v)
+    if not n:
+        return None
+    return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+
+
+def _percentil(v, p):
+    v = sorted(v)
+    if not v:
+        return None
+    i = min(len(v) - 1, max(0, int(round(p / 100 * (len(v) - 1)))))
+    return v[i]
+
+
+def contexto_do_minuto(m):
+    return 'jogo' if m.get('jogo') else 'sem_jogo'
+
+
+def linha_de_base(minutos, metrica, contexto, ate=None, dias=BASE_DIAS):
+    """O normal desta métrica neste PC: mediana, dispersão robusta (MAD) e a faixa de 10 a 90 %, dos minutos ANTES de `ate`.
+    None se ainda não há dado bastante (menos de 3 dias diferentes ou 300 minutos)."""
+    ate = ate or datetime.now()
+    de = ate - timedelta(days=dias)
+    v, dias_vistos = [], set()
+    for m in minutos:
+        dt = m.get('_dt')
+        x = m.get(metrica)
+        if dt is None or not (de <= dt < ate) or not isinstance(x, (int, float)) or contexto_do_minuto(m) != contexto:
+            continue
+        v.append(float(x))
+        dias_vistos.add(dt.date())
+    if len(dias_vistos) < BASE_DIAS_MIN or len(v) < BASE_MINUTOS_MIN:
+        return None
+    med = _mediana_lista(v)
+    mad = _mediana_lista([abs(x - med) for x in v])
+    return {'mediana': round(med, 1), 'mad': round(mad, 2), 'p10': round(_percentil(v, 10), 1), 'p90': round(_percentil(v, 90), 1),
+            'n': len(v), 'dias': len(dias_vistos)}
+
+
+def confianca(n, dias=0, repeticoes=0, fonte_boa=True):
+    """Confiança pelos dados. None = ainda não sei (não propõe). n: leituras; dias: dias diferentes; repeticoes: sessões ou episódios."""
+    if n < 3 or (dias < 1 and repeticoes < 2):
+        return None
+    if n >= 30 and (dias >= 3 or repeticoes >= 3):
+        nivel = 'alta'
+    elif n >= 10 and (dias >= 2 or repeticoes >= 2):
+        nivel = 'média'
+    else:
+        nivel = 'baixa'
+    if not fonte_boa:
+        nivel = {'alta': 'média', 'média': 'baixa'}.get(nivel, 'baixa')
+    return nivel
+
+
+def linha_de_base_toda(minutos, agora=None):
+    """{métrica: {contexto: linha de base}} de tudo o que der para calcular. Vai para o Katharos.exe desenhar o normal nos gráficos."""
+    out = {}
+    for met in METRICAS_BASE:
+        for ctx_ in ('sem_jogo', 'jogo'):
+            b = linha_de_base(minutos, met, ctx_, agora)
+            if b:
+                out.setdefault(met, {})[ctx_] = b
+    return out
+
+
+def escreve_linha_de_base(minutos=None, agora=None):
+    try:
+        d = {'quando': agora_iso(), 'metricas': linha_de_base_toda(minutos if minutos is not None else le_minutos(24 * BASE_DIAS), agora)}
+        tmp = CASA / 'linha-de-base.json.tmp'
+        tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, CASA / 'linha-de-base.json')
+        return d
+    except OSError as e:
+        LOG.escreve(f'linha de base: {e!r}')
+        return None
+
+
+@regra
+def r_fora_do_normal(ev):
+    """As últimas 24 h comparadas com o normal deste PC nos 14 dias antes (mesmo contexto). Só com dado bastante dos dois lados."""
+    mins = ev.get('minutos') or []
+    agora = ev['agora']
+    corte = agora - timedelta(hours=24)
+    out = []
+    for met, (nome, un, minimo, cmd) in METRICAS_BASE.items():
+        if met.startswith('temp'):
+            continue   # calor tem limite absoluto (regra própria); aqui é o que muda em relação ao normal
+        base = linha_de_base(mins, met, 'sem_jogo', ate=corte)
+        recente = [float(m[met]) for m in mins if m.get('_dt') and m['_dt'] >= corte and isinstance(m.get(met), (int, float))
+                   and contexto_do_minuto(m) == 'sem_jogo']
+        if not base or len(recente) < 60:
+            continue
+        med = _mediana_lista(recente)
+        limiar = base['mediana'] + max(3 * 1.4826 * base['mad'], minimo)
+        if med <= limiar:
+            continue
+        conf = confianca(len(recente), base['dias'], repeticoes=0)
+        if not conf:
+            continue
+        out.append(_sug(f'normal-{met}', f'{nome[0].upper()}{nome[1:]} está acima do normal deste PC',
+                        f'Nas últimas 24 horas, sem jogo aberto, {nome} ficou em {br(med, 0)} {un} (mediana de {len(recente)} minutos). '
+                        f'O normal deste PC nos {base["dias"]} dias antes era {br(base["mediana"], 0)} {un} (entre {br(base["p10"], 0)} e {br(base["p90"], 0)}).',
+                        cmd, conf, f'descobrir o que mudou ({"o raio-x mostra quem gasta" if cmd == "raiox" else "quem ocupa a memória"})', 'nenhum: só leitura',
+                        3, 0, met, previsao={'fonte': 'minutos', 'chave': met, 'contexto': 'sem_jogo', 'delta': -(med - base['mediana']), 'un': un,
+                                             'texto': f'voltar perto de {br(base["mediana"], 0)} {un}'}))
+    return out
+
+
+# ───────── previsão x resultado ─────────
+
+def _janela(minutos, chave, contexto, de, ate):
+    return [float(m[chave]) for m in minutos if m.get('_dt') and de <= m['_dt'] < ate and isinstance(m.get(chave), (int, float))
+            and contexto_do_minuto(m) == contexto]
+
+
+def _limite_sessoes(sessoes, chave, de, ate):
+    return [float((s.get('tempo_no_limite') or {}).get(chave, 0)) for s in sessoes
+            if s.get('_dt') and de <= s['_dt'] < ate and isinstance(s.get('min'), (int, float)) and s['min'] >= 5]
+
+
+def mede_previsao(prev, quando, minutos, sessoes, dias=7):
+    """Compara a janela antes e a depois de `quando` na métrica da previsão.
+    Devolve (veredito, antes, depois): 'como previsto', 'em parte', 'sem diferença', 'piorou' ou 'cedo para dizer'."""
+    de, ate = quando - timedelta(days=dias), quando + timedelta(days=dias)
+    if prev.get('fonte') == 'sessoes':
+        a, b = _limite_sessoes(sessoes, prev['chave'], de, quando), _limite_sessoes(sessoes, prev['chave'], quando, ate)
+        minimo = 3
+    else:
+        a = _janela(minutos, prev['chave'], prev.get('contexto', 'sem_jogo'), de, quando)
+        b = _janela(minutos, prev['chave'], prev.get('contexto', 'sem_jogo'), quando, ate)
+        minimo = 60
+    if len(a) < minimo or len(b) < minimo:
+        return 'cedo para dizer', None, None
+    ma, mb = _mediana_lista(a), _mediana_lista(b)
+    ruido = 1.4826 * (_mediana_lista([abs(x - ma) for x in a]) or 0)
+    real, esperado = mb - ma, float(prev.get('delta') or 0)
+    if abs(real) <= max(ruido, 1.0):
+        return 'sem diferença', ma, mb
+    if esperado and (real > 0) != (esperado > 0):
+        return 'piorou', ma, mb
+    return ('como previsto' if not esperado or abs(real) >= 0.6 * abs(esperado) else 'em parte'), ma, mb
+
+
+def resultados_previstos(e, minutos, sessoes, agora=None):
+    """Para cada proposta executada (pacote ou comando registrado depois de vista), o previsto e o medido."""
+    out = []
+    feitos = e.get('conselheiro_feitos') or {}
+    for id_, f in feitos.items():
+        prev = f.get('previsao')
+        try:
+            quando = datetime.fromisoformat(f['quando'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not prev:
+            continue
+        ver, a, b = mede_previsao(prev, quando, minutos, sessoes)
+        out.append({'id': id_, 'titulo': f.get('titulo') or id_, 'quando': quando, 'previsto': prev.get('texto') or '', 'veredito': ver,
+                    'antes': a, 'depois': b, 'un': prev.get('un') or ''})
+    return out
+
+
+def registra_feito(id_, titulo, previsao, quando=None):
+    """Guarda que a proposta foi executada, com a previsão: o motor mede depois."""
+    e = estado()
+    e.setdefault('conselheiro_feitos', {})[id_] = {'quando': (quando or datetime.now()).replace(microsecond=0).isoformat(), 'titulo': titulo, 'previsao': previsao}
+    salva_estado(e)
+
+
+def marca_propostas_feitas(comando):
+    """Depois de rodar um comando que muda o PC: as propostas vistas com esse comando viram 'feitas' (com a previsão que tinham)."""
+    e = estado()
+    vistas = e.get('conselheiro_vistas') or {}
+    feitos = e.setdefault('conselheiro_feitos', {})
+    for id_, v in vistas.items():
+        if (v.get('comando') or '').split(' ')[0] == comando and id_ not in feitos and v.get('previsao'):
+            feitos[id_] = {'quando': agora_iso(), 'titulo': v.get('titulo') or id_, 'previsao': v['previsao']}
+    salva_estado(e)
+
+
+# ───────── a sua resposta ─────────
+
+def peso_da_resposta(e, id_):
+    """Multiplicador dos pontos da proposta pelo que você respondeu e pelo resultado medido. 0 = nunca mais propor."""
+    r = (e.get('conselheiro_respostas') or {}).get(id_, {}).get('resposta')
+    if r == 'nao-importa':
+        return 0.0
+    if r == 'nao':
+        return 0.4
+    if r == 'sim':
+        return 1.3
+    return 1.0
+
+
+def responde(id_, resposta):
+    if resposta not in RESPOSTAS:
+        raise ValueError(resposta)
+    e = estado()
+    e.setdefault('conselheiro_respostas', {})[id_] = {'resposta': resposta, 'quando': agora_iso()}
+    salva_estado(e)
 # ─────────────── saúde do Windows: erros dos logs, drivers e o que o Windows precisa ───────────────
 # Coleta só leitura (Visualizador de Eventos, drivers instalados, estado do Windows) → catálogo de causas conhecidas → problemas
 # explicados, com o que fazer. Regras: (1) só explica o que está no catálogo; o resto aparece como "sem explicação catalogada",
@@ -13787,6 +14049,10 @@ COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)'
 SEM_ESTADO = {'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
+# comandos depois dos quais o motor de inteligência pensa de novo (evento "aplicou" ou "desfez")
+MUDAM_O_PC = {cmd for _, _, itens in GRUPOS for cmd, _, f in itens if f == 'pacote'} | {'turbo', 'desfazer', 'restaurar', 'retomar'}
+
+
 def roda_ferramenta(ctx, args, abre=True):
     t = ctx.t
     desc, f = COMANDOS[args.comando]
@@ -13822,6 +14088,12 @@ def roda_ferramenta(ctx, args, abre=True):
         if not cod and gasto > 5:
             e.setdefault('duracoes', {})[args.comando] = round(gasto)
         salva_estado(e)
+    if args.comando in MUDAM_O_PC and not getattr(args, 'teste', False):
+        try:   # o motor pensa logo depois de uma mudança (o ícone mostra as propostas novas), não no próximo relógio
+            marca_propostas_feitas(args.comando)
+            exporta_propostas(ctx)
+        except Exception as ex:
+            LOG.escreve(f'pensar depois de {args.comando}: {ex!r}')
     rel_fim(ctx, args, inicio)
     t.fim(('concluído em ' if not cod else 'terminou com pendências · ') + duracao(time.time() - inicio), 'ok' if not cod else 'aviso')
     return cod or 0
@@ -13861,6 +14133,7 @@ def monta_parser():
     sd.add_argument('--ultimo', action='store_true', help='mostra o último retrato em vez de ler os logs de novo')
     cs = sub.add_parser('conselheiro', parents=[depois], help='propõe mudanças com base nas medidas do segundo plano (não aplica nada)')
     cs.add_argument('--dispensar', metavar='ID', help='esconde uma proposta por 30 dias')
+    cs.add_argument('--resposta', nargs=2, metavar=('ID', 'RESPOSTA'), help='diz se uma proposta ajudou: sim, nao ou nao-importa')
     cs.add_argument('--exportar', action='store_true', help='só grava as propostas em ~/.katharos/propostas.json (o ícone do segundo plano mostra)')
     pn = sub.add_parser('painel', parents=[depois], help='gera o painel de gráficos (HTML) e abre no navegador')
     pn.add_argument('--nao-abrir', action='store_true', help='só gera o arquivo')
