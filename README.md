@@ -148,7 +148,7 @@ O número é MAIOR.MENOR.CORREÇÃO, explicado no [CHANGELOG.md](CHANGELOG.md); 
 - **Arquivo importado nunca é executado.** `importar` só escolhe, entre os itens que o Katharos já conhece, quais aplicar, depois da prévia e da confirmação.
 - **Verifique o download, de fora do programa.** `gh attestation verify katharos.py --repo kessleru/Katharos` confere a assinatura que o GitHub põe em cada release, e `Get-FileHash .\katharos.py -Algorithm SHA256` deve bater com a página da release. Dentro do programa, `katharos autenticidade` faz a conferência local e online, e a abertura avisa sozinha se o arquivo não bate com o `SHA256SUMS.txt` que veio junto; mas um arquivo alterado pode esconder isso, por isso valem as de fora. Veja o [SECURITY.md](SECURITY.md).
 
-Relatório, medidas, backups, logs e preferências ficam em `%USERPROFILE%\.katharos`.
+Relatório, medidas, logs e preferências ficam em `%USERPROFILE%\.katharos`. O que roda como administrador fica em `%ProgramData%\Katharos`, onde só administradores gravam: o backup do `desfazer`, os scripts temporários do PowerShell e a cópia do programa que as tarefas do Windows executam.
 
 ## De onde veio
 

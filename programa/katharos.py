@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '3.0.3'
+VERSAO = '3.0.4'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -1062,10 +1062,10 @@ EXPLICA_MODOS = [
     ('seguro', 'verde', 'Só o que não tem contrapartida: telemetria, anúncios, lixo, apps de propaganda, '
      'tarefas inúteis, Modo de Jogo. Bom para PC de trabalho ou de outra pessoa.'),
     ('equilibrado', 'azul', 'O seguro mais o que quase ninguém usa: serviços de empresa e de telefone, '
-     'Xbox (se não joga), IA do Windows, widgets, efeitos visuais, caches, e o que ajuda em jogo sem custo '
-     '(sem gravação de fundo, mouse sem aceleração). É o recomendado.'),
-    ('extremo', 'pessego', 'Tudo o que pode ajudar neste PC, inclusive o máximo de FPS em jogo: energia no máximo, '
-     'placa de vídeo sempre no desempenho, menos atraso de rede e de entrada; desliga sensores, área de trabalho remota, '
+     'Xbox (se não joga), IA do Windows, widgets, efeitos visuais, caches, sem gravação de fundo do Xbox e, se há jogos instalados, '
+     'mouse sem aceleração. É o recomendado.'),
+    ('extremo', 'pessego', 'Tudo o que pode ajudar neste PC: energia no máximo e, se há jogos instalados, o máximo de FPS '
+     '(placa de vídeo sempre no desempenho, menos atraso de rede e de entrada); desliga sensores, área de trabalho remota, '
      'scanner, localização, hibernação no SSD. Você perde recursos (cada item diz quais).'),
 ]
 
@@ -1209,8 +1209,9 @@ def lista(v):
 
 
 def psq(s):
-    """Texto como literal de PowerShell entre aspas simples."""
-    return "'" + str(s).replace("'", "''") + "'"
+    """Texto como literal de PowerShell entre aspas simples. O PowerShell também fecha a string com as aspas tipográficas
+    (‘ ’ ‚ ‛), comuns em nome de arquivo e de programa: cada uma é dobrada como a ' comum."""
+    return "'" + re.sub("['‘’‚‛]", lambda m: m.group(0) * 2, str(s)) + "'"
 
 
 def ps_lista(itens):
@@ -1832,16 +1833,25 @@ class _Filho:
 def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostra=True, pr=None, mult=1.0,
             desfaz=False, vigia_ocioso=False):
     """Roda um trecho de PowerShell num processo filho, com limite de tempo (vezes o fator do hardware).
-    Devolve Saida. pacote: pasta de backup (~/.katharos/backup/PACOTE) para as mudanças poderem voltar."""
+    Devolve Saida. pacote: pasta de backup (dir_backup()/PACOTE) para as mudanças poderem voltar.
+    Como administrador, o script vai para a pasta protegida: em ~/.katharos/tmp, um programa sem administrador poderia trocá-lo entre a
+    gravação e a execução e rodar o que quisesse como administrador."""
     s = Saida()
     if not WINDOWS:
         s.codigo = 1
         s.erros.append('só funciona no Windows')
         return s
-    arq = pasta('tmp') / f'{re.sub(r"[^a-z0-9-]", "-", rotulo.lower())[:30]}-{os.getpid()}-{int(time.time() * 1000) % 100000}.ps1'
+    admin = eh_admin()
+    tmp = pasta_protegida('tmp') if admin else pasta('tmp')
+    bk = (dir_backup() / pacote) if pacote else ''
+    if admin and (tmp is None or (pacote and not teste and pasta_protegida('backup') is None)):
+        s.codigo = 1
+        _exibe(t, 'erro', f'não consegui proteger a pasta {pasta_da_tarefa()} (só administradores devem gravar nela); nada foi rodado', s, mostra)
+        return s
+    arq = tmp / f'{re.sub(r"[^a-z0-9-]", "-", rotulo.lower())[:30]}-{os.getpid()}-{int(time.time() * 1000) % 100000}.ps1'
     # as variáveis vão dentro do script: o processo criado pelo WMI não herda o ambiente
     cabeca = (f"$env:OTM_TESTE = '{'1' if teste else '0'}'\n$env:OTM_CASA = {psq(CASA)}\n$env:OTM_MULT = '{mult:.2f}'\n"
-              f"$env:OTM_BK = {psq(pasta('backup', pacote) if pacote else '')}\n")
+              f"$env:OTM_BK = {psq(bk)}\n")
     with open(arq, 'w', encoding='utf-8-sig', newline='\r\n') as f:  # BOM: o PowerShell 5.1 lê como UTF-8
         f.write(cabeca + PRELUDIO_PS + '\n' + RETRATO_PS + '\n' + (DESFAZ_PS if desfaz else corpo) + '\n')
     ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -1995,7 +2005,7 @@ def limpa_residuos(casa=None, agora=None):
                 if agora - lg.stat().st_mtime > DIAS_LOG * 86400:
                     lg.unlink()
                     n += 1
-        ruins = sorted(casa.glob('*.corrompido-*'))
+        ruins = sorted(casa.glob('*.corrompido-*'), key=lambda a: a.stat().st_mtime)   # pela data: pelo nome, os de config.json iam primeiro
         for velho in ruins[:-MAX_CORROMPIDOS]:
             velho.unlink()
             n += 1
@@ -2027,6 +2037,27 @@ def _vivo(pid):
         return True
 
 
+def _eh_python(pid):
+    """O processo com este PID é um Python (o Katharos)? Depois de um travamento, o Windows pode dar o PID da trava a outro programa."""
+    if not WINDOWS:
+        return True
+    try:
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return True
+        try:
+            buf = ctypes.create_unicode_buffer(1024)
+            n = ctypes.c_uint32(1024)
+            if not k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+                return True
+            return 'python' in Path(buf.value).name.lower()
+        finally:
+            k.CloseHandle(h)
+    except Exception:
+        return True
+
+
 class Trava:
     """Uma única instância do Katharos mexendo no sistema por vez (duas janelas aplicando juntas escreveriam no mesmo
     backup e no mesmo estado). Arquivo ~/.katharos/katharos.lock com o PID; trava de processo que já morreu é ignorada."""
@@ -2037,17 +2068,34 @@ class Trava:
         self.dona = None
 
     def pega(self):
+        """Cria a trava de uma vez só (O_EXCL): duas janelas abertas juntas não passam as duas. Uma trava de processo que já morreu,
+        ou cujo PID o Windows deu a outro programa, é apagada e criada de novo."""
         try:
             self.arq.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                pid = int((self.arq.read_text(encoding='utf-8').split() or ['0'])[0])
-            except (OSError, ValueError):
-                pid = 0
-            if pid and pid != os.getpid() and _vivo(pid):
-                self.dona = pid
-                return False
-            self.arq.write_text(f'{os.getpid()} {datetime.now().isoformat(timespec="seconds")}\n', encoding='utf-8')
-            self.minha = True
+            for _ in range(3):
+                try:
+                    fd = os.open(str(self.arq), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                except FileExistsError:
+                    try:
+                        pid = int((self.arq.read_text(encoding='utf-8').split() or ['0'])[0])
+                    except (OSError, ValueError):
+                        pid = 0
+                    if pid == os.getpid():
+                        self.minha = True
+                        return True
+                    if pid and _vivo(pid) and _eh_python(pid):
+                        self.dona = pid
+                        return False
+                    try:
+                        self.arq.unlink()   # trava velha
+                    except FileNotFoundError:
+                        pass
+                    continue
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    f.write(f'{os.getpid()} {datetime.now().isoformat(timespec="seconds")}\n')
+                self.minha = True
+                return True
+            return False
         except OSError:
             self.minha = False     # sem como gravar a trava: não impede o uso
         return True
@@ -5588,6 +5636,10 @@ GPU_PS = r'''foreach ($__c in @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Co
   if ($__d -match '«fab»') { $__k = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\' + $__c.PSChildName; «reg» }
 }'''
 
+# Itens que só servem para jogo: num PC sem jogos instalados, ficam fora de todo modo (placa de vídeo, entrada, rede e agendador).
+SO_COM_JOGOS = frozenset({'mmcss', 'mouse', 'teclado', 'gpu-nvidia', 'gpu-amd', 'timer', 'rede-jogos', 'hags'})
+
+
 @pacote('jogos', 'jogos', 'Modo de Jogo, Game DVR, entrada e latência: vale para qualquer jogo',
         'Ajustes que os otimizadores de jogos usam, com a verdade sobre cada um: alguns ajudam sempre, outros só em casos específicos, '
         'e alguns são quase placebo (está escrito). Desligar segurança do Windows (VBS, Integridade de Memória) não está aqui de propósito: '
@@ -5604,7 +5656,7 @@ def itens_jogos(ctx):
     Set-Valor $__k 'TcpAckFrequency' 1 | Out-Null; Set-Valor $__k 'TCPNoDelay' 1 | Out-Null
   }
 }'''
-    return [
+    itens = [
         Item('modo-jogo', 'Modo de Jogo ligado', 'O Windows segura atualizações e tarefas de fundo enquanto um jogo está aberto.',
              'pequeno: segura atualizações e avisos durante o jogo', 'nenhum', 1,
              RR(R('HKCU:\\Software\\Microsoft\\GameBar', 'AutoGameModeEnabled', 1), R('HKCU:\\Software\\Microsoft\\GameBar', 'AllowAutoGameMode', 1))),
@@ -5634,7 +5686,7 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              'provavelmente nenhum, se o valor nunca foi mexido', 'nenhum', 0,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl', 'Win32PrioritySeparation', 38)),
         Item('mouse', 'sem aceleração do mouse', 'O ponteiro anda sempre a mesma distância para o mesmo movimento ("precisão aprimorada" desligada).',
-             'mira mais consistente', 'em telas grandes o mouse parece mais lento até se acostumar', 2 if j else 3,
+             'mira mais consistente', 'em telas grandes o mouse parece mais lento até se acostumar', 2,
              RR(R('HKCU:\\Control Panel\\Mouse', 'MouseSpeed', '0', 'String'), R('HKCU:\\Control Panel\\Mouse', 'MouseThreshold1', '0', 'String'),
                 R('HKCU:\\Control Panel\\Mouse', 'MouseThreshold2', '0', 'String'))),
         Item('teclado', 'teclado mais rápido', 'Repetição de tecla no máximo e atraso mínimo antes de repetir.',
@@ -5667,6 +5719,11 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              'driver recentes; vale depois de reiniciar.', 'pequeno; necessário para o DLSS 3 (geração de quadros)',
              'em placas antigas pode causar engasgos', 3, R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', 'HwSchMode', 2)),
     ]
+    if not j:   # sem jogos instalados, o que só serve para jogo não entra em modo nenhum (continua dando para escolher à mão)
+        for it in itens:
+            if it and it.id in SO_COM_JOGOS:
+                it.nivel = 0
+    return itens
 
 
 # ═══════════════════════════════ energia ═══════════════════════════════
@@ -5736,7 +5793,7 @@ def itens_energia(ctx):
         Item('rede-energia', 'placa de rede sem economia de energia', 'O Windows não desliga a placa de rede para economizar.',
              'evita quedas de Wi-Fi e atraso ao voltar da suspensão', 'mais consumo', 0 if nb else 3, r'''
 $__ad = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)
-foreach ($a in $__ad) { $pm = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue; if ($pm -and [string]$pm.AllowComputerToTurnOffDevice -eq 'Enabled') { if ($TESTE) { Plano ('sem economia: ' + $a.Name) } else { Guarda-Desfazer ('rede|' + $a.Name) ("Enable-NetAdapterPowerManagement -Name '" + $a.Name + "' -ErrorAction SilentlyContinue"); Disable-NetAdapterPowerManagement -Name $a.Name -NoRestart -ErrorAction SilentlyContinue; $script:MUDOU++ } } }'''),
+foreach ($a in $__ad) { $pm = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue; if ($pm -and [string]$pm.AllowComputerToTurnOffDevice -eq 'Enabled') { if ($TESTE) { Plano ('sem economia: ' + $a.Name) } else { Guarda-Desfazer ('rede|' + $a.Name) ("Enable-NetAdapterPowerManagement -Name '" + ($a.Name -replace "['\u2018\u2019\u201a\u201b]", '$0$0') + "' -ErrorAction SilentlyContinue"); Disable-NetAdapterPowerManagement -Name $a.Name -NoRestart -ErrorAction SilentlyContinue; $script:MUDOU++ } } }'''),
         Item('inicio-rapido', 'inicialização rápida garantida', 'Ligar depois de desligar fica muito mais rápido. Em HD faz diferença grande.',
              'boot mais curto', 'é preciso "Reiniciar" (não "Desligar") para aplicar algumas atualizações', 1, r'''
 $__h = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction SilentlyContinue).HibernateEnabled
@@ -8030,12 +8087,21 @@ def desfaz_organizar(ctx):
     if not diario:
         t.ok('Nenhuma organização para desfazer.')
         return 0
-    arq = diario[-1]
-    d = le_json(arq, {})
-    raiz = Path(d.get('desktop', ''))
-    if not raiz.is_dir():
-        t.erro('A área de trabalho daquela organização não existe mais.')
+    # a mais recente cuja área de trabalho ainda existe: uma de pasta que sumiu (OneDrive desligado, por exemplo) não trava as outras
+    arq = d = raiz = None
+    orfas = 0
+    for cand in reversed(diario):
+        dd = le_json(cand, {})
+        rr = Path(dd.get('desktop', '') or '.')
+        if dd.get('desktop') and rr.is_dir():
+            arq, d, raiz = cand, dd, rr
+            break
+        orfas += 1
+    if arq is None:
+        t.erro('A área de trabalho das organizações guardadas não existe mais.')
         return 1
+    if orfas:
+        t.nota(f'  {pl(orfas, "organização mais nova ficou de lado", "organizações mais novas ficaram de lado")}: a área de trabalho dela não existe mais.')
     n = pulados = 0
     for m in d.get('movidos', []):
         de, para = Path(m.get('de', '')), Path(m.get('para', ''))
@@ -8385,6 +8451,16 @@ NIVEL_PACOTE = {'programas': 1, 'apps': 1, 'ia': 2, 'inicializacao': 1, 'servico
                 'jogos': 1, 'energia': 1, 'reparar': 1, 'atualizar': 1, 'limpar': 1, 'disco': 1, 'navegador': 2, 'interface': 3}
 
 
+def nivel_etapa_turbo(nome, p):
+    """Nível de cada pacote no turbo (1 = entra até no seguro) e a nota que aparece ao lado."""
+    n, nota = NIVEL_PACOTE[nome], ''
+    if nome == 'jogos':
+        nota = 'com os itens de jogo do modo' if joga(p) else 'sem jogos instalados: só o básico'
+    if nome == 'navegador' and config('navegador') == 'brave':
+        n = 1
+    return n, nota
+
+
 def _espera_bateria(t):
     na_tomada, carga = energia_agora()
     avisou = False
@@ -8398,12 +8474,24 @@ def _espera_bateria(t):
 
 def tarefa_continuar(ctx, criar=True):
     """Tarefa agendada de uma vez: depois do reinício, no seu logon, abre o turbo de novo como administrador
-    (sem lançador escondido: uma janela normal do PowerShell chamando o Python)."""
-    script = CASA / 'katharos.py'
-    try:
-        shutil.copy2(Path(__file__).resolve(), script)
-    except OSError:
-        script = Path(__file__).resolve()
+    (sem lançador escondido: uma janela normal do PowerShell chamando o Python).
+    A tarefa é elevada, então o script que ela roda fica na pasta protegida: em ~/.katharos, um programa sem administrador poderia
+    trocá-lo antes do próximo logon e ganhar administrador. Sem a proteção, a tarefa não é criada e o turbo continua quando você o abrir."""
+    if criar:
+        destino = pasta_protegida('turbo')
+        if destino is None:
+            ctx.t.aviso('Não consegui proteger a pasta da tarefa que continua o turbo. Depois do reinício, abra o Katharos e rode "turbo": '
+                        'ele pergunta se continua de onde parou.')
+            return False
+        script = destino / 'katharos.py'
+        try:
+            shutil.copy2(Path(__file__).resolve(), script)
+        except OSError as e:
+            ctx.t.aviso(f'Não consegui copiar o programa para {destino} ({e.__class__.__name__}). Depois do reinício, abra o Katharos e rode "turbo".')
+            return False
+        if python_em_pasta_do_usuario():
+            ctx.t.aviso('O Python que a tarefa usa está dentro da sua pasta de usuário, que programas sem administrador conseguem alterar. '
+                        'Para fechar essa brecha, instale o Python "para todos os usuários" (python.org, "Install for all users").')
     if criar:
         cmd = (f"& {psq(sys.executable)} {psq(str(script))} turbo --continuar; Read-Host 'Enter para fechar'")
         corpo = ps_monta(r'''
@@ -8416,7 +8504,7 @@ Ok 'o katharos vai continuar sozinho depois do reinicio, quando voce entrar na c
 ''', cmd=psq(cmd.replace('"', '\\"')), nome=psq(TAREFA_CONTINUAR))
     else:
         corpo = f"Unregister-ScheduledTask -TaskName {psq(TAREFA_CONTINUAR)} -Confirm:$false -ErrorAction SilentlyContinue"
-    roda_ps(ctx.t, corpo, 'tarefa-continuar', minutos=2, mostra=criar)
+    return roda_ps(ctx.t, corpo, 'tarefa-continuar', minutos=2, mostra=criar).ok
 
 
 def _resumo_pacotes(t):
@@ -8443,6 +8531,14 @@ def escolhe_modo(t, args):
 
 ETAPAS_FIXAS = ('medir-antes', 'medir-depois', 'reinicio', 'agendar')
 
+# Um turbo começado na 2.5.0 (com "para quê") e continuado nesta versão aplica o que foi aprovado lá.
+FOCO_ANTIGO_ITENS = {
+    'jogos': {'modo-jogo', 'gamedvr', 'aderencia', 'mouse', 'hags', 'directx-jogos'},
+    'jogos-max': {'modo-jogo', 'gamedvr', 'aderencia', 'mouse', 'teclado', 'hags', 'directx-jogos', 'mmcss', 'primeiro-plano', 'rede-jogos', 'timer',
+                  'gpu-nvidia', 'gpu-amd'},
+}
+FOCO_ANTIGO_EXTREMO = {'jogos-max': ('energia', 'visual')}
+
 def le_plano(arq):
     """O plano de um turbo anterior: um .json com etapas, ou o relatório único (.md) de onde ele veio. Só vale o que o
     Katharos conhece: etapas e ids são nomes, nunca comandos."""
@@ -8457,7 +8553,22 @@ def le_plano(arq):
         return None
     etapas = [e for e in d['etapas'] if isinstance(e, str) and (e in PACOTES or e in ETAPAS_FIXAS)]
     itens = {k: [str(i)[:120] for i in v] for k, v in (d.get('itens') or {}).items() if k in PACOTES and isinstance(v, list)}
-    return {'modo': d.get('modo') if d.get('modo') in MODOS else 'equilibrado', 'etapas': etapas, 'itens': itens}
+    base = {'modo': d.get('modo') if d.get('modo') in MODOS else 'equilibrado', 'etapas': etapas, 'itens': itens}
+    if d.get('foco') in FOCO_ANTIGO_ITENS:   # plano gravado pela 2.5.0 com "para quê"
+        base['foco'] = d['foco']
+    return base
+
+
+def foco_antigo(t, args):
+    """O --foco da 2.5.0. "jogos no máximo" vira --modo extremo quando o modo não veio junto; devolve o foco que vale para o plano
+    (jogos ou jogos-max) ou None. Avisa sempre, para ninguém achar que a opção antiga fez o que fazia."""
+    foco = getattr(args, 'foco', None)
+    if not foco:
+        return None
+    if foco == 'jogos-max' and not getattr(args, 'modo', None):
+        args.modo = 'extremo'
+    t.nota('"--foco" saiu na 3.0.0: os jogos vêm dentro do modo ("jogos no máximo" é o --modo extremo).')
+    return foco if foco in FOCO_ANTIGO_ITENS else None
 
 
 def ferramenta_turbo(ctx, args):
@@ -8465,6 +8576,7 @@ def ferramenta_turbo(ctx, args):
     t.aba('otimiza tudo em sequência; continua sozinho depois de reiniciar')
     if not precisa_admin(ctx, args):
         return 1
+    foco = foco_antigo(t, args)
     plano = le_json(ARQ_TURBO, None)
     if plano and not plano.get('concluido') and (getattr(args, 'continuar', False) or (t.interativo and not args.teste and
             t.pergunta(f'há um turbo de {str(plano.get("criado", ""))[:10]} pela metade. continuar? s = sim, Enter = começar outro')
@@ -8487,6 +8599,8 @@ def ferramenta_turbo(ctx, args):
             return 1
         plano = {'criado': agora_iso(), 'modo': base.get('modo', 'equilibrado'), 'etapas': base['etapas'], 'itens': base.get('itens', {}),
                  'feitas': [], 'tentativas': {}, 'concluido': False}
+        if base.get('foco') or foco:
+            plano['foco'] = base.get('foco') or foco
         t.info(f'plano de {caminho_curto(args.plano)}: modo {plano["modo"]}, {pl(len(plano["etapas"]), "etapa")}.')
         if args.teste:
             return 0
@@ -8499,12 +8613,7 @@ def ferramenta_turbo(ctx, args):
     itens = []
     for nome in ORDEM_TURBO:
         pac = PACOTES[nome]
-        n = NIVEL_PACOTE[nome]
-        nota = ''
-        if nome == 'jogos' and joga(p):
-            n, nota = 2, 'tem jogos instalados'
-        if nome == 'navegador' and config('navegador') == 'brave':
-            n = 1
+        n, nota = nivel_etapa_turbo(nome, p)
         itens.append(Item(nome, pac.titulo, pac.explica, pac.resumo, '', n, nota=nota))
     itens.append(Item('agendar', 'manutenção semanal automática', 'Tarefa leve que roda com o PC ocioso e na tomada: limpa, '
                       'reaplica o que atualizações desfazem e avisa de problemas de disco.', 'o PC continua leve', 'nenhum', 1))
@@ -8608,7 +8717,12 @@ def _itens_da_etapa(ctx, plano, etapa, filtra_ja=True):
         ids = set(plano['itens'][etapa])
         its = [x for x in its if x.id in ids]
     else:
-        marca_por_modo(its, plano['modo'])
+        foco = plano.get('foco')
+        marca_por_modo(its, 'extremo' if etapa in FOCO_ANTIGO_EXTREMO.get(foco, ()) else plano['modo'])
+        if etapa == 'jogos':
+            for x in its:
+                if x.id in FOCO_ANTIGO_ITENS.get(foco, ()):
+                    x.marcado = True
         its = [x for x in its if x.marcado]
     if filtra_ja:   # o que já foi conferido como feito nesta sessão não roda de novo
         cache = getattr(ctx, 'ja', None) or {}
@@ -8879,13 +8993,74 @@ def pasta_da_tarefa():
 
 
 def protege_pasta_da_tarefa(pasta):
-    """Pasta só com SYSTEM e Administradores gravando (por SID, vale em qualquer idioma); Usuários só leem e executam. True se o icacls aceitou."""
+    """Pasta só com SYSTEM e Administradores gravando (por SID, vale em qualquer idioma); Usuários só leem e executam. True se o icacls aceitou.
+    O dono passa a ser Administradores (quem criou a pasta antes, sem administrador, continuaria podendo mudar as permissões) e o que já estava
+    dentro volta a herdar da pasta (um arquivo deixado ali com permissão própria continuaria gravável)."""
+    def icacls(*a):
+        return subprocess.run(['icacls', *a], capture_output=True, text=True, timeout=60).returncode == 0
     try:
-        r = subprocess.run(['icacls', str(pasta), '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX'],
-                           capture_output=True, text=True, timeout=30)
-        return r.returncode == 0
+        if not icacls(str(pasta), '/setowner', '*S-1-5-32-544', '/T', '/C', '/Q'):
+            return False
+        try:
+            tem_dentro = any(Path(pasta).iterdir())
+        except OSError:
+            tem_dentro = False
+        if tem_dentro and not icacls(str(Path(pasta) / '*'), '/reset', '/T', '/C', '/Q'):
+            return False
+        return icacls(str(pasta), '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX')
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+_PROTEGIDA = {}
+
+
+def pasta_protegida(*partes):
+    """Subpasta de %ProgramData%\\Katharos, onde só administradores gravam, para tudo o que um processo elevado executa ou em que confia:
+    a cópia do programa das tarefas, os scripts temporários do PowerShell e o backup do desfazer. Em ~/.katharos, qualquer programa rodando
+    como o seu usuário (sem administrador) poderia trocar esses arquivos e ganhar administrador. Só no Windows e como administrador;
+    devolve None se não der para proteger."""
+    if not WINDOWS or not eh_admin():
+        return None
+    base = pasta_da_tarefa()
+    chave = str(base)
+    if chave not in _PROTEGIDA:
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+            _PROTEGIDA[chave] = protege_pasta_da_tarefa(base)
+        except OSError:
+            _PROTEGIDA[chave] = False
+        if not _PROTEGIDA[chave]:
+            LOG.escreve(f'não consegui proteger {base}: nada elevado vai usar essa pasta')
+    if not _PROTEGIDA[chave]:
+        return None
+    d = base.joinpath(*partes)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+_BACKUP_MIGRADO = []
+
+
+def dir_backup():
+    """Onde fica o backup do desfazer. No Windows, na pasta protegida (o desfazer roda como administrador e executa o que está guardado ali);
+    na primeira vez como administrador, o que estava em ~/.katharos/backup (versões até a 3.0.3) vai para lá."""
+    if not WINDOWS:
+        return CASA / 'backup'
+    novo = pasta_da_tarefa() / 'backup'
+    if not _BACKUP_MIGRADO and pasta_protegida('backup'):
+        _BACKUP_MIGRADO.append(True)
+        velho = CASA / 'backup'
+        try:
+            for sub in (list(velho.iterdir()) if velho.is_dir() else []):
+                if sub.is_dir() and not sub.is_symlink() and not (novo / sub.name).exists():
+                    shutil.move(str(sub), str(novo / sub.name))
+            if velho.is_dir() and not any(velho.iterdir()):
+                velho.rmdir()
+        except OSError as e:
+            LOG.escreve(f'backup antigo não foi movido: {e!r}')
+        protege_pasta_da_tarefa(pasta_da_tarefa())   # o que veio de ~/.katharos passa a herdar a proteção
+    return novo
 
 
 def python_em_pasta_do_usuario():
@@ -9001,7 +9176,7 @@ def ferramenta_agendar(ctx, args):
 
 def desfaz_pacote(ctx, nome, teste=False):
     t = ctx.t
-    bk = CASA / 'backup' / nome
+    bk = dir_backup() / nome
     if not (bk / 'mudancas.jsonl').exists():
         t.nota(f'  {nome}: nada guardado para desfazer.')
         return 0
@@ -9024,7 +9199,7 @@ def ferramenta_desfazer(ctx, args):
     if not precisa_admin(ctx, args):
         return 1
     e = estado().get('pacotes', {})
-    com_backup = [n for n in PACOTES if (CASA / 'backup' / n / 'mudancas.jsonl').exists()]
+    com_backup = [n for n in PACOTES if (dir_backup() / n / 'mudancas.jsonl').exists()]
     if not com_backup:
         t.ok('Nenhuma mudança guardada para desfazer.')
         return 0
@@ -9303,7 +9478,7 @@ def ferramenta_socorro(ctx, args):
                 'o último passo é o ponto de restauração do Windows, que este comando explica no fim.', 2, 'sub')
     if not precisa_admin(ctx, args):
         return 1
-    com_backup = [n for n in PACOTES if (CASA / 'backup' / n / 'mudancas.jsonl').exists()]
+    com_backup = [n for n in PACOTES if (dir_backup() / n / 'mudancas.jsonl').exists()]
     if not com_backup:
         t.ok('O Katharos não tem nenhuma mudança guardada neste PC. Se o problema é recente, use o ponto de restauração (passos abaixo).')
     else:
@@ -12062,16 +12237,16 @@ def arquivos_do_programa(base=None):
     return achados
 
 
-def baixa_somas_oficiais(versao=None, minutos=25):
+def baixa_somas_oficiais(versao=None, segundos=25):
     """A lista oficial da release, baixada pelo PowerShell (HTTPS, endereço fixo). Devolve (texto, erro)."""
     if not WINDOWS:
         return '', 'a conferência online usa o PowerShell do Windows'
     url = URL_SOMAS.format(versao=versao or VERSAO)
     ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
     cmd = ("[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; "
-           f"(Invoke-WebRequest -UseBasicParsing -TimeoutSec {minutos} -Uri '{url}').Content")
+           f"(Invoke-WebRequest -UseBasicParsing -TimeoutSec {int(segundos)} -Uri '{url}').Content")
     try:
-        r = subprocess.run([ps, '-NoProfile', '-NonInteractive', '-Command', cmd], capture_output=True, timeout=minutos + 10,
+        r = subprocess.run([ps, '-NoProfile', '-NonInteractive', '-Command', cmd], capture_output=True, timeout=segundos + 15,
                            creationflags=0x08000000)
     except (OSError, subprocess.SubprocessError) as e:
         return '', f'não consegui abrir o PowerShell ({e.__class__.__name__})'
@@ -12081,14 +12256,14 @@ def baixa_somas_oficiais(versao=None, minutos=25):
     return txt, ''
 
 
-def verifica_autenticidade(online=True, minutos=8):
+def verifica_autenticidade(online=True, segundos=20):
     """Confere os arquivos do programa. Devolve {'nivel', 'arquivos': [(arquivo, hash, local, oficial)], 'erro'}.
     nivel: 'oficial' (bate com a lista da release no GitHub), 'local' (só com a que veio junto), 'diferente' (alguma lista diz que
     é outro arquivo) ou 'sem' (nada para comparar). Verde só em 'oficial' e 'local'; nunca sem ter comparado com algo."""
     arqs = arquivos_do_programa()
     local = acha_somas()
     somas_local = le_somas(local.read_text(encoding='utf-8', errors='replace')) if local else []
-    oficial, erro = baixa_somas_oficiais(minutos=minutos) if online else ('', 'pulada (--offline)')
+    oficial, erro = baixa_somas_oficiais(segundos=segundos) if online else ('', 'pulada (--offline)')
     somas_of = le_somas(oficial)
     linhas, ruim = [], False
     for a in arqs:
@@ -13030,6 +13205,7 @@ def monta_parser():
     tb = sub.add_parser('turbo', parents=[depois], help='otimiza tudo em sequência, retomando depois de reiniciar')
     tb.add_argument('--continuar', action='store_true', help='continua um turbo pela metade (a tarefa agendada usa)')
     tb.add_argument('--plano', metavar='ARQUIVO', help='usa as escolhas salvas de outro turbo (para repetir em outros PCs, sem perguntas)')
+    tb.add_argument('--foco', choices=['geral', 'jogos', 'jogos-max'], help=argparse.SUPPRESS)   # da 2.5.0: os jogos vêm no modo
     for cmd, desc, f in (x for _, _, itens in GRUPOS for x in itens):
         if f == 'pacote':
             sub.add_parser(cmd, parents=[depois], help=desc)
@@ -13081,7 +13257,7 @@ def monta_parser():
 
 def _defaults(args):
     for k, v in (('pastas', []), ('mb', None), ('agora', False), ('remover', False), ('pacotes', []), ('chave', None),
-                 ('valor', None), ('continuar', False), ('plano', None), ('agendada', False), ('queixas', None), ('salvar', None),
+                 ('valor', None), ('continuar', False), ('plano', None), ('foco', None), ('agendada', False), ('queixas', None), ('salvar', None),
                  ('copiar', False), ('codigo', False), ('filtro', None), ('dias', None), ('atalhos', False), ('desfazer', False),
                  ('zerar', False), ('acao', None), ('alvo', None)):
         if not hasattr(args, k):

@@ -107,12 +107,14 @@ if (EhAdmin) {
 # ── abre o melhor terminal como administrador ──
 $shell = (Get-Command pwsh.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
 if (-not $shell) { $shell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe' }
-$q = { param($s) '"' + ($s -replace '"', '\"') + '"' }
+# aspas do jeito que o Windows separa os argumentos: barras antes de uma aspa e no fim dobram (senao "C:\pasta\" engole a aspa de fechar)
+$q = { param($s) if ("$s" -eq '') { return '""' }; '"' + (("$s" -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"' }
 $argsPs = @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (& $q $PSCommandPath), '-Dentro', '-Py', (& $q $python)) + @($Resto | ForEach-Object { & $q $_ })
 $wt = Get-Command wt.exe -ErrorAction SilentlyContinue | Select-Object -First 1
 try {
     if ($wt) {
-        Start-Process -Verb RunAs -FilePath $wt.Source -ArgumentList (@('-w', 'new', '--title', 'Katharos', (& $q $shell)) + $argsPs) -ErrorAction Stop
+        # o Windows Terminal separa comandos em ";": dentro dos argumentos, ele vira "\;"
+        Start-Process -Verb RunAs -FilePath $wt.Source -ArgumentList (@('-w', 'new', '--title', 'Katharos', (& $q $shell)) + @($argsPs | ForEach-Object { $_ -replace ';', '\;' })) -ErrorAction Stop
     } else {
         Start-Process -Verb RunAs -FilePath $shell -ArgumentList $argsPs -ErrorAction Stop
     }

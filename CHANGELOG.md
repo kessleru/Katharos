@@ -18,6 +18,21 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.0.4 · 10 de novembro de 2026
+
+Nada que roda como administrador depende de arquivo que um programa comum consegue trocar.
+
+- **Backup do `desfazer`, scripts temporários e a tarefa que continua o `turbo` saem de `~/.katharos`**: vão para `%ProgramData%\Katharos`, onde só administradores gravam, como já era com a tarefa de segundo plano. Antes, um programa rodando sem administrador podia trocar o script que a tarefa do turbo roda depois do reinício, o PowerShell que o Katharos acabou de gravar ou o registro do `desfazer`, e ganhar administrador. O backup que já existia vai para lá sozinho na primeira vez como administrador, e a pasta passa a ter Administradores como dono.
+- **Nome com aspas tipográficas (’) não quebra mais os scripts**: o PowerShell trata ‘ e ’ como aspas; agora elas são dobradas como a ' comum.
+- **O que só serve para jogo fica fora em PC sem jogos**: placa de vídeo sempre no desempenho (NVIDIA e AMD), agendamento de GPU, temporizador, rede, agendador multimídia, teclado mais rápido e mouse sem aceleração não entram mais no extremo de quem não tem jogo instalado. A prioridade do primeiro plano continua opcional.
+- **O pacote `jogos` entra no turbo do modo seguro também em PC com jogos** (ficava de fora justamente de quem joga).
+- **Turbo começado na 2.5.0 termina com o que foi aprovado lá**, também pelo `--plano`. O `--foco` antigo avisa sempre, vira `--modo extremo` no "jogos no máximo" e recusa valor errado.
+- **Caminho que termina em `\`** (como `D:\Jogos\`) chega inteiro quando o Katharos abre como administrador, e no Windows Terminal um `;` dentro de um argumento não vira outro comando.
+- **Duas janelas abertas juntas não passam as duas pela trava**, e a trava de um Katharos que fechou à força não bloqueia mais quando o Windows dá o mesmo número de processo a outro programa.
+- **`organizar --desfazer`** pula a organização de uma área de trabalho que não existe mais e desfaz a anterior.
+- **A conferência de autenticidade espera 20 segundos pela lista oficial** (eram 8, que numa conexão lenta davam "não deu para conferir").
+- Das cópias de JSON ilegível, ficam as 5 mais recentes de verdade (antes, as últimas em ordem alfabética).
+
 ## 3.0.3 · 10 de novembro de 2026
 
 A lista do que já está feito é conferida de novo toda vez que abre.

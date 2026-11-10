@@ -2271,9 +2271,58 @@ class TestFocoJogos(unittest.TestCase):
         ids = {m: {i.id for i in k._itens_da_etapa(ctx, {'modo': m, 'itens': {}}, 'jogos')} for m in ('seguro', 'equilibrado', 'extremo')}
         self.assertIn('modo-jogo', ids['seguro'])
         self.assertTrue(ids['seguro'] < ids['equilibrado'] < ids['extremo'])
-        self.assertIn('timer', ids['extremo'] | {'timer'})
+        self.assertIn('timer', ids['extremo'])
+        self.assertNotIn('primeiro-plano', ids['extremo'], 'quase sem ganho: continua opcional')
         self.assertNotIn('jogar', k.COMANDOS, 'só três escolhas: os modos')
-        self.assertEqual(k.NIVEL_PACOTE['jogos'], 1, 'o turbo inclui jogos em todo modo')
+
+    def test_turbo_inclui_jogos_no_seguro_mesmo_com_jogos_instalados(self):
+        for perfil in (k.PC_MODELO, dict(k.PC_MODELO, jogos=[])):
+            n, _ = k.nivel_etapa_turbo('jogos', perfil)
+            self.assertEqual(n, 1, 'o pacote jogos entra no turbo em todo modo')
+        self.assertEqual(k.nivel_etapa_turbo('jogos', k.PC_MODELO)[1], 'com os itens de jogo do modo')
+        self.assertIn('sem jogos', k.nivel_etapa_turbo('jogos', dict(k.PC_MODELO, jogos=[]))[1])
+
+    def test_extremo_sem_jogos_nao_mexe_em_gpu_rede_nem_temporizador(self):
+        ctx = mock.Mock(perfil=dict(k.PC_MODELO, jogos=[], pc={'notebook': False}, tem={'nvidia': True, 'amd': True}), ja={})
+        ids = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'extremo', 'itens': {}}, 'jogos')}
+        for so_de_jogo in ('gpu-nvidia', 'hags', 'timer', 'rede-jogos', 'mmcss', 'primeiro-plano', 'gpu-amd', 'teclado', 'mouse'):
+            self.assertNotIn(so_de_jogo, ids)
+        self.assertIn('modo-jogo', ids)
+
+    def test_plano_pela_metade_da_2_5_0_continua_com_o_foco_aprovado(self):
+        ctx = mock.Mock(perfil=k.PC_MODELO, ja={})
+        ids = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'seguro', 'foco': 'jogos-max', 'itens': {}}, 'jogos')}
+        self.assertTrue({'timer', 'rede-jogos', 'mmcss', 'primeiro-plano', 'hags'} <= ids)
+        energia_antiga = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'seguro', 'foco': 'jogos-max', 'itens': {}}, 'energia')}
+        energia_extremo = {i.id for i in k._itens_da_etapa(ctx, {'modo': 'extremo', 'itens': {}}, 'energia')}
+        self.assertEqual(energia_antiga, energia_extremo)
+
+    def test_foco_antigo_na_linha_de_comando_nao_quebra(self):
+        a = k.monta_parser().parse_args(['turbo', '--foco', 'jogos-max', '--sim'])
+        self.assertEqual(a.foco, 'jogos-max')
+        with self.assertRaises(SystemExit), mock.patch('sys.stderr'):
+            k.monta_parser().parse_args(['turbo', '--foco', 'jogs-max'])
+
+    def test_foco_jogos_max_vira_extremo_sem_passar_por_cima_do_modo(self):
+        t = mock.Mock()
+        a = k.monta_parser().parse_args(['turbo', '--foco', 'jogos-max'])
+        self.assertEqual(k.foco_antigo(t, a), 'jogos-max')
+        self.assertEqual(a.modo, 'extremo')
+        t.nota.assert_called_once()
+        b = k.monta_parser().parse_args(['turbo', '--foco', 'jogos-max', '--modo', 'seguro'])
+        k.foco_antigo(t, b)
+        self.assertEqual(b.modo, 'seguro', 'o --modo dito junto vale')
+        self.assertIsNone(k.foco_antigo(t, k.monta_parser().parse_args(['turbo', '--foco', 'geral'])))
+        self.assertIsNone(k.foco_antigo(t, k.monta_parser().parse_args(['turbo'])))
+
+    def test_plano_da_2_5_0_com_foco_guarda_o_foco(self):
+        import json, tempfile
+        with tempfile.TemporaryDirectory() as d:
+            arq = Path(d) / 'plano.json'
+            arq.write_text(json.dumps({'modo': 'seguro', 'foco': 'jogos-max', 'etapas': ['jogos'], 'itens': {}}), encoding='utf-8')
+            self.assertEqual(k.le_plano(arq)['foco'], 'jogos-max')
+            arq.write_text(json.dumps({'modo': 'seguro', 'foco': 'qualquer', 'etapas': ['jogos']}), encoding='utf-8')
+            self.assertNotIn('foco', k.le_plano(arq))
 
 
 class TestSemBan(unittest.TestCase):
@@ -2282,3 +2331,159 @@ class TestSemBan(unittest.TestCase):
         for proibido in ('Image File Execution Options', 'CpuPriorityClass', 'ReadProcessMemory', 'WriteProcessMemory', 'CreateRemoteThread', 'VirtualAllocEx'):
             self.assertNotIn(proibido, fonte, proibido)
         self.assertIn('$comAC', k.DIAG_PS, 'com anti-cheat aberto o raio-x não consulta os processos')
+
+
+def _modulo_novo():
+    """Outra cópia do programa, com o roda_ps de verdade (o desta suíte é trocado por um que não roda nada)."""
+    sp = importlib.util.spec_from_file_location('katharos_real', RAIZ / 'programa' / 'katharos.py')
+    m = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(m)
+    return m
+
+
+class TestElevadoSoEmPastaProtegida(unittest.TestCase):
+    """O que roda como administrador não pode ler nem executar nada que um programa sem administrador consiga trocar."""
+
+    def setUp(self):
+        import tempfile
+        self.d = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_psq_dobra_as_aspas_tipograficas(self):
+        self.assertEqual(k.psq("it's"), "'it''s'")
+        for q in '‘’‚‛':
+            self.assertEqual(k.psq(f'Tom Clancy{q}s'), f"'Tom Clancy{q}{q}s'")
+
+    def test_script_elevado_vai_para_a_pasta_protegida(self):
+        m = _modulo_novo()
+        prot = self.d / 'PD' / 'Katharos'
+        def protegida(*partes):
+            d = prot.joinpath(*partes)
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+        with mock.patch.object(m, 'WINDOWS', True), mock.patch.object(m, 'eh_admin', return_value=True), \
+                mock.patch.object(m, 'CASA', self.d / 'casa'), mock.patch.object(m, 'pasta_protegida', side_effect=protegida), \
+                mock.patch.object(m, 'dir_backup', return_value=prot / 'backup'), \
+                mock.patch.object(m, '_Filho', side_effect=OSError('sem powershell')):
+            s = m.roda_ps(_Mudo(), 'Ok "x"', 'teste', pacote='limpar')
+        self.assertEqual(s.codigo, 127)
+        scripts = list((prot / 'tmp').glob('*.ps1'))
+        self.assertEqual(len(scripts), 1)
+        self.assertFalse((self.d / 'casa' / 'tmp').exists(), 'nada elevado em ~/.katharos/tmp')
+        self.assertIn(str(prot / 'backup' / 'limpar'), scripts[0].read_text(encoding='utf-8-sig'))
+
+    def test_sem_proteger_a_pasta_nada_elevado_roda(self):
+        m = _modulo_novo()
+        with mock.patch.object(m, 'WINDOWS', True), mock.patch.object(m, 'eh_admin', return_value=True), \
+                mock.patch.object(m, 'CASA', self.d), mock.patch.object(m, 'pasta_protegida', return_value=None), \
+                mock.patch.object(m, '_Filho', side_effect=AssertionError('não podia abrir o PowerShell')):
+            s = m.roda_ps(_Mudo(), 'Ok "x"', 'teste')
+        self.assertFalse(s.ok)
+        self.assertTrue(s.erros)
+
+    def test_tarefa_que_continua_o_turbo_roda_a_copia_protegida(self):
+        corpos = []
+        prot = self.d / 'PD' / 'turbo'
+        prot.mkdir(parents=True)
+        with mock.patch.object(k, 'CASA', self.d / 'casa'), mock.patch.object(k, 'pasta_protegida', return_value=prot), \
+                mock.patch.object(k, 'python_em_pasta_do_usuario', return_value=False), \
+                mock.patch.object(k, 'roda_ps', lambda t, corpo, *a, **kw: (corpos.append(corpo), k.Saida())[1]):
+            k.tarefa_continuar(Ctx(), criar=True)
+        self.assertTrue((prot / 'katharos.py').exists())
+        self.assertIn(str(prot / 'katharos.py').replace('"', '\\"'), corpos[0])
+        self.assertNotIn(str(self.d / 'casa' / 'katharos.py'), corpos[0])
+        self.assertIn('-RunLevel Highest', corpos[0])
+
+    def test_sem_pasta_protegida_a_tarefa_do_turbo_nao_e_criada(self):
+        corpos = []
+        with mock.patch.object(k, 'pasta_protegida', return_value=None), \
+                mock.patch.object(k, 'roda_ps', lambda t, corpo, *a, **kw: corpos.append(corpo)):
+            self.assertFalse(k.tarefa_continuar(Ctx(), criar=True))
+        self.assertEqual(corpos, [])
+
+    def test_backup_antigo_vai_para_a_pasta_protegida(self):
+        m = _modulo_novo()
+        casa, pd = self.d / 'casa', self.d / 'PD'
+        (casa / 'backup' / 'limpar').mkdir(parents=True)
+        (casa / 'backup' / 'limpar' / 'mudancas.jsonl').write_text('{}\n', encoding='utf-8')
+        with mock.patch.object(m, 'WINDOWS', True), mock.patch.object(m, 'eh_admin', return_value=True), \
+                mock.patch.object(m, 'CASA', casa), mock.patch.object(m, 'pasta_da_tarefa', return_value=pd), \
+                mock.patch.object(m, 'protege_pasta_da_tarefa', return_value=True):
+            novo = m.dir_backup()
+        self.assertEqual(novo, pd / 'backup')
+        self.assertTrue((pd / 'backup' / 'limpar' / 'mudancas.jsonl').exists())
+        self.assertFalse((casa / 'backup').exists())
+
+    def test_icacls_troca_o_dono_antes_de_proteger(self):
+        with mock.patch.object(k.subprocess, 'run', return_value=type('R', (), {'returncode': 0})()) as r:
+            self.assertTrue(k.protege_pasta_da_tarefa(self.d))
+        primeiro = r.call_args_list[0][0][0]
+        self.assertIn('/setowner', primeiro)
+        self.assertIn('*S-1-5-32-544', primeiro)
+
+    def test_lancador_dobra_a_barra_antes_da_aspa(self):
+        ps1 = (RAIZ / 'programa' / 'katharos.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn("""-replace '(\\\\*)"', '$1$1\\"'""", ps1)
+        self.assertIn("""-replace '(\\\\+)$', '$1$1'""", ps1)
+        self.assertIn("""$_ -replace ';', '\\;'""", ps1, 'o Windows Terminal separa comandos em ";"')
+
+
+class TestCorrecoesMiudas(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.d = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_copias_corrompidas_ficam_as_mais_recentes(self):
+        import os
+        for i in range(4):
+            a = self.d / f'config.json.corrompido-2026111{i}'
+            a.write_text('x')
+            os.utime(a, (2_000_000_000 + i, 2_000_000_000 + i))
+        for i in range(5):
+            a = self.d / f'turbo.json.corrompido-2020010{i}'
+            a.write_text('x')
+            os.utime(a, (1_000_000_000 + i, 1_000_000_000 + i))
+        k.limpa_residuos(self.d, agora=2_000_000_100)
+        ficaram = {a.name for a in self.d.glob('*.corrompido-*')}
+        self.assertEqual(len(ficaram), 5)
+        self.assertTrue(all(f'config.json.corrompido-2026111{i}' in ficaram for i in range(4)), 'as de hoje ficam')
+
+    def test_trava_de_pid_que_virou_outro_programa_e_velha(self):
+        import os
+        (self.d / 'katharos.lock').write_text(f'{os.getppid()} x\n')
+        with mock.patch.object(k, '_eh_python', return_value=False):
+            a = k.Trava(self.d)
+            self.assertTrue(a.pega())
+        a.solta()
+
+    def test_tempo_da_lista_oficial_em_segundos(self):
+        chamadas = []
+        def run(cmd, **kw):
+            chamadas.append((cmd, kw))
+            return type('R', (), {'returncode': 1, 'stdout': b''})()
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k.subprocess, 'run', side_effect=run):
+            k.baixa_somas_oficiais(segundos=20)
+        cmd, kw = chamadas[0]
+        self.assertIn('-TimeoutSec 20 ', cmd[-1])
+        self.assertEqual(kw['timeout'], 35)
+
+    def test_desfazer_organizar_pula_a_area_de_trabalho_que_sumiu(self):
+        import json
+        casa, desk = self.d / 'casa', self.d / 'Desktop'
+        (desk / 'Organizado' / 'Imagens').mkdir(parents=True)
+        (desk / 'Organizado' / 'Imagens' / 'a.png').write_text('x')
+        (casa / 'organizar').mkdir(parents=True)
+        (casa / 'organizar' / '2026-01-01-000000-00001.json').write_text(json.dumps(
+            {'desktop': str(desk), 'movidos': [{'de': str(desk / 'a.png'), 'para': str(desk / 'Organizado' / 'Imagens' / 'a.png')}]}), encoding='utf-8')
+        (casa / 'organizar' / '2026-02-01-000000-00001.json').write_text(json.dumps(
+            {'desktop': str(self.d / 'OneDrive' / 'Desktop'), 'movidos': []}), encoding='utf-8')
+        with mock.patch.object(k, 'CASA', casa):
+            self.assertEqual(k.desfaz_organizar(Ctx()), 0)
+        self.assertTrue((desk / 'a.png').exists())

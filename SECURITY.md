@@ -32,7 +32,7 @@ Desligar Defender, firewall, UAC, SmartScreen, VBS, Windows Update, BitLocker ou
 
 ## Dados
 
-Nada é enviado pela rede pelo Katharos. Tudo fica em `%USERPROFILE%\.katharos`. O relatório único tem o nome do PC, os programas instalados e caminhos de pastas: confira antes de compartilhar. Textos que vêm do PC entram no relatório limpos, e o arquivo declara que é dado e não instrução.
+Nada é enviado pela rede pelo Katharos. Tudo fica em `%USERPROFILE%\.katharos`, menos o que roda como administrador (backup do `desfazer`, scripts temporários e a cópia das tarefas agendadas), que fica em `%ProgramData%\Katharos`, onde só administradores gravam: um programa sem administrador não consegue trocar esses arquivos para ganhar administrador. O relatório único tem o nome do PC, os programas instalados e caminhos de pastas: confira antes de compartilhar. Textos que vêm do PC entram no relatório limpos, e o arquivo declara que é dado e não instrução.
 
 ## Encontrou um problema?
 
