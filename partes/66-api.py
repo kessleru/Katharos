@@ -204,11 +204,38 @@ def api_raiox(ctx, p, ev):
     dados = raiox_dados(perf, m, s.dados, achados, queixas)
     rel_secao('raiox', dados)
     rel_pc(perf)
+    dados['quando'] = agora_iso()
     dados['pesa'] = [{'titulo': ti, 'pontos': pt} for ti, pt in pesa_na_nota(achados)]
     dados['pc'] = {'modelo': f'{pf(perf, "pc.fabricante", "")} {pf(perf, "pc.modelo", "")}'.strip(), 'notebook': bool(pf(perf, 'pc.notebook')),
                    'windows': nome_windows(compat_windows(perf)), 'cpu': texto_cpu(perf), 'ram': texto_ram(perf),
                    'disco': texto_disco(perf), 'video': texto_video(perf)}
     return dados
+
+
+def _pc_curto(pc):
+    """O resumo do PC guardado no relatório, no mesmo formato do raio-x."""
+    if not pc:
+        return {}
+    gb = lambda v: f'{br(v, 0)} GB' if isinstance(v, (int, float)) and v else ''
+    return {'modelo': f'{pc.get("fabricante", "")} {pc.get("modelo", "")}'.strip(), 'notebook': bool(pc.get('notebook')),
+            'windows': f'{pc.get("windows", "")} {pc.get("versao", "")}'.replace('Microsoft ', '').strip(),
+            'cpu': str(pc.get('cpu') or ''), 'ram': gb(pc.get('ram_gb')),
+            'disco': ' · '.join(x for x in (str(pc.get('disco') or ''), (gb(pc.get('disco_livre_gb')) + ' livres') if pc.get('disco_livre_gb') else '') if x),
+            'video': ', '.join(str(g.get('nome') if isinstance(g, dict) else g) for g in (pc.get('gpus') or []))}
+
+
+@metodo_api('raiox_guardado')
+def api_raiox_guardado(ctx, p, ev):
+    """O último raio-x, completo (todos os achados), sem rodar nada. null se ainda não teve."""
+    quando, rx, pc = _raiox_guardado()
+    if not quando:
+        return None
+    d = dict(rx)
+    d['quando'] = quando
+    d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in (rx.get('achados') or [])
+                        if PESO_NOTA.get(a.get('impacto'), 0)), key=lambda x: -x['pontos'])[:3]
+    d['pc'] = _pc_curto(pc)
+    return d
 
 
 def _item_api(it, pac):
@@ -518,3 +545,23 @@ def roda_api_elevada(nome, sid, senha):
         canal.write(json.dumps({'id': None, 'ok': False, 'erro': {'codigo': 'senha', 'texto': 'senha da sessão errada'}}) + '\n')
         return 3
     return roda_api([], entrada=linhas, saida=canal)
+
+
+@metodo_api('segundo_plano')
+def api_segundo_plano(ctx, p, ev):
+    """Liga ou desliga o acompanhamento (o ícone perto do relógio). Roda como o usuário. Só diz "rodando" se o processo está mesmo de pé."""
+    if not WINDOWS:
+        raise ErroApi('so_windows', 'o acompanhamento só roda no Windows')
+    if not exe_disponivel():
+        raise ErroApi('sem_exe', 'O Katharos.exe não está junto do programa: reinstale o Katharos.')
+    if p.get('ligar') is True:
+        ok = instala_segundo_plano(ctx, mostrar=False)
+        for _ in range(20):
+            if sp_rodando():
+                break
+            time.sleep(0.25)
+        if not (ok and sp_rodando()):
+            raise ErroApi('nao_ligou', 'O acompanhamento não abriu. Veja ~/.katharos/segundo-plano.log.')
+    elif p.get('ligar') is False:
+        remove_segundo_plano(ctx)
+    return _segundo_plano()

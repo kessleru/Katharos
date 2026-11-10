@@ -7,46 +7,55 @@
         Background="{x:Static k:Tema.Fundo}"
         Icon="avares://Katharos/Assets/katharos.ico"
         WindowStartupLocation="CenterScreen">
-  <DockPanel>
-    <!-- navegação: sempre visível, com o nome de cada tela por extenso -->
-    <Border DockPanel.Dock="Left" Width="232" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,0,1,0">
-      <DockPanel>
-        <Border DockPanel.Dock="Top" Height="72" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,0,0,1" Padding="22,0">
-          <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-            <Image Source="avares://Katharos/Assets/marca.png" Width="28" Height="28" />
-            <TextBlock Text="katharos" FontFamily="{x:Static k:Tema.Mono}" FontWeight="Bold" FontSize="17" Foreground="{x:Static k:Tema.Osso}" VerticalAlignment="Center" />
-            <Border BorderBrush="{x:Static k:Tema.LinhaForte}" BorderThickness="1" CornerRadius="2" Padding="5,1" VerticalAlignment="Center">
-              <TextBlock Text="4.0" FontFamily="{x:Static k:Tema.Mono}" FontSize="11" Foreground="{x:Static k:Tema.Apagado}" />
-            </Border>
-          </StackPanel>
-        </Border>
-
-        <!-- o segundo plano: o estado de verdade, sempre à vista -->
-        <Border DockPanel.Dock="Bottom" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,1,0,0" Padding="22,16">
-          <StackPanel Spacing="4">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Ellipse Width="8" Height="8" Fill="{x:Static k:Tema.Verde}" VerticalAlignment="Center" />
-              <TextBlock Text="Acompanhando o PC" Foreground="{x:Static k:Tema.Osso}" FontSize="13" />
+  <Grid>
+    <DockPanel>
+      <!-- navegação: sempre visível, com o nome de cada tela por extenso -->
+      <Border DockPanel.Dock="Left" Width="232" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Height="72" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,0,0,1" Padding="22,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+              <Image Source="avares://Katharos/Assets/marca.png" Width="28" Height="28" />
+              <TextBlock Text="katharos" FontFamily="{x:Static k:Tema.Mono}" FontWeight="Bold" FontSize="17" Foreground="{x:Static k:Tema.Osso}" VerticalAlignment="Center" />
+              <Border BorderBrush="{x:Static k:Tema.LinhaForte}" BorderThickness="1" CornerRadius="2" Padding="5,1" VerticalAlignment="Center">
+                <TextBlock x:Name="Versao" Text="4.0" FontFamily="{x:Static k:Tema.Mono}" FontSize="11" Foreground="{x:Static k:Tema.Apagado}" />
+              </Border>
             </StackPanel>
-            <TextBlock Text="leve: 0,1 % da CPU" Classes="rotulo" FontSize="12" Margin="16,0,0,0" />
+          </Border>
+
+          <!-- o segundo plano: o estado de verdade (lido do agora.json), sempre à vista -->
+          <Border DockPanel.Dock="Bottom" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,1,0,0" Padding="22,16">
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Ellipse x:Name="Luz" Width="8" Height="8" Fill="{x:Static k:Tema.Apagado}" VerticalAlignment="Center" />
+                <TextBlock x:Name="Estado" Text="Acompanhamento desligado" Foreground="{x:Static k:Tema.Osso}" FontSize="13" />
+              </StackPanel>
+              <TextBlock x:Name="EstadoMais" Text="" Classes="rotulo" FontSize="12" Margin="16,0,0,0" />
+            </StackPanel>
+          </Border>
+          <Button x:Name="BtConfig" DockPanel.Dock="Bottom" Classes="nav" Content="Configurações" Tag="config" Margin="0,0,0,8" />
+
+          <StackPanel x:Name="Nav" Margin="0,14,0,0">
+            <Button Classes="nav" Content="Início" Tag="inicio" />
+            <Button Classes="nav" Content="Raio-x" Tag="raiox" />
+            <Button Classes="nav" Content="Otimizar" Tag="otimizar" />
+            <Button Classes="nav" Content="Ao vivo" Tag="aovivo" />
+            <Button Classes="nav" Content="Jogos" Tag="jogos" />
+            <Button Classes="nav" Content="Sugestões" Tag="sugestoes" />
+            <Button Classes="nav" Content="Desfazer" Tag="desfazer" />
           </StackPanel>
-        </Border>
-        <Button x:Name="BtConfig" DockPanel.Dock="Bottom" Classes="nav" Content="Configurações" Tag="config" Margin="0,0,0,8" />
+        </DockPanel>
+      </Border>
 
-        <StackPanel x:Name="Nav" Margin="0,14,0,0">
-          <Button Classes="nav" Content="Início" Tag="inicio" />
-          <Button Classes="nav" Content="Raio-x" Tag="raiox" />
-          <Button Classes="nav" Content="Otimizar" Tag="otimizar" />
-          <Button Classes="nav" Content="Ao vivo" Tag="aovivo" />
-          <Button Classes="nav" Content="Jogos" Tag="jogos" />
-          <Button Classes="nav" Content="Sugestões" Tag="sugestoes" />
-          <Button Classes="nav" Content="Histórico" Tag="historico" />
-          <Button Classes="nav" Content="Desfazer" Tag="desfazer" />
-        </StackPanel>
-      </DockPanel>
+      <!-- cada tela cuida da própria rolagem (a de Otimizar tem a barra de ação fixa embaixo) -->
+      <ContentControl x:Name="Tela" />
+    </DockPanel>
+
+    <!-- painel por cima de tudo: confirmação, progresso de uma mudança e o resultado. Enquanto aberto, o resto não recebe clique. -->
+    <Border x:Name="Veu" IsVisible="False" Background="#d80c0c0d">
+      <Border x:Name="CaixaBorda" Background="{x:Static k:Tema.Painel}" BorderBrush="{x:Static k:Tema.LinhaForte}" BorderThickness="1"
+              Width="640" MaxHeight="680" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="2">
+        <ContentControl x:Name="CaixaConteudo" />
+      </Border>
     </Border>
-
-    <!-- cada tela cuida da própria rolagem (a de Otimizar tem a barra de ação fixa embaixo) -->
-    <ContentControl x:Name="Tela" />
-  </DockPanel>
+  </Grid>
 </Window>

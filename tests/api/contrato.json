@@ -36,7 +36,13 @@
   "raiox": {
    "muda": false
   },
+  "raiox_guardado": {
+   "muda": false
+  },
   "responder": {
+   "muda": false
+  },
+  "segundo_plano": {
    "muda": false
   },
   "sessoes": {

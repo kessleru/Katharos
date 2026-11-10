@@ -114,8 +114,30 @@ jobs:
         with: { name: executavel, path: Katharos.exe }
       - uses: actions/upload-artifact@v4
         with: { name: conferencia-executavel, path: '${{ runner.temp }}/conferencia' }
+  interface:
+    # O Katharos com janelas (app/, Avalonia + .NET 10): compila no Windows, desenha cada tela (fotos) e conversa com o motor de verdade.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+      - name: compila
+        shell: pwsh
+        run: dotnet build app/Katharos.App/Katharos.App.csproj -c Release
+      - name: fotos de cada tela e conversa com o motor
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP 'fotos'
+          dotnet run --project app/Katharos.Fotos -c Release -- $d
+          if ($LASTEXITCODE) { exit 1 }
+          $env:KATHAROS_MOTOR = (Resolve-Path programa\katharos.py).Path
+          dotnet run --project app/Katharos.Fotos -c Release -- --motor
+          if ($LASTEXITCODE) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with: { name: fotos-da-interface, path: '${{ runner.temp }}/fotos' }
   publicar:
-    needs: executavel
+    needs: [executavel, interface]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
