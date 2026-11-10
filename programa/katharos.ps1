@@ -72,6 +72,10 @@ function Para([string]$msg) {
 if ($Dentro) {
     $Host.UI.RawUI.WindowTitle = 'Katharos'
     try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
+    # a janela com o fundo da landing: preto (#0c0c0d) e texto cinza-osso; o Windows Terminal aceita a cor exata, o console antigo usa o preto dele
+    try { $Host.UI.RawUI.BackgroundColor = 'Black'; $Host.UI.RawUI.ForegroundColor = 'Gray' } catch {}
+    try { $e = [char]27; [Console]::Write("$e]11;#0c0c0d$([char]7)$e]10;#cdc8be$([char]7)") } catch {}
+    Clear-Host
     Set-Location -LiteralPath $aqui
     & $Py $programa @Resto
     Write-Host ''

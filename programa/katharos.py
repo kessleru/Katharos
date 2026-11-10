@@ -44,10 +44,26 @@ from pathlib import Path
 
 
 
-# ═══════════════════════════════ paleta: Kessleru (Catppuccin) ═══════════════════════════════
+# ═══════════════════════════════ paleta: Katharos (padrão) e Kessleru (Catppuccin) ═══════════════════════════════
 # Valores de 07 • Design System/Kessleru/codigo/tokens.json. Cada papel aponta para um token.
 
 _CTP = {
+    # Katharos: a mesma paleta da landing (fundo quase preto, texto cor de osso, um âmbar só). É o tema padrão.
+    'katharos': {
+        'text': '#cdc8be', 'subtext1': '#b5b0a6', 'subtext0': '#a9a49b', 'overlay2': '#8e8a82',
+        'overlay1': '#86837c', 'overlay0': '#5f5d58', 'surface2': '#38383e', 'surface1': '#2a2a2f',
+        'surface0': '#18181b', 'base': '#0c0c0d', 'mantle': '#09090a', 'crust': '#060607',
+        'rosewater': '#efe9de', 'flamingo': '#e8c9b4', 'pink': '#d9a3b0', 'mauve': '#b9a3c9', 'red': '#e5737a',
+        'maroon': '#d9646c', 'peach': '#e2a85c', 'yellow': '#ecb876', 'green': '#9ccf8c', 'teal': '#8fc4b4',
+        'sky': '#9cc4cf', 'sapphire': '#8fb3c4', 'blue': '#9db0c8', 'lavender': '#b3b6d6'},
+    # o mesmo clima para terminal de fundo claro: papel envelhecido, tinta escura, âmbar queimado
+    'pergaminho': {
+        'text': '#2a2622', 'subtext1': '#3d3832', 'subtext0': '#4a443d', 'overlay2': '#5e574e',
+        'overlay1': '#6f675c', 'overlay0': '#8a8173', 'surface2': '#b9ae9c', 'surface1': '#d6ccbb',
+        'surface0': '#e6ddcd', 'base': '#f4efe6', 'mantle': '#faf7f1', 'crust': '#e9e2d4',
+        'rosewater': '#7a4a2a', 'flamingo': '#8a4b3a', 'pink': '#9a3f5f', 'mauve': '#6d4a8a', 'red': '#b0303a',
+        'maroon': '#9a2f38', 'peach': '#9a5a12', 'yellow': '#86620e', 'green': '#3f7a2c', 'teal': '#1f7268',
+        'sky': '#1f6a85', 'sapphire': '#255f7a', 'blue': '#2f5694', 'lavender': '#4f5aa0'},
     'mocha': {
         'text': '#cdd6f4', 'subtext1': '#bac2de', 'subtext0': '#a6adc8', 'overlay2': '#9399b2',
         'overlay1': '#7f849c', 'overlay0': '#6c7086', 'surface2': '#585b70', 'surface1': '#45475a',
@@ -104,7 +120,7 @@ def _hex(h):
     return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
 
 
-def paleta(tema='frappe', destaque='green'):
+def paleta(tema='katharos', destaque='peach'):
     """Cores RGB de cada papel no tema, com a cor de destaque escolhida."""
     c = _CTP[tema]
     p = {papel: _hex(c[tok]) for papel, tok in _PAPEIS.items()}
@@ -393,9 +409,9 @@ atexit.register(_restaura_cursor)
 class Terminal:
     """Saída formatada: blocos com guia lateral, títulos, itens, caixas, tabelas, mensagens e perguntas.
 
-    tema: 'auto' (padrão), 'mocha', 'macchiato', 'frappe' ou 'latte'. Em auto, usa Latte quando o fundo
-    do terminal é claro e Frappé quando é escuro ou desconhecido.
-    destaque: uma das 14 cores do Catppuccin (padrão 'green'). Marca o que é interativo: o ◇ dos
+    tema: 'auto' (padrão), 'katharos', 'pergaminho' ou os do Catppuccin ('mocha', 'macchiato', 'frappe', 'latte'). Em auto,
+    usa Pergaminho quando o fundo do terminal é claro e Katharos (o da landing) quando é escuro ou desconhecido.
+    destaque: uma das 14 cores do tema (padrão 'peach', o âmbar da landing). Marca o que é interativo: o ◇ dos
     títulos, os números do menu, o spinner, o › da pergunta.
     nivel: 'pleno', 'simples' ou 'ascii' (None = descobre).
     cores: 24, 256 ou 16 (None = descobre).
@@ -474,12 +490,12 @@ class Terminal:
             if self.cor and self.modo_cor != 16:
                 pode = consulta_fundo and self.tty and self.interativo and not env.get('CI') and termo not in ('linux', 'dumb')
                 claro = _fundo_claro(env, pode)
-            tema = 'latte' if claro else 'frappe'
+            tema = 'pergaminho' if claro else 'katharos'
         if tema not in _CTP:
-            tema = 'frappe'
-        destaque = destaque or env.get('KTERM_DESTAQUE') or 'green'
+            tema = 'katharos'
+        destaque = destaque or env.get('KTERM_DESTAQUE') or 'peach'
         if destaque not in DESTAQUES:
-            destaque = 'green'
+            destaque = 'peach'
         self.tema, self.destaque = tema, destaque
         self.paleta = paleta(tema, destaque)
 
