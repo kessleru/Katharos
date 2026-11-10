@@ -2,15 +2,25 @@
 
 ## Verificar o que você baixou
 
-O Katharos é um arquivo só (`programa\katharos.py`) e um lançador (`programa\katharos.ps1`), chamados pelo `KATHAROS.bat`. Confira que são os do repositório:
+Confira de fora do programa, porque um arquivo alterado pode mentir sobre si mesmo. Em ordem de força:
 
-```powershell
-python programa\katharos.py --sha256
-Get-FileHash programa\katharos.ps1 -Algorithm SHA256
-Get-FileHash KATHAROS.bat -Algorithm SHA256
-```
+1. **Assinatura do GitHub** (a mais forte). Cada release é atestada pelo GitHub Actions deste repositório. Com o [GitHub CLI](https://cli.github.com/) instalado:
 
-Compare com o `SHA256SUMS.txt` da versão em https://github.com/kessleru/Katharos. Se os valores não baterem, não rode.
+   ```powershell
+   gh attestation verify katharos.py --repo kessleru/Katharos
+   ```
+
+   Passa só se o arquivo foi gerado pela release oficial. Uma cópia alterada, ou publicada por outra conta, falha.
+2. **SHA-256 contra a descrição da release.** No PowerShell, na pasta do arquivo:
+
+   ```powershell
+   Get-FileHash .\katharos.py -Algorithm SHA256
+   ```
+
+   O valor deve ser igual ao da página da release e ao do `SHA256SUMS.txt`. Prefira a página da release em https://github.com/kessleru/Katharos/releases: quem altera o arquivo pode alterar uma lista que veio junto.
+3. **Dentro do programa:** `katharos autenticidade` compara com o `SHA256SUMS.txt` que veio junto (sem rede) e com a lista oficial da versão (baixada pelo PowerShell, só quando você roda o comando; `--offline` pula). Na abertura, ele avisa sozinho se o arquivo não bate com a lista que veio junto. É conveniência, não prova: um arquivo alterado pode remover essa conferência, por isso valem as de fora.
+
+Baixe só de https://github.com/kessleru/Katharos. Cópias em outros sites, fóruns ou mensagens podem ter sido alteradas.
 
 ## O que ele nunca faz
 

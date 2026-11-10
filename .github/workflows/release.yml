@@ -1,0 +1,43 @@
+name: release
+# Quando uma release é publicada, o GitHub assina (atestado de procedência) os arquivos do programa, ligando o hash deles
+# a este repositório e a esta execução. Quem baixar confere com:  gh attestation verify katharos.py --repo kessleru/Katharos
+# Uma cópia alterada, ou publicada por outra conta, não passa nessa conferência.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tag da release (ex.: v2.0.0)'
+        required: true
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+jobs:
+  atesta:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.event.release.tag_name || inputs.tag }}' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: testes
+        run: python -m unittest discover -s tests
+      - name: SHA256SUMS.txt bate com os arquivos da tag
+        run: sha256sum --check SHA256SUMS.txt
+      - name: o katharos.py anexado à release é o da tag
+        run: |
+          mkdir baixado
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'katharos.py' --dir baixado
+          cmp baixado/katharos.py programa/katharos.py
+      - name: atestado de procedência
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            programa/katharos.py
+            programa/katharos.ps1
+            KATHAROS.bat

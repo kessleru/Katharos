@@ -18,6 +18,14 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 2.0.1 · 9 de novembro de 2026
+
+Conferir que o programa baixado é o original.
+
+- **Autenticidade** (`autenticidade`): confere se os arquivos do programa são os publicados, contra o `SHA256SUMS.txt` que veio junto e contra a lista oficial da versão (baixada pelo PowerShell; `--offline` pula). Na primeira vez, a tela do aviso faz isso sozinha e mostra o resultado em verde; se o programa não bate, ela não deixa continuar. Na abertura, avisa sozinho se o arquivo não bate com a lista que veio junto. Só a lista de hashes é baixada, nada é enviado.
+- **Assinatura do GitHub**: cada release passa a ser atestada pelo GitHub Actions. Quem baixar confere de fora do programa com `gh attestation verify katharos.py --repo kessleru/Katharos`.
+- Site: o texto solto no topo da página saiu e o rodapé ficou mais curto.
+
 ## 2.0.0 · 9 de novembro de 2026
 
 Terminal mais simples: menu curto, sem perfis e escolha de itens numa linha cada.

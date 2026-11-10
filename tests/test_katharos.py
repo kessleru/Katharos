@@ -2186,3 +2186,122 @@ class TestAbrirRelatorio(_CasaTemporaria):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestAutenticidade(_CasaTemporaria):
+    def _escreve(self, nome, txt):
+        (self.casa / nome).write_text(txt, encoding='utf-8')
+        return self.casa / nome
+
+    def test_le_somas_aceita_caminho_e_asterisco(self):
+        h = 'a' * 64
+        self.assertEqual(k.le_somas(f'{h}  programa/katharos.py\n{h.upper()} *outro.txt\nlixo'),
+                         [(h, 'programa/katharos.py'), (h, 'outro.txt')])
+
+    def test_compara_pelo_hash_mesmo_com_nome_de_caminho_diferente(self):
+        h = hashlib.sha256(b'x').hexdigest()
+        somas = [(h, 'programa/katharos.py')]
+        self.assertEqual(k.compara_com_lista(h, 'katharos.py', somas), 'ok')
+        self.assertEqual(k.compara_com_lista('0' * 64, 'katharos.py', somas), 'diferente')
+        self.assertEqual(k.compara_com_lista('0' * 64, 'outro.py', somas), 'sem')
+
+    def test_sha256_de_arquivo(self):
+        f = self._escreve('a.bin', 'abc')
+        self.assertEqual(k.sha256_de(f), hashlib.sha256(b'abc').hexdigest())
+
+    def test_abertura_so_avisa_se_a_lista_diz_que_e_outro(self):
+        me = Path(k.__file__).resolve()
+        h = k.sha256_de(me)
+        avisos = []
+        t = mock.Mock(aviso=avisos.append)
+        marcas = {}
+        with mock.patch.object(k, 'estado', return_value={}), mock.patch.object(k, 'marca_estado', lambda c, v: marcas.update({c: v})):
+            for linha, esperado in ((f'{h}  programa/katharos.py', 0), (f'{"0" * 64}  programa/katharos.py', 1)):
+                avisos.clear()
+                somas = self._escreve('SHA256SUMS.txt', linha + '\n')
+                with mock.patch.object(k, 'acha_somas', return_value=somas):
+                    k.confere_na_abertura(t)
+                self.assertEqual(len(avisos), esperado)
+            with mock.patch.object(k, 'acha_somas', return_value=None):
+                avisos.clear(); k.confere_na_abertura(t); self.assertEqual(avisos, [])
+
+    def test_abertura_nao_repete_para_o_mesmo_arquivo(self):
+        me = Path(k.__file__).resolve()
+        avisos = []
+        somas = self._escreve('SHA256SUMS.txt', f'{"0" * 64}  katharos.py\n')
+        with mock.patch.object(k, 'estado', return_value={'autenticidade': {'hash': k.sha256_de(me)}}), \
+                mock.patch.object(k, 'acha_somas', return_value=somas):
+            k.confere_na_abertura(mock.Mock(aviso=avisos.append))
+        self.assertEqual(avisos, [])
+
+    def test_comando_diz_nao_bate_e_devolve_erro(self):
+        me = Path(k.__file__).resolve()
+        somas = self._escreve('SHA256SUMS.txt', f'{"0" * 64}  katharos.py\n')
+        sai = []
+        t = mock.Mock()
+        t.aviso = sai.append
+        t.p = lambda x, *a, **kw: x
+        ctx = mock.Mock(t=t)
+        with mock.patch.object(k, 'acha_somas', return_value=somas), mock.patch.object(k, 'arquivos_do_programa', return_value=[me]):
+            self.assertEqual(k.ferramenta_autenticidade(ctx, mock.Mock(offline=True)), 1)
+        self.assertTrue(any('NÃO bate' in x for x in sai))
+
+    def test_comando_ok_com_lista_oficial(self):
+        me = Path(k.__file__).resolve()
+        oficial = f'{k.sha256_de(me)}  programa/katharos.py\n'
+        oks = []
+        t = mock.Mock()
+        t.ok = oks.append
+        t.p = lambda x, *a, **kw: x
+        ctx = mock.Mock(t=t)
+        with mock.patch.object(k, 'acha_somas', return_value=None), mock.patch.object(k, 'arquivos_do_programa', return_value=[me]), \
+                mock.patch.object(k, 'baixa_somas_oficiais', return_value=(oficial, '')):
+            self.assertEqual(k.ferramenta_autenticidade(ctx, mock.Mock(offline=False)), 0)
+        self.assertTrue(oks and 'oficial' in oks[0])
+
+    def test_comando_registrado_e_sem_aceite(self):
+        self.assertIn('autenticidade', k.SEM_ACEITE)
+        self.assertIn('autenticidade', [c[0] for g in k.AREAS_MENU for c in g[2]] if hasattr(k, 'AREAS_MENU') else ['autenticidade'])
+
+    def _nivel(self, local, oficial):
+        me = Path(k.__file__).resolve()
+        h = k.sha256_de(me)
+        l = self._escreve('SHA256SUMS.txt', f'{h if local == "ok" else "0" * 64}  programa/katharos.py\n') if local else None
+        of = (f'{h if oficial == "ok" else "0" * 64}  programa/katharos.py\n', '') if oficial else ('', 'sem internet')
+        with mock.patch.object(k, 'acha_somas', return_value=l), mock.patch.object(k, 'arquivos_do_programa', return_value=[me]), \
+                mock.patch.object(k, 'baixa_somas_oficiais', return_value=of):
+            return k.verifica_autenticidade()['nivel']
+
+    def test_niveis_da_verificacao(self):
+        self.assertEqual(self._nivel('ok', 'ok'), 'oficial')
+        self.assertEqual(self._nivel(None, 'ok'), 'oficial')
+        self.assertEqual(self._nivel('ok', None), 'local')
+        self.assertEqual(self._nivel(None, None), 'sem')
+        self.assertEqual(self._nivel('ok', 'ruim'), 'diferente')
+        self.assertEqual(self._nivel('ruim', 'ok'), 'diferente')
+
+    def test_tela_do_aceite_mostra_verde_so_quando_bateu_e_barra_se_nao_bate(self):
+        for nivel, ok_esperado, verde in (('oficial', True, True), ('local', True, True), ('sem', True, False), ('diferente', False, False)):
+            t = mock.Mock()
+            t.p = lambda x, *a, **kw: x
+            with mock.patch.object(k, 'verifica_autenticidade', return_value={'nivel': nivel, 'arquivos': [], 'erro': 'x', 'tem_local': False}):
+                self.assertEqual(k.mostra_autenticidade_no_aceite(t), ok_esperado, nivel)
+            self.assertEqual(t.ok.called, verde, nivel)
+
+    def test_aceite_nao_continua_se_o_programa_nao_bate(self):
+        t = mock.Mock()
+        ctx = mock.Mock(t=t)
+        with mock.patch.object(k, 'mostra_aviso'), mock.patch.object(k, 'mostra_autenticidade_no_aceite', return_value=False):
+            self.assertFalse(k.pede_aceite(ctx))
+        t.confirma.assert_not_called()
+
+    def test_falha_ao_conferir_nao_trava_o_aceite(self):
+        t = mock.Mock()
+        t.p = lambda x, *a, **kw: x
+        with mock.patch.object(k, 'verifica_autenticidade', side_effect=OSError('x')):
+            self.assertTrue(k.mostra_autenticidade_no_aceite(t))
+
+    def test_workflow_de_release_existe_com_atestado(self):
+        y = (RAIZ / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
+        self.assertIn('attest-build-provenance', y)
+        self.assertIn('attestations: write', y)
