@@ -496,6 +496,21 @@ class TestJaFeito(unittest.TestCase):
         for nome in ('limpar', 'reparar', 'atualizar'):
             self.assertIn(nome, k.PACOTES_RECORRENTES)
 
+    def test_lista_do_aplicado_confere_de_novo_toda_vez_que_abre(self):
+        """Duas aberturas na mesma sessão rodam a conferência duas vezes: o PC pode ter mudado entre elas."""
+        chamadas = []
+        def confere(ctx, its, n=None):
+            chamadas.append(getattr(ctx, 'ja', 'sem'))
+            ctx.ja = {('x', 'a'): True}   # o que a conferência deixa em cache
+        ctx = mock.Mock(t=mock.Mock(), mult=1.0, args=None, ja={('x', 'velho'): True})
+        with mock.patch.object(k, 'precisa_admin', return_value=True), mock.patch.object(k, 'perfil_pc'), \
+             mock.patch.object(k, 'confere_itens', side_effect=confere), mock.patch.object(k, 'rel_eventos'), \
+             mock.patch.object(k, 'estado', return_value={}), mock.patch.object(k, 'Progresso', mock.MagicMock()):
+            k.ferramenta_aplicado(ctx, mock.Mock(teste=False))
+            k.ferramenta_aplicado(ctx, mock.Mock(teste=False))
+        self.assertTrue(chamadas)
+        self.assertNotIn(('x', 'velho'), (chamadas[0] or {}))
+
     def test_acao_que_se_repete_nao_conta_como_ja_feito(self):
         """Limpar e otimizar não ficam gravados no Windows: com o tempo o PC volta a precisar, então não entram na lista."""
         a = k.Item('a', 'A', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'a' 1")

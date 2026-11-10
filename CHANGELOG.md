@@ -18,6 +18,13 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.0.3 · 10 de novembro de 2026
+
+A lista do que já está feito é conferida de novo toda vez que abre.
+
+- **`aplicado` refaz a conferência a cada abertura**, mesmo dentro da mesma sessão: o que está feito hoje pode ter mudado desde a última vez.
+- **Depois de aplicar uma área, a conferência dela é descartada**, para a tela de escolha não mostrar "falta" de algo que acabou de ser feito.
+
 ## 3.0.2 · 10 de novembro de 2026
 
 Ação que se repete fica fora de tudo que confere "o que já está aplicado".

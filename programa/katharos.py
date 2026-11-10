@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '3.0.2'
+VERSAO = '3.0.3'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -3701,6 +3701,7 @@ class Item:
         self.alerta = alerta  # o que pode dar problema depois (ex.: anti-cheat), mostrado em amarelo
         self.recorrente = recorrente  # ação que se repete (limpar, otimizar): nunca conta como "já feito", porque o PC volta a precisar
         self.marcado = False
+        self.ja = None   # conferido antes de aplicar: True já está assim, False falta, None não entra na conta
 
     @property
     def definitivo(self):
@@ -4269,6 +4270,10 @@ def ferramenta_pacote(ctx, args, nome=None):
         linhas.insert(2, ('espaço liberado', t.p(humano(liberado), 'verde')))
     t.chaves(linhas)
     t.fecha_caixa()
+    cache_ja = getattr(ctx, 'ja', None)
+    if cache_ja:   # o que foi conferido antes de aplicar já não vale: o PC mudou
+        for chave in [c for c in cache_ja if c[0] == pac.nome]:
+            del cache_ja[chave]
     if pac.nome in REAPLICA and feitos:
         planos = verifica_pacote(ctx, pac.nome, [i.id for i in escolhidos])
         if planos:
@@ -6998,6 +7003,7 @@ def ferramenta_aplicado(ctx, args):
     if not precisa_admin(ctx, args):
         return 1
     perfil_pc(ctx)
+    ctx.ja = None   # a lista é sempre conferida de novo ao abrir: o que está feito hoje pode ter mudado desde a última vez
     reg = estado().get('pacotes') or {}
     areas = [n for n in REAPLICA if n in PACOTES]
     res = []
