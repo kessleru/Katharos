@@ -11,6 +11,7 @@ cada tarefa tem um código; quando ficar pronta, marque `[x]`, anote no **Regist
 |---|---|---|
 | 0 | fontes no repositório, protótipos e decisões confirmadas | a fazer |
 | 1 | motor com API (o Python conversa com a interface por JSON) | a fazer |
+| 1b | motor de inteligência novo: memória do PC, linha de base, detectores, causa, planejador, avaliador, eventos | a fazer |
 | 2 | o aplicativo com janelas (Katharos.App), com o painel dentro dele | a fazer |
 | 2b | raio-x mais completo e otimizações guiadas por evidência | a fazer |
 | 2c | prova em jogo: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver; notebook na tomada e na bateria | a fazer |
@@ -116,6 +117,27 @@ Cada decisão diz o porquê e a alternativa descartada. As marcadas "confirmar n
 - **Teste de usabilidade** com 3 pessoas que não são da área antes de lançar (tarefa 2.13): achar o raio-x, aplicar o modo seguro,
   desfazer um item. Onde travarem, a tela muda.
 
+### D10. Um motor de inteligência só, que aprende com este PC
+Pedido de 10 nov: melhorar o motor de inteligência (a "central") e como ele conversa com tudo.
+
+Hoje: a central é uma lista de regras em Python que lê um dicionário montado na hora e devolve propostas com confiança escrita à mão; o
+segundo plano em C# tem outras regras, com os mesmos limites duplicados; os limites são fixos para qualquer PC; o aprendizado é só o antes
+e depois de um pacote; a comunicação é por arquivo e o ícone chama o Python escondido a cada hora; achado, causa e ação ficam soltos.
+
+O motor novo:
+- **Memória do PC** num banco **SQLite** local (Python tem `sqlite3` nativo; o C# do .NET 10 usa Microsoft.Data.Sqlite): fatos, sessões,
+  minutos, mudanças, provas, achados, propostas, previsões, resultados e as respostas da pessoa. Uma fonte só para o ícone, a interface,
+  a CLI e o motor. Os arquivos de hoje (`horas.jsonl`, `minutos.jsonl`, `sessoes.jsonl`, `provas.jsonl`...) migram para ele, com
+  exportação para JSON para quem quiser ver.
+- **Fato** é a unidade: métrica, valor, unidade, quando, de onde veio (sensor e confiança da fonte) e contexto (repouso, jogo, bateria,
+  hora do dia, modo aplicado).
+- **Cinco camadas**: linha de base → detectores → diagnóstico de causa → planejador → avaliador, com o avaliador realimentando os pesos.
+- **Regras como dados**: limites, janelas, duração mínima, textos e ações num arquivo (`motor/regras.json`) lido pelo C# e pelo Python.
+  Nunca mais um limite duplicado em código.
+- **Eventos em vez de relógio**: o segundo plano e a interface avisam o motor por um pipe local; o motor pensa quando algo acontece.
+- **Honestidade acima de tudo**: cada conclusão com os números e a fonte; pouco dado vira "ainda não sei"; aviso falso é bug.
+- **Tudo no PC**: sem rede e sem modelo de IA externo; as explicações saem de modelos de texto preenchidos com os números reais.
+
 ---
 
 ## 2. Arquitetura
@@ -172,6 +194,92 @@ Protocolo `katharos api` (rascunho; fechar na tarefa 1.1):
   quando o aplicativo fecha.
 - [ ] **1.5** Testes: cada método com PC modelo; contrato do JSON congelado em arquivo (`tests/api/*.json`) para a interface e o motor não
   se desencontrarem.
+
+### Fase 1b: motor de inteligência (D10)
+Arquitetura, em ordem de dependência. As tarefas I1 a I6 dá para fazer antes da interface (melhoram o ícone e a CLI de hoje).
+
+```
+ sensores (Katharos.exe, raio-x, PowerShell, PresentMon da fase 2c)
+        │  fatos: métrica, valor, quando, fonte, contexto
+        ▼
+ memória do PC (SQLite: fatos, sessões, mudanças, provas, achados, propostas, previsões, resultados, respostas)
+        │
+        ▼
+ linha de base ─▶ detectores ─▶ diagnóstico de causa ─▶ planejador ─▶ avaliador
+   o normal        limite,         achados viram uma      ações com        mede o
+   deste PC        tendência,      causa provável,        ganho previsto   resultado e
+                   anomalia,       com o porquê           e risco          ajusta os pesos
+                   piora pós-mudança                                            │
+        ▲                                                                       │
+        └─────────────────────────── aprende ◀─────────────────────────────────┘
+ eventos (pipe local): sessão começou/terminou, limite sustentado, aplicou, desfez, driver mudou, Windows atualizou, bateria
+ consumidores: ícone, interface, CLI (pela API da fase 1), notificações
+```
+
+Ajustes imediatos (antes da interface):
+- [ ] **I1** **Regras como dados**: tirar os limites do `Katharos.cs` (`Regras`) e do `conselheiro` para `motor/regras.json`
+  (métrica, condição, janela, duração mínima, nível, título, texto, comando). O C# e o Python leem o mesmo arquivo; um teste falha se um
+  limite aparecer escrito no código.
+- [ ] **I2** **Pensar por evento**: no fim de cada sessão de jogo, depois de aplicar ou desfazer, ao mudar de driver ou depois de uma
+  atualização do Windows, o segundo plano chama o motor (`katharos conselheiro --exportar` hoje; o pipe depois). Sai o relógio de 1 hora.
+- [ ] **I3** **Linha de base por PC**: mediana e dispersão robusta (MAD) de cada métrica por contexto (repouso, jogo, bateria, faixa do
+  dia), recalculada por dia, com pelo menos 3 dias de dado antes de usar. "Fora do normal deste PC" substitui os limites fixos de RAM,
+  CPU, disco e rede; calor continua com limite absoluto de segurança.
+- [ ] **I4** **Confiança calculada**: a partir do número de amostras, da duração, de em quantas sessões ou dias se repetiu e da
+  confiança da fonte (sensor de verdade x zona térmica). Faixas: "ainda não sei", baixa, média, alta. Pouco dado nunca vira alarme.
+- [ ] **I5** **Previsão e resultado**: cada proposta e cada item aplicado guardam o que se espera (ex.: −5 °C em jogo, +5 a 10 % no 1 %
+  low, −8 s de boot); o avaliador compara com o resultado medido e grava nas provas.
+- [ ] **I6** **"Ajudou?"** no painel do ícone e na CLI (`conselheiro --resposta ID sim|nao|nao-importa`). "Não me importa" para de propor
+  aquilo; "não ajudou" baixa o peso do item neste PC.
+
+Motor novo:
+- [ ] **I7** **Memória do PC em SQLite** (`~/.katharos/katharos.db`): esquema versionado (a migração entra no `68-versoes.py`), escrita
+  só pelo motor e pelo segundo plano (um escritor por tabela), leitura por todos; importação dos `.jsonl` de hoje; `exportar` para JSON.
+- [ ] **I8** **Detectores** como módulos pequenos, cada um com teste: limite sustentado (gargalo de GPU, CPU, freio, RAM, VRAM, disco,
+  calor), tendência (piorando há dias), anomalia (fora da linha de base), piora depois de uma mudança, evento do Windows (tela azul,
+  driver, disco), FPS e travadas (fase 2c). Saída: **achado** com números, duração, contexto, fonte e confiança.
+- [ ] **I9** **Diagnóstico de causa**: um mapa de conhecimento em dados (`motor/causas.json`): sintoma → causas possíveis → o que confirma
+  ou descarta cada uma → ação. Ex.: FPS cai + CPU freando + temperatura ≥ limite → calor; CPU freando + bateria → economia de energia;
+  travadas + nenhum limite → driver (teste de DPC da fase 2c). Pontua as causas pelas evidências e explica a escolhida e as descartadas.
+- [ ] **I10** **Planejador**: escolhe as ações pelo ganho esperado (peso do item neste PC x confiança da causa) contra o risco, respeitando
+  modo, itens protegidos, o que já está feito (`item.definitivo`), conflitos e a regra "nada específico de jogo". Cada proposta sai com
+  previsão, risco, como desfazer e o número que a justifica.
+- [ ] **I11** **Avaliador**: compara previsão e resultado com janelas comparáveis (mesmo contexto, sessões de duração parecida, pelo
+  menos 3 de cada lado), separa ruído de efeito pela variação (mesma regra da prova de ganho), atualiza o peso do item neste PC e propõe
+  desfazer quando piorou.
+- [ ] **I12** **Eventos**: pipe local com nome e ACL do usuário; o segundo plano publica, o motor assina e responde; a interface e o ícone
+  assinam as conclusões. Fila em disco para eventos que chegam com o motor fechado.
+- [ ] **I13** **Explicações**: modelos de texto por achado, causa e proposta, preenchidos com os números reais; sempre "o que eu vi",
+  "por que acho que é isso", "o que eu faria", "o que mudaria minha conclusão". Linguagem do dia a dia (D9).
+- [ ] **I14** **Testes com dados reais**: gravar sessões e semanas de dado de PCs de verdade (anonimizados: só números), reproduzir no
+  teste e conferir que o motor conclui o mesmo; um teste por aviso falso já visto (inicialização cheia, PC de empresa, sem sensor). Medir
+  a taxa de aviso falso a cada versão.
+- [ ] **I15** **Orçamento de avisos**: no máximo um aviso por tipo a cada X horas (configurável), nada durante o jogo salvo calor grave,
+  e um resumo diário opcional em vez de vários avisos soltos.
+
+O que o motor faz na interface (liga com a fase 2):
+- [ ] **I16** **Início**: a frase principal sai do motor ("seu PC está bem; o que mais pesa é o calor em jogo") com um botão para a ação
+  que mais rende, a previsão do ganho e o caminho para desfazer.
+- [ ] **I17** **Central de inteligência (tela)**: propostas em cartões por prioridade, cada uma com o que eu vi (gráfico pequeno do
+  dado), por que acho que é isso (causas, com as descartadas), o que eu faria, quanto espero ganhar, risco, "aplicar", "agora não",
+  "não me importa" e "ajudou?" depois de aplicar.
+- [ ] **I18** **Resultado das propostas**: linha do tempo com o que foi aplicado, a previsão e o que aconteceu de verdade (verde, cinza
+  ou vermelho), e o botão desfazer onde piorou.
+- [ ] **I19** **Ao vivo**: as conclusões de agora vindas do motor (as mesmas regras do ícone), com o porquê ao passar o mouse, e o "normal
+  deste PC" desenhado como faixa nos gráficos.
+- [ ] **I20** **Jogos**: por jogo detectado, o que segura o FPS, a evolução de FPS e travadas entre sessões, o antes e depois de cada
+  mudança (fase 2c) e a recomendação para aquele perfil de uso.
+- [ ] **I21** **Raio-x**: os achados vêm dos detectores, com a nota explicada (de onde vem cada ponto perdido e quanto cada correção
+  devolve) e o "ainda não sei" quando falta dado.
+- [ ] **I22** **Otimizar**: os itens que o motor recomenda para este PC aparecem marcados e com o motivo ("recomendado: a CPU segurou
+  seus jogos em 40 % do tempo"); o modo continua decidindo o resto, e a pessoa marca o que quiser.
+- [ ] **I23** **Histórico**: os gráficos com as marcas das mudanças, a linha de base e as anomalias destacadas, e a explicação de cada
+  anomalia ao clicar.
+- [ ] **I24** **Configurações do motor**: o que ele pode avisar, com que frequência, se pensa durante jogo, o que nunca propor, e apagar a
+  memória do PC (com exportação antes).
+- [ ] **I25** **Perguntar ao Katharos** (depois de tudo acima, opcional): uma caixa onde a pessoa escreve "por que meu jogo trava?" e a
+  resposta sai do motor (achados, causas e propostas que batem com a pergunta, pela busca e pelos sinônimos que já existem), sem modelo de
+  IA externo.
 
 ### Fase 2: o aplicativo com janelas (Katharos.App)
 Telas, na ordem do uso real (o raio-x primeiro, como na CLI):
@@ -359,4 +467,5 @@ Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pess
 | 10 nov 2026 | plano ampliado: painel dentro da interface (D8), fácil para leigos (D9), fase 2b (raio-x e otimizações) | 3.1.2 | 5380a0f | pedido do usuário |
 | 10 nov 2026 | bibliotecas de referência grátis no lugar do Magic (21st.dev) | 3.1.2 | 960b503 | shadcn MCP, Magic UI MCP, React Bits, Aceternity, Context7 |
 | 10 nov 2026 | fase 2c: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | 3.1.2 | 014ff01 | pedido do usuário (itens 1, 2, 3 e 5 das sugestões) |
-| 10 nov 2026 | 2c.12 a 2c.15: notebook na tomada e na bateria, desligado por padrão | 3.1.2 | (local, sem commit) | pedido do usuário (item 6); não publicar |
+| 10 nov 2026 | 2c.12 a 2c.15: notebook na tomada e na bateria, desligado por padrão | 3.1.2 | d7107c3 (local) | pedido do usuário (item 6); não publicar |
+| 10 nov 2026 | D10 e fase 1b: motor de inteligência novo (I1 a I25), com tudo o que ele faz na interface | 3.1.2 | (este commit, local) | pedido do usuário; não publicar |
