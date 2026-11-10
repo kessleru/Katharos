@@ -85,6 +85,15 @@ Cada decisão diz o porquê e a alternativa descartada. As marcadas "confirmar n
   animação lenta, pesada ou que trava (reclamação de 9 nov: quadriculado, rodapé, espada); `prefers-reduced-motion` respeitado; sem cara de
   IA (ver a skill frontend-design); linhas e "+" dos containers mantidos.
 - Os dados do site (modos, lista das mudanças por área, novidades) saem do programa como JSON gerado no build, como o `gera_site.py` faz hoje.
+- **Bibliotecas de referência, sem pagar**: o usuário citou o Magic do 21st.dev (MCP pago, gera componentes por pedido). Alternativas grátis
+  que fazem o mesmo papel de "componente pronto e bom" para quem escreve com IA:
+  - **MCP oficial do shadcn/ui** (`npx shadcn@latest mcp`): procura, mostra e instala componentes e blocos do registro do shadcn e de
+    registros de terceiros, direto na sessão.
+  - **MCP do Magic UI** (grátis): os componentes animados do Magic UI pela mesma via.
+  - **React Bits** (componentes animados grátis, copiar e colar; o MCP deles é da versão Pro, paga: não usar).
+  - **Comunidade do 21st.dev**: os componentes publicados lá são grátis para copiar; o pago é só o gerador (Magic).
+  - **Aceternity UI** (grátis) para efeitos pontuais; **Context7** (MCP grátis) para a documentação atual de Astro, Tailwind e Motion.
+  - Tarefa 0.6 testa os MCPs grátis na prática e escolhe; 6.1 instala os que ficarem (como servidores MCP desta sessão ou do repositório).
 
 ### D8. O painel vai para dentro da interface; acaba o painel em HTML
 - Pedido do usuário: nada de painel que gera um arquivo HTML e abre no navegador. Tudo o que o `painel` mostra (agora, o que está mudando,
@@ -291,6 +300,8 @@ Otimizações:
   [termos da SignPath Foundation](https://signpath.org/terms)
 - [Avalonia x WinUI 3](https://avaloniaui.net/winui-compare), [MAUI x Avalonia x Uno em 2026](https://startdebugging.net/2026/05/maui-vs-avalonia-vs-uno-in-2026/)
 - [shadcn/ui no Astro](https://ui.shadcn.com/docs/installation/astro), [Magic UI no Astro](https://v3.magicui.design/docs/installation/astro)
+- [MCP do shadcn/ui](https://mcpservers.org/servers/shadcn-mcp-server), [MCP do Magic UI](https://mcp.directory/servers/magic-ui),
+  [21st.dev Magic MCP (pago)](https://mcp.directory/blog/21st-dev-magic-mcp-complete-guide-2026), [React Bits MCP (Pro)](https://pro.reactbits.dev/docs/mcp)
 
 ---
 
@@ -299,4 +310,5 @@ Otimizações:
 | data | tarefa | versão | commit | nota |
 |---|---|---|---|---|
 | 10 nov 2026 | plano escrito | 3.1.2 | (este commit) | pesquisa: Velopack, Avalonia/WPF, assinatura, Astro + shadcn + Magic UI |
-| 10 nov 2026 | plano ampliado: painel dentro da interface (D8), fácil para leigos (D9), fase 2b (raio-x e otimizações) | 3.1.2 | (este commit) | pedido do usuário |
+| 10 nov 2026 | plano ampliado: painel dentro da interface (D8), fácil para leigos (D9), fase 2b (raio-x e otimizações) | 3.1.2 | 5380a0f | pedido do usuário |
+| 10 nov 2026 | bibliotecas de referência grátis no lugar do Magic (21st.dev) | 3.1.2 | (este commit) | shadcn MCP, Magic UI MCP, React Bits, Aceternity, Context7 |
