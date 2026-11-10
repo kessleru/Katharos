@@ -466,6 +466,37 @@ class TestBenchmark(unittest.TestCase):
 
 
 class TestJaFeito(unittest.TestCase):
+    def test_pacotes_de_manutencao_nunca_contam_como_ja_feito(self):
+        """"Nada a limpar agora" não é "já feito": limpar, reparar e atualizar se repetem."""
+        a = k.Item('a', 'A', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'a' 1")
+        s = k.Saida(); s.dados = {'ja:a': True}
+        ctx = mock.Mock(t=mock.Mock(), mult=1.0, ja=None)
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s) as m:
+            for nome in ('limpar', 'reparar', 'atualizar'):
+                k.confere_itens(ctx, [a], nome)
+                self.assertIsNone(a.ja, nome)
+            m.assert_not_called()
+
+    def test_so_ajuste_gravado_e_conferido_e_reaplicado(self):
+        """A conferência depois de aplicar, o verificar e a reaplicação em segundo plano usam o mesmo critério: item.definitivo."""
+        fixo = k.Item('f', 'F', 'x', ps="Set-Valor 'HKCU:\\X' 'f' 1")
+        rec = k.Item('r', 'R', 'x', ps="Set-Valor 'HKCU:\\X' 'r' 1", recorrente=True)
+        py = k.Item('p', 'P', 'x', py=lambda *a: None)
+        so = k.Item('s', 'S', 'x', ps='x', sozinho=True)
+        self.assertEqual([i.definitivo for i in (fixo, rec, py, so)], [True, False, False, False])
+        for arq in ('57-seguranca.py', '60-turbo.py'):
+            fonte = (Path(__file__).resolve().parent.parent / 'partes' / arq).read_text(encoding='utf-8')
+            self.assertNotIn('not i.py and not i.sozinho', fonte, arq + ': use i.definitivo')
+
+    def test_item_de_acao_em_area_conferida_e_marcado_como_recorrente(self):
+        """Quem apaga arquivo, limpa ou otimiza a cada rodada não pode entrar na lista de já feito."""
+        acao = re.compile(r'Remove-Item|Move-Item|Clear-RecycleBin|defrag|cleanmgr|flushdns|wsreset|Optimize-Volume')
+        for nome, i in ITENS:
+            if nome in k.REAPLICA and i.ps and acao.search(i.ps):
+                self.assertTrue(i.recorrente, f'{nome}/{i.id} é ação que se repete: marque recorrente=True')
+        for nome in ('limpar', 'reparar', 'atualizar'):
+            self.assertIn(nome, k.PACOTES_RECORRENTES)
+
     def test_acao_que_se_repete_nao_conta_como_ja_feito(self):
         """Limpar e otimizar não ficam gravados no Windows: com o tempo o PC volta a precisar, então não entram na lista."""
         a = k.Item('a', 'A', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'a' 1")

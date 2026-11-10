@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '3.0.1'
+VERSAO = '3.0.2'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -3702,6 +3702,12 @@ class Item:
         self.recorrente = recorrente  # ação que se repete (limpar, otimizar): nunca conta como "já feito", porque o PC volta a precisar
         self.marcado = False
 
+    @property
+    def definitivo(self):
+        """Ajuste que fica gravado no Windows e dá para conferir em modo teste: só estes entram na lista do que já está feito,
+        na conferência depois de aplicar e na reaplicação em segundo plano. Ação que se repete (limpar, otimizar) não."""
+        return bool(self.ps) and not self.py and not self.sozinho and not self.recorrente
+
 
 class Pacote:
     def __init__(self, nome, titulo, resumo, explica, itens, reversivel=True, admin=True):
@@ -3710,6 +3716,9 @@ class Pacote:
 
 
 PACOTES = {}
+# Pacotes de manutenção: limpar, reparar e atualizar são ações que se repetem. "Nada a limpar agora" não é "já feito":
+# com o tempo o PC volta a precisar, então nunca entram na conta do que já está aplicado.
+PACOTES_RECORRENTES = ('limpar', 'reparar', 'atualizar')
 SEM_ITENS = {}   # pacote -> o que dizer quando não há nada a fazer neste PC
 
 
@@ -3799,7 +3808,7 @@ def confere_itens(ctx, itens, pacote_=None):
             i.ja = cache[chave]
             continue
         i.ja = None
-        if i.ps and not i.py and not i.sozinho and not i.recorrente:
+        if i.definitivo and chave[0] not in PACOTES_RECORRENTES:
             vs.append((chave, i))
     if not WINDOWS or not vs:
         return
@@ -6971,7 +6980,7 @@ def verifica_pacote(ctx, nome, ids=None):
     pac = PACOTES[nome]
     reg = (estado().get('pacotes') or {}).get(nome) or {}
     ids = set(ids if ids is not None else reg.get('itens', []))
-    its = [i for i in (pac.itens(ctx) or []) if i and i.id in ids and i.ps and not i.py and not i.sozinho]
+    its = [i for i in (pac.itens(ctx) or []) if i and i.id in ids and i.definitivo]
     its, _ = aplica_protegidos(nome, its)
     if not its:
         return []
@@ -7060,7 +7069,7 @@ def ferramenta_verificar(ctx, args):
         garante_ponto(ctx)
         for n, _ in desvios:
             reg = estado()['pacotes'][n]
-            its = [i for i in (PACOTES[n].itens(ctx) or []) if i and i.id in set(reg.get('itens', [])) and i.ps and not i.py and not i.sozinho]
+            its = [i for i in (PACOTES[n].itens(ctx) or []) if i and i.id in set(reg.get('itens', [])) and i.definitivo]
             its, _x = aplica_protegidos(n, its)
             r = roda_ps(t, '\n'.join(_envolve(i) for i in its), f'reaplica-{n}', minutos=8, pacote=n, mostra=False, mult=ctx.mult)
             t.ok(f'{PACOTES[n].titulo}: {pl(len(r.feitos), "mudança reaplicada", "mudanças reaplicadas")}')
@@ -8816,7 +8825,7 @@ def ferramenta_manutencao(ctx, args):
             if nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
                 continue
             ids = set(reg.get('itens', []))
-            its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.ps and not i.py and not i.sozinho]
+            its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo]
             its, _ = aplica_protegidos(nome, its)
             if not its:
                 continue

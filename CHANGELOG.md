@@ -18,6 +18,13 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.0.2 · 10 de novembro de 2026
+
+Ação que se repete fica fora de tudo que confere "o que já está aplicado".
+
+- **A reaplicação em segundo plano e o `verificar` não refazem mais ações que se repetem**: depois de uma atualização do Windows, "área de trabalho só com a Lixeira" não move mais atalhos novos sozinho nem acusa "ajuste voltou" por causa deles.
+- **Limpar, reparar e atualizar nunca contam como "já feito"**: "nada a limpar agora" não é "já feito", e o item não vem mais riscado como feito no `turbo`.
+
 ## 3.0.1 · 10 de novembro de 2026
 
 Lista do que já está feito só com o que é definitivo.
