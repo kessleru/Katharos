@@ -15,6 +15,8 @@ cada tarefa tem um código; quando ficar pronta, marque `[x]`, anote no **Regist
 | 2 | o aplicativo com janelas (Katharos.App), com o painel dentro dele | a fazer |
 | 2b | raio-x mais completo e otimizações guiadas por evidência | a fazer |
 | 2c | prova em jogo: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver; notebook na tomada e na bateria | a fazer |
+| 2d | funcionar bem em todas as versões do Windows 10 e 11 (e edições) | em andamento |
+| 2e | medidas e benchmarks fiéis: tirar o efeito de fatores externos | a fazer |
 | 3 | o segundo plano dentro do aplicativo | a fazer |
 | 4 | instalador e atualização (Velopack) | a fazer |
 | 5 | publicação dos dois produtos e assinatura do executável | a fazer |
@@ -381,6 +383,67 @@ Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pess
   desempenho por 1 hora na bateria").
 - [ ] **2c.15** Tudo pelo `powercfg` e pelo que o pacote energia já guarda para desfazer; desligar a opção volta o plano de antes.
 
+### Fase 2d: todas as versões do Windows 10 e 11
+Pedido de 10 nov: funcionar bem principalmente no Windows 10 e no 11, em qualquer versão e edição, sabendo o que muda entre elas.
+
+O que já se sabe (fontes na pesquisa do cofre `2026-11-10 versoes-do-windows`):
+- **Fim de suporte**: Windows 11 21H2 (out/2023), 22H2 (out/2024), 23H2 (nov/2025) e **24H2 Home/Pro (13/10/2026)** já não recebem
+  atualização de segurança; 24H2 Enterprise/Education vai até 12/10/2027. Windows 10 22H2 acabou em 14/10/2025, mas o **ESU de pessoa
+  física foi estendido até 12/10/2027** (precisa do 22H2 em dia e de inscrição).
+- **Edição muda o efeito**: "telemetria 0" só desliga de todo no Enterprise, Education e Server; no Home e no Pro vale o mínimo da edição
+  (dados obrigatórios). A política "experiências do consumidor" (`DisableWindowsConsumerFeatures`) só vale no Enterprise e no Education
+  desde 2016; no Home e no Pro o que funciona são as chaves por usuário do ContentDeliveryManager.
+- **UCPD**: no Windows 11 24H2 (e no 10 com as atualizações de 2024) um driver da Microsoft protege alguns valores do registro; gravar o
+  botão de Widgets (`TaskbarDa`) dá "acesso negado". Desligar pela política `Dsh\AllowNewsAndInterests` funciona.
+- **WMIC** sai do Windows (25H2 e atualizações do 24H2): o Katharos não pode depender dele (hoje não depende; um teste garante).
+- O que só existe numa versão: modo de janela otimizado para jogos (Windows 11 22H2+), Recall e Click to Do (Copilot+ e 24H2+),
+  agendamento de GPU (Windows 10 2004+ e driver WDDM 2.7), Copilot como app (24H2) x botão e política (23H2 e antes).
+- Edições que mudam o jogo: **S mode** (só apps da Loja: o Katharos nem roda), **LTSC** (sem Loja e sem a maioria dos apps), **Server**,
+  **IoT**, **ARM64** (Python x64 roda emulado; o executável .NET roda nativo).
+
+Tarefas:
+- [ ] **2d.1** Perfil de compatibilidade (`compat_windows`): família (10 ou 11), versão (21H2…25H2), build, edição normalizada (home, pro,
+  empresa, educação, ltsc, server, iot, s-mode), arquitetura, se está no suporte e até quando, UCPD ligado.
+- [ ] **2d.2** Raio-x: achado "versão sem atualizações de segurança" com a data e o que fazer (atualizar para a versão atual; no Windows 10,
+  o ESU até 12/10/2027), e aviso de versão antiga demais (antes do Windows 10 1809) com só o modo seguro.
+- [ ] **2d.3** Itens honestos por edição: telemetria e anúncios dizem o que de fato acontece no Home e no Pro.
+- [ ] **2d.4** UCPD: valor protegido não conta como "falta fazer" nem como erro; o item usa a política que funciona (Widgets).
+- [ ] **2d.5** Matriz de testes: o Katharos monta os itens e os scripts para perfis de Windows 10 1809, 21H2 e 22H2, Windows 11 21H2,
+  22H2, 23H2, 24H2 e 25H2, nas edições Home, Pro, Enterprise, LTSC e Server, sem erro e com os itens certos em cada um.
+- [ ] **2d.6** Rodar o Katharos de verdade nas versões que o GitHub oferece (Windows Server 2022 e 2025) no job `windows-real`.
+- [ ] **2d.7** Ler o que mudou a cada versão nova do Windows (lista de recursos removidos e as notas de cada atualização) e anotar na
+  pesquisa do cofre; virar rotina do fluxo de publicação.
+
+### Fase 2e: medidas e benchmarks fiéis
+Pedido de 10 nov: as medidas e os benchmarks precisam mostrar o efeito do Katharos, não o de um programa aberto, de o PC estar ligado há
+dias ou de uma atualização rodando. Sem obrigar ninguém a fechar nada, e pedindo só quando ajuda de verdade.
+
+O que distorce hoje: programas abertos (RAM, CPU), tempo ligado (cache, vazamento de memória), boot logo depois de atualização, Windows
+Update ou Defender rodando, indexação, bateria e plano de energia, calor (o chip freia), o próprio segundo plano, e comparar um dia de
+uso pesado com um de uso leve.
+
+Tarefas:
+- [ ] **2e.1** **Contexto em toda medida**: junto de cada leitura e de cada benchmark, o que pode distorcer: tempo ligado, minutos desde o
+  boot, quantos processos e quais os 5 que mais gastam, RAM dos programas da pessoa x RAM do sistema, Windows Update, Defender e indexação
+  ativos, na bateria ou na tomada, plano de energia, temperatura, jogo aberto.
+- [ ] **2e.2** **Separar o sistema dos programas da pessoa**: a métrica que o Katharos promete melhorar é a do sistema (Windows, serviços,
+  o que abre sozinho), não a do navegador aberto. RAM e processos passam a ter as duas partes, e a comparação usa a do sistema.
+- [ ] **2e.3** **Descartar leituras sujas**: minutos com atualização instalando, verificação do Defender, os primeiros 10 minutos depois do
+  boot e boots logo depois de uma atualização do Windows não entram na linha de base nem na comparação (ficam guardados, marcados).
+- [ ] **2e.4** **Comparar o comparável**: antes e depois só entre situações parecidas (mesmo contexto, faixa de tempo ligado, de processos e
+  de carga), pareando as janelas; diferença com intervalo de confiança (bootstrap) em vez de um número solto; "sem diferença" quando a
+  margem engole o efeito.
+- [ ] **2e.5** **Benchmark em condições de bancada**: antes de medir, o Katharos confere e mostra o que vai atrapalhar (programas pesados
+  abertos, atualização rodando, bateria, PC quente) e **pergunta** se a pessoa quer fechar os que ele lista (nunca fecha sozinho); espera
+  a CPU ficar ociosa (ex.: abaixo de 10 % por 30 s), pausa o próprio segundo plano, faz uma rodada de aquecimento, roda várias vezes,
+  usa a mediana, descarta os pontos fora da curva e diz a variação. Se a variação for grande, repete ou avisa que o resultado é fraco.
+- [ ] **2e.6** **Boot medido pelo Windows**: o tempo do caminho principal do boot (evento 100 do Diagnostics-Performance), sem os boots
+  logo depois de atualização; mediana dos últimos boots em vez de um só.
+- [ ] **2e.7** **Prova de ganho com ensaio repetido** (onde dá): aplicar, medir, desfazer, medir, aplicar de novo, nas mesmas condições,
+  para itens com efeito pequeno; o resultado diz se o ganho se repetiu.
+- [ ] **2e.8** Mostrar a qualidade da medida em toda tela que mostra ganho: "medida boa" ou "medida fraca (programas pesados abertos em
+  3 de 5 leituras)", com o que fazer para medir melhor.
+
 ### Fase 3: o segundo plano dentro do aplicativo
 - [ ] **3.1** Levar o código de `exe/Katharos.cs` (leitura, regras, sessões, minutos, ícone, painel ao vivo, sensores externos) para o
   aplicativo, como um modo `--segundo-plano` do mesmo executável. Mantém os formatos de `agora.json`, `minutos.jsonl` e `sessoes.jsonl`.
@@ -494,3 +557,4 @@ Tarefas a mais desta reformulação:
 | 10 nov 2026 | I2 pensar por evento (fim de sessão no exe; depois de aplicar e desfazer no Katharos; relógio vira reserva de 6 h) | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | I3 linha de base por PC (`65-motor.py`, `linha-de-base.json`, faixa do normal nos gráficos do ícone, regra "fora do normal deste PC") | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | I4 confiança pelos dados (uma sessão só não conclui nada); I5 previsão x resultado (`conselheiro_feitos`, "o que eu previ e o que aconteceu"); I6 "ajudou?" e "não me importa" no ícone e na CLI | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | fases 2d (versões do Windows) e 2e (medidas fiéis) no plano | 3.1.2 | ramo v4 | pedidos do usuário |
