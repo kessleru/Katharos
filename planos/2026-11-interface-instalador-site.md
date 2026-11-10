@@ -13,6 +13,7 @@ cada tarefa tem um código; quando ficar pronta, marque `[x]`, anote no **Regist
 | 1 | motor com API (o Python conversa com a interface por JSON) | a fazer |
 | 2 | o aplicativo com janelas (Katharos.App), com o painel dentro dele | a fazer |
 | 2b | raio-x mais completo e otimizações guiadas por evidência | a fazer |
+| 2c | prova em jogo: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | a fazer |
 | 3 | o segundo plano dentro do aplicativo | a fazer |
 | 4 | instalador e atualização (Velopack) | a fazer |
 | 5 | publicação dos dois produtos e assinatura do executável | a fazer |
@@ -227,6 +228,42 @@ Otimizações:
 - [ ] **2b.14** Revisar os 176 itens: tirar o que não dá ganho medido nas provas, juntar os parecidos, e reescrever o texto de cada um no
   formato de três linhas (D9).
 
+### Fase 2c: prova em jogo
+Pedido de 10 nov: provar o ganho com número que gamer entende, e com o PC real. Pode começar antes da interface (o Katharos.exe de hoje
+já tem o segundo plano e as sessões); o que for tela entra nas telas Ao vivo, Jogos e Histórico da fase 2.
+
+Teste no PC real (primeiro, antes de tudo o que vem abaixo):
+- [ ] **2c.1** Roteiro de teste no kesslerupc, com a pessoa jogando: `Katharos.exe --sensores` com o MSI Afterburner aberto (temperatura da
+  CPU), ícone e painel ao vivo, sessão de jogo gravada e o limite certo (comparar com o que o Afterburner mostra), migração do acompanhamento
+  contínuo, aviso do SmartScreen, pausar, ritmo, sair e voltar no próximo início do Windows.
+- [ ] **2c.2** Anotar o resultado de cada ponto (funcionou, falhou, com print) na ficha do kesslerupc no cofre e corrigir o que falhar,
+  com teste novo para cada falha.
+
+FPS de verdade:
+- [ ] **2c.3** Pesquisar e decidir a captura de FPS: PresentMon (Intel, código aberto, MIT) pelos eventos do Windows (ETW), como o CapFrameX
+  faz. Confirmar antes: se precisa de administrador ou só do grupo "Usuários de log de desempenho", se algum anti-cheat (Vanguard, FACEIT,
+  EAC, BattlEye) reclama, o custo de CPU e o tamanho. Sem confirmação de que é seguro com anti-cheat, não entra.
+- [ ] **2c.4** Medir no segundo plano, só durante a sessão de jogo: FPS médio, 1 % e 0,1 % mais baixos, tempo de quadro (média e
+  variação), e as travadas (quadros acima de 2x a média). Nunca abre o processo do jogo: só lê os eventos de apresentação do Windows.
+- [ ] **2c.5** Gravar na sessão (`sessoes.jsonl`) e no minuto (`minutos.jsonl`), mostrar no painel ao vivo (FPS e tempo de quadro em
+  gráfico) e cruzar com os limites: "FPS caiu quando a CPU freou" vira conclusão.
+
+Antes e depois por jogo:
+- [ ] **2c.6** A central compara as sessões do mesmo jogo antes e depois de cada mudança (pacote aplicado, turbo, troca de modo), com
+  pelo menos 3 sessões de cada lado e duração parecida, e diz o resultado em número: FPS médio, 1 % low, travadas, temperatura, limite.
+  Diferença menor que a variação entre sessões vira "sem diferença" (mesma regra da prova de ganho).
+- [ ] **2c.7** Entra nas provas (`provas.jsonl`) por item e por rodada, no Histórico da interface e no `aovivo`. Vale para qualquer jogo
+  detectado, sem nada específico de um jogo.
+- [ ] **2c.8** Se a mudança piorou o jogo, a central propõe desfazer aquela área, com o número que mostra a piora.
+
+Travadas por driver:
+- [ ] **2c.9** Medir a latência de DPC e de interrupção por driver (o que o LatencyMon faz), pelos eventos do kernel do Windows (ETW), num
+  teste de 1 a 2 minutos que a pessoa pede (`travadas` ou um botão), não o tempo todo. Precisa de administrador.
+- [ ] **2c.10** Dizer o culpado em linguagem simples: "o driver de rede (ndis.sys) segura o processador por 2 ms; atualize o driver da
+  placa de rede pelo site do fabricante", com o que fazer para os culpados comuns (rede, Wi-Fi, áudio, armazenamento, ACPI, placa de vídeo).
+- [ ] **2c.11** Rodar sozinho uma vez quando a sessão de jogo tiver travadas sem nenhum limite (CPU, GPU, RAM, disco e calor normais) e
+  entrar no raio-x como achado.
+
 ### Fase 3: o segundo plano dentro do aplicativo
 - [ ] **3.1** Levar o código de `exe/Katharos.cs` (leitura, regras, sessões, minutos, ícone, painel ao vivo, sensores externos) para o
   aplicativo, como um modo `--segundo-plano` do mesmo executável. Mantém os formatos de `agora.json`, `minutos.jsonl` e `sessoes.jsonl`.
@@ -311,4 +348,5 @@ Otimizações:
 |---|---|---|---|---|
 | 10 nov 2026 | plano escrito | 3.1.2 | (este commit) | pesquisa: Velopack, Avalonia/WPF, assinatura, Astro + shadcn + Magic UI |
 | 10 nov 2026 | plano ampliado: painel dentro da interface (D8), fácil para leigos (D9), fase 2b (raio-x e otimizações) | 3.1.2 | 5380a0f | pedido do usuário |
-| 10 nov 2026 | bibliotecas de referência grátis no lugar do Magic (21st.dev) | 3.1.2 | (este commit) | shadcn MCP, Magic UI MCP, React Bits, Aceternity, Context7 |
+| 10 nov 2026 | bibliotecas de referência grátis no lugar do Magic (21st.dev) | 3.1.2 | 960b503 | shadcn MCP, Magic UI MCP, React Bits, Aceternity, Context7 |
+| 10 nov 2026 | fase 2c: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | 3.1.2 | (este commit) | pedido do usuário (itens 1, 2, 3 e 5 das sugestões) |
