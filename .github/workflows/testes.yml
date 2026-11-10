@@ -32,6 +32,9 @@ jobs:
           $p = Start-Process .\Katharos.exe -ArgumentList '--sensores', "$d\sensores.json" -Wait -PassThru
           if ($p.ExitCode) { exit 1 }
           Get-Content "$d\sensores.json"
+          $p = Start-Process .\Katharos.exe -ArgumentList '--teste-fps', "$d\teste-fps.txt" -Wait -PassThru
+          Get-Content "$d\teste-fps.txt"
+          if ($p.ExitCode) { exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--teste-externos', "$d\teste-externos.txt" -Wait -PassThru
           Get-Content "$d\teste-externos.txt"
           if ($p.ExitCode) { exit 1 }

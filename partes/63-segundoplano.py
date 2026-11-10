@@ -117,7 +117,7 @@ def config_segundo_plano():
         intervalo = 1.0
     return {'versao': VERSAO, 'ps1': str(ps1), 'py': str(py if not py.name.lower().startswith('pythonw') else py.with_name('python.exe')),
             'pyw': str(pyw) if pyw.exists() else '', 'kpy': str(CASA / 'katharos.py'), 'intervalo_s': intervalo,
-            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'),
+            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'), 'fps': config('fps', 'sim'),
             'aviso_cpu': REGRAS_MOTOR['calor_cpu'], 'aviso_gpu': REGRAS_MOTOR['calor_gpu'],
             'nomes_de_jogo': nomes_de_jogo()}
 
@@ -210,6 +210,9 @@ def instala_segundo_plano(ctx, mostrar=True, quieto=False):
             if destino.is_file() and sp_rodando():
                 sp_para()
             shutil.copy2(origem, destino)
+        pm = origem.with_name('PresentMon.exe')
+        if pm.is_file() and pm.resolve() != (CASA / 'PresentMon.exe').resolve():
+            shutil.copy2(pm, CASA / 'PresentMon.exe')   # FPS nas sessões de jogo (Intel, licença MIT); roda só durante o jogo
     except OSError as e:
         if not quieto:
             t.erro(f'Não consegui copiar o Katharos.exe para {CASA} ({e}). Feche o ícone do Katharos e tente de novo.')
@@ -316,6 +319,37 @@ def completa_temperaturas(m, cpu='temperatura', cpu_fonte='temp_fonte', gpu='tem
     if x.get('gpu') is not None and m.get(gpu) is None:
         m[gpu], m[gpu_fonte] = x['gpu'], x.get('gpu_fonte')
     return m
+
+
+# ───────── FPS de verdade: o grupo "Usuários de log de desempenho" ─────────
+# O PresentMon lê eventos do Windows (ETW) e, sem administrador, só funciona para quem está nesse grupo (SID S-1-5-32-559, o nome
+# muda com o idioma). Entrar no grupo é opcional, pedido e explicado; vale depois de sair e entrar na conta; desligar tira de volta.
+GRUPO_LOG_DESEMPENHO = 'S-1-5-32-559'
+
+
+def fps_no_grupo(ctx):
+    """O usuário já está no grupo? (lido do Windows; None se não deu para saber)"""
+    if not WINDOWS:
+        return None
+    s = roda_ps(ctx.t, f"Dado 'grupo' ([bool](Tenta {{ Get-LocalGroupMember -SID '{GRUPO_LOG_DESEMPENHO}' -ErrorAction Stop | Where-Object {{ $_.Name -like ('*\\' + $env:USERNAME) }} }} $null))",
+                'fps-grupo', minutos=1, mostra=False)
+    return s.dados.get('grupo')
+
+
+def fps_permissao(ctx, ligar=True):
+    """Põe (ou tira) o seu usuário no grupo. Precisa de administrador; vale depois de sair e entrar de novo na conta do Windows."""
+    acao = 'Add-LocalGroupMember' if ligar else 'Remove-LocalGroupMember'
+    corpo = f'''
+$__quem = "$env:USERDOMAIN\\$env:USERNAME"
+if ($TESTE) {{ Plano '{"pôr" if ligar else "tirar"} o seu usuário no grupo Usuários de log de desempenho (medida de FPS)'; return }}
+try {{ {acao} -SID '{GRUPO_LOG_DESEMPENHO}' -Member $__quem -ErrorAction Stop; Feito '{"medida de FPS liberada: vale depois de sair e entrar na conta" if ligar else "medida de FPS desligada"}' }}
+catch {{ if ("$($_.Exception.Message)" -match 'already|já é membro|not a member|não é membro') {{ Feito 'já estava assim' }} else {{ Aviso ("nao consegui: " + $_.Exception.Message) }} }}
+'''
+    s = roda_ps(ctx.t, corpo, 'fps-permissao', minutos=1)
+    if s.ok and not s.erros:
+        marca_estado('fps_grupo', 'sim' if ligar else 'nao')
+        return True
+    return False
 
 
 # ───────── os dados que o executável grava ─────────
@@ -429,6 +463,7 @@ def ferramenta_segundo_plano(ctx, args):
               ('ritmo', f'a cada {config("tempo-real", "1")} s'),
               ('com jogo aberto', 'continua lendo' if config('coleta-em-jogo', 'segura') != 'pausar' else 'pausa'),
               ('avisos', config('avisos', 'sim')),
+              ('FPS nos jogos', {'sim': 'ligado' + ('' if estado().get('fps_grupo') == 'sim' else ' (falta liberar: f)'), 'nao': 'desligado'}.get(config('fps', 'sim'), '-')),
               ('agora', (f'CPU {br(a.get("cpu"), 0)} % · GPU {br(a.get("gpu"), 0)} % · RAM {br(a.get("ram_pct"), 0)} %'
                          + (f' · {br(a.get("temp_cpu"), 0)} °C' if a.get('temp_cpu') is not None else '')) if a else '-'),
               ('sessões de jogo (30 dias)', str(len(ss)))])
@@ -436,7 +471,7 @@ def ferramenta_segundo_plano(ctx, args):
         return 0
     t.escreve()
     t.paragrafo('l = ligar (e abrir o painel) · d = desligar · r = ritmo (1, 2, 5 ou 10 s) · j = com jogo aberto (continuar ou pausar) · '
-                'a = avisos (sim ou não) · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
+                'a = avisos (sim ou não) · f = medir FPS nos jogos · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
     r = t.pergunta('fazer').strip().lower()[:1]
     if r == 'l':
         return 0 if instala_segundo_plano(ctx, mostrar=True) else 1
@@ -457,9 +492,38 @@ def ferramenta_segundo_plano(ctx, args):
         salva_config('avisos', 'nao' if config('avisos', 'sim') == 'sim' else 'sim')
         escreve_config_sp()
         t.ok('Avisos: ' + config('avisos'))
+    elif r == 'f':
+        return liga_fps(ctx, args)
     elif r == 'v':
         return ferramenta_aovivo(ctx, args)
     return 0
+
+
+def liga_fps(ctx, args):
+    """Explica, pergunta e libera (ou desliga) a medida de FPS. Nada muda sem o sim da pessoa."""
+    t = ctx.t
+    if config('fps', 'sim') == 'sim' and estado().get('fps_grupo') == 'sim':
+        if t.confirma('A medida de FPS está ligada. Desligar e tirar o seu usuário do grupo "Usuários de log de desempenho"?', sim=False):
+            if not precisa_admin(ctx, args):
+                return 1
+            fps_permissao(ctx, ligar=False)
+            salva_config('fps', 'nao')
+            escreve_config_sp()
+        return 0
+    t.paragrafo('Para medir o FPS de verdade (média, 1% low e travadas) durante os jogos, o Katharos usa o PresentMon, da Intel: ele lê '
+                'os eventos de quadro que o próprio Windows registra, como o FrameView da NVIDIA e o CapFrameX. Não abre, não lê e não muda '
+                'nada no jogo. O Windows só deixa isso para quem está no grupo "Usuários de log de desempenho". O Katharos põe o seu '
+                'usuário nesse grupo (vale depois de sair e entrar na conta) e tira de volta quando você desligar.', 2, 'sub')
+    if not t.confirma('Liberar a medida de FPS?', sim=False):
+        return 0
+    if not precisa_admin(ctx, args):
+        return 1
+    if fps_permissao(ctx, ligar=True):
+        salva_config('fps', 'sim')
+        escreve_config_sp()
+        t.ok('Pronto. Saia e entre de novo na sua conta do Windows (ou reinicie) para começar a medir.')
+        return 0
+    return 1
 
 
 def ferramenta_aovivo(ctx, args):
@@ -497,6 +561,10 @@ def ferramenta_aovivo(ctx, args):
                   f'  temp  CPU {br(a.get("temp_cpu"), 0) if a.get("temp_cpu") is not None else "-"} °C · GPU {br(a.get("temp_gpu"), 0) if a.get("temp_gpu") is not None else "-"} °C',
                   f'  disco {br(a.get("disco"), 0):>4} %   rede ↓ {br((a.get("rede_baixa_mbs") or 0) * 8, 1)} Mb/s ↑ {br((a.get("rede_sobe_mbs") or 0) * 8, 1)} Mb/s',
                   ('  jogo  ' + f'{j.get("nome")} há {br(j.get("min"), 0)} min · limite: {NOMES_LIMITE.get(j.get("principal"), j.get("principal"))}') if j else '  jogo  nenhum aberto']
+            if j and j.get('fps') is not None:
+                ls.append(f'  fps   {br(j.get("fps"), 0):>4}     média {br(j.get("fps_med"), 0)} · 1% low {br(j.get("fps_1low"), 0)} · travadas/min {br(j.get("travadas_por_min"), 1)}')
+            elif j and j.get('fps_estado') == 'sem permissão':
+                ls.append('  fps   não liberado: katharos segundo-plano, opção f')
             for c in (a.get('conclusoes') or [])[:2]:
                 ls.append(f'  {"!" if c.get("nivel", 0) >= 1 else "·"} {c.get("titulo")}: {c.get("texto")}'[:160])
             if linhas_ant and t.interativo and t.cor:

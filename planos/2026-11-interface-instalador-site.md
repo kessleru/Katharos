@@ -350,21 +350,21 @@ Teste no PC real (primeiro, antes de tudo o que vem abaixo):
   com teste novo para cada falha.
 
 FPS de verdade:
-- [ ] **2c.3** Pesquisar e decidir a captura de FPS: PresentMon (Intel, código aberto, MIT) pelos eventos do Windows (ETW), como o CapFrameX
+- [x] **2c.3** Pesquisar e decidir a captura de FPS: PresentMon (Intel, código aberto, MIT) pelos eventos do Windows (ETW), como o CapFrameX
   faz. Confirmar antes: se precisa de administrador ou só do grupo "Usuários de log de desempenho", se algum anti-cheat (Vanguard, FACEIT,
   EAC, BattlEye) reclama, o custo de CPU e o tamanho. Sem confirmação de que é seguro com anti-cheat, não entra.
-- [ ] **2c.4** Medir no segundo plano, só durante a sessão de jogo: FPS médio, 1 % e 0,1 % mais baixos, tempo de quadro (média e
+- [x] **2c.4** Medir no segundo plano, só durante a sessão de jogo: FPS médio, 1 % e 0,1 % mais baixos, tempo de quadro (média e
   variação), e as travadas (quadros acima de 2x a média). Nunca abre o processo do jogo: só lê os eventos de apresentação do Windows.
-- [ ] **2c.5** Gravar na sessão (`sessoes.jsonl`) e no minuto (`minutos.jsonl`), mostrar no painel ao vivo (FPS e tempo de quadro em
+- [x] **2c.5** Gravar na sessão (`sessoes.jsonl`) e no minuto (`minutos.jsonl`), mostrar no painel ao vivo (FPS e tempo de quadro em
   gráfico) e cruzar com os limites: "FPS caiu quando a CPU freou" vira conclusão.
 
 Antes e depois por jogo:
-- [ ] **2c.6** A central compara as sessões do mesmo jogo antes e depois de cada mudança (pacote aplicado, turbo, troca de modo), com
+- [x] **2c.6** A central compara as sessões do mesmo jogo antes e depois de cada mudança (pacote aplicado, turbo, troca de modo), com
   pelo menos 3 sessões de cada lado e duração parecida, e diz o resultado em número: FPS médio, 1 % low, travadas, temperatura, limite.
   Diferença menor que a variação entre sessões vira "sem diferença" (mesma regra da prova de ganho).
 - [ ] **2c.7** Entra nas provas (`provas.jsonl`) por item e por rodada, no Histórico da interface e no `aovivo`. Vale para qualquer jogo
   detectado, sem nada específico de um jogo.
-- [ ] **2c.8** Se a mudança piorou o jogo, a central propõe desfazer aquela área, com o número que mostra a piora.
+- [x] **2c.8** Se a mudança piorou o jogo, a central propõe desfazer aquela área, com o número que mostra a piora.
 
 Travadas por driver:
 - [ ] **2c.9** Medir a latência de DPC e de interrupção por driver (o que o LatencyMon faz), pelos eventos do kernel do Windows (ETW), num
@@ -484,6 +484,10 @@ Ferramentas para isso (usar, não só citar):
   testar variações de seção antes de codar, como já foi feito na cena do hero) e o navegador para conferir no celular e no computador.
 - Referências de sites com a mesma ideia de arte (Hermes/Nous, kc1t e outros), com crítica: pegar o que serve, não copiar.
 
+**Todas as seções repaginadas** (pedido de 10 nov, 19:53): repensar cada seção depois do hero; criar seções novas (ao vivo e central de
+inteligência, FPS de verdade, versões do Windows, segurança, CLI x GUI) e tirar as que não fazem mais sentido. Nada fica como está só porque
+já existia; o hero é a única parte que mantém a pegada.
+
 Tarefas a mais desta reformulação:
 - [ ] **6.0** Direção visual antes de codar: 2 ou 3 propostas para as seções depois do hero (rascunho no Figma ou em HTML), escolha com o
   dono e registro da escolha no cofre (`04 • Decisions`).
@@ -583,3 +587,5 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | 2e.1 a 2e.5: contexto em cada minuto (tempo ligado, processos, RAM do sistema x da conta, manutenção, top 5), minuto sujo fora da conta, diferença com margem (bootstrap), benchmark com bancada (mostra, pede, espera a CPU, pausa o segundo plano; nunca fecha nada) | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | seção de segurança do PC (S1, S2) no plano | 3.1.2 | ramo v4 | pedido do usuário |
 | 10 nov 2026 | S2 lista única de processos protegidos (`NUNCA_ENCERRAR` em `28-windows.py`, ampliada) e `pode_sugerir_fechar`; a bancada do benchmark só sugere fechar programa da pessoa | 3.1.2 | ramo v4 | |
+| 10 nov 2026 | 2c.3 a 2c.6 e 2c.8: FPS pelo PresentMon (Intel, MIT, v2.6.0 fixa no zip), só durante a sessão de jogo; média, 1% low e 0,1% low (média dos quadros mais lentos), travadas; permissão pelo grupo Usuários de log de desempenho com confirmação e volta; FPS no ícone, no `aovivo`, nas sessões e no painel; antes e depois por jogo com margem e proposta de desfazer quando piora | 3.1.2 | ramo v4 | autoteste `--teste-fps` |
+| 10 nov 2026 | site: todas as seções repaginadas, criar e tirar seções (fase 6) | 3.1.2 | ramo v4 | pedido do usuário |

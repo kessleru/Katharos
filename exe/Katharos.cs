@@ -139,6 +139,7 @@ namespace KatharosApp
         public bool PausarEmJogo = false;
         public double AvisoCpu = Lim.G("calor_cpu"), AvisoGpu = Lim.G("calor_gpu");
         public bool Notificar = true;
+        public bool Fps = true;
         public List<string> NomesJogo = new List<string>();
 
         public static Config Le()
@@ -157,6 +158,7 @@ namespace KatharosApp
                 if (Dbl(d, "aviso_gpu", out v) && v > 40 && v < 120) c.AvisoGpu = v;
                 c.PausarEmJogo = Txt(d, "em_jogo") == "pausar";
                 c.Notificar = Txt(d, "notificar") != "nao";
+                c.Fps = Txt(d, "fps") != "nao";
                 object n;
                 if (d.TryGetValue("nomes_de_jogo", out n) && n is object[])
                     foreach (var x in (object[])n) if (x != null) c.NomesJogo.Add(x.ToString().ToLowerInvariant());
@@ -532,6 +534,7 @@ namespace KatharosApp
         public int PrimeiroPlanoPid; public bool TelaCheia; public bool AntiCheat;
         public string Jogo; public int JogoPid;
         // contexto (2e): o que pode distorcer a medida
+        public double? Fps;
         public double? UptimeH, RamSistemaGb, RamContaGb; public int? Processos; public string Manutencao, Top;
         public double? VramPct { get { return (VramGb.HasValue && VramTotalGb.HasValue && VramTotalGb.Value > 0) ? (double?)(VramGb.Value / VramTotalGb.Value * 100) : null; } }
     }
@@ -976,11 +979,164 @@ namespace KatharosApp
         }
     }
 
+    // ───────── FPS de verdade (fase 2c): PresentMon, da Intel, só durante a sessão de jogo ─────────
+    // O PresentMon lê os eventos de apresentação de quadros do próprio Windows (ETW), como o FrameView e o CapFrameX: não abre, não lê
+    // e não injeta nada no jogo. Precisa que o usuário esteja no grupo "Usuários de log de desempenho" (o Katharos pede e explica antes).
+    class Fps
+    {
+        Process proc; Thread fio;
+        readonly object trava = new object();
+        readonly int[] hist = new int[4000];          // tempo de quadro em décimos de ms, até 400 ms
+        readonly Queue<KeyValuePair<DateTime, double>> recentes = new Queue<KeyValuePair<DateTime, double>>();
+        readonly Queue<double> janela = new Queue<double>();   // últimos 60 quadros, para achar travada
+        double somaJanela; long frames; double somaMs; int travadas; DateTime inicio;
+        public string Estado = "";   // "" | "medindo" | "sem permissão" | "sem PresentMon" | "erro"
+        // por minuto
+        long framesMin; double somaMsMin; double piorSegMin = double.MaxValue;
+
+        public static string Caminho()
+        {
+            string a = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PresentMon.exe");
+            if (File.Exists(a)) return a;
+            a = K.Arq("PresentMon.exe");
+            return File.Exists(a) ? a : null;
+        }
+
+        public void Inicia(int pid)
+        {
+            Para();
+            string exe = Caminho();
+            if (exe == null) { Estado = "sem PresentMon"; return; }
+            lock (trava)
+            {
+                Array.Clear(hist, 0, hist.Length); recentes.Clear(); janela.Clear(); somaJanela = 0; frames = 0; somaMs = 0; travadas = 0;
+                inicio = DateTime.Now; framesMin = 0; somaMsMin = 0; piorSegMin = double.MaxValue;
+            }
+            try
+            {
+                var p = new ProcessStartInfo(exe, "--process_id " + pid.ToString(K.INV) + " --output_stdout --no_console_stats --stop_existing_session --session_name KatharosFPS");
+                p.UseShellExecute = false; p.CreateNoWindow = true; p.RedirectStandardOutput = true; p.RedirectStandardError = true;
+                proc = Process.Start(p);
+                try { proc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+                Estado = "medindo";
+                var meu = proc;
+                fio = new Thread(delegate () { Le(meu); }) { IsBackground = true, Priority = ThreadPriority.BelowNormal };
+                fio.Start();
+                new Thread(delegate ()
+                {
+                    try
+                    {
+                        string erro = meu.StandardError.ReadToEnd();
+                        if (erro.IndexOf("access denied", StringComparison.OrdinalIgnoreCase) >= 0 || erro.IndexOf("acesso negado", StringComparison.OrdinalIgnoreCase) >= 0)
+                        { Estado = "sem permissão"; Log.Escreve("FPS: sem permissão (usuário fora do grupo Usuários de log de desempenho)"); }
+                        else if (erro.Trim().Length > 0) Log.Escreve("FPS: " + erro.Trim().Split('\n')[0]);
+                    }
+                    catch { }
+                }) { IsBackground = true }.Start();
+            }
+            catch (Exception e) { Estado = "erro"; Log.Escreve("FPS: " + e.Message); }
+        }
+
+        void Le(Process p)
+        {
+            try
+            {
+                int col = -1; string linha;
+                while ((linha = p.StandardOutput.ReadLine()) != null)
+                {
+                    var c = linha.Split(',');
+                    if (col < 0) { col = Array.IndexOf(c, "MsBetweenPresents"); continue; }
+                    double ms;
+                    if (col >= c.Length || !double.TryParse(c[col], NumberStyles.Float, K.INV, out ms) || ms <= 0 || ms > 5000) continue;
+                    Soma(ms);
+                }
+            }
+            catch { }
+        }
+
+        public void SomaParaTeste(double ms) { lock (trava) { if (inicio == DateTime.MinValue) inicio = DateTime.Now.AddMinutes(-1); } Soma(ms); }
+
+        void Soma(double ms)
+        {
+            lock (trava)
+            {
+                frames++; somaMs += ms; framesMin++; somaMsMin += ms;
+                hist[Math.Min(hist.Length - 1, (int)(ms * 10))]++;
+                if (janela.Count >= 20 && ms > 2 * somaJanela / janela.Count && ms > 25) travadas++;   // quadro 2x mais lento que o normal recente
+                janela.Enqueue(ms); somaJanela += ms; if (janela.Count > 60) somaJanela -= janela.Dequeue();
+                var agora = DateTime.Now;
+                recentes.Enqueue(new KeyValuePair<DateTime, double>(agora, ms));
+                while (recentes.Count > 0 && (agora - recentes.Peek().Key).TotalSeconds > 1) recentes.Dequeue();
+            }
+        }
+
+        public double? Agora()
+        {
+            lock (trava)
+            {
+                if (recentes.Count < 2) return null;
+                double soma = 0; foreach (var r in recentes) soma += r.Value;
+                double f = 1000.0 * recentes.Count / soma;
+                if (f < piorSegMin) piorSegMin = f;
+                return f;
+            }
+        }
+
+        // média do tempo de quadro dos `fracao` (ex.: 1 %) quadros mais lentos: é o "1% low" dos medidores de jogo (CapFrameX, FrameView)
+        double MediaDosPiores(double fracao)
+        {
+            long alvo = Math.Max(1, (long)Math.Ceiling(frames * fracao)), conta = 0; double soma = 0;
+            for (int i = hist.Length - 1; i >= 0 && conta < alvo; i--)
+            {
+                long usa = Math.Min(hist[i], alvo - conta);
+                conta += usa; soma += usa * (i + 0.5) / 10.0;
+            }
+            return soma / Math.Max(1, conta);
+        }
+
+        public Dictionary<string, object> Resumo()
+        {
+            lock (trava)
+            {
+                if (frames < 100) return null;
+                var d = new Dictionary<string, object>();
+                d["fps_med"] = Math.Round(1000.0 * frames / somaMs, 1);
+                d["fps_1low"] = Math.Round(1000.0 / MediaDosPiores(0.01), 1);
+                d["fps_01low"] = Math.Round(1000.0 / MediaDosPiores(0.001), 1);
+                double min = Math.Max(1, (DateTime.Now - inicio).TotalMinutes);
+                d["travadas_por_min"] = Math.Round(travadas / min, 2);
+                d["frames"] = frames;
+                return d;
+            }
+        }
+
+        public Dictionary<string, object> FechaMinuto()
+        {
+            lock (trava)
+            {
+                if (framesMin < 30) { framesMin = 0; somaMsMin = 0; piorSegMin = double.MaxValue; return null; }
+                var d = new Dictionary<string, object>();
+                d["fps"] = Math.Round(1000.0 * framesMin / somaMsMin, 1);
+                if (piorSegMin < double.MaxValue) d["fps_pior_seg"] = Math.Round(piorSegMin, 1);
+                framesMin = 0; somaMsMin = 0; piorSegMin = double.MaxValue;
+                return d;
+            }
+        }
+
+        public void Para()
+        {
+            var p = proc; proc = null;
+            if (p != null) { try { if (!p.HasExited) p.Kill(); } catch { } try { p.Dispose(); } catch { } }   // só o PresentMon que o Katharos abriu
+            if (Estado == "medindo") Estado = "";
+        }
+    }
+
     class Sessao
     {
         public string Jogo; public int Pid; public DateTime Inicio, Ultimo;
         public int N; double sCpu, sGpu, sNuc, sRam; double mCpu, mGpu, mNuc, mRam, mVram, mTc = -1, mTg = -1; double mDesemp = 1000;
         public readonly Dictionary<string, int> Marcas = new Dictionary<string, int>();
+        public Dictionary<string, object> FpsResumo;
 
         public void Soma(Amostra a, Config c)
         {
@@ -1020,6 +1176,7 @@ namespace KatharosApp
             foreach (var kv in Marcas) t[kv.Key] = Math.Round(100.0 * kv.Value / n, 0);
             d["tempo_no_limite"] = t;
             d["principal"] = Principal();
+            if (FpsResumo != null) foreach (var kv in FpsResumo) d[kv.Key] = kv.Value;
             return d;
         }
     }
@@ -1027,6 +1184,7 @@ namespace KatharosApp
     class Minuto
     {
         public DateTime Inicio; int n; double sCpu, sGpu, sRam, sDisco, sRede; double mCpu, mGpu, mNuc, mTc = -1, mTg = -1, mVram; double mDesemp = 1000; public string Jogo;
+        public Dictionary<string, object> FpsMin;
         int nManut, nBat, nProc; double sProc, sRamSis, sRamConta, minUp = double.MaxValue; int nRamSis; readonly HashSet<string> manut = new HashSet<string>();
         public Minuto(DateTime t) { Inicio = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0); }
         public void Soma(Amostra a)
@@ -1069,6 +1227,7 @@ namespace KatharosApp
             if (minUp < double.MaxValue) d["ligado_h"] = Math.Round(minUp, 2);
             if (manut.Count > 0) d["manutencao"] = string.Join(", ", new List<string>(manut).ToArray());
             if (nBat > n / 2) d["bateria"] = true;
+            if (FpsMin != null) foreach (var kv in FpsMin) d[kv.Key] = kv.Value;
             if (nManut * 3 >= n || (minUp < double.MaxValue && minUp * 60 < Lim.G("minutos_depois_do_boot"))) d["sujo"] = true;
             return new JavaScriptSerializer().Serialize(d);
         }
@@ -1095,6 +1254,7 @@ namespace KatharosApp
         public readonly List<Amostra> Historico = new List<Amostra>(); // últimos 2 min, para os gráficos do painel
         public Amostra Ultima;
         public Sessao Sessao;
+        public readonly Fps Fps = new Fps();
         public List<Conclusao> Conclusoes = new List<Conclusao>();
         public bool Pausado;
         public DateTime Desde = DateTime.Now;
@@ -1186,6 +1346,7 @@ namespace KatharosApp
                         Sessao = new Sessao { Jogo = nomeTop, Pid = a.TopGpuPid, Inicio = candidatoDesde, Ultimo = agora };
                         semJogoDesde = DateTime.MaxValue;
                         Log.Escreve("jogo aberto: " + nomeTop);
+                        if (Cfg.Fps) Fps.Inicia(a.TopGpuPid);
                     }
                 }
                 else candidatoPid = 0;
@@ -1198,13 +1359,15 @@ namespace KatharosApp
                 else if (semJogoDesde == DateTime.MaxValue) semJogoDesde = agora;
                 if (!vivo || (agora - semJogoDesde).TotalSeconds >= Lim.G("jogo_segundos_fechar")) FechaSessao();
             }
-            if (Sessao != null) { a.Jogo = Sessao.Jogo; a.JogoPid = Sessao.Pid; }
+            if (Sessao != null) { a.Jogo = Sessao.Jogo; a.JogoPid = Sessao.Pid; a.Fps = Fps.Agora(); }
         }
 
         void FechaSessao()
         {
             var s = Sessao; Sessao = null; candidatoPid = 0;
             if (s == null) return;
+            s.FpsResumo = Fps.Resumo();
+            Fps.Para();
             Log.Escreve("jogo fechado: " + s.Jogo + ", " + Math.Round((s.Ultimo - s.Inicio).TotalMinutes, 1).ToString(K.INV) + " min");
             if ((s.Ultimo - s.Inicio).TotalMinutes < 1 || s.N < 5) return;
             Acrescenta("sessoes.jsonl", new JavaScriptSerializer().Serialize(s.Json()));
@@ -1214,6 +1377,7 @@ namespace KatharosApp
         void FechaMinuto()
         {
             if (minuto == null) return;
+            minuto.FpsMin = Fps.FechaMinuto();
             string l = minuto.Linha();
             if (l != null) Acrescenta("minutos.jsonl", l);
             minuto = null;
@@ -1265,6 +1429,8 @@ namespace KatharosApp
                 var j = new Dictionary<string, object>();
                 j["nome"] = Sessao.Jogo; j["desde"] = K.Iso(Sessao.Inicio); j["min"] = Math.Round((a.Quando - Sessao.Inicio).TotalMinutes, 1);
                 j["principal"] = Sessao.Principal();
+                j["fps"] = K.R(a.Fps, 0); j["fps_estado"] = Fps.Estado;
+                var fr = Fps.Resumo(); if (fr != null) foreach (var kv in fr) j[kv.Key] = kv.Value;
                 d["jogo"] = j;
             }
             var cs = new List<object>();
@@ -1578,7 +1744,17 @@ namespace KatharosApp
                 y = Linha(g, pinta, y, pad, "memória", K.Num(a.RamPct, 0) + " %", K.Num(a.RamGb, 1) + " de " + K.Num(a.RamTotalGb, 0) + " GB", hist, fRam, 100, a.RamPct >= 90, Faixa("ram", jg));
                 y = Linha(g, pinta, y, pad, "temperatura", valTemp, subTemp, hist, fTemp, 100, a.TempCpu >= motor.Cfg.AvisoCpu || a.TempGpu >= motor.Cfg.AvisoGpu, a.TempCpu.HasValue ? Faixa("temp_cpu", jg) : Faixa("temp_gpu", jg));
                 y = Linha(g, pinta, y, pad, "disco", K.Num(a.Disco, 0) + " %", "lê " + K.Num(a.DiscoLe, 1) + " · grava " + K.Num(a.DiscoGrava, 1) + " MB/s", hist, fDisco, 100, a.Disco >= 95, Faixa("disco", jg));
-                y = Linha(g, pinta, y, pad, "rede", K.Num((a.RedeBaixa ?? 0) * 8, 1) + " Mb/s", "baixando · enviando " + K.Num((a.RedeSobe ?? 0) * 8, 1) + " Mb/s", hist, fRede, 0, false);
+                if (ses != null)
+                {   // em jogo, o FPS de verdade vale mais que a rede
+                    var fr = motor.Fps.Resumo();
+                    string est = motor.Fps.Estado;
+                    string subFps = fr != null ? "média " + K.Num(Convert.ToDouble(fr["fps_med"]), 0) + " · 1% low " + K.Num(Convert.ToDouble(fr["fps_1low"]), 0)
+                                  : est == "sem permissão" ? "ligue a medida de FPS no Katharos" : est == "sem PresentMon" ? "medida de FPS não instalada" : "medindo...";
+                    Func<Amostra, double?> fFps = x => x.Fps;
+                    y = Linha(g, pinta, y, pad, "fps", a.Fps.HasValue ? K.Num(a.Fps, 0) : "-", subFps, hist, fFps, 0, false);
+                }
+                else
+                    y = Linha(g, pinta, y, pad, "rede", K.Num((a.RedeBaixa ?? 0) * 8, 1) + " Mb/s", "baixando · enviando " + K.Num((a.RedeSobe ?? 0) * 8, 1) + " Mb/s", hist, fRede, 0, false);
                 if (a.Bateria.HasValue && pinta) Texto(g, "bateria " + a.Bateria + " %" + (a.NaBateria ? ", fora da tomada" : ", na tomada"), fPequeno, Cor.Apagado, pad, y);
                 if (a.Bateria.HasValue) y += 18 * s;
             }
@@ -2111,6 +2287,22 @@ namespace KatharosApp
             return ok && res.Count == 4 ? 0 : 4;
         }
 
+        // tempos de quadro sintéticos: 990 a 120 FPS, 9 travadas de 50 ms, 1 de 100 ms
+        public static int TesteFps(string destino)
+        {
+            var f = new Fps();
+            for (int i = 0; i < 1000; i++)
+            {
+                f.SomaParaTeste(i % 100 == 50 ? (i == 550 ? 100.0 : 50.0) : 1000.0 / 120);
+            }
+            var r = f.Resumo();
+            double med = Convert.ToDouble(r["fps_med"]), low = Convert.ToDouble(r["fps_1low"]), low01 = Convert.ToDouble(r["fps_01low"]);
+            bool ok = med > 100 && med < 115 && low > 15 && low < 22 && low01 > 9 && low01 < 11 && low < med && Convert.ToDouble(r["travadas_por_min"]) > 0;
+            File.WriteAllText(Path.GetFullPath(destino), "media " + med.ToString(K.INV) + ", 1% low " + low.ToString(K.INV) + ", 0.1% low " + low01.ToString(K.INV) +
+                              ", travadas/min " + Convert.ToString(r["travadas_por_min"], K.INV) + (ok ? " ok" : " ERRADO") + "\n", new UTF8Encoding(false));
+            return ok ? 0 : 4;
+        }
+
         public static int Sensores(string destino)
         {
             var a = new Leitor().Le(Config.Le(), false);
@@ -2133,7 +2325,8 @@ namespace KatharosApp
                 var a = new Amostra { Quando = agora.AddSeconds(i - 120), Cpu = 38 + 20 * Math.Sin(i / 9.0) + rnd.Next(8), NucleoMax = 70 + rnd.Next(20),
                     CpuDesempenho = 112, CpuGhz = 4.2, Gpu = 90 + rnd.Next(9), VramGb = 6.1 + f, VramTotalGb = 8, RamPct = 61 + 4 * f, RamGb = 9.8 + 0.6 * f, RamTotalGb = 16,
                     Disco = 4 + rnd.Next(10), DiscoLe = 2.1, DiscoGrava = 0.8, RedeBaixa = 0.4 + rnd.NextDouble(), RedeSobe = 0.05,
-                    TempCpu = 68 + 6 * f + rnd.Next(2), TempCpuFonte = "LibreHardwareMonitor", TempGpu = 71 + 3 * f, TempGpuFonte = "driver de vídeo" };
+                    TempCpu = 68 + 6 * f + rnd.Next(2), TempCpuFonte = "LibreHardwareMonitor", TempGpu = 71 + 3 * f, TempGpuFonte = "driver de vídeo",
+                    Fps = 118 + 10 * Math.Sin(i / 7.0) + rnd.Next(6) };
                 m.Historico.Add(a); m.Ultima = a;
             }
             m.Sessao = new Sessao { Jogo = "eldenring", Pid = 1, Inicio = agora.AddMinutes(-47), Ultimo = agora };
@@ -2158,6 +2351,11 @@ namespace KatharosApp
         static int Main(string[] args)
         {
             var lista = new List<string>(args);
+            if (lista.Contains("--teste-fps"))
+            {
+                try { int i = lista.IndexOf("--teste-fps"); return Testes.TesteFps(i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-fps.txt")); }
+                catch (Exception e) { Log.Escreve("teste fps: " + e); return 3; }
+            }
             if (lista.Contains("--teste-externos"))
             {
                 try { int i = lista.IndexOf("--teste-externos"); return Testes.TesteExternos(i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-externos.txt")); }

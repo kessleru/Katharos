@@ -50,6 +50,9 @@ jobs:
           $p = Start-Process .\Katharos.exe -ArgumentList '--sensores', "$d\sensores.json" -Wait -PassThru
           if ($p.ExitCode) { exit 1 }
           Get-Content "$d\sensores.json"
+          $p = Start-Process .\Katharos.exe -ArgumentList '--teste-fps', "$d\teste-fps.txt" -Wait -PassThru
+          Get-Content "$d\teste-fps.txt"
+          if ($p.ExitCode) { exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--teste-externos', "$d\teste-externos.txt" -Wait -PassThru
           Get-Content "$d\teste-externos.txt"
           if ($p.ExitCode) { exit 1 }
@@ -71,6 +74,16 @@ jobs:
         with: { python-version: '3.12' }
       - uses: actions/download-artifact@v4
         with: { name: executavel, path: saida/exe }
+      - name: PresentMon (medida de FPS, Intel, licença MIT), versão fixa
+        env: { PM_VERSAO: v2.6.0 }
+        run: |
+          mkdir -p saida/pm
+          NOME=$(gh api "repos/GameTechDev/PresentMon/releases/tags/$PM_VERSAO" --jq '[.assets[].name | select(test("x64\\.exe$"; "i")) | select(test("setup|install|capture"; "i") | not)][0]')
+          if [ -z "$NOME" ] || [ "$NOME" = "null" ]; then echo "::error::não achei o PresentMon de console na release $PM_VERSAO"; exit 1; fi
+          gh release download "$PM_VERSAO" -R GameTechDev/PresentMon -p "$NOME" -D saida/pm
+          mv "saida/pm/$NOME" saida/pm/PresentMon.exe
+          curl -sSfL "https://raw.githubusercontent.com/GameTechDev/PresentMon/$PM_VERSAO/LICENSE.txt" -o saida/pm/PresentMon-LICENSE.txt
+          echo "PresentMon $PM_VERSAO ($NOME):"; sha256sum saida/pm/*
       - name: versão, changelog e tag
         id: v
         run: |
@@ -97,10 +110,10 @@ jobs:
         run: |
           mkdir -p saida
           git archive --format=zip --prefix=Katharos/ HEAD KATHAROS.bat programa README.md LICENSE SECURITY.md CHANGELOG.md SHA256SUMS.txt -o saida/Katharos.zip
-          mkdir -p saida/z/Katharos && cp saida/exe/Katharos.exe saida/z/Katharos/Katharos.exe
-          (cd saida/z && zip -q -X ../Katharos.zip Katharos/Katharos.exe)
+          mkdir -p saida/z/Katharos && cp saida/exe/Katharos.exe saida/pm/PresentMon.exe saida/pm/PresentMon-LICENSE.txt saida/z/Katharos/
+          (cd saida/z && zip -q -X ../Katharos.zip Katharos/Katharos.exe Katharos/PresentMon.exe Katharos/PresentMon-LICENSE.txt)
           cp programa/katharos.py saida/katharos.py
-          (cd saida && sha256sum katharos.py Katharos.zip > SHA256SUMS-release.txt && (cd z && sha256sum Katharos/Katharos.exe) >> SHA256SUMS-release.txt)
+          (cd saida && sha256sum katharos.py Katharos.zip > SHA256SUMS-release.txt && (cd z && sha256sum Katharos/Katharos.exe Katharos/PresentMon.exe) >> SHA256SUMS-release.txt)
           unzip -l saida/Katharos.zip
           python .github/scripts/notas_release.py "${{ steps.v.outputs.versao }}" "$(sha256sum programa/katharos.py | cut -d' ' -f1)" > notas.md
           cat saida/SHA256SUMS-release.txt

@@ -384,10 +384,11 @@ def _secao_ao_vivo(minutos, sessoes):
                    f'O que mais segurou: <b>{_e(NOMES_LIMITE.get(r["principal"], r["principal"]))}</b>.'
                    + (f' Tempo de cada limite: {"; ".join(partes_)}.' if partes_ else '') + '</p>')
         linhas = ''.join(f'<tr><td>{_e(s.get("jogo") or "?")}</td><td>{s["_dt"]:%d/%m %H:%M}</td><td>{_num(s.get("min"), 0)} min</td>'
+                         f'<td>{_num(s.get("fps_med"), 0) if isinstance(s.get("fps_med"), (int, float)) else "-"}</td><td>{_num(s.get("fps_1low"), 0) if isinstance(s.get("fps_1low"), (int, float)) else "-"}</td>'
                          f'<td>{_num(s.get("cpu"), 0)} %</td><td>{_num(s.get("gpu"), 0)} %</td><td>{_num(s.get("ram_max"), 0)} %</td>'
                          f'<td>{_num(s.get("temp_cpu_max"), 0) if isinstance(s.get("temp_cpu_max"), (int, float)) else "-"} / {_num(s.get("temp_gpu_max"), 0) if isinstance(s.get("temp_gpu_max"), (int, float)) else "-"} °C</td>'
                          f'<td>{_e(NOMES_LIMITE.get(s.get("principal"), s.get("principal") or "-"))}</td></tr>' for s in reversed(sessoes[-20:]))
-        out.append('<table><tr><th>jogo</th><th>quando</th><th>duração</th><th>CPU média</th><th>GPU média</th><th>RAM máx.</th><th>temp. máx. CPU / GPU</th><th>o que segurou</th></tr>'
+        out.append('<table><tr><th>jogo</th><th>quando</th><th>duração</th><th>FPS médio</th><th>1% low</th><th>CPU média</th><th>GPU média</th><th>RAM máx.</th><th>temp. máx. CPU / GPU</th><th>o que segurou</th></tr>'
                    + linhas + '</table><p class="legenda">"O que segurou" é o limite em que o jogo passou mais tempo (pelo menos 20 % da sessão). '
                    'Placa de vídeo no limite é o normal de um jogo pesado; CPU, calor, RAM ou disco no limite são o que dá para melhorar.</p>')
     return ''.join(out)

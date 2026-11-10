@@ -1070,7 +1070,7 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1083,6 +1083,7 @@ DESCR_CONFIG = {
     'abrir-relatorio': ('abrir o relatório', 'perguntar (padrão: uma tecla no fim do raio-x, da segurança e do turbo), sempre (abre a pasta sozinho) ou nunca'),
     'coleta-em-jogo': ('acompanhamento com jogo aberto', 'segura (padrão): continua lendo tudo, como o Gerenciador de Tarefas (sem abrir o processo do jogo); ou pausar: não lê nada enquanto houver jogo aberto'),
     'tempo-real': ('ritmo do segundo plano', 'de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10'),
+    'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
@@ -7726,7 +7727,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
@@ -10934,7 +10935,7 @@ def config_segundo_plano():
         intervalo = 1.0
     return {'versao': VERSAO, 'ps1': str(ps1), 'py': str(py if not py.name.lower().startswith('pythonw') else py.with_name('python.exe')),
             'pyw': str(pyw) if pyw.exists() else '', 'kpy': str(CASA / 'katharos.py'), 'intervalo_s': intervalo,
-            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'),
+            'em_jogo': config('coleta-em-jogo', 'segura'), 'notificar': config('avisos', 'sim'), 'fps': config('fps', 'sim'),
             'aviso_cpu': REGRAS_MOTOR['calor_cpu'], 'aviso_gpu': REGRAS_MOTOR['calor_gpu'],
             'nomes_de_jogo': nomes_de_jogo()}
 
@@ -11027,6 +11028,9 @@ def instala_segundo_plano(ctx, mostrar=True, quieto=False):
             if destino.is_file() and sp_rodando():
                 sp_para()
             shutil.copy2(origem, destino)
+        pm = origem.with_name('PresentMon.exe')
+        if pm.is_file() and pm.resolve() != (CASA / 'PresentMon.exe').resolve():
+            shutil.copy2(pm, CASA / 'PresentMon.exe')   # FPS nas sessões de jogo (Intel, licença MIT); roda só durante o jogo
     except OSError as e:
         if not quieto:
             t.erro(f'Não consegui copiar o Katharos.exe para {CASA} ({e}). Feche o ícone do Katharos e tente de novo.')
@@ -11133,6 +11137,37 @@ def completa_temperaturas(m, cpu='temperatura', cpu_fonte='temp_fonte', gpu='tem
     if x.get('gpu') is not None and m.get(gpu) is None:
         m[gpu], m[gpu_fonte] = x['gpu'], x.get('gpu_fonte')
     return m
+
+
+# ───────── FPS de verdade: o grupo "Usuários de log de desempenho" ─────────
+# O PresentMon lê eventos do Windows (ETW) e, sem administrador, só funciona para quem está nesse grupo (SID S-1-5-32-559, o nome
+# muda com o idioma). Entrar no grupo é opcional, pedido e explicado; vale depois de sair e entrar na conta; desligar tira de volta.
+GRUPO_LOG_DESEMPENHO = 'S-1-5-32-559'
+
+
+def fps_no_grupo(ctx):
+    """O usuário já está no grupo? (lido do Windows; None se não deu para saber)"""
+    if not WINDOWS:
+        return None
+    s = roda_ps(ctx.t, f"Dado 'grupo' ([bool](Tenta {{ Get-LocalGroupMember -SID '{GRUPO_LOG_DESEMPENHO}' -ErrorAction Stop | Where-Object {{ $_.Name -like ('*\\' + $env:USERNAME) }} }} $null))",
+                'fps-grupo', minutos=1, mostra=False)
+    return s.dados.get('grupo')
+
+
+def fps_permissao(ctx, ligar=True):
+    """Põe (ou tira) o seu usuário no grupo. Precisa de administrador; vale depois de sair e entrar de novo na conta do Windows."""
+    acao = 'Add-LocalGroupMember' if ligar else 'Remove-LocalGroupMember'
+    corpo = f'''
+$__quem = "$env:USERDOMAIN\\$env:USERNAME"
+if ($TESTE) {{ Plano '{"pôr" if ligar else "tirar"} o seu usuário no grupo Usuários de log de desempenho (medida de FPS)'; return }}
+try {{ {acao} -SID '{GRUPO_LOG_DESEMPENHO}' -Member $__quem -ErrorAction Stop; Feito '{"medida de FPS liberada: vale depois de sair e entrar na conta" if ligar else "medida de FPS desligada"}' }}
+catch {{ if ("$($_.Exception.Message)" -match 'already|já é membro|not a member|não é membro') {{ Feito 'já estava assim' }} else {{ Aviso ("nao consegui: " + $_.Exception.Message) }} }}
+'''
+    s = roda_ps(ctx.t, corpo, 'fps-permissao', minutos=1)
+    if s.ok and not s.erros:
+        marca_estado('fps_grupo', 'sim' if ligar else 'nao')
+        return True
+    return False
 
 
 # ───────── os dados que o executável grava ─────────
@@ -11246,6 +11281,7 @@ def ferramenta_segundo_plano(ctx, args):
               ('ritmo', f'a cada {config("tempo-real", "1")} s'),
               ('com jogo aberto', 'continua lendo' if config('coleta-em-jogo', 'segura') != 'pausar' else 'pausa'),
               ('avisos', config('avisos', 'sim')),
+              ('FPS nos jogos', {'sim': 'ligado' + ('' if estado().get('fps_grupo') == 'sim' else ' (falta liberar: f)'), 'nao': 'desligado'}.get(config('fps', 'sim'), '-')),
               ('agora', (f'CPU {br(a.get("cpu"), 0)} % · GPU {br(a.get("gpu"), 0)} % · RAM {br(a.get("ram_pct"), 0)} %'
                          + (f' · {br(a.get("temp_cpu"), 0)} °C' if a.get('temp_cpu') is not None else '')) if a else '-'),
               ('sessões de jogo (30 dias)', str(len(ss)))])
@@ -11253,7 +11289,7 @@ def ferramenta_segundo_plano(ctx, args):
         return 0
     t.escreve()
     t.paragrafo('l = ligar (e abrir o painel) · d = desligar · r = ritmo (1, 2, 5 ou 10 s) · j = com jogo aberto (continuar ou pausar) · '
-                'a = avisos (sim ou não) · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
+                'a = avisos (sim ou não) · f = medir FPS nos jogos · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
     r = t.pergunta('fazer').strip().lower()[:1]
     if r == 'l':
         return 0 if instala_segundo_plano(ctx, mostrar=True) else 1
@@ -11274,9 +11310,38 @@ def ferramenta_segundo_plano(ctx, args):
         salva_config('avisos', 'nao' if config('avisos', 'sim') == 'sim' else 'sim')
         escreve_config_sp()
         t.ok('Avisos: ' + config('avisos'))
+    elif r == 'f':
+        return liga_fps(ctx, args)
     elif r == 'v':
         return ferramenta_aovivo(ctx, args)
     return 0
+
+
+def liga_fps(ctx, args):
+    """Explica, pergunta e libera (ou desliga) a medida de FPS. Nada muda sem o sim da pessoa."""
+    t = ctx.t
+    if config('fps', 'sim') == 'sim' and estado().get('fps_grupo') == 'sim':
+        if t.confirma('A medida de FPS está ligada. Desligar e tirar o seu usuário do grupo "Usuários de log de desempenho"?', sim=False):
+            if not precisa_admin(ctx, args):
+                return 1
+            fps_permissao(ctx, ligar=False)
+            salva_config('fps', 'nao')
+            escreve_config_sp()
+        return 0
+    t.paragrafo('Para medir o FPS de verdade (média, 1% low e travadas) durante os jogos, o Katharos usa o PresentMon, da Intel: ele lê '
+                'os eventos de quadro que o próprio Windows registra, como o FrameView da NVIDIA e o CapFrameX. Não abre, não lê e não muda '
+                'nada no jogo. O Windows só deixa isso para quem está no grupo "Usuários de log de desempenho". O Katharos põe o seu '
+                'usuário nesse grupo (vale depois de sair e entrar na conta) e tira de volta quando você desligar.', 2, 'sub')
+    if not t.confirma('Liberar a medida de FPS?', sim=False):
+        return 0
+    if not precisa_admin(ctx, args):
+        return 1
+    if fps_permissao(ctx, ligar=True):
+        salva_config('fps', 'sim')
+        escreve_config_sp()
+        t.ok('Pronto. Saia e entre de novo na sua conta do Windows (ou reinicie) para começar a medir.')
+        return 0
+    return 1
 
 
 def ferramenta_aovivo(ctx, args):
@@ -11314,6 +11379,10 @@ def ferramenta_aovivo(ctx, args):
                   f'  temp  CPU {br(a.get("temp_cpu"), 0) if a.get("temp_cpu") is not None else "-"} °C · GPU {br(a.get("temp_gpu"), 0) if a.get("temp_gpu") is not None else "-"} °C',
                   f'  disco {br(a.get("disco"), 0):>4} %   rede ↓ {br((a.get("rede_baixa_mbs") or 0) * 8, 1)} Mb/s ↑ {br((a.get("rede_sobe_mbs") or 0) * 8, 1)} Mb/s',
                   ('  jogo  ' + f'{j.get("nome")} há {br(j.get("min"), 0)} min · limite: {NOMES_LIMITE.get(j.get("principal"), j.get("principal"))}') if j else '  jogo  nenhum aberto']
+            if j and j.get('fps') is not None:
+                ls.append(f'  fps   {br(j.get("fps"), 0):>4}     média {br(j.get("fps_med"), 0)} · 1% low {br(j.get("fps_1low"), 0)} · travadas/min {br(j.get("travadas_por_min"), 1)}')
+            elif j and j.get('fps_estado') == 'sem permissão':
+                ls.append('  fps   não liberado: katharos segundo-plano, opção f')
             for c in (a.get('conclusoes') or [])[:2]:
                 ls.append(f'  {"!" if c.get("nivel", 0) >= 1 else "·"} {c.get("titulo")}: {c.get("texto")}'[:160])
             if linhas_ant and t.interativo and t.cor:
@@ -11717,10 +11786,11 @@ def _secao_ao_vivo(minutos, sessoes):
                    f'O que mais segurou: <b>{_e(NOMES_LIMITE.get(r["principal"], r["principal"]))}</b>.'
                    + (f' Tempo de cada limite: {"; ".join(partes_)}.' if partes_ else '') + '</p>')
         linhas = ''.join(f'<tr><td>{_e(s.get("jogo") or "?")}</td><td>{s["_dt"]:%d/%m %H:%M}</td><td>{_num(s.get("min"), 0)} min</td>'
+                         f'<td>{_num(s.get("fps_med"), 0) if isinstance(s.get("fps_med"), (int, float)) else "-"}</td><td>{_num(s.get("fps_1low"), 0) if isinstance(s.get("fps_1low"), (int, float)) else "-"}</td>'
                          f'<td>{_num(s.get("cpu"), 0)} %</td><td>{_num(s.get("gpu"), 0)} %</td><td>{_num(s.get("ram_max"), 0)} %</td>'
                          f'<td>{_num(s.get("temp_cpu_max"), 0) if isinstance(s.get("temp_cpu_max"), (int, float)) else "-"} / {_num(s.get("temp_gpu_max"), 0) if isinstance(s.get("temp_gpu_max"), (int, float)) else "-"} °C</td>'
                          f'<td>{_e(NOMES_LIMITE.get(s.get("principal"), s.get("principal") or "-"))}</td></tr>' for s in reversed(sessoes[-20:]))
-        out.append('<table><tr><th>jogo</th><th>quando</th><th>duração</th><th>CPU média</th><th>GPU média</th><th>RAM máx.</th><th>temp. máx. CPU / GPU</th><th>o que segurou</th></tr>'
+        out.append('<table><tr><th>jogo</th><th>quando</th><th>duração</th><th>FPS médio</th><th>1% low</th><th>CPU média</th><th>GPU média</th><th>RAM máx.</th><th>temp. máx. CPU / GPU</th><th>o que segurou</th></tr>'
                    + linhas + '</table><p class="legenda">"O que segurou" é o limite em que o jogo passou mais tempo (pelo menos 20 % da sessão). '
                    'Placa de vídeo no limite é o normal de um jogo pesado; CPU, calor, RAM ou disco no limite são o que dá para melhorar.</p>')
     return ''.join(out)
@@ -12189,7 +12259,7 @@ def coleta_evidencias(ctx=None, agora=None):
             'dispensadas': e.get('conselheiro_dispensadas') or {}, 'vistas': e.get('conselheiro_vistas') or {},
             'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')) or e.get('segundo_plano') == 'sim',
             'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {},
-            'sessoes': le_sessoes(30, agora), 'minutos': le_minutos(24 * BASE_DIAS + 24, agora), 'segundo_plano': e.get('segundo_plano') == 'sim',
+            'sessoes': le_sessoes(60, agora), 'minutos': le_minutos(24 * BASE_DIAS + 24, agora), 'segundo_plano': e.get('segundo_plano') == 'sim',
             'respostas': e.get('conselheiro_respostas') or {}, 'feitos': e.get('conselheiro_feitos') or {}}
 
 
@@ -12882,6 +12952,55 @@ def responde(id_, resposta):
     e = estado()
     e.setdefault('conselheiro_respostas', {})[id_] = {'resposta': resposta, 'quando': agora_iso()}
     salva_estado(e)
+
+
+# ───────── o mesmo jogo antes e depois de cada mudança (fase 2c) ─────────
+METRICAS_JOGO = [('fps_1low', '1% low', 'maior', 'FPS'), ('fps_med', 'FPS médio', 'maior', 'FPS'), ('travadas_por_min', 'travadas por minuto', 'menor', '')]
+
+
+def comparacoes_por_jogo(sessoes, pacotes, minimo=3, dias=30):
+    """Para cada pacote aplicado e cada jogo com pelo menos `minimo` sessões antes e depois (na janela de `dias`), a diferença de FPS,
+    1% low e travadas, com margem (bootstrap). Devolve [{jogo, pacote, nome_pacote, quando, metrica, rotulo, antes, depois, veredito}]."""
+    out = []
+    for quando, nome, titulo in pacotes:
+        de, ate = quando - timedelta(days=dias), quando + timedelta(days=dias)
+        jogos = {s.get('jogo') for s in sessoes if s.get('jogo')}
+        for jogo in sorted(jogos):
+            antes = [s for s in sessoes if s.get('jogo') == jogo and s.get('_dt') and de <= s['_dt'] < quando]
+            depois = [s for s in sessoes if s.get('jogo') == jogo and s.get('_dt') and quando <= s['_dt'] < ate]
+            for chave, rot, melhor, un in METRICAS_JOGO:
+                a = [float(s[chave]) for s in antes if isinstance(s.get(chave), (int, float))]
+                b = [float(s[chave]) for s in depois if isinstance(s.get(chave), (int, float))]
+                if len(a) < minimo or len(b) < minimo:
+                    continue
+                dif, lo, hi = intervalo_da_diferenca(a, b)
+                if lo <= 0 <= hi:
+                    ver = 'sem diferença'
+                else:
+                    ver = 'melhorou' if (dif > 0) == (melhor == 'maior') else 'piorou'
+                out.append({'jogo': jogo, 'pacote': nome, 'nome_pacote': titulo, 'quando': quando, 'metrica': chave, 'rotulo': rot, 'un': un,
+                            'antes': round(_mediana_lista(a), 1), 'depois': round(_mediana_lista(b), 1), 'veredito': ver,
+                            'sessoes': (len(a), len(b))})
+    return out
+
+
+@regra
+def r_jogo_antes_depois(ev):
+    """O resultado de cada mudança nos jogos de verdade; se piorou de forma clara, propõe desfazer aquela área."""
+    out = []
+    for c in comparacoes_por_jogo(ev.get('sessoes') or [], ev.get('pacotes') or []):
+        if c['metrica'] != 'fps_1low' or c['veredito'] == 'sem diferença':
+            continue
+        n = f'{c["sessoes"][0]} sessões antes e {c["sessoes"][1]} depois'
+        num = f'{br(c["antes"], 0)} → {br(c["depois"], 0)} {c["un"]}'.strip()
+        if c['veredito'] == 'melhorou':
+            out.append(_sug(f'jogo-ganho:{c["pacote"]}:{c["jogo"]}', f'{c["nome_pacote"]} melhorou {c["jogo"]}',
+                            f'O 1% low (os momentos mais pesados) foi de {num}, comparando {n}, com margem calculada.', '', 'alta', '', '', 2, 0, tipo='info'))
+        else:
+            out.append(_sug(f'jogo-piora:{c["pacote"]}:{c["jogo"]}', f'{c["nome_pacote"]} piorou {c["jogo"]}',
+                            f'O 1% low caiu de {num} ({n}), além da variação normal. Desfazer esta área volta como estava.',
+                            f'desfazer {c["pacote"]}', 'alta', 'o jogo volta ao desempenho de antes', 'perde o que a área fazia', 4, 0))
+    return out
 # ─────────────── saúde do Windows: erros dos logs, drivers e o que o Windows precisa ───────────────
 # Coleta só leitura (Visualizador de Eventos, drivers instalados, estado do Windows) → catálogo de causas conhecidas → problemas
 # explicados, com o que fazer. Regras: (1) só explica o que está no catálogo; o resto aparece como "sem explicação catalogada",

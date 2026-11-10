@@ -2693,7 +2693,7 @@ class TestRegrasDoMotor(unittest.TestCase):
         self.assertEqual(usadas - set(k.REGRAS_MOTOR), set())
 
     def test_sem_limite_escrito_nas_regras_do_exe(self):
-        ini = self.CS.index('static class Regras'); fim = self.CS.index('class Sessao')
+        ini = self.CS.index('static class Regras'); fim = min(self.CS.index('class Sessao'), self.CS.index('class Fps', ini))
         trecho = re.sub(r'"(?:\\.|[^"\\])*"', '""', self.CS[ini:fim])
         self.assertEqual(re.findall(r'(?:>=|<=|<|>)\s*\.?\d', trecho), [], 'limite numérico nas Regras do Katharos.cs: ponha em REGRAS_MOTOR')
 
@@ -2919,3 +2919,30 @@ class TestProcessosProtegidos(unittest.TestCase):
         self.assertTrue(k.pode_sugerir_fechar('chrome'))
         fonte = (RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8')
         self.assertEqual(fonte.count('NUNCA_ENCERRAR = {'), 1, 'a lista de processos protegidos fica num lugar só')
+
+
+class TestFpsAntesDepois(unittest.TestCase):
+    """2c.6 a 2c.8: o mesmo jogo antes e depois de uma mudança, com margem; piora clara vira proposta de desfazer."""
+
+    def _sessoes(self, jogo, dia0, n, low, ruido=1):
+        return [{'jogo': jogo, '_dt': datetime(2026, 11, dia0 + i, 20), 'fps_1low': low + (i % 3 - 1) * ruido, 'fps_med': low * 2, 'min': 30}
+                for i in range(n)]
+
+    def test_compara_e_julga(self):
+        q = datetime(2026, 11, 10, 12)
+        pac = [(q, 'jogos', 'Jogos')]
+        melhor = self._sessoes('cs2', 5, 4, 60) + self._sessoes('cs2', 11, 4, 75)
+        c = [x for x in k.comparacoes_por_jogo(melhor, pac) if x['metrica'] == 'fps_1low']
+        self.assertEqual(c[0]['veredito'], 'melhorou')
+        self.assertAlmostEqual(c[0]['antes'], 60, delta=1)
+        self.assertAlmostEqual(c[0]['depois'], 75, delta=1)
+        igual = self._sessoes('cs2', 5, 4, 60, ruido=4) + self._sessoes('cs2', 11, 4, 61, ruido=4)
+        self.assertEqual([x['veredito'] for x in k.comparacoes_por_jogo(igual, pac) if x['metrica'] == 'fps_1low'], ['sem diferença'])
+        pouco = self._sessoes('cs2', 5, 2, 60) + self._sessoes('cs2', 11, 4, 75)
+        self.assertEqual(k.comparacoes_por_jogo(pouco, pac), [], 'menos de 3 sessões de um lado: não compara')
+
+    def test_piora_vira_desfazer(self):
+        q = datetime(2026, 11, 10, 12)
+        ev = {'sessoes': self._sessoes('cs2', 5, 4, 80) + self._sessoes('cs2', 11, 4, 55), 'pacotes': [(q, 'visual', 'Visual')]}
+        sug = k.r_jogo_antes_depois(ev)
+        self.assertEqual([x['comando'] for x in sug], ['desfazer visual'])

@@ -237,3 +237,52 @@ def responde(id_, resposta):
     e = estado()
     e.setdefault('conselheiro_respostas', {})[id_] = {'resposta': resposta, 'quando': agora_iso()}
     salva_estado(e)
+
+
+# ───────── o mesmo jogo antes e depois de cada mudança (fase 2c) ─────────
+METRICAS_JOGO = [('fps_1low', '1% low', 'maior', 'FPS'), ('fps_med', 'FPS médio', 'maior', 'FPS'), ('travadas_por_min', 'travadas por minuto', 'menor', '')]
+
+
+def comparacoes_por_jogo(sessoes, pacotes, minimo=3, dias=30):
+    """Para cada pacote aplicado e cada jogo com pelo menos `minimo` sessões antes e depois (na janela de `dias`), a diferença de FPS,
+    1% low e travadas, com margem (bootstrap). Devolve [{jogo, pacote, nome_pacote, quando, metrica, rotulo, antes, depois, veredito}]."""
+    out = []
+    for quando, nome, titulo in pacotes:
+        de, ate = quando - timedelta(days=dias), quando + timedelta(days=dias)
+        jogos = {s.get('jogo') for s in sessoes if s.get('jogo')}
+        for jogo in sorted(jogos):
+            antes = [s for s in sessoes if s.get('jogo') == jogo and s.get('_dt') and de <= s['_dt'] < quando]
+            depois = [s for s in sessoes if s.get('jogo') == jogo and s.get('_dt') and quando <= s['_dt'] < ate]
+            for chave, rot, melhor, un in METRICAS_JOGO:
+                a = [float(s[chave]) for s in antes if isinstance(s.get(chave), (int, float))]
+                b = [float(s[chave]) for s in depois if isinstance(s.get(chave), (int, float))]
+                if len(a) < minimo or len(b) < minimo:
+                    continue
+                dif, lo, hi = intervalo_da_diferenca(a, b)
+                if lo <= 0 <= hi:
+                    ver = 'sem diferença'
+                else:
+                    ver = 'melhorou' if (dif > 0) == (melhor == 'maior') else 'piorou'
+                out.append({'jogo': jogo, 'pacote': nome, 'nome_pacote': titulo, 'quando': quando, 'metrica': chave, 'rotulo': rot, 'un': un,
+                            'antes': round(_mediana_lista(a), 1), 'depois': round(_mediana_lista(b), 1), 'veredito': ver,
+                            'sessoes': (len(a), len(b))})
+    return out
+
+
+@regra
+def r_jogo_antes_depois(ev):
+    """O resultado de cada mudança nos jogos de verdade; se piorou de forma clara, propõe desfazer aquela área."""
+    out = []
+    for c in comparacoes_por_jogo(ev.get('sessoes') or [], ev.get('pacotes') or []):
+        if c['metrica'] != 'fps_1low' or c['veredito'] == 'sem diferença':
+            continue
+        n = f'{c["sessoes"][0]} sessões antes e {c["sessoes"][1]} depois'
+        num = f'{br(c["antes"], 0)} → {br(c["depois"], 0)} {c["un"]}'.strip()
+        if c['veredito'] == 'melhorou':
+            out.append(_sug(f'jogo-ganho:{c["pacote"]}:{c["jogo"]}', f'{c["nome_pacote"]} melhorou {c["jogo"]}',
+                            f'O 1% low (os momentos mais pesados) foi de {num}, comparando {n}, com margem calculada.', '', 'alta', '', '', 2, 0, tipo='info'))
+        else:
+            out.append(_sug(f'jogo-piora:{c["pacote"]}:{c["jogo"]}', f'{c["nome_pacote"]} piorou {c["jogo"]}',
+                            f'O 1% low caiu de {num} ({n}), além da variação normal. Desfazer esta área volta como estava.',
+                            f'desfazer {c["pacote"]}', 'alta', 'o jogo volta ao desempenho de antes', 'perde o que a área fazia', 4, 0))
+    return out
