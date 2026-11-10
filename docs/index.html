@@ -65,7 +65,7 @@
   /* faixa hachurada entre blocos: as mesmas diagonais da gravura; chega junto com o fio */
   .listras .quadro { height: 36px; background: repeating-linear-gradient(135deg, var(--linha) 0 1px, transparent 1px 9px); }
   .js .listras .quadro { clip-path: inset(0 100% 0 0); }
-  .js .listras.traco .quadro { clip-path: inset(0 0 0 0); transition: clip-path 1.3s .1s cubic-bezier(.65,0,.25,1); }
+  .js .listras.traco .quadro { clip-path: inset(0 0 0 0); transition: clip-path .6s cubic-bezier(.65,0,.25,1); }
   .celulas { display: grid; }
   .celulas > * + * { border-left: 1px solid var(--linha); }
 
@@ -98,12 +98,12 @@
   .titulo .bloco { display: inline-block; width: .5em; height: .76em; margin-left: .06em; vertical-align: -.03em; background: var(--ambar); animation: pisca 1.1s steps(2) infinite; }
   @keyframes pisca { 50% { opacity: 0; } }
   /* abertura: um só gesto. A gravura acende, o nome é escrito da esquerda para a direita, depois o resto chega. */
-  .js .cena img { animation: acende 2.2s cubic-bezier(.2,.6,.2,1) both; }
-  .js .titulo { animation: escreve .9s cubic-bezier(.7,0,.2,1) .2s both; }
-  .js .lead { animation: chega .7s cubic-bezier(.2,.6,.2,1) .85s both; }
-  .js .ctas { animation: chega .7s cubic-bezier(.2,.6,.2,1) 1s both; }
-  .js .grego { animation: chega .7s cubic-bezier(.2,.6,.2,1) 1.15s both; }
-  @keyframes acende { from { opacity: 0; scale: 1.035; filter: brightness(.45); } to { opacity: 1; scale: 1; filter: none; } }
+  .js .cena img { animation: acende .9s cubic-bezier(.2,.6,.2,1) both; }
+  .js .titulo { animation: escreve .55s cubic-bezier(.7,0,.2,1) .1s both; }
+  .js .lead { animation: chega .45s cubic-bezier(.2,.6,.2,1) .45s both; }
+  .js .ctas { animation: chega .45s cubic-bezier(.2,.6,.2,1) .5s both; }
+  .js .grego { animation: chega .45s cubic-bezier(.2,.6,.2,1) .55s both; }
+  @keyframes acende { from { opacity: 0; } to { opacity: 1; } }
   @keyframes escreve { from { clip-path: inset(-10% 100% -10% 0); } to { clip-path: inset(-10% -2% -10% 0); } }
   @keyframes chega { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
   /* abrir e fechar com altura de verdade, onde o navegador deixa */
@@ -229,27 +229,14 @@
 
 
   /* ── o traço: cada faixa desenha o próprio fio da esquerda para a direita quando chega; os + acendem nas pontas,
-        o ponto âmbar do título pousa por último. Divisores e horizonte entram no mesmo gesto. ── */
-  .js .faixa:not(.topo):not(.hero) { border-top-color: transparent; }
-  .js .faixa:not(.topo):not(.hero)::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 1px; background: var(--linha);
+        o ponto âmbar do título pousa por último. Divisores ficam parados. ── */
+  .js .faixa:not(.topo):not(.hero):not(.divisor) { border-top-color: transparent; }
+  .js .faixa:not(.topo):not(.hero):not(.divisor)::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 1px; background: var(--linha);
     transform: scaleX(0); transform-origin: 0 50%; z-index: 30; pointer-events: none; }
-  .js .faixa.traco::before { transform: scaleX(1); transition: transform 1.2s cubic-bezier(.65,0,.25,1); }
-  .js .faixa > .quadro::before, .js .faixa > .quadro::after { opacity: 0; scale: .3; }
-  .js .faixa.traco > .quadro::before { opacity: 1; scale: 1; transition: opacity .3s .15s, scale .4s .15s cubic-bezier(.3,1.6,.5,1); }
-  .js .faixa.traco > .quadro::after { opacity: 1; scale: 1; transition: opacity .3s .8s, scale .4s .8s cubic-bezier(.3,1.6,.5,1); }
-  .js .faixa h2 > span { display: inline-block; scale: 0; transform-origin: 50% 80%; }
-  .js .faixa.traco h2 > span { scale: 1; transition: scale .45s .95s cubic-bezier(.3,1.7,.5,1); }
-  .js .divisor .fio { transform: scaleX(0); transform-origin: 100% 50%; }
-  .js .divisor .fio:last-child { transform-origin: 0 50%; }
-  .js .divisor.traco .fio { transform: scaleX(1); transition: transform 1s .35s cubic-bezier(.65,0,.25,1); }
-  .js .divisor.espada img { clip-path: inset(0 100% 0 0); }
-  .js .divisor.florao img { clip-path: inset(0 50% 0 50%); }
-  .js .divisor.traco img { clip-path: inset(0 0 0 0); transition: clip-path 1.1s cubic-bezier(.65,0,.25,1); }
-  .js .horizonte { clip-path: inset(100% 0 0 0); }
-  .js .horizonte.traco { clip-path: inset(0 0 0 0); transition: clip-path 1.8s cubic-bezier(.3,.6,.2,1); }
-  /* gravura em pontos: a imagem chega como meio-tom grosso e se resolve até a gravura */
-  .js .espera img { visibility: hidden; }
-  canvas.pontos { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity .5s; }
+  .js .faixa.traco::before { transform: scaleX(1); transition: transform .6s cubic-bezier(.65,0,.25,1); }
+  .js .faixa > .quadro::before, .js .faixa > .quadro::after { opacity: 0; }
+  .js .faixa.traco > .quadro::before { opacity: 1; scale: 1; transition: opacity .2s; }
+  .js .faixa.traco > .quadro::after { opacity: 1; scale: 1; transition: opacity .2s .4s; }
 
   /* ── painel: as mesmas células com fios do resto da página, sem cartões soltos ── */
   .telas-painel .quadro { padding: 0; }
@@ -274,30 +261,28 @@
   .gc .grade { stroke: var(--linha); stroke-width: 1; }
   .gc .linha { fill: none; stroke: var(--ambar); stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
   .gc .area { fill: url(#g-area); opacity: 0; }
-  .gc .proj { fill: none; stroke: var(--vermelho); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0; }
+  .gc .marco { stroke: var(--ambar); stroke-width: 1; stroke-dasharray: 2 3; }
   .gc .ponto { fill: var(--ambar); opacity: 0; }
   .gc .rot { font: 500 11px var(--mono); fill: var(--vermelho); opacity: 0; }
   .gc .grade { stroke-dasharray: 2 4; }
   .gc .eixo.hoje { fill: var(--texto); }
-  .gc .futuro { opacity: 0; }
+  .gc .depois, .gc .marco { opacity: 0; }
   .gc .ponto.r { fill: var(--vermelho); }
-  .gc .anel { fill: none; stroke: var(--ambar); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; }
   .gc .rot-v { font: 700 12px var(--mono); fill: var(--osso); opacity: 0; }
   .gc .mira { opacity: 0; transition: opacity .15s; pointer-events: none; } .gc .mira.on { opacity: 1; }
   .gc .mira-l { stroke: var(--linha-forte); stroke-width: 1; } .gc .mira-p { fill: var(--osso); }
   .gc .mira-t { font: 500 11px var(--mono); fill: var(--osso); }
   .gc svg#g-disco { cursor: crosshair; touch-action: pan-y; }
-  .vis .gc .futuro { opacity: 1; transition: opacity .8s 1.5s; }
-  .vis .gc .rot-v { opacity: 1; transition: opacity .5s 2s; }
-  .vis .gc .anel { animation: anel 1.6s 2s ease-out 2 both; }
-  @keyframes anel { from { opacity: .8; scale: 1; } to { opacity: 0; scale: 3.2; } }
-  .vis .gc .linha { stroke-dashoffset: 0; transition: stroke-dashoffset 1.8s cubic-bezier(.5,0,.2,1) .2s; }
-  .vis .gc .area { opacity: 1; transition: opacity .8s 1.4s; }
-  .vis .gc .proj, .vis .gc .rot, .vis .gc .ponto { opacity: 1; transition: opacity .5s 1.9s; }
+  .vis .gc .depois { opacity: 1; transition: opacity .4s .5s; }
+  .vis .gc .rot-v { opacity: 1; transition: opacity .3s .7s; }
+
+  .vis .gc .linha { stroke-dashoffset: 0; transition: stroke-dashoffset .8s cubic-bezier(.5,0,.2,1); }
+  .vis .gc .area { opacity: 1; transition: opacity .4s .5s; }
+  .vis .gc .ponto, .vis .gc .marco { opacity: 1; transition: opacity .3s .7s; }
   .calor { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; }
   .calor i { aspect-ratio: 1; border-radius: 1px; background: #17171a; opacity: 0; }
   .calor i[data-l="1"] { background: #221d16; } .calor i[data-l="2"] { background: #3f321f; } .calor i[data-l="3"] { background: #7a5a2f; } .calor i[data-l="4"] { background: var(--ambar); }
-  .vis .calor i { opacity: 1; transition: opacity .35s calc(var(--c) * 45ms + var(--r) * 14ms + 300ms); }
+  .vis .calor i { opacity: 1; transition: opacity .4s .2s; }
   .horas { display: flex; justify-content: space-between; font: 400 10px var(--mono); color: var(--apagado); }
   .prop { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
   .prop .nv { grid-row: 1 / span 2; }
@@ -305,8 +290,7 @@
   .prop code { grid-column: 2; font-size: 12px; color: var(--apagado); }
   .prop .btn { grid-column: 3; grid-row: 1 / span 2; font: 700 13px/1 var(--mono); background: var(--ambar); color: #16110a; border-radius: 3px; padding: 10px 14px; font-style: normal; }
   .js .prop > * { opacity: 0; }
-  .vis .prop > * { opacity: 1; transition: opacity .5s calc(var(--i) * 300ms + 900ms); }
-  .vis .prop .btn { animation: tecla2 1.2s calc(var(--i) * 300ms + 2.2s) 1 both; }
+  .vis .prop > * { opacity: 1; transition: opacity .3s calc(var(--i) * 100ms + 300ms); }
   @keyframes tecla2 { 0%, 100% { translate: 0 0; } 40% { translate: 0 2px; background: #ecb876; } }
   .vivo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--verde); animation: pisca 1.6s ease-in-out infinite; }
   .tp-nota { border-top: 1px solid var(--linha); padding: 14px clamp(20px, 2.4vw, 32px); font: 400 12px/1.6 var(--mono); color: var(--apagado); }
@@ -591,14 +575,14 @@
   </section>
   <section class="faixa telas-painel" aria-label="Painel do Katharos, exemplo animado">
     <div class="quadro">
-      <div class="dash" id="dash" role="img" aria-label="Exemplo animado do painel: espaço livre em queda, temperatura por hora e propostas de correção">
+      <div class="dash" id="dash" role="img" aria-label="Exemplo do painel: tempo de boot antes e depois do turbo, temperatura por hora e propostas de correção">
         <div class="dash-kpis" aria-hidden="true">
-          <div class="kpi"><span>espaço livre</span><b data-n="50">0<small>GB</small></b><em class="mau">−28 GB<span class="mes"> no mês</span></em></div>
-          <div class="kpi"><span>boot</span><b data-n="49">0<small>s</small></b><em class="mau">+10 s<span class="mes"> no mês</span></em></div>
+          <div class="kpi"><span>liberado</span><b data-n="7.7" data-d="1">0<small>GB</small></b><em class="bom">caches e temporários</em></div>
+          <div class="kpi"><span>boot</span><b data-n="22">0<small>s</small></b><em class="bom">−27 s<span class="mes"> com o turbo</span></em></div>
           <div class="kpi"><span><i class="vivo"></i>temperatura</span><b data-n="47" id="k-temp">0<small>°C</small></b><em class="bom">−1 °C<span class="mes"> no mês</span></em></div>
         </div>
         <div class="dash-graf" aria-hidden="true">
-          <figure class="gc"><header><b>espaço livre em C:</b><span>cheio em ~17/11</span></header><svg id="g-disco" viewBox="0 0 600 180"></svg></figure>
+          <figure class="gc"><header><b>tempo de boot</b><span>antes e depois do turbo</span></header><svg id="g-disco" viewBox="0 0 600 180"></svg></figure>
           <figure class="gc"><header><b>quando esquenta</b><span>por hora</span></header><div class="calor" id="g-calor"></div><div class="horas"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div></figure>
         </div>
         <div class="dash-baixo" aria-hidden="true">
@@ -755,61 +739,13 @@
 (() => {
   const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // o traço das faixas
-  const alvos = document.querySelectorAll('.faixa:not(.topo):not(.hero), .horizonte');
+  const alvos = document.querySelectorAll('.faixa:not(.topo):not(.hero):not(.divisor)');
   if (calmo) alvos.forEach(a => a.classList.add('traco'));
   else {
     const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('traco'); io.unobserve(e.target); } }),
       { rootMargin: '0px 0px -8% 0px' });
     alvos.forEach(a => io.observe(a));
   }
-  if (calmo) return;
-  // gravura em pontos: meio-tom que fica cada vez mais fino até virar a imagem
-  const PASSOS = [22, 13, 8, 5, 3];
-  function pontilha(img, atraso) {
-    const pai = img.parentElement, cw = pai.clientWidth, ch = pai.clientHeight;
-    if (!cw || !ch || !img.naturalWidth) { img.style.visibility = 'visible'; return; }
-    const dpr = Math.min(2, devicePixelRatio || 1);
-    const cv = document.createElement('canvas'); cv.className = 'pontos'; cv.width = cw * dpr; cv.height = ch * dpr;
-    const cx = cv.getContext('2d'); cx.scale(dpr, dpr);
-    const est = getComputedStyle(img), alfa = parseFloat(est.opacity) || 1;
-    const [px, py] = est.objectPosition.split(' ').map(v => parseFloat(v) / 100);
-    const k = Math.max(cw / img.naturalWidth, ch / img.naturalHeight), sw = cw / k, sh = ch / k;
-    const sx = (img.naturalWidth - sw) * (isNaN(px) ? .5 : px), sy = (img.naturalHeight - sh) * (isNaN(py) ? .5 : py);
-    let fundo = getComputedStyle(pai).backgroundColor; if (!fundo || fundo === 'rgba(0, 0, 0, 0)') fundo = '#0c0c0d';
-    const amostra = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
-    const quadro = passo => {
-      const gx = Math.ceil(cw / passo), gy = Math.ceil(ch / passo);
-      amostra.canvas.width = gx; amostra.canvas.height = gy;
-      amostra.drawImage(img, sx, sy, sw, sh, 0, 0, gx, gy);
-      const d = amostra.getImageData(0, 0, gx, gy).data;
-      cx.fillStyle = fundo; cx.fillRect(0, 0, cw, ch);
-      cx.fillStyle = '#efe9de'; cx.globalAlpha = alfa;
-      for (let y = 0; y < gy; y++) for (let x = 0; x < gx; x++) {
-        const i = (y * gx + x) * 4, l = (d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11) / 255;
-        const r = passo * .5 * Math.sqrt(l) * 1.05; if (r < .35) continue;
-        cx.beginPath(); cx.arc(x * passo + passo / 2, y * passo + passo / 2, r, 0, 6.2832); cx.fill();
-      }
-      cx.globalAlpha = 1;
-    };
-    try { quadro(PASSOS[0]); } catch (e) { img.style.visibility = 'visible'; return; }   // imagem de outra origem: fica sem o efeito
-    img.after(cv); img.style.visibility = 'visible';
-    let n = 0;
-    const segue = () => {
-      n++;
-      if (n < PASSOS.length) { quadro(PASSOS[n]); setTimeout(segue, 120 + n * 25); }
-      else { cv.style.opacity = '0'; setTimeout(() => cv.remove(), 600); }
-    };
-    setTimeout(segue, atraso + 160);
-  }
-  const grupos = [...document.querySelectorAll('.placas, .jh-arte')];
-  const ig = new IntersectionObserver(es => es.forEach(e => {
-    if (!e.isIntersecting) return; ig.unobserve(e.target);
-    e.target.querySelectorAll('img').forEach((im, i) => {
-      const vai = () => pontilha(im, i * 110);
-      im.complete ? vai() : im.addEventListener('load', vai, { once: true });
-    });
-  }), { threshold: .2 });
-  grupos.forEach(g => { g.classList.add('espera'); g.querySelectorAll('img').forEach(im => im.loading = 'eager'); ig.observe(g); });
 })();
 </script>
 <script>
@@ -824,45 +760,42 @@
     ys.forEach(y => el('line', { x1: x0, x2: x1, y1: y, y2: y, class: 'grade' }, svg));
     rot.forEach(([x, y, t, a]) => { const n = el('text', { x, y, class: 'eixo', 'text-anchor': a || 'start' }, svg); n.textContent = t; });
   }
-  // espaço livre: 01/10 a hoje (21/10) medido; daí em diante, a projeção até encher (~17/11)
+  // tempo de boot medido todo dia: sobe devagar, o turbo é aplicado no dia 18 e ele cai. Só o que foi medido, sem previsão.
   const disco = document.getElementById('g-disco');
-  const X0 = 44, X1 = 588, DIAS = 47, HOJE = 20, Y0 = 150, Y = v => 14 + (100 - v) / 100 * (Y0 - 14);
-  const XD = d => X0 + d / DIAS * (X1 - X0), XN = XD(HOJE);
+  const X0 = 44, X1 = 588, DIAS = 29, DT = 18, Y0 = 150, Y = v => 14 + (60 - v) / 60 * (Y0 - 14);
+  const XD = d => X0 + d / DIAS * (X1 - X0), XT = XD(DT);
   const defs = el('defs', {}, disco);
   const gr = el('linearGradient', { id: 'g-area', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-  el('stop', { offset: 0, 'stop-color': '#e2a85c', 'stop-opacity': .28 }, gr); el('stop', { offset: 1, 'stop-color': '#e2a85c', 'stop-opacity': 0 }, gr);
+  el('stop', { offset: 0, 'stop-color': '#e2a85c', 'stop-opacity': .26 }, gr); el('stop', { offset: 1, 'stop-color': '#e2a85c', 'stop-opacity': 0 }, gr);
   const pt = el('pattern', { id: 'g-hach', width: 8, height: 8, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
   el('line', { x1: 0, y1: 0, x2: 0, y2: 8, stroke: '#242428', 'stroke-width': 1 }, pt);
-  el('rect', { x: XN, y: 8, width: X1 - XN, height: Y0 - 8, fill: 'url(#g-hach)', class: 'futuro' }, disco);
-  [[100, '100'], [50, '50'], [0, '0 GB']].forEach(([v, t]) => {
+  el('rect', { x: XT, y: 8, width: X1 - XT, height: Y0 - 8, fill: 'url(#g-hach)', class: 'depois' }, disco);
+  [[60, '60'], [30, '30'], [0, '0 s']].forEach(([v, t]) => {
     el('line', { x1: X0, x2: X1, y1: Y(v), y2: Y(v), class: 'grade' }, disco);
     const n = el('text', { x: X0 - 8, y: Y(v) + 3.5, class: 'eixo', 'text-anchor': 'end' }, disco); n.textContent = t;
   });
-  [[0, '01/10', 'start'], [HOJE, 'hoje', 'middle'], [DIAS, '17/11', 'end']].forEach(([d, t, an]) => {
-    const n = el('text', { x: XD(d), y: Y0 + 20, class: 'eixo' + (d === HOJE ? ' hoje' : ''), 'text-anchor': an }, disco); n.textContent = t;
+  [[0, '11/10', 'start'], [DT, 'turbo', 'middle'], [DIAS, '09/11', 'end']].forEach(([d, t, an]) => {
+    const n = el('text', { x: XD(d), y: Y0 + 20, class: 'eixo' + (d === DT ? ' hoje' : ''), 'text-anchor': an }, disco); n.textContent = t;
   });
-  const vals = []; for (let i = 0; i <= 60; i++) { const t = i / 60; vals.push(92 - 42 * t - 1.4 * Math.sin(t * 38) + (rnd() - .5) * 1.6); }
-  vals[60] = 50;
-  const pts = vals.map((v, i) => [XD(i / 60 * HOJE), Y(v)]);
-  el('path', { class: 'area', d: caminho(pts) + ` L${XN} ${Y0} L${X0} ${Y0}Z`, fill: 'url(#g-area)' }, disco);
+  el('line', { x1: XT, x2: XT, y1: 8, y2: Y0, class: 'marco' }, disco);
+  const vals = []; for (let d = 0; d <= DIAS; d++) vals.push(d < DT ? 38 + d * .6 + (rnd() - .5) * 5 : 22 + (rnd() - .5) * 3);
+  vals[DIAS] = 22;
+  const pts = vals.map((v, d) => [XD(d), Y(v)]);
+  el('path', { class: 'area', d: caminho(pts) + ` L${X1} ${Y0} L${X0} ${Y0}Z` }, disco);
   el('path', { class: 'linha', pathLength: 1, d: caminho(pts) }, disco);
-  el('path', { class: 'proj', d: `M${XN} ${Y(50)} L${X1} ${Y(0)}` }, disco);
-  el('circle', { class: 'ponto r', cx: X1, cy: Y(0), r: 3.5 }, disco);
-  el('circle', { class: 'anel', cx: XN, cy: Y(50), r: 4 }, disco);
-  el('circle', { class: 'ponto', cx: XN, cy: Y(50), r: 4 }, disco);
-  const rv = el('text', { class: 'rot-v', x: XN, y: Y(50) - 12, 'text-anchor': 'middle' }, disco); rv.textContent = '50 GB';
-  // passar o mouse: o dia e quanto sobrava (ou quanto vai sobrar)
+  el('circle', { class: 'ponto', cx: X1, cy: pts[DIAS][1], r: 4 }, disco);
+  const rv = el('text', { class: 'rot-v', x: X1, y: pts[DIAS][1] - 12, 'text-anchor': 'end' }, disco); rv.textContent = Math.round(vals[DIAS]) + ' s';
+  // passar o mouse: o dia e quanto o boot levou
   const mira = el('g', { class: 'mira' }, disco);
   const ml = el('line', { y1: 8, y2: Y0, class: 'mira-l' }, mira), mp = el('circle', { r: 3.5, class: 'mira-p' }, mira);
   const mt = el('text', { class: 'mira-t', y: 4 }, mira);
-  const valor = d => d <= HOJE ? vals[Math.round(d / HOJE * 60)] : 50 - (d - HOJE) / (DIAS - HOJE) * 50;
-  const data = d => { const x = new Date(2026, 9, 1 + Math.round(d)); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0'); };
+  const data = d => { const x = new Date(2026, 9, 11 + d); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0'); };
   const move = ev => {
     const r = disco.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * 600;
-    const d = Math.max(0, Math.min(DIAS, (x - X0) / (X1 - X0) * DIAS)), xx = XD(d), v = valor(d);
+    const d = Math.max(0, Math.min(DIAS, Math.round((x - X0) / (X1 - X0) * DIAS))), xx = XD(d), v = vals[d];
     ml.setAttribute('x1', xx); ml.setAttribute('x2', xx); mp.setAttribute('cx', xx); mp.setAttribute('cy', Y(v));
-    mt.setAttribute('x', Math.min(X1, Math.max(X0, xx))); mt.setAttribute('text-anchor', xx > 470 ? 'end' : xx < 110 ? 'start' : 'middle');
-    mt.textContent = data(d) + '  ' + Math.round(v) + ' GB' + (d > HOJE ? ' (projeção)' : '');
+    mt.setAttribute('x', xx); mt.setAttribute('text-anchor', xx > 480 ? 'end' : xx < 110 ? 'start' : 'middle');
+    mt.textContent = data(d) + '  ' + Math.round(v) + ' s';
     mira.classList.add('on');
   };
   disco.addEventListener('pointermove', move); disco.addEventListener('pointerleave', () => mira.classList.remove('on'));
@@ -880,14 +813,14 @@
   const escreve = (n, v) => { const d = +(n.dataset.d || 0), u = un(n); n.firstChild.nodeValue = fmt(v, d); };
   nums.forEach(n => { n.insertBefore(document.createTextNode('0'), n.firstChild); n.firstChild.nextSibling.nodeType === 3 && n.firstChild.nextSibling.remove(); });
   const sobe = () => {
-    const t0 = performance.now(), dur = 1400;
+    const t0 = performance.now(), dur = 700;
     const f = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
       nums.forEach(n => escreve(n, +n.dataset.n * e)); if (k < 1) requestAnimationFrame(f); };
     requestAnimationFrame(f);
   };
   const tic = () => { const t = document.getElementById('k-temp'); let base = 47, vis = true;
     setInterval(() => { if (document.hidden) return; base = 46 + Math.round(rnd() * 3); escreve(t, base); }, 2600); };
-  const entra = () => { dash.parentElement.classList.add('vis'); sobe(); setTimeout(tic, 1600); };
+  const entra = () => { dash.parentElement.classList.add('vis'); sobe(); setTimeout(tic, 900); };
   if (calmo) { dash.parentElement.classList.add('vis'); nums.forEach(n => escreve(n, +n.dataset.n)); }
   else new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); entra(); } }, { threshold: .25 }).observe(dash);
 })();
