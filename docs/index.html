@@ -271,17 +271,32 @@
   .gc .eixo { font: 400 10px var(--mono); fill: var(--apagado); }
   .gc .grade { stroke: var(--linha); stroke-width: 1; }
   .gc .linha { fill: none; stroke: var(--ambar); stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
-  .gc .area { fill: var(--ambar); opacity: 0; }
+  .gc .area { fill: url(#g-area); opacity: 0; }
   .gc .proj { fill: none; stroke: var(--vermelho); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0; }
   .gc .ponto { fill: var(--ambar); opacity: 0; }
   .gc .rot { font: 500 11px var(--mono); fill: var(--vermelho); opacity: 0; }
+  .gc .grade { stroke-dasharray: 2 4; }
+  .gc .eixo.hoje { fill: var(--texto); }
+  .gc .futuro { opacity: 0; }
+  .gc .ponto.r { fill: var(--vermelho); }
+  .gc .anel { fill: none; stroke: var(--ambar); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .gc .rot-v { font: 700 12px var(--mono); fill: var(--osso); opacity: 0; }
+  .gc .mira { opacity: 0; transition: opacity .15s; pointer-events: none; } .gc .mira.on { opacity: 1; }
+  .gc .mira-l { stroke: var(--linha-forte); stroke-width: 1; } .gc .mira-p { fill: var(--osso); }
+  .gc .mira-t { font: 500 11px var(--mono); fill: var(--osso); }
+  .gc svg#g-disco { cursor: crosshair; touch-action: pan-y; }
+  .vis .gc .futuro { opacity: 1; transition: opacity .8s 1.5s; }
+  .vis .gc .rot-v { opacity: 1; transition: opacity .5s 2s; }
+  .vis .gc .anel { animation: anel 1.6s 2s ease-out 2 both; }
+  @keyframes anel { from { opacity: .8; scale: 1; } to { opacity: 0; scale: 3.2; } }
   .vis .gc .linha { stroke-dashoffset: 0; transition: stroke-dashoffset 1.8s cubic-bezier(.5,0,.2,1) .2s; }
-  .vis .gc .area { opacity: .1; transition: opacity .8s 1.4s; }
+  .vis .gc .area { opacity: 1; transition: opacity .8s 1.4s; }
   .vis .gc .proj, .vis .gc .rot, .vis .gc .ponto { opacity: 1; transition: opacity .5s 1.9s; }
   .calor { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; }
   .calor i { aspect-ratio: 1; border-radius: 1px; background: #17171a; opacity: 0; }
   .calor i[data-l="1"] { background: #221d16; } .calor i[data-l="2"] { background: #3f321f; } .calor i[data-l="3"] { background: #7a5a2f; } .calor i[data-l="4"] { background: var(--ambar); }
   .vis .calor i { opacity: 1; transition: opacity .35s calc(var(--c) * 45ms + var(--r) * 14ms + 300ms); }
+  .horas { display: flex; justify-content: space-between; font: 400 10px var(--mono); color: var(--apagado); }
   .prop { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
   .prop .nv { grid-row: 1 / span 2; }
   .prop b { font: 700 14px/1.3 var(--mono); color: var(--osso); }
@@ -341,6 +356,8 @@
   .contribui .celulas > a { padding: 28px clamp(20px, 2.4vw, 32px) 32px; display: block; text-decoration: none; transition: background-color .2s; }
   .contribui .celulas > a:hover { background: #101012; }
   .contribui .celulas > a:hover h3 { color: var(--ambar); }
+  .contribui .ic { width: 22px; height: 22px; color: var(--apagado); margin-bottom: 18px; display: block; transition: color .2s; }
+  .contribui .celulas > a:hover .ic { color: var(--ambar); }
   .contribui h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; transition: color .2s; }
   .contribui p { font: 400 15px/1.5 var(--sans); color: #a9a49b; max-width: 46ch; }
   .contribui code { font: 500 13px var(--mono); color: var(--osso); }
@@ -381,13 +398,13 @@
   .jh-arte { position: absolute; inset: 0 0 auto 0; height: 420px; }
   .jh-arte img { width: 100%; height: 100%; object-fit: cover; object-position: 64% 50%; opacity: .9; }
   .jh-arte::after { content: ''; position: absolute; inset: 0;
-    background: linear-gradient(90deg, #060607 0%, rgba(6,6,7,.9) 26%, rgba(6,6,7,.3) 62%, transparent 85%), linear-gradient(0deg, var(--fundo) 0%, transparent 38%); }
+    background: linear-gradient(180deg, var(--fundo) 0%, rgba(12,12,13,0) 26%), linear-gradient(90deg, var(--fundo) 0%, rgba(12,12,13,.9) 26%, rgba(12,12,13,.3) 62%, rgba(12,12,13,0) 85%), linear-gradient(0deg, var(--fundo) 0%, rgba(12,12,13,0) 38%); }
   .jh-texto { position: relative; z-index: 2; padding: clamp(48px, 6vw, 84px) clamp(20px, 3vw, 40px) clamp(40px, 5vw, 64px); max-width: 560px; display: grid; gap: 16px; justify-items: start; }
   .jh-texto h2 { font: 800 clamp(34px, 4vw, 52px)/1 var(--mono); color: var(--osso); letter-spacing: -.05em; }
   .jh-texto h2 span { color: var(--ambar); }
   .jh-texto p { font: 400 16px/1.55 var(--sans); max-width: 44ch; text-wrap: pretty; }
   .placas { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--linha); background: var(--fundo); }
-  .placa { position: relative; min-height: 210px; display: flex; align-items: flex-end; overflow: hidden; background: #060607; border-left: 1px solid var(--linha); }
+  .placa { position: relative; min-height: 210px; display: flex; align-items: flex-end; overflow: hidden; background: var(--fundo); border-left: 1px solid var(--linha); }
   .placa:nth-child(3n+1) { border-left: 0; }
   .placa:nth-child(n+4) { border-top: 1px solid var(--linha); }
   .placa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .62; transition: opacity .35s, transform 1.2s ease-out; }
@@ -419,7 +436,7 @@
     .placa:nth-child(odd) { border-left: 0; }
     .placa:nth-child(n+3) { border-top: 1px solid var(--linha); }
     .jh-arte { height: 360px; }
-    .jh-arte::after { background: linear-gradient(90deg, rgba(6,6,7,.9) 0%, rgba(6,6,7,.5) 100%), linear-gradient(0deg, var(--fundo) 0%, transparent 38%); }
+    .jh-arte::after { background: linear-gradient(180deg, var(--fundo) 0%, rgba(12,12,13,0) 30%), linear-gradient(90deg, rgba(12,12,13,.9) 0%, rgba(12,12,13,.55) 100%), linear-gradient(0deg, var(--fundo) 0%, rgba(12,12,13,0) 38%); }
     .nunca { grid-template-columns: 1fr; }
     .nunca-lado { border-right: 0; border-bottom: 1px solid var(--linha); }
     .contribui .celulas, .passos .celulas { grid-template-columns: 1fr; }
@@ -579,7 +596,7 @@
         </div>
         <div class="dash-graf" aria-hidden="true">
           <figure class="gc"><header><b>espaço livre em C:</b><span>cheio em ~17/11</span></header><svg id="g-disco" viewBox="0 0 600 180"></svg></figure>
-          <figure class="gc"><header><b>quando esquenta</b><span>por hora</span></header><div class="calor" id="g-calor"></div></figure>
+          <figure class="gc"><header><b>quando esquenta</b><span>por hora</span></header><div class="calor" id="g-calor"></div><div class="horas"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div></figure>
         </div>
         <div class="dash-baixo" aria-hidden="true">
           <div class="prop" style="--i:0"><span class="nv nv3">grave</span><b>Driver com problema</b><code>katharos atualizar</code><i class="btn">Corrigir</i></div>
@@ -714,9 +731,9 @@
   </section>
   <section class="faixa contribui" aria-label="Como contribuir">
     <div class="quadro celulas">
-      <a href="https://github.com/kessleru/Katharos/issues/new/choose"><h3>Contar um problema</h3><p>Abra uma issue.</p></a>
-      <a href="https://github.com/kessleru/Katharos/pulls"><h3>Propor um ajuste</h3><p>Envie um pull request.</p></a>
-      <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md"><h3>Falha de segurança</h3><p>Conte em privado.</p></a>
+      <a href="https://github.com/kessleru/Katharos/issues/new/choose"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><h3>Contar um problema</h3><p>Abra uma issue.</p></a>
+      <a href="https://github.com/kessleru/Katharos/pulls"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v10M18 17V9a3 3 0 0 0-3-3h-4M13 3.5 10.5 6 13 8.5"/></svg><h3>Propor um ajuste</h3><p>Envie um pull request.</p></a>
+      <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5M12 14.5v2.5"/></svg><h3>Falha de segurança</h3><p>Conte em privado.</p></a>
     </div>
   </section>
 </main>
@@ -802,15 +819,48 @@
     ys.forEach(y => el('line', { x1: x0, x2: x1, y1: y, y2: y, class: 'grade' }, svg));
     rot.forEach(([x, y, t, a]) => { const n = el('text', { x, y, class: 'eixo', 'text-anchor': a || 'start' }, svg); n.textContent = t; });
   }
-  // espaço livre: cai de 92 a 50 GB; o traço vermelho projeta quando enche
+  // espaço livre: 01/10 a hoje (21/10) medido; daí em diante, a projeção até encher (~17/11)
   const disco = document.getElementById('g-disco');
-  const X0 = 10, X1 = 590, XN = 380, Y = v => 15 + (100 - v) / 60 * 140;
-  grade(disco, X0, X1, [], [[X0, 176, '01/10'], [X1, 176, '21/10', 'end']]);
-  const pts = []; for (let i = 0; i <= 60; i++) { const t = i / 60; pts.push([X0 + t * (XN - X0), Y(92 - 42 * t - 1.2 * Math.sin(t * 40) + (rnd() - .5) * 1.4)]); }
-  el('path', { class: 'area', d: caminho(pts) + ` L${XN} ${Y(40)} L${X0} ${Y(40)}Z` }, disco);
+  const X0 = 44, X1 = 588, DIAS = 47, HOJE = 20, Y0 = 150, Y = v => 14 + (100 - v) / 100 * (Y0 - 14);
+  const XD = d => X0 + d / DIAS * (X1 - X0), XN = XD(HOJE);
+  const defs = el('defs', {}, disco);
+  const gr = el('linearGradient', { id: 'g-area', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+  el('stop', { offset: 0, 'stop-color': '#e2a85c', 'stop-opacity': .28 }, gr); el('stop', { offset: 1, 'stop-color': '#e2a85c', 'stop-opacity': 0 }, gr);
+  const pt = el('pattern', { id: 'g-hach', width: 8, height: 8, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+  el('line', { x1: 0, y1: 0, x2: 0, y2: 8, stroke: '#242428', 'stroke-width': 1 }, pt);
+  el('rect', { x: XN, y: 8, width: X1 - XN, height: Y0 - 8, fill: 'url(#g-hach)', class: 'futuro' }, disco);
+  [[100, '100'], [50, '50'], [0, '0 GB']].forEach(([v, t]) => {
+    el('line', { x1: X0, x2: X1, y1: Y(v), y2: Y(v), class: 'grade' }, disco);
+    const n = el('text', { x: X0 - 8, y: Y(v) + 3.5, class: 'eixo', 'text-anchor': 'end' }, disco); n.textContent = t;
+  });
+  [[0, '01/10', 'start'], [HOJE, 'hoje', 'middle'], [DIAS, '17/11', 'end']].forEach(([d, t, an]) => {
+    const n = el('text', { x: XD(d), y: Y0 + 20, class: 'eixo' + (d === HOJE ? ' hoje' : ''), 'text-anchor': an }, disco); n.textContent = t;
+  });
+  const vals = []; for (let i = 0; i <= 60; i++) { const t = i / 60; vals.push(92 - 42 * t - 1.4 * Math.sin(t * 38) + (rnd() - .5) * 1.6); }
+  vals[60] = 50;
+  const pts = vals.map((v, i) => [XD(i / 60 * HOJE), Y(v)]);
+  el('path', { class: 'area', d: caminho(pts) + ` L${XN} ${Y0} L${X0} ${Y0}Z`, fill: 'url(#g-area)' }, disco);
   el('path', { class: 'linha', pathLength: 1, d: caminho(pts) }, disco);
-  el('path', { class: 'proj', d: `M${XN} ${pts[60][1]} L${X1} ${Y(43)}` }, disco);
-  el('circle', { class: 'ponto', cx: XN, cy: pts[60][1], r: 4 }, disco);
+  el('path', { class: 'proj', d: `M${XN} ${Y(50)} L${X1} ${Y(0)}` }, disco);
+  el('circle', { class: 'ponto r', cx: X1, cy: Y(0), r: 3.5 }, disco);
+  el('circle', { class: 'anel', cx: XN, cy: Y(50), r: 4 }, disco);
+  el('circle', { class: 'ponto', cx: XN, cy: Y(50), r: 4 }, disco);
+  const rv = el('text', { class: 'rot-v', x: XN, y: Y(50) - 12, 'text-anchor': 'middle' }, disco); rv.textContent = '50 GB';
+  // passar o mouse: o dia e quanto sobrava (ou quanto vai sobrar)
+  const mira = el('g', { class: 'mira' }, disco);
+  const ml = el('line', { y1: 8, y2: Y0, class: 'mira-l' }, mira), mp = el('circle', { r: 3.5, class: 'mira-p' }, mira);
+  const mt = el('text', { class: 'mira-t', y: 4 }, mira);
+  const valor = d => d <= HOJE ? vals[Math.round(d / HOJE * 60)] : 50 - (d - HOJE) / (DIAS - HOJE) * 50;
+  const data = d => { const x = new Date(2026, 9, 1 + Math.round(d)); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0'); };
+  const move = ev => {
+    const r = disco.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * 600;
+    const d = Math.max(0, Math.min(DIAS, (x - X0) / (X1 - X0) * DIAS)), xx = XD(d), v = valor(d);
+    ml.setAttribute('x1', xx); ml.setAttribute('x2', xx); mp.setAttribute('cx', xx); mp.setAttribute('cy', Y(v));
+    mt.setAttribute('x', Math.min(X1, Math.max(X0, xx))); mt.setAttribute('text-anchor', xx > 470 ? 'end' : xx < 110 ? 'start' : 'middle');
+    mt.textContent = data(d) + '  ' + Math.round(v) + ' GB' + (d > HOJE ? ' (projeção)' : '');
+    mira.classList.add('on');
+  };
+  disco.addEventListener('pointermove', move); disco.addEventListener('pointerleave', () => mira.classList.remove('on'));
   // mapa de calor: máxima por hora; esquenta no fim da tarde e à noite
   const calor = document.getElementById('g-calor');
   for (let r = 0; r < 10; r++) for (let c = 0; c < 24; c++) {
