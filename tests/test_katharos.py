@@ -484,9 +484,8 @@ class TestJaFeito(unittest.TestCase):
         py = k.Item('p', 'P', 'x', py=lambda *a: None)
         so = k.Item('s', 'S', 'x', ps='x', sozinho=True)
         self.assertEqual([i.definitivo for i in (fixo, rec, py, so)], [True, False, False, False])
-        for arq in ('57-seguranca.py', '60-turbo.py'):
-            fonte = (Path(__file__).resolve().parent.parent / 'partes' / arq).read_text(encoding='utf-8')
-            self.assertNotIn('not i.py and not i.sozinho', fonte, arq + ': use i.definitivo')
+        fonte = Path(k.__file__).read_text(encoding='utf-8')
+        self.assertNotIn('not i.py and not i.sozinho', fonte, 'use i.definitivo em vez de repetir a condição')
 
     def test_item_de_acao_em_area_conferida_e_marcado_como_recorrente(self):
         """Quem apaga arquivo, limpa ou otimiza a cada rodada não pode entrar na lista de já feito."""
