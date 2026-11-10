@@ -41,7 +41,7 @@ Ou direto, num PowerShell aberto como administrador: `python programa\katharos.p
 
 ## Modos
 
-Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem sete linhas (`raiox`, `turbo`, `escolher`, `jogar`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas, `jogar` junta o que é de jogo e mostra só o que este PC tem (o Windows sempre; a Steam, o CS2, o Minecraft e os jogos Unreal só se estiverem instalados) e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
+A abertura mostra o **próximo passo** para este PC (medir, aplicar o que o raio-x apontou, conferir o ganho, agendar) e o Enter segue; qualquer palavra que não seja comando vira busca (`ventoinha`, `como tirar a propaganda`). Não há perfis: você escolhe um **modo** e ele decide o que vem marcado, ou abre uma área (`limpar`, `jogos`...) e marca item por item. O menu de abertura tem sete linhas (`raiox`, `turbo`, `escolher`, `jogar`, `painel`, `desfazer`, `mais`): `escolher` mostra as áreas, `jogar` junta o que é de jogo e mostra só o que este PC tem (o Windows sempre; a Steam, o CS2, o Minecraft e os jogos Unreal só se estiverem instalados) e `mais` as outras ferramentas, por assunto. Em qualquer tela vale o número da linha ou o nome de um comando.
 
 | Modo | O que marca |
 | --- | --- |
@@ -61,7 +61,7 @@ Antes de mostrar qualquer item, ele olha o PC: HD ou SSD, RAM e slots, notebook 
 - dobra os limites de tempo em HD e aumenta em pouca RAM;
 - com o Python da Microsoft Store, roda o PowerShell **fora do contêiner** dela pelo WMI (senão o registro do usuário seria gravado numa cópia virtual), e avisa quando o administrador é outra conta.
 
-O `raiox` não só lista: ele mede e explica. Além de CPU, RAM e disco, olha a memória comprometida (falta de RAM de verdade, não só "em uso"), o disco ocupado com o PC parado e quem está lendo e gravando, as interrupções e DPC (o driver que picota o áudio e engasga o jogo), a velocidade real dos pentes de memória (XMP desligado), a taxa de atualização do monitor contra a que ele aceita, a idade do driver de vídeo e o TRIM do SSD. Cada processo que aparece gastando vem com o que ele é e o que fazer (mais de 110 conhecidos). A nota diz quais achados mais pesaram, e o que é só informação não tira ponto.
+O `raiox` não só lista: ele mede e explica. Além de CPU, RAM e disco, olha a memória comprometida (falta de RAM de verdade, não só "em uso"), o disco ocupado com o PC parado e quem está lendo e gravando, as interrupções e DPC (o driver que picota o áudio e engasga o jogo), a velocidade real dos pentes de memória (XMP desligado), a taxa de atualização do monitor contra a que ele aceita, a idade do driver de vídeo e o TRIM do SSD. Cada processo que aparece gastando vem com o que ele é e o que fazer (mais de 900 conhecidos, e pelo começo ou fim do nome ele ainda reconhece de quem é ou o que faz). A nota diz quais achados mais pesaram, e o que é só informação não tira ponto.
 
 ## Comandos
 

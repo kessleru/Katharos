@@ -2,6 +2,7 @@
 Verificam o que não pode quebrar: cada item é completo, nenhum script mexe nas proteções do Windows, os perfis só
 citam itens que existem, o menu só cita comandos que existem e o ZIP bate com os hashes publicados."""
 import hashlib
+from datetime import datetime
 import importlib.util
 import re
 import sys
@@ -1761,8 +1762,13 @@ class TestBusca(unittest.TestCase):
         self.assertEqual(self.ids('desfazer')[0], ('desfazer', 'desfazer'))
 
     def test_todas_as_palavras_precisam_aparecer(self):
-        self.assertEqual(self.ids('telemetria zzzqqq'), [])
+        self.assertEqual(self.ids('zzzqqq wwwkkk'), [])
         self.assertEqual(self.ids(''), [])
+
+    def test_frase_inteira_acha_pelo_que_importa(self):
+        self.assertTrue(any(a == 'energia' for a, _ in self.ids('meu notebook esquenta muito e faz barulho')))
+        self.assertTrue(self.ids('como tirar a propaganda do meu pc'))
+        self.assertEqual(self.ids('telemetria zzzqqq')[0][0], 'privacidade', 'metade das palavras basta numa frase')
 
     def test_buscar_nao_pede_aceite_e_nao_guarda_estado(self):
         self.assertIn('buscar', k.SEM_ACEITE)
@@ -1796,6 +1802,76 @@ class TestJogosDeOutrasLojas(unittest.TestCase):
             achadas = k._pastas_riot(d)
         self.assertEqual(len(achadas), 1)
         self.assertIn('VALORANT', str(next(iter(achadas))))
+
+
+class TestDicionarioEFluxo(unittest.TestCase):
+    def test_dicionario_grande_e_sem_pedacos_soltos(self):
+        self.assertGreater(len(k.PROCESSOS), 800)
+        for solto in ('pro', 'service', 'desktop', 'cloud', '3', '-'):
+            self.assertNotIn(solto, k.PROCESSOS)
+        for nome, (oque, faz, cmd) in k.PROCESSOS.items():
+            self.assertEqual(nome, nome.lower().strip())
+            self.assertTrue(oque and faz, nome)
+            self.assertTrue(not cmd or cmd in k.COMANDOS, f'{nome} aponta para {cmd}')
+
+    def test_quem_e_por_nome_jogo_dono_e_funcao(self):
+        self.assertIn('Cyberpunk', k.quem_e('Cyberpunk2077.exe')[0])
+        self.assertIn('anti-cheat', k.quem_e('r5apex.exe')[0])
+        self.assertIn('ASUS', k.quem_e('AsusNovoPrograma.exe')[0])
+        self.assertIn('atualizador', k.quem_e('QualquerUpdater.exe')[0])
+        self.assertIn('Unreal', k.quem_e('JogoNovo-Win64-Shipping.exe')[0])
+        self.assertEqual(k.quem_e('svchost#4'), k.quem_e('svchost'))
+        self.assertIn('empresa', k.quem_e('CSFalconService')[0])
+        for desconhecido in ('nvda', 'hp', 'xyzabc', '', None):
+            self.assertIsNone(k.quem_e(desconhecido), desconhecido)
+
+    def test_inicializacao_nunca_oferece_antivirus_nem_programa_da_empresa(self):
+        for nome in ('Avast UI', 'Kaspersky', 'Bitdefender Agent', 'GlobalProtect', 'Cisco AnyConnect'):
+            self.assertIsNone(k._classe_inicio(nome, '')[0], nome)
+        self.assertEqual(k._classe_inicio('Bitwarden', '')[0], 0)
+        self.assertEqual(k._classe_inicio('CCleaner Monitor', '')[0], 1)
+        self.assertEqual(k._classe_inicio('Spotify', '')[0], 2)
+
+    def test_inicializacao_nao_confunde_pedaco_de_palavra(self):
+        generico = 'programa que abre com o Windows'
+        for nome in ('MeuLoginHelperX', 'Marcador', 'Equinox', 'Generoso'):
+            self.assertNotIn(k._classe_inicio(nome.replace('Helper', ''), '')[1], ('programa que você abre quando quiser',), nome)
+        self.assertEqual(k._classe_inicio('Coisa Qualquer', 'C:\\x\\coisa.exe')[1], generico)
+
+    def test_catalogo_cresceu_sem_jogo_com_anticheat(self):
+        self.assertGreaterEqual(len(k.CATALOGO_JOGOS), 120)
+        self.assertFalse({e.lower() for e in k.JOGOS_EXE} & {e.lower() for e in k.EXE_COM_ANTICHEAT})
+        self.assertEqual(len(k.JOGOS_EXE), len({e.lower() for e in k.JOGOS_EXE}), 'executável repetido no catálogo')
+
+    def test_proximo_passo_segue_o_caminho_de_quem_chega(self):
+        agora = datetime(2026, 11, 9, 12, 0, 0)
+        self.assertEqual(k.proximo_passo({}, {}, agora)[0], 'raiox')
+        e = {'usado': {'raiox': '2026-11-09T10:00:00'}}
+        rx = {'achados': [{'titulo': 'A', 'impacto': 1, 'comando': 'limpar'}, {'titulo': 'Muita coisa abrindo', 'impacto': 3, 'comando': 'inicializacao'}]}
+        self.assertEqual(k.proximo_passo(e, rx, agora)[0], 'inicializacao')
+        e = {'usado': {'raiox': '2026-11-09T10:00:00', 'inicializacao': '2026-11-09T10:30:00'},
+             'pacotes': {'inicializacao': {'quando': '2026-11-09T10:30:00'}}}
+        self.assertEqual(k.proximo_passo(e, rx, agora)[0], 'medir')
+        e['usado']['medir'] = '2026-11-09T11:00:00'
+        self.assertIsNone(k.proximo_passo(e, rx, agora))
+        e['pacotes']['limpar'] = {'quando': '2026-11-09T10:40:00'}
+        self.assertEqual(k.proximo_passo(e, rx, agora)[0], 'agendar')
+        e['manut_freq'] = 'semanal'
+        self.assertIsNone(k.proximo_passo(e, rx, agora))
+        self.assertEqual(k.proximo_passo(e, rx, datetime(2026, 12, 20))[0], 'raiox')
+        self.assertIsNone(k.proximo_passo({'usado': {'raiox': 'lixo'}}, {'achados': 'lixo' and []}, agora))
+
+    def test_enter_no_menu_segue_o_proximo_passo(self):
+        import io, contextlib
+        t = k.Terminal(True, True)
+        t.interativo = True
+        ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
+        rodou = []
+        with contextlib.redirect_stdout(io.StringIO()) as buf, mock.patch.object(k, 'estado', lambda: {}), mock.patch.object(k, 'primeira_vez', lambda c: None), \
+                mock.patch.object(k, '_roda_do_menu', lambda c, p, a, cmd, extra=(): rodou.append(cmd)), mock.patch('builtins.input', side_effect=['', '0']):
+            k.menu(ctx, k.monta_parser(), type('A', (), {})())
+        self.assertEqual(rodou, ['raiox'])
+        self.assertIn('ximo passo', buf.getvalue())
 
 
 if __name__ == '__main__':

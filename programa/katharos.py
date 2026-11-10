@@ -3063,21 +3063,6 @@ PROCESSOS = {
 }
 
 
-def quem_e(nome):
-    """(o que é, o que fazer, comando) para um nome de processo, ou None se o Katharos não conhece."""
-    n = str(nome or '').strip().lower()
-    if n.endswith('.exe'):
-        n = n[:-4]
-    if n in PROCESSOS:
-        return PROCESSOS[n]
-    for prefixo in ('armourycrate', 'nvidia', 'razer', 'steam', 'riot', 'epic'):
-        if n.startswith(prefixo):
-            achado = next((v for k, v in PROCESSOS.items() if k.startswith(prefixo)), None)
-            if achado:
-                return achado
-    return None
-
-
 def explica_processos(lista_proc, campo, unidade, limite=3):
     """'chrome 12% (o Google Chrome), xyz 4%': os primeiros de uma lista do raio-x, com o que cada um é."""
     partes = []
@@ -3086,6 +3071,326 @@ def explica_processos(lista_proc, campo, unidade, limite=3):
         valor = f'{br(x.get(campo), 1 if unidade == "%" else 0)}{" " if unidade != "%" else ""}{unidade}'
         partes.append(f'{x.get("n")} {valor}' + (f' ({q[0]})' if q else ''))
     return ', '.join(partes)
+# ──────────────────────────────────────────────────────────────────────────────
+# O dicionário grande: mais processos conhecidos, por família. Cada linha: (nomes, o que é, o que fazer, comando).
+# Os nomes são de processo (minúsculas, sem .exe). Entra aqui o que aparece de verdade no Gerenciador de Tarefas
+# de PCs de casa, de jogo e de trabalho. Na dúvida sobre o que um processo é, ele NÃO entra: melhor "não conheço"
+# do que explicar errado.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_NORMAL = 'faz parte do Windows: normal'
+_INI = 'tire da inicialização se não usa todo dia'
+_ABAS = 'feche abas e veja as extensões'
+
+FAMILIAS = [
+    # ── Windows: núcleo e sessão ──
+    ('smss wininit winlogon services lsaiso dllhost conhost sihost backgroundtaskhost applicationframehost '
+     'systemsettings systemsettingsbroker useroobebroker lockapp logonui userinit dashost wudfhost unsecapp '
+     'securityhealthsystray securityhealthhost sgrmbroker msdtc vds vssvc wlanext wmiapsrv wmiadap smartscreen '
+     'crossdeviceservice crossdeviceresume mobsync taskmgr mmc regedit notepad calculatorapp snippingtool '
+     'screenclippinghost aggregatorhost dataexchangehost easeofaccessdialog magnify narrator osk tabtip '
+     'openwith pickerhost credentialuibroker consent rundll32 msiexec werfault wermgr winstore.app',
+     'parte do Windows', _NORMAL, ''),
+    ('ntoskrnl secure system', 'o núcleo do Windows', 'se gasta muito parado, é driver: veja "saude"', 'saude'),
+    ('idle', 'o tempo em que o processador está livre', 'quanto maior, melhor: não é um programa', ''),
+    ('wsl wslhost wslservice wslrelay', 'o Linux dentro do Windows (WSL)', 'rode "wsl --shutdown" quando não usa', ''),
+    ('vmcompute vmms vmwp', 'máquinas virtuais do Hyper-V', 'a memória é da máquina virtual', ''),
+    ('windowsterminal openconsole cmd powershell pwsh powershell_ise', 'um terminal aberto', 'é o que você (ou um script) está rodando nele', ''),
+    ('werfault wermgr', 'o relatório de erros do Windows', 'aparece quando um programa trava: veja "saude"', 'saude'),
+    ('msiexec', 'um instalador do Windows trabalhando', 'espere a instalação terminar', ''),
+    ('tiworker trustedinstaller musnotification musnotifyicon updatenotificationmgr usocoreworker wuaucltcore sihclient',
+     'o Windows Update', 'espere terminar e reinicie', 'atualizar'),
+    ('defrag dfrgui', 'a otimização de unidades', 'passa sozinho; em SSD é só o TRIM', ''),
+    ('chkdsk autochk', 'a verificação de disco', 'espere terminar', ''),
+    ('sfc', 'a verificação de arquivos do Windows', 'espere terminar', ''),
+    ('searchfilterhost searchui', 'a busca do Windows', 'passa sozinho', ''),
+    ('ngen ngentask mscorsvw', 'o .NET recompilando programas depois de uma atualização', 'passa sozinho em alguns minutos', ''),
+    ('mpcmdrun mpsigstub msseces', 'o antivírus do Windows (Defender)', 'passa sozinho', 'disco'),
+    ('sdxhelper officeclicktorun officec2rclient appvshnotify msoia', 'o instalador e atualizador do Office', 'normal; pesa só enquanto atualiza', ''),
+    ('msteamsupdate squirrel update', 'um atualizador de programa', 'passa sozinho', ''),
+    ('gameinputsvc gamingservicesnet xboxgamebarwidgets xboxappservices xgamehelper', 'serviços de jogos do Xbox',
+     'necessários para jogos da Microsoft Store', ''),
+    ('gamebarpresencewriter bcastdvr broadcastdvrserver', 'a gravação de jogos do Xbox', 'o pacote de jogos desliga a gravação em segundo plano', 'jogos'),
+    ('microsoft.photos photos video.ui microsoft.media.player wmplayer', 'fotos e vídeo do Windows', 'normal enquanto está aberto', ''),
+    ('hxtsr hxoutlook hxcalendarappimm', 'o app Email e Calendário', 'pode ser removido se você não usa', 'apps'),
+    ('m365copilot copilotnative microsoft.copilot aihost aixhost windowsaifoundry', 'a IA do Windows (Copilot)', 'o pacote de privacidade desliga', 'privacidade'),
+    ('msedgeupdate microsoftedgeupdate', 'o atualizador do Edge', 'passa sozinho', ''),
+    ('identity_helper elevation_service notification_helper', 'um auxiliar do navegador', 'normal', ''),
+    ('onedrivesetup onedriveupdater filecoauth filesynchelper', 'o OneDrive', 'muita CPU quer dizer muitos arquivos pequenos sincronizando', 'privacidade'),
+    ('peopleexperiencehost', 'os contatos do Windows', 'normal', ''),
+    ('msfeedssync newsandinterests', 'notícias e interesses', 'o pacote de privacidade desliga', 'privacidade'),
+    ('printisolationhost splwow64', 'a impressão', 'normal enquanto imprime', ''),
+    ('wlrmdr', 'avisos de login do Windows', _NORMAL, ''),
+    ('quickassist msra', 'a assistência remota', 'feche se você não abriu: alguém pode estar vendo sua tela', ''),
+    ('mstsc rdpclip', 'a área de trabalho remota', 'normal durante uma conexão remota', ''),
+    # ── navegadores ──
+    ('vivaldi opera_gx operagx arc zen librewolf waterfox thorium chromium tor iexplore', 'um navegador', _ABAS, ''),
+    ('brave bravebrowser', 'o Brave', _ABAS, ''),
+    ('browser_broker crashpad_handler chrome_crashpad_handler', 'um auxiliar de navegador', 'normal', ''),
+    # ── comunicação e escritório ──
+    ('telegram signal element thunderbird mailbird', 'um programa de mensagens ou e-mail', _INI, 'inicializacao'),
+    ('teamviewer teamviewer_service anydesk rustdesk parsecd parsec', 'acesso remoto', 'deixe aberto só quando precisa: ele aceita conexões de fora', 'inicializacao'),
+    ('winword excel powerpnt onenote onenotem msaccess mspub visio lync', 'o Microsoft Office', 'normal enquanto está aberto', ''),
+    ('soffice soffice.bin wps wpp et', 'um pacote de escritório', 'normal enquanto está aberto', ''),
+    ('acrobat acrord32 acrocef rdrcef adobearm armsvc', 'o Adobe Acrobat', 'o atualizador pode sair da inicialização', 'inicializacao'),
+    ('notion obsidian evernote todoist trello', 'um app de notas ou tarefas', _INI, 'inicializacao'),
+    ('webexmta atmgr ciscocollabhost gotomeeting', 'um app de reunião', _INI, 'inicializacao'),
+    # ── criação ──
+    ('creative cloud ccxprocess cclibrary coresync adobeipcbroker adobe desktop service adobeupdateservice agsservice agmservice adobegcclient adobenotificationclient',
+     'a Adobe Creative Cloud em segundo plano', 'gasta parada: tire da inicialização e abra só com os programas da Adobe', 'inicializacao'),
+    ('photoshop illustrator afterfx premiere pro adobe premiere pro lightroom indesign adobe media encoder',
+     'um programa da Adobe', 'normal enquanto trabalha; usa muita RAM de propósito', ''),
+    ('resolve blender obs64 obs32 streamlabs obs vegas handbrake audacity gimp-2.10 gimp inkscape krita figma figma_agent canva',
+     'um programa de criação ou gravação', 'normal enquanto trabalha', ''),
+    ('vlc mpc-hc64 mpc-be64 mpv potplayermini64 itunes applemobiledeviceservice', 'um player de mídia', 'normal enquanto toca', ''),
+    # ── nuvem e backup ──
+    ('dropbox dropboxupdate googledrivefs googledrivesync megasync icloudservices iclouddrive icloudphotos pcloud nextcloud backblaze bztransmit',
+     'sincronização de arquivos na nuvem', 'gasta CPU enquanto sincroniza; os arquivos só sobem com ele aberto', 'inicializacao'),
+    ('veeam.endpoint.tray acronistrueimage macriumservice reflectmonitor', 'um programa de backup', 'deixe: é o seu backup', ''),
+    # ── jogos: lojas e auxiliares ──
+    ('steamservice gameoverlayui steamerrorreporter', 'a Steam', 'a sobreposição pode ser desligada nas configurações dela', 'steam'),
+    ('epicgameslauncher unrealcefsubprocess epiconlineservices epiconlineservicesuserhelper eosoverlayrenderer-win64-shipping',
+     'a loja da Epic', 'feche depois de abrir o jogo; tire da inicialização', 'inicializacao'),
+    ('agent battle.net blizzardbrowser blizzarderror', 'a Battle.net', 'tire da inicialização', 'inicializacao'),
+    ('origin originwebhelperservice eadesktop ealauncher eaconnect_microsoft ealocalhostsvc eaanticheat.gameservice', 'o EA app',
+     'tire da inicialização', 'inicializacao'),
+    ('ubisoftgamelauncher upc uplaywebcore ubisoftconnect uplayservice', 'a Ubisoft Connect', 'tire da inicialização', 'inicializacao'),
+    ('riotclientux riotclientuxrender riotclientcrashhandler leagueclient leagueclientux', 'o cliente da Riot', 'tire da inicialização', 'inicializacao'),
+    ('galaxyclient galaxyclienthelper galaxycommunication gogalaxy', 'o GOG Galaxy', 'tire da inicialização', 'inicializacao'),
+    ('rockstarservice launcher socialclubhelper', 'o launcher da Rockstar', 'abre só com o jogo', ''),
+    ('amazon games itch playnite heroic lutris prismlauncher curseforge overwolf overwolfbrowser overwolfhelper',
+     'um launcher ou gerenciador de jogos', _INI, 'inicializacao'),
+    ('minecraftlauncher minecraft tlauncher', 'o launcher do Minecraft', 'pode fechar depois que o jogo abre', 'minecraft'),
+    ('medal medalencoder outplayed', 'gravador de jogadas', 'grava o tempo todo: desligue se não usa', 'inicializacao'),
+    ('wallpaper32 wallpaper64 wallpaperservice32 rainmeter lively', 'papel de parede animado ou widgets', 'gasta GPU o tempo todo: pause quando joga', 'inicializacao'),
+    ('rtss msiafterburner hwinfo64 hwinfo32 hwmonitor coretemp aida64 cpuz gpu-z fancontrol', 'monitor de hardware',
+     'cada um deles lê os sensores o tempo todo: deixe só um aberto', 'inicializacao'),
+    ('vgc vgtray vanguard', 'o anti-cheat Vanguard (Valorant)', 'o Katharos não mexe em anti-cheat', ''),
+    ('easyanticheat easyanticheat_eos beservice beservice_x64 faceit faceitservice esportal', 'um anti-cheat', 'o Katharos não mexe em anti-cheat', ''),
+    # ── placas de vídeo e chips ──
+    ('nvidia overlay nvsphelper64 nvcplui nvtelemetrycontainer nvbroadcast nvidia broadcast nvoawrappercache',
+     'programas da NVIDIA', 'a sobreposição e a telemetria podem ser desligadas no app da NVIDIA', ''),
+    ('amdrsserv amdow atieclxx atiesrxx amdfendrsr cncmd amddvr radeonsoftware amdryzenmasterdriver',
+     'o driver e o painel da AMD', 'normal; a gravação (ReLive) pode ser desligada no painel', ''),
+    ('igfxtray igfxhk igfxcuiservice igfxext intelgraphicssoftware arccontrol intelcphdcpsvc oneapp.igcc.winservice',
+     'o driver e o painel de vídeo da Intel', 'normal', ''),
+    ('lms jhi_service ipf_helper ipf_uf esif_uf dptf intelcphecisvc heciserver', 'serviços do chipset Intel (gerenciamento e controle térmico)',
+     'deixe: o controle térmico do notebook depende deles', ''),
+    ('rtkngui64 rtkauduservice64 rtkbtmanserv ravbg64 ravcpl64 nahimicsvc64 nahimicsvc32 nahimic3 waves maxxaudiopro wavessvc64 dolbydax2api dax3api',
+     'o áudio do fabricante', 'os efeitos de som pesam pouco; o Nahimic é conhecido por atrapalhar jogos', ''),
+    ('syntpenh syntphelper etdctrl etdservice apoint elantechservice', 'o driver do touchpad', 'deixe: os gestos dependem dele', ''),
+    ('ibtsiva btwdins', 'o Bluetooth do fabricante', 'normal', ''),
+    ('killerservice killernetworkservice killeranalyticsservice xtuservice', 'software de rede ou ajuste da Intel/Killer',
+     'o Killer é conhecido por pesar na rede: dá para usar só o driver', 'servicos'),
+    # ── fabricantes de PC ──
+    ('asus_framework asusoptimization asussoftwaremanager asussystemanalysis asussystemdiagnosis asuslinknear asuslinkremote asusswitch asuscertservice '
+     'armourysocketserver armouryswagent armourycrate armouryhtmldebugserver asusupdatecheck atkexcomsvc rogliveservice aura auraservice aurawallpaperservice',
+     'programas da ASUS', 'são vários e somam: use o perfil silencioso ou remova o que não usa', 'programas'),
+    ('myasus glidex screenxpert', 'o MyASUS', 'pode sair da inicialização', 'inicializacao'),
+    ('dellsupportassistremedationservice supportassist supportassistagent dell.techhub dell.d3.winsvc dell.coreservices.client delldatavault '
+     'dellclientmanagementservice dellupdate dellpair ddvdatacollector ddvrulesprocessor ddvcollectorsvcapi dcu-cli',
+     'programas de suporte da Dell', 'conhecidos por pesar parados: podem ser removidos', 'programas'),
+    ('awcc awcc.service awccservice alienfxsubagent gamelibrarysvc', 'a central da Alienware', 'costuma pesar: atualize ou use o perfil equilibrado', 'servicos'),
+    ('hpsupportassistant hpsa_service hpsysteminfocap hpdiagscap hpnetworkcap hpappheliercap hpanalyticscomp hpcommrecovery hpaudioanalytics '
+     'hpprintscandoctorservice hpomencap omencommandcenterbackground hpsmartexperiences sysinfocap networkcap apphelpercap diagscap',
+     'programas e telemetria da HP', 'são muitos serviços que consultam o PC o tempo todo: podem ser removidos', 'programas'),
+    ('lenovovantage lenovovantageservice lenovo.modern.imcontroller imcontrollerservice lenovonow lenovoutilityservice lenovofnandfunctionkeys '
+     'utility lnbitssvc systeminterfacefoundation legionzone lzservice legionfancontrol',
+     'programas da Lenovo', 'o Vantage pode ficar em manual; as teclas de função dependem do "Utility"', 'servicos'),
+    ('acersysmonitorservice acerccagent acercentralservice acerqaagent quickaccess nitrosense predatorsense acerservice aasvc',
+     'programas da Acer', 'a central de ventoinha pode ficar; o resto pode sair da inicialização', 'inicializacao'),
+    ('msi.centralserver msi.terminalserver msi_central_service mystic_light_service dragoncenter msiservice lightkeeperservice ledkeeper2 msiapservice',
+     'programas da MSI', 'costumam pesar: atualize ou tire da inicialização', 'servicos'),
+    ('samsungsystemsupportengine samsungsettings samsungdex smartthings galaxybookexperience', 'programas da Samsung', _INI, 'inicializacao'),
+    ('gigabyte control center gcc easytuneengineservice sivservice rgbfusion gamingotservice', 'programas da Gigabyte',
+     'conhecidos por pesar: deixe só se usa RGB ou controle de ventoinha', 'servicos'),
+    # ── periféricos e RGB ──
+    ('lghub lghub_agent lghub_updater lghub_system_tray lcore logioptionsplus logioptionsplus_agent logioptions logi_lamparray_service setpoint',
+     'programas da Logitech', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    ('razer synapse 3 razer synapse service razer central razercentralservice rzsdkservice rzsdkserver razer cortex gamemanagerservice rzchromastreamserver',
+     'programas da Razer', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    ('icue corsair.service corsair.service.cpuidremote corsair.service.displayadapter corsairgamingaudiocfgservice64 cuellaccessservice',
+     'o iCUE da Corsair', 'conhecido por gastar CPU: atualize ou feche quando não precisa', 'inicializacao'),
+    ('steelseriesgg steelseriesengine steelseriesggclient steelseriessonar steelseriesprismsync', 'o SteelSeries GG', _INI, 'inicializacao'),
+    ('hyperx ngenuity ngenuity2 openrgb signalrgb signalrgblauncher nzxt cam nzxt cam roccat_swarm_monitor wootility', 'software de periférico ou RGB',
+     'RGB sincronizado gasta CPU o tempo todo: feche se não faz questão', 'inicializacao'),
+    ('wacom_tablet wacomhost wtabletserviceisd pen_tablet', 'o driver da mesa digitalizadora', 'deixe: a caneta depende dele', ''),
+    ('epson status monitor 3 e_yatiave canonmydeviceservice hpstatusbl brmfcmon', 'o monitor da impressora', 'pode sair da inicialização: a impressora continua funcionando', 'inicializacao'),
+    # ── antivírus e segurança de terceiros ──
+    ('avastui avastsvc aswidsagent aswenginesrv wsc_proxy afwserv avgui avgsvc avgidsagent', 'o antivírus Avast/AVG',
+     'o Defender pesa menos; se quer manter, é escolha sua', 'programas'),
+    ('mcuicnt mcshield mfemms mfevtps mfefire mcapexe mccspservicehost modulecoreservice mcafee.truekey pefservice mmsshost servicehost',
+     'o McAfee', 'costuma vir de fábrica e pesar: remova se não pagou por ele', 'programas'),
+    ('nortonsecurity ns nortonui nortonsvc nllclientsvc', 'o Norton', 'costuma vir de fábrica: remova se não pagou por ele', 'programas'),
+    ('avp avpui ksde kavfs', 'o Kaspersky', 'é o seu antivírus: o Katharos não mexe', ''),
+    ('bdagent bdservicehost vsserv bdredline epsecurityservice', 'o Bitdefender', 'é o seu antivírus: o Katharos não mexe', ''),
+    ('ekrn egui eguiproxy', 'o ESET', 'é o seu antivírus: o Katharos não mexe', ''),
+    ('mbam mbamservice mbamtray', 'o Malwarebytes', 'a versão grátis não precisa abrir com o Windows', 'inicializacao'),
+    ('avguard avira.servicehost avira.systray avira.spotlight.service', 'o Avira', 'o Defender pesa menos', 'programas'),
+    ('csfalconservice csfalconcontainer sentinelagent sentinelone cbdefense repmgr cylancesvc taniumclient ccmexec nessusd qualysagent zsatunnel '
+     'zsatray vpnagent vpnui globalprotect pangps pangpa forticlient fortitray nxtray netskope stagentsvc',
+     'segurança ou gestão da empresa', 'é do TI da sua empresa: não mexa (e use o modo seguro neste PC)', ''),
+    ('1password bitwarden keepass keepassxc lastpass dashlane nordpass protonpass', 'um gerenciador de senhas', 'deixe aberto: é ele que preenche as senhas', ''),
+    ('nordvpn nordvpn-service expressvpn expressvpnd protonvpn protonvpnservice surfshark openvpn openvpn-gui wireguard tailscale tailscaled tailscale-ipn '
+     'cloudflare warp warp-svc mullvad-daemon windscribe hamachi-2 zerotier-one_x64 radminvpn',
+     'uma VPN', 'ligada, deixa a internet e os jogos com mais atraso: ligue só quando precisa', 'inicializacao'),
+    # ── utilitários ──
+    ('powertoys powertoys.runner powertoys.awake powertoys.fancyzones powertoys.powerlauncher powertoys.colorpickerui powertoys.keyboardmanagerengine',
+     'o PowerToys', 'desligue dentro dele os módulos que não usa', ''),
+    ('everything sharex lightshot greenshot flameshot ditto f.lux flux autohotkey autohotkeyu64 espanso keypirinha listary flow.launcher '
+     'translucenttb startallbackcfg explorerpatcher eartrumpet twinkletray quicklook nilesoft.shell', 'um utilitário que fica na bandeja',
+     'leve; deixe se você usa', ''),
+    ('7zfm 7zg 7z winrar rar peazip bandizip', 'um compactador trabalhando', 'gasta CPU só enquanto compacta', ''),
+    ('qbittorrent utorrent bittorrent transmission-qt deluge tixati fdm idman iemonitor jdownloader2', 'um programa de download',
+     'usa disco e rede o tempo todo enquanto baixa ou semeia', 'inicializacao'),
+    ('ccleaner ccleaner64 ccleanerbrowser iobit advancedsystemcare asc driverbooster iobituninstaler glaryutilities wisecare365 pcappstore '
+     'driver easy drivereasy smartdefrag auslogics reimage restoro outbyte avastcleanup avgtuneup',
+     'um "otimizador" que fica rodando', 'fica residente e vende limpeza: não precisa abrir com o Windows, e pode ser removido', 'programas'),
+    ('java javaw javaws jusched jucheck jp2launcher', 'o Java', 'o atualizador (jusched) pode sair da inicialização', 'inicializacao'),
+    ('virtualbox virtualboxvm vboxsvc vboxheadless vmware vmware-vmx vmware-tray vmware-authd vmnat vmnetdhcp qemu-system-x86_64 bluestacks hd-player '
+     'hd-agent ldplayer dnplayer nox noxvmhandle memu msiplayer androidemulator',
+     'uma máquina virtual ou emulador de Android', 'usa muita RAM de propósito: feche quando não usa', ''),
+    # ── programação ──
+    ('code code - insiders cursor windsurf devenv rider64 idea64 pycharm64 webstorm64 clion64 goland64 phpstorm64 datagrip64 studio64 '
+     'sublime_text notepad++ atom zed fleet', 'um editor de código', 'extensões e indexação pesam: normal ao abrir um projeto grande', ''),
+    ('node deno bun npm yarn pnpm tsserver esbuild vite webpack', 'JavaScript rodando (um servidor ou build seu)', 'feche o terminal ou o editor que abriu', ''),
+    ('python python3 pythonw py jupyter-lab jupyter-notebook conda', 'um programa em Python', 'é algo que você ou outro programa abriu', ''),
+    ('git git-remote-https ssh ssh-agent gpg-agent github desktop githubdesktop sourcetree gitkraken fork', 'o Git ou um cliente dele', 'normal durante clone, pull e push', ''),
+    ('docker dockerd com.docker.service com.docker.build docker desktop backend vpnkit docker-desktop', 'o Docker Desktop',
+     'feche quando não usa: ele mantém uma máquina virtual ligada', ''),
+    ('msbuild cl link vbcscompiler dotnet cargo rustc rust-analyzer gopls go gradle java gcc g++ clang cmake ninja make',
+     'um compilador ou servidor de linguagem', 'normal enquanto compila ou analisa o projeto', ''),
+    ('postgres mysqld mongod redis-server sqlservr sqlwriter sqlbrowser sqlceip mariadbd elasticsearch', 'um banco de dados local',
+     'fica ligado o tempo todo: ponha em manual se só usa de vez em quando', 'servicos'),
+    ('ollama ollama app lm studio lmstudio koboldcpp', 'um modelo de IA local', 'usa muita RAM e placa de vídeo de propósito: feche quando não usa', ''),
+    ('adb emulator qemu-system-x86_64-headless', 'ferramentas do Android', 'normal com o Android Studio aberto', ''),
+    ('postman insomnia dbeaver heidisql ssms azuredatastudio wireshark fiddler', 'uma ferramenta de desenvolvimento', 'normal enquanto está aberta', ''),
+]
+
+for _nomes, _oque, _faz, _cmd in FAMILIAS:
+    # nomes com espaço vêm juntos na mesma string; os conhecidos de duas palavras são reconhecidos pela lista abaixo
+    for _n in _nomes.split():
+        PROCESSOS.setdefault(_n, (_oque, _faz, _cmd))
+
+# nomes de processo com espaço (o split acima os quebraria): entram inteiros
+for _n, _v in {
+    'creative cloud': ('a Adobe Creative Cloud em segundo plano', 'tire da inicialização e abra só com os programas da Adobe', 'inicializacao'),
+    'adobe desktop service': ('a Adobe Creative Cloud em segundo plano', 'tire da inicialização e abra só com os programas da Adobe', 'inicializacao'),
+    'adobe premiere pro': ('o Adobe Premiere', 'normal enquanto trabalha; usa muita RAM de propósito', ''),
+    'adobe media encoder': ('o Adobe Media Encoder', 'normal enquanto exporta', ''),
+    'streamlabs obs': ('o Streamlabs', 'normal enquanto transmite', ''),
+    'razer synapse 3': ('o Razer Synapse', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    'razer synapse service': ('o Razer Synapse', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    'razer central': ('o Razer Central', 'tire da inicialização', 'inicializacao'),
+    'razer cortex': ('o Razer Cortex', 'é um "otimizador" residente: não precisa abrir com o Windows', 'inicializacao'),
+    'nvidia overlay': ('a sobreposição da NVIDIA', 'desligue no app da NVIDIA se não grava', ''),
+    'nvidia broadcast': ('o NVIDIA Broadcast', 'usa a placa de vídeo o tempo todo: feche quando não está em chamada', 'inicializacao'),
+    'docker desktop backend': ('o Docker Desktop', 'feche quando não usa: ele mantém uma máquina virtual ligada', ''),
+    'github desktop': ('o GitHub Desktop', 'normal enquanto está aberto', ''),
+    'lm studio': ('um modelo de IA local (LM Studio)', 'usa muita RAM e placa de vídeo de propósito', ''),
+    'ollama app': ('um modelo de IA local (Ollama)', 'usa muita RAM e placa de vídeo de propósito', ''),
+    'amazon games': ('o launcher da Amazon Games', _INI, 'inicializacao'),
+    'nzxt cam': ('o NZXT CAM', 'conhecido por gastar CPU: feche se não precisa do controle de ventoinha', 'inicializacao'),
+    'epson status monitor 3': ('o monitor da impressora Epson', 'pode sair da inicialização', 'inicializacao'),
+    'gigabyte control center': ('o Gigabyte Control Center', 'conhecido por pesar: deixe só se usa RGB ou ventoinha', 'servicos'),
+    'cloudflare warp': ('a VPN da Cloudflare (WARP)', 'ligada, pode aumentar o atraso nos jogos', 'inicializacao'),
+    'driver easy': ('um "atualizador de drivers"', 'instala drivers de origem duvidosa: prefira o Windows Update e o site do fabricante', 'programas'),
+    'code - insiders': ('o Visual Studio Code', 'extensões pesam: veja "Developer: Show Running Extensions"', ''),
+}.items():
+    PROCESSOS[_n] = _v
+
+# pedaços soltos dos nomes com espaço (o split os deixou para trás) não querem dizer nada sozinhos
+_MULTI = [k for k in PROCESSOS if ' ' in k]
+for _n in {tok for k in _MULTI for tok in k.split()} - {'code', 'ollama', 'docker', 'update', 'launcher', 'agent', 'system'}:
+    PROCESSOS.pop(_n, None)
+
+# o começo do nome já diz de quem é (para o que não está listado um a um)
+PREFIXOS = [
+    ('asus', 'um programa da ASUS', 'veja se você usa; a ASUS instala vários', 'programas'),
+    ('armoury', 'a central da ASUS (Armoury Crate)', 'costuma pesar: use o perfil silencioso ou atualize', 'servicos'),
+    ('dell', 'um programa da Dell', 'os de suporte podem ser removidos', 'programas'),
+    ('hpsupport', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpomen', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpsa_', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpdiag', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpprint', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpaudio', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpnetwork', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpsystem', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpsmart', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpq', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hptouchpoint', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpanalytics', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('hpcomm', 'um programa da HP', 'os de suporte e telemetria podem ser removidos', 'programas'),
+    ('lenovo', 'um programa da Lenovo', 'pode ficar em manual', 'servicos'),
+    ('acer', 'um programa da Acer', 'pode sair da inicialização', 'inicializacao'),
+    ('msi.', 'um programa da MSI', 'costuma pesar: atualize ou tire da inicialização', 'servicos'),
+    ('samsung', 'um programa da Samsung', _INI, 'inicializacao'),
+    ('nvidia', 'um componente da NVIDIA', 'normal', ''),
+    ('amd', 'um componente da AMD', 'normal', ''),
+    ('radeon', 'um componente da AMD', 'normal', ''),
+    ('igfx', 'um componente de vídeo da Intel', 'normal', ''),
+    ('intel', 'um componente da Intel', 'normal', ''),
+    ('rtk', 'um componente da Realtek (som ou rede)', 'normal', ''),
+    ('razer', 'um programa da Razer', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    ('logi', 'um programa da Logitech', 'tire da inicialização se o perfil já está salvo no mouse', 'inicializacao'),
+    ('corsair', 'um programa da Corsair', 'conhecido por gastar CPU: feche quando não precisa', 'inicializacao'),
+    ('steelseries', 'um programa da SteelSeries', _INI, 'inicializacao'),
+    ('steam', 'a Steam', 'tire da inicialização se não joga todo dia', 'steam'),
+    ('epic', 'a loja da Epic', 'tire da inicialização', 'inicializacao'),
+    ('riot', 'o cliente da Riot', 'tire da inicialização', 'inicializacao'),
+    ('ubisoft', 'a Ubisoft Connect', 'tire da inicialização', 'inicializacao'),
+    ('adobe', 'um programa da Adobe', 'os que ficam em segundo plano podem sair da inicialização', 'inicializacao'),
+    ('microsoft.', 'um app da Microsoft', 'normal', ''),
+    ('windows.', 'parte do Windows', _NORMAL, ''),
+    ('powertoys', 'o PowerToys', 'desligue dentro dele os módulos que não usa', ''),
+    ('mcafee', 'o McAfee', 'costuma vir de fábrica: remova se não pagou por ele', 'programas'),
+    ('norton', 'o Norton', 'costuma vir de fábrica: remova se não pagou por ele', 'programas'),
+    ('avast', 'o antivírus Avast', 'o Defender pesa menos', 'programas'),
+    ('avg', 'o antivírus AVG', 'o Defender pesa menos', 'programas'),
+    ('vmware', 'o VMware', 'a memória é da máquina virtual', ''),
+    ('vbox', 'o VirtualBox', 'a memória é da máquina virtual', ''),
+    ('jetbrains', 'um editor da JetBrains', 'indexação pesa ao abrir um projeto', ''),
+]
+# o fim do nome diz o que o programa está fazendo, mesmo sem saber de quem é
+SUFIXOS = [
+    ('-win64-shipping', 'um jogo feito na Unreal Engine', 'é o jogo em si: veja "unreal" e "jogos"', 'jogos'),
+    ('-wingdk-shipping', 'um jogo da Microsoft Store feito na Unreal Engine', 'é o jogo em si', 'jogos'),
+    ('crashhandler', 'o relator de erros de um programa', 'normal', ''),
+    ('crashreporter', 'o relator de erros de um programa', 'normal', ''),
+    ('webhelper', 'as páginas embutidas de um programa', 'fecha junto com o programa', ''),
+    ('updater', 'o atualizador de um programa', 'passa sozinho; pode sair da inicialização', 'inicializacao'),
+    ('update', 'o atualizador de um programa', 'passa sozinho; pode sair da inicialização', 'inicializacao'),
+    ('setup', 'um instalador rodando', 'espere terminar', ''),
+    ('installer', 'um instalador rodando', 'espere terminar', ''),
+    ('tray', 'o ícone de um programa na bandeja', 'pode sair da inicialização se você não usa', 'inicializacao'),
+    ('launcher', 'o abridor de um programa ou jogo', 'pode fechar depois que o programa abre', ''),
+]
+
+
+def quem_e(nome):
+    """(o que é, o que fazer, comando) para um nome de processo, ou None se o Katharos não conhece.
+    Primeiro o nome exato, depois o jogo do catálogo, depois de quem é (começo do nome) e o que faz (fim do nome)."""
+    n = str(nome or '').strip().lower()
+    if n.endswith('.exe'):
+        n = n[:-4]
+    n = re.sub(r'#\d+$', '', n)
+    if not n:
+        return None
+    if n in PROCESSOS:
+        return PROCESSOS[n]
+    for jogo, exes in CATALOGO_JOGOS:
+        if any(n == e.lower()[:-4] for e in exes):
+            return (f'o jogo {jogo}', 'é o jogo em si: veja "jogar"', 'jogos')
+    if any(n == e.lower()[:-4] for e in EXE_COM_ANTICHEAT):
+        return ('um jogo com anti-cheat', 'o Katharos não mexe em jogo com anti-cheat de terceiros', '')
+    for sufixo, oque, faz, cmd in SUFIXOS:
+        if n.endswith(sufixo) and len(n) > len(sufixo):
+            return (oque, faz, cmd)
+    for prefixo, oque, faz, cmd in sorted(PREFIXOS, key=lambda x: -len(x[0])):
+        if n.startswith(prefixo) and len(n) > len(prefixo):
+            return (oque, faz, cmd)
+    return None
 
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -4098,21 +4403,51 @@ Dado 'inicio' (Lista $__r.ToArray())
 # (padrão no nome ou comando, nível, por quê). O primeiro que casar vale.
 CLASSES_INICIO = [
     (r'SecurityHealth|Windows Defender|MsMpEng|WindowsDefender', None, 'segurança do Windows: fica sempre'),
+    (r'Avast|AVG ?(UI|Antivirus|Internet)|Kaspersky|\bavp\b|ESET|\begui\b|Bitdefender|bdagent|Norton|McAfee|Malwarebytes|Avira|Sophos|Trend ?Micro|F-Secure|Panda (Dome|Security)|'
+     r'CrowdStrike|SentinelOne|Cylance|Carbon ?Black', None, 'antivírus: fica sempre (é a sua proteção)'),
+    (r'GlobalProtect|Cisco AnyConnect|vpnui|FortiClient|Zscaler|Netskope|Pulse Secure|Ivanti|Citrix|Intune|CompanyPortal|ManageEngine|Tanium', None,
+     'programa da empresa: fica sempre (o TI precisa dele)'),
+    (r'1Password|Bitwarden|KeePass|LastPass|Dashlane|NordPass|Proton ?Pass', 0, 'gerenciador de senhas: sem ele aberto, as senhas não preenchem sozinhas'),
+    (r'NordVPN|ExpressVPN|ProtonVPN|Surfshark|OpenVPN|WireGuard|Tailscale|Cloudflare WARP|Mullvad|Windscribe|Hamachi|ZeroTier|Radmin', 0,
+     'VPN: se você depende dela ligada sempre, deixe'),
+    (r'Veeam|Acronis|Macrium|Backblaze|CrashPlan|Carbonite|SyncBack|FreeFileSync|Duplicati', 0, 'backup: sem ele abrindo, o backup automático para'),
+    (r'f\.lux|flux|PowerToys|AutoHotkey|ShareX|Lightshot|Greenshot|Flameshot|Ditto|Everything|EarTrumpet|TranslucentTB|StartAllBack|ExplorerPatcher|'
+     r'Twinkle ?Tray|Listary|Flow\.Launcher|espanso|QuickLook|Rainmeter|Wallpaper ?Engine|Lively|DisplayFusion|FancyZones', 0,
+     'utilitário que só funciona se abrir com o Windows: você instalou para isso'),
+    (r'HP ?Smart|HPStatus|Epson|EEventManager|Canon|IJ ?Scan|Brother|BrMfcWnd|BrStMonW|ControlCenter4|Lexmark|Samsung Printer|StatusMonitor|Status Monitor', 2,
+     'monitor da impressora: ela continua imprimindo sem ele'),
+    (r'Creative ?Cloud|CCXProcess|CCLibrary|Adobe ?(Desktop|Collab|Creative|Genuine)|AGSService|CoreSync|Acrobat ?Assistant|AcroTray|Adobe ?Acrobat ?Synchronizer', 1,
+     'Adobe em segundo plano: os programas da Adobe abrem ele quando precisam'),
+    (r'CCleaner|IObit|Advanced SystemCare|Driver ?Booster|Driver ?Easy|Glary|Wise ?Care|Auslogics|Reimage|Restoro|Outbyte|PC ?App ?Store|Smart ?Defrag|'
+     r'Avast ?Cleanup|AVG ?TuneUp|Razer ?Cortex|Game ?Booster|WinZip (Driver|System)', 1, '"otimizador" residente: fica ligado só para vender limpeza'),
+    (r'qBittorrent|uTorrent|BitTorrent|Transmission|Deluge|Tixati|Free Download Manager|IDMan|Internet Download Manager|JDownloader|eMule|Soulseek', 2,
+     'programa de download: abra quando for baixar'),
+    (r'MSIAfterburner|RTSS|RivaTuner|HWiNFO|HWMonitor|Core ?Temp|AIDA64|FanControl|SpeedFan|ThrottleStop|Open ?Hardware|Libre ?Hardware', 0,
+     'monitor ou controle de ventoinha: se o seu perfil de ventoinha ou de undervolt depende dele, deixe'),
+    (r'TeamViewer|AnyDesk|RustDesk|Parsec|Chrome Remote|Splashtop|LogMeIn|RemotePC|Supremo', 3,
+     'acesso remoto: sem ele abrindo, ninguém (nem você) entra neste PC de fora'),
+    (r'VirtualBox|VBoxTray|VMware|vmware-tray|BlueStacks|LDPlayer|\bNox|MEmu|Android ?Studio|Docker', 2, 'máquina virtual ou emulador: abra quando for usar'),
+    (r'Ollama|LM ?Studio|GitHub ?Desktop|JetBrains ?Toolbox|Sourcetree|GitKraken|Postman|Insomnia|DBeaver|XAMPP|WampServer|Laragon', 2,
+     'ferramenta de programação: abra quando for usar'),
+    (r'Java ?Update|jusched|SunJavaUpdateSched|QuickTime|qttask|RealPlayer|Winamp ?Agent|WinZip|\bNero\b|Roxio|CyberLink|PowerDVD|Bonjour|Apple ?Push|APSDaemon|iCloud ?(Services|Photos)?Helper', 1,
+     'resto de programa antigo ou atualizador: não precisa abrir sozinho'),
     (r'vgc|vgtray|Vanguard|EasyAntiCheat|BattlEye|FACEIT|PunkBuster|nProtect|XignCode', 0, 'anti-cheat: só tire se você pedir (alguns jogos deixam de abrir)'),
     (r'SynTP|ETDCtrl|Elan|Synaptics|Touchpad|Precision|Wacom|PenService|Pen Tablet', 0, 'driver de touchpad ou caneta: sem ele os gestos podem parar'),
     (r'RtkAud|RTHDVCPL|Realtek|IntelAudio|SmartAudio|Conexant|IDT|Dolby|DTS|MaxxAudio|Waves|Nahimic|SonicStudio', 3, 'painel de áudio: sem ele, efeitos e alguns atalhos de som param'),
     (r'Bluetooth|BTTray|ibtsiva', 3, 'Bluetooth do fabricante'),
     (r'OneDrive', 1, 'sincronização do OneDrive'),
-    (r'Dropbox|GoogleDrive|Google Drive|MEGAsync|iCloud|pCloud|Nextcloud', 3, 'sincronização de arquivos: os arquivos só sincronizam com ele aberto'),
+    (r'Dropbox|GoogleDrive|Google Drive|GoogleDriveFS|MEGAsync|iCloud|pCloud|Nextcloud|Box Sync|\\Box\\|Sync\.com|Syncthing|Resilio|Proton ?Drive|Yandex\.Disk', 3, 'sincronização de arquivos: os arquivos só sincronizam com ele aberto'),
     (r'MicrosoftEdgeAutoLaunch|msedge.*--no-startup-window|MicrosoftEdge', 1, 'Edge pré-carregado sem você pedir'),
     (r'Teams|ms-teams|com\.squirrel\.Teams', 1, 'Teams abrindo sozinho'),
     (r'Update|Updater|GoogleUpdate|AdobeARM|AdobeGC|jusched|iTunesHelper|CCleaner|Helper|Launcher.*-silent|BraveSoftware Update|Edge Update', 1,
      'atualizador: continua atualizando pelas tarefas dele'),
     (r'Cortana|YourPhone|PhoneExperienceHost|Copilot|Widgets', 1, 'recurso do Windows que você não abriu'),
-    (r'Spotify|Discord|Steam|EpicGames|Battle\.net|Origin|EADesktop|Ubisoft|GOG|Riot Client|Skype|Zoom|WhatsApp|Telegram|Slack|Opera|Brave|chrome|Vivaldi|Docker|Postman|Notion|Figma|Lghub|Razer|Corsair|SteelSeries|Logitech|Overwolf|Medal|NVIDIA Broadcast',
+    (r'Spotify|Deezer|TIDAL|Amazon Music|Apple Music|Discord|Guilded|Steam|EpicGames|Epic Games|Battle\.net|Origin|EADesktop|EA app|Ubisoft|GOG|Riot Client|Rockstar|Amazon Games|\bitch\b|Playnite|Heroic|CurseForge|Minecraft|Xbox|'
+     r'Skype|Zoom|Webex|GoToMeeting|WhatsApp|Telegram|Signal|Element|Viber|WeChat|Slack|Mattermost|Thunderbird|Mailbird|Opera|Brave|chrome|Vivaldi|Firefox|\bArc\b|Notion|Obsidian|Evernote|Todoist|Trello|Figma|Canva|'
+     r'Lghub|LGHUB|Razer|Corsair|iCUE|SteelSeries|Logitech|\bLogi(?!n)|HyperX|NGENUITY|ROCCAT|NZXT|OpenRGB|SignalRGB|Wootility|Overwolf|Medal|Outplayed|\bOBS|Streamlabs|NVIDIA Broadcast|Elgato|Stream ?Deck|Voicemod|Krisp|Clownfish|SteelSeries Sonar',
      2, 'programa que você abre quando quiser'),
     (r'igfx|IntelGraphics|NvBackend|NVIDIA|RadeonSoftware|AMD|cncmd', 2, 'painel da placa de vídeo (o driver continua)'),
-    (r'AWCC|Alienware|Armoury|ArmouryCrate|Vantage|NitroSense|PredatorSense|MSI|Dragon Center|OMEN', 3, 'central do fabricante: perfis de ventoinha e luz podem parar'),
+    (r'AWCC|Alienware|Armoury|ArmouryCrate|MyASUS|Vantage|Legion|NitroSense|PredatorSense|Acer ?(Quick|Care)|MSI|Dragon Center|Mystic ?Light|OMEN|Gigabyte|RGB ?Fusion|AORUS|Samsung ?Settings|Galaxy ?Book|LG ?(Control|Smart)|Huawei|PC ?Manager|Dell ?(Optimizer|Power|Command)|SupportAssist|HP ?(Support|Command|System Event|JumpStart)', 3, 'central do fabricante: perfis de ventoinha e luz podem parar'),
 ]
 
 
@@ -4217,6 +4552,9 @@ def itens_inicializacao(ctx):
         if imp and imp[0] > 0:
             ganho = f'o Windows mediu ~{br(imp[0], 1)} s de atraso no boot (média de {pl(imp[1], "boot", "boots")}) e sobra RAM'
         impactos[nome] = imp[0] if imp else 0.0
+        q = quem_e(Path(str(exe).replace('\\', '/')).name) if porque == 'programa que abre com o Windows' else None
+        if q:
+            porque = f'{q[0]}: {q[1]}'
         itens.append(Item('ini:' + nome, nome, f'{porque[0].upper() + porque[1:]}. ({onde}: {corta_esq(caminho_curto(exe), 60)})',
                           ganho, 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota))
     itens.sort(key=lambda i: (i.nivel == 0, i.nivel, -impactos.get(i.titulo, 0.0), i.titulo.lower()))
@@ -4543,26 +4881,51 @@ CATALOGO = [
         ('Resident Evil 4', ['re4.exe']), ('Resident Evil Village', ['re8.exe']), ('Control', ['Control_DX12.exe', 'Control_DX11.exe']),
         ('Divinity: Original Sin 2', ['EoCApp.exe']), ('Stray', ['Stray-Win64-Shipping.exe']),
         ('Diablo IV', ['Diablo IV.exe']), ('Monster Hunter Wilds', ['MonsterHunterWilds.exe']), ('Monster Hunter World', ['MonsterHunterWorld.exe']),
-        ('Path of Exile', ['PathOfExile_x64.exe', 'PathOfExileSteam.exe'])]),
+        ('Path of Exile', ['PathOfExile_x64.exe', 'PathOfExileSteam.exe']),
+        ('God of War Ragnarök', ['GoWR.exe']), ('Horizon Forbidden West', ['HorizonForbiddenWest.exe']), ('Ghost of Tsushima', ['GhostOfTsushima.exe']),
+        ("Marvel's Spider-Man", ['Spider-Man.exe', 'MilesMorales.exe', 'Spider-Man2.exe']), ('The Last of Us Part I', ['tlou-i.exe']),
+        ('Death Stranding', ['ds.exe']), ('Days Gone', ['DaysGone.exe']), ('Ratchet & Clank', ['RiftApart.exe']), ('Returnal', ['Returnal-Win64-Shipping.exe']),
+        ('Dark Souls III', ['DarkSoulsIII.exe']), ('Dark Souls Remastered', ['DarkSoulsRemastered.exe']), ('Lies of P', ['LOP-Win64-Shipping.exe']),
+        ('Black Myth: Wukong', ['b1-Win64-Shipping.exe']), ('Alan Wake 2', ['AlanWake2.exe']), ('Metro Exodus', ['MetroExodus.exe']),
+        ("Assassin's Creed (Origins, Odyssey, Valhalla)", ['ACOrigins.exe', 'ACOdyssey.exe', 'ACValhalla.exe']),
+        ('Tomb Raider (trilogia)', ['TombRaider.exe', 'ROTTR.exe', 'SOTTR.exe']), ('Kingdom Come: Deliverance', ['KingdomCome.exe']),
+        ("Dragon's Dogma 2", ['DD2.exe']), ('Resident Evil 2 e 3', ['re2.exe', 're3.exe']), ('Devil May Cry 5', ['DevilMayCry5.exe']),
+        ('Persona 5 Royal', ['P5R.exe']), ('Final Fantasy XIV', ['ffxiv_dx11.exe']), ('Final Fantasy XVI', ['ffxvi.exe']),
+        ('Guild Wars 2', ['Gw2-64.exe']), ('The Elder Scrolls Online', ['eso64.exe']), ('Borderlands 2 e 3', ['Borderlands2.exe', 'Borderlands3.exe']),
+        ('BioShock Infinite', ['BioShockInfinite.exe']), ('Disco Elysium', ['disco.exe']), ('Outer Wilds', ['OuterWilds.exe']),
+        ("No Man's Sky", ['NMS.exe']), ('Grim Dawn', ['Grim Dawn.exe']), ('Last Epoch', ['Last Epoch.exe'])]),
     ('Corrida e simulação', [
         ('Forza Horizon 5', ['ForzaHorizon5.exe']), ('Forza Horizon 4', ['ForzaHorizon4.exe']),
         ('Euro Truck Simulator 2', ['eurotrucks2.exe']), ('American Truck Simulator', ['amtrucks.exe']),
         ('Assetto Corsa', ['acs.exe']), ('Assetto Corsa Competizione', ['AC2-Win64-Shipping.exe']), ('BeamNG.drive', ['BeamNG.drive.x64.exe']),
-        ('Microsoft Flight Simulator', ['FlightSimulator.exe', 'FlightSimulator2024.exe'])]),
+        ('Microsoft Flight Simulator', ['FlightSimulator.exe', 'FlightSimulator2024.exe']),
+        ('Need for Speed Heat', ['NeedForSpeedHeat.exe']), ('Elite Dangerous', ['EliteDangerous64.exe']), ('Kerbal Space Program', ['KSP_x64.exe']),
+        ('The Sims 4', ['TS4_x64.exe']), ('Planet Zoo', ['PlanetZoo.exe']), ('Farming Simulator 22 e 25', ['FarmingSimulator2022Game.exe', 'FarmingSimulator2025Game.exe'])]),
     ('Estratégia e construção', [
         ('Civilization VI', ['CivilizationVI.exe', 'CivilizationVI_DX12.exe']), ('Cities: Skylines', ['Cities.exe']),
         ('Hearts of Iron IV', ['hoi4.exe']), ('Crusader Kings III', ['ck3.exe']), ('Stellaris', ['stellaris.exe']),
         ('Total War: Warhammer III', ['Warhammer3.exe']), ('Factorio', ['factorio.exe']), ('Satisfactory', ['FactoryGame-Win64-Shipping.exe']),
-        ('Hearthstone', ['Hearthstone.exe'])]),
+        ('Hearthstone', ['Hearthstone.exe']),
+        ('Age of Empires II: Definitive Edition', ['AoE2DE_s.exe']), ('Age of Empires IV', ['RelicCardinal.exe']), ('Europa Universalis IV', ['eu4.exe']),
+        ('Victoria 3', ['victoria3.exe']), ('XCOM 2', ['XCom2.exe']), ('Frostpunk', ['Frostpunk.exe']), ('RimWorld', ['RimWorldWin64.exe']),
+        ('Oxygen Not Included', ['OxygenNotIncluded.exe']), ('Dyson Sphere Program', ['DSPGAME.exe']), ('Manor Lords', ['ManorLords-Win64-Shipping.exe']),
+        ('Kenshi', ['kenshi_x64.exe']), ('Slay the Spire', ['SlayTheSpire.exe']), ('Balatro', ['Balatro.exe'])]),
     ('Sobrevivência e cooperativo', [
         ('Minecraft (Bedrock)', ['Minecraft.Windows.exe']), ('Palworld', ['Palworld-Win64-Shipping.exe']), ('Valheim', ['valheim.exe']),
         ('Subnautica', ['Subnautica.exe', 'SubnauticaZero.exe']), ('Terraria', ['Terraria.exe']), ('Stardew Valley', ['Stardew Valley.exe']),
         ('Phasmophobia', ['Phasmophobia.exe']), ('Lethal Company', ['Lethal Company.exe']), ('Among Us', ['Among Us.exe']),
-        ('Risk of Rain 2', ['Risk of Rain 2.exe'])]),
+        ('Risk of Rain 2', ['Risk of Rain 2.exe']),
+        ('Deep Rock Galactic', ['FSD-Win64-Shipping.exe']), ('Raft', ['Raft.exe']), ('The Forest', ['TheForest.exe']),
+        ('Sons of the Forest', ['SonsOfTheForest.exe']), ('Project Zomboid', ['ProjectZomboid64.exe']), ("Don't Starve Together", ['dontstarve_steam_x64.exe']),
+        ('Half-Life: Alyx', ['hlvr.exe'])]),
     ('Ação e independentes', [
         ('Warframe', ['Warframe.x64.exe']), ('Hades', ['Hades.exe']), ('Hades II', ['Hades2.exe']),
         ('Hollow Knight', ['hollow_knight.exe']), ('Celeste', ['Celeste.exe']), ('Cuphead', ['Cuphead.exe']),
-        ('Vampire Survivors', ['VampireSurvivors.exe'])]),
+        ('Vampire Survivors', ['VampireSurvivors.exe']),
+        ('DOOM e DOOM Eternal', ['DOOMx64vk.exe', 'DOOMx64.exe', 'DOOMEternalx64vk.exe']), ('Dead Cells', ['deadcells.exe']),
+        ('Hollow Knight: Silksong', ['Hollow Knight Silksong.exe']), ('Ori and the Will of the Wisps', ['oriwotw.exe']),
+        ('The Binding of Isaac', ['isaac-ng.exe']), ('Enter the Gungeon', ['EtG.exe']), ('Noita', ['noita.exe']), ('Brotato', ['Brotato.exe']),
+        ('Undertale', ['UNDERTALE.exe']), ('Geometry Dash', ['GeometryDash.exe']), ('osu!', ['osu!.exe']), ('Dave the Diver', ['DaveTheDiver.exe'])]),
 ]
 CATALOGO_JOGOS = [j for _, jogos in CATALOGO for j in jogos]
 JOGOS_EXE = [e for _, exes in CATALOGO_JOGOS for e in exes]
@@ -4571,7 +4934,13 @@ EXE_COM_ANTICHEAT = ['VALORANT-Win64-Shipping.exe', 'LeagueClient.exe', 'League 
                      'r5apex.exe', 'RainbowSix.exe', 'RainbowSix_Vulkan.exe', 'TslGame.exe', 'EscapeFromTarkov.exe', 'destiny2.exe',
                      'RustClient.exe', 'RobloxPlayerBeta.exe', 'GenshinImpact.exe', 'eldenring.exe', 'RocketLeague.exe',
                      'helldivers2.exe', 'DeadByDaylight-Win64-Shipping.exe', 'FallGuys_client_game.exe', 'ModernWarfare.exe',
-                     'cod.exe', 'BF2042.exe', 'bf1.exe', 'FIFA23.exe', 'FC25.exe', 'Overwatch.exe', 'Marvel-Win64-Shipping.exe']
+                     'cod.exe', 'BF2042.exe', 'bf1.exe', 'FIFA23.exe', 'FC25.exe', 'Overwatch.exe', 'Marvel-Win64-Shipping.exe',
+                     'GTA5.exe', 'GTA5_Enhanced.exe', 'HaloInfinite.exe', 'MCC-Win64-Shipping.exe', 'SoTGame.exe', 'ArkAscended.exe', 'ShooterGame.exe',
+                     'DayZ_x64.exe', '7DaysToDie.exe', 'FarCry5.exe', 'FarCry6.exe', 'WatchDogs2.exe', 'Bannerlord.exe', 'StarCitizen.exe', 'aces.exe',
+                     'NarakaBladepoint.exe', 'HuntGame.exe', 'armoredcore6.exe', 'NewWorld.exe', 'LOSTARK.exe', 'ZenlessZoneZero.exe', 'StarRail.exe',
+                     'Discovery.exe', 'SquadGame.exe', 'arma3_x64.exe', 'DeltaForceClient-Win64-Shipping.exe', 'bf6.exe', 'FC26.exe', 'F1_24.exe',
+                     'nightreign.exe', 'ThroneAndLiberty.exe', 'Enlisted.exe', 'PaladinsSteam.exe', 'SMITE.exe', 'Brawlhalla.exe',
+                     'MultiVersus-Win64-Shipping.exe', 'TheFinals.exe', 'XDefiant.exe', 'Spectre-Win64-Shipping.exe', 'Warzone.exe']
 JOGOS_ANTICHEAT = 'Valorant, LoL, Fortnite, Apex, Rainbow Six, PUBG, Tarkov, Destiny 2, Call of Duty, Rust, Roblox, Genshin, Elden Ring, Rocket League, Helldivers 2, EA FC e outros'
 ANTICHEAT_NOMES = [x.strip() for x in JOGOS_ANTICHEAT.replace(' e outros', '').split(',')]
 
@@ -11206,18 +11575,72 @@ def ferramenta_aviso(ctx, args):
 
 # palavra que a pessoa usa → palavras que aparecem nos itens
 SINONIMOS = {
-    'propaganda': ('anuncio', 'sugest'), 'ads': ('anuncio',), 'anuncios': ('anuncio',),
-    'espionagem': ('telemetria', 'diagnostico'), 'espiao': ('telemetria',), 'rastreio': ('telemetria', 'rastre'),
-    'ia': ('copilot', 'recall', 'inteligencia'), 'internet': ('rede', 'dns', 'wi-fi'), 'wifi': ('wi-fi', 'rede'),
-    'ping': ('rede', 'latencia'), 'lag': ('rede', 'latencia', 'jogo'), 'fps': ('jogo', 'gpu', 'video'),
-    'esquenta': ('temperatura', 'fresco', 'calor', 'turbo'), 'quente': ('temperatura', 'fresco', 'calor'),
-    'ventoinha': ('fresco', 'calor', 'temperatura'), 'cooler': ('fresco', 'calor'), 'barulho': ('fresco', 'ventoinha'),
-    'lixo': ('temporario', 'cache', 'limp'), 'espaco': ('limp', 'cache', 'temporario', 'disco'), 'cheio': ('limp', 'espaco'),
-    'ligar': ('boot', 'inicializ'), 'iniciar': ('boot', 'inicializ'), 'demora': ('boot', 'inicializ'),
-    'travando': ('servico', 'inicializ', 'memoria'), 'lento': ('servico', 'inicializ', 'visual'),
-    'memoria': ('ram', 'memoria'), 'placa': ('gpu', 'video'), 'bloatware': ('fabrica', 'apps', 'remov'),
-    'atualizacao': ('update', 'atualiz'), 'update': ('update', 'atualiz'), 'animacao': ('animac', 'efeito'),
-    'mouse': ('mouse', 'ponteiro'), 'teclado': ('teclado', 'tecla'), 'som': ('audio', 'som'), 'tela': ('tela', 'monitor', 'visual'),
+    # privacidade
+    'propaganda': ('anuncio', 'sugest'), 'propagandas': ('anuncio', 'sugest'), 'ads': ('anuncio',), 'anuncios': ('anuncio',),
+    'publicidade': ('anuncio', 'sugest'), 'sugestao': ('sugest',), 'sugestoes': ('sugest',), 'dica': ('sugest', 'dicas'),
+    'espionagem': ('telemetria', 'diagnostico'), 'espiao': ('telemetria',), 'espionar': ('telemetria',), 'rastreio': ('telemetria', 'rastre'),
+    'rastreamento': ('telemetria', 'rastre'), 'dados': ('telemetria', 'diagnostico'), 'coleta': ('telemetria',), 'tracking': ('telemetria', 'rastre'),
+    'ia': ('copilot', 'recall', 'inteligencia'), 'ai': ('copilot', 'recall'), 'bing': ('busca na web', 'bing', 'pesquisa'),
+    'noticias': ('widgets', 'noticia'), 'clima': ('widgets',), 'localizacao': ('localiza',), 'gps': ('localiza',),
+    'microfone': ('microfone', 'voz'), 'webcam': ('camera',), 'historico': ('historico', 'atividade'), 'cortana': ('cortana', 'copilot'),
+    'edge': ('edge',), 'onedrive': ('onedrive',), 'conta': ('conta', 'microsoft 365'),
+    # rede
+    'internet': ('rede', 'dns', 'wi-fi'), 'wifi': ('wi-fi', 'rede'), 'wi-fi': ('wi-fi', 'rede'), 'net': ('rede', 'dns'),
+    'ping': ('rede', 'latencia', 'nagle'), 'lag': ('rede', 'latencia', 'jogo'), 'latencia': ('latencia', 'nagle', 'rede'),
+    'download': ('rede', 'otimizacao de entrega', 'update'), 'upload': ('p2p', 'compartilhar'), 'conexao': ('rede',), 'cabo': ('rede', 'ethernet'),
+    'roteador': ('rede', 'dns'), 'navegador': ('edge', 'chrome', 'brave', 'cache'),
+    # jogos e vídeo
+    'fps': ('jogo', 'gpu', 'video'), 'game': ('jogo',), 'games': ('jogo',), 'gamer': ('jogo',), 'jogar': ('jogo',),
+    'engasgo': ('jogo', 'dvr', 'latencia'), 'stutter': ('jogo', 'dvr'), 'travadinha': ('jogo', 'dvr'), 'gravacao': ('dvr', 'captura'),
+    'xbox': ('xbox', 'game bar', 'dvr'), 'gamebar': ('game bar', 'dvr'), 'placa': ('gpu', 'video'), 'gpu': ('gpu', 'video'),
+    'nvidia': ('nvidia', 'gpu'), 'amd': ('amd', 'radeon', 'gpu'), 'radeon': ('amd', 'radeon'), 'shader': ('shader',), 'shaders': ('shader',),
+    'counter': ('cs2',), 'csgo': ('cs2',), 'cs': ('cs2',), 'mine': ('minecraft',), 'unreal': ('unreal',), 'steam': ('steam',),
+    'tela-cheia': ('tela cheia', 'fullscreen'), 'fullscreen': ('tela cheia',), 'hz': ('taxa', 'monitor'), 'vsync': ('vsync', 'sincroniza'),
+    'input': ('latencia', 'mouse'), 'prioridade': ('prioridade',),
+    # calor, energia, bateria
+    'esquenta': ('temperatura', 'fresco', 'calor', 'turbo'), 'esquentando': ('temperatura', 'fresco', 'calor'), 'quente': ('temperatura', 'fresco', 'calor'),
+    'calor': ('fresco', 'calor', 'temperatura'), 'temperatura': ('temperatura', 'fresco', 'termic'), 'ventoinha': ('fresco', 'calor', 'temperatura'),
+    'cooler': ('fresco', 'calor'), 'fan': ('fresco', 'ventoinha'), 'barulho': ('fresco', 'ventoinha'), 'barulhento': ('fresco', 'ventoinha'),
+    'bateria': ('bateria', 'energia', 'economia'), 'carregador': ('tomada', 'energia'), 'energia': ('energia', 'plano'), 'economia': ('economia', 'energia'),
+    'suspender': ('suspens', 'hibern'), 'hibernar': ('hibern',), 'hibernacao': ('hibern',), 'dormir': ('suspens', 'hibern'),
+    'desligar': ('desliga', 'inicializacao rapida'), 'tampa': ('tampa', 'energia'), 'usb': ('usb',), 'desempenho': ('desempenho', 'plano'),
+    # espaço e disco
+    'lixo': ('temporario', 'cache', 'limp'), 'lixeira': ('lixeira',), 'espaco': ('limp', 'cache', 'temporario', 'disco'), 'cheio': ('limp', 'espaco'),
+    'liberar': ('limp', 'cache', 'temporario'), 'limpar': ('limp', 'cache', 'temporario'), 'limpeza': ('limp', 'cache'), 'temp': ('temporario',),
+    'temporarios': ('temporario',), 'cache': ('cache',), 'downloads': ('download',), 'duplicados': ('grandes', 'arquivo'), 'grandes': ('grandes',),
+    'hd': ('hd', 'disco', 'desfragment'), 'ssd': ('ssd', 'trim'), 'desfragmentar': ('desfragment', 'otimizar a unidade'), 'defrag': ('desfragment',),
+    'paginacao': ('paginacao', 'memoria virtual'), 'pagefile': ('paginacao',), 'swap': ('paginacao', 'memoria virtual'),
+    'indexacao': ('indexa', 'busca'), 'pesquisa': ('indexa', 'busca', 'pesquisa'), 'windows.old': ('windows.old', 'versao anterior'),
+    # lentidão, boot, memória
+    'ligar': ('boot', 'inicializ'), 'iniciar': ('boot', 'inicializ'), 'demora': ('boot', 'inicializ'), 'boot': ('boot', 'inicializ'),
+    'startup': ('inicializ',), 'inicio': ('inicializ', 'iniciar'), 'abrindo': ('inicializ',), 'sozinho': ('inicializ', 'automatic'),
+    'travando': ('servico', 'inicializ', 'memoria'), 'trava': ('servico', 'inicializ', 'memoria'), 'lento': ('servico', 'inicializ', 'visual'),
+    'lerdo': ('servico', 'inicializ', 'visual'), 'devagar': ('servico', 'inicializ', 'visual'), 'rapido': ('desempenho', 'inicializ'),
+    'acelerar': ('desempenho', 'inicializ', 'visual'), 'otimizar': ('desempenho', 'otimiz'), 'memoria': ('ram', 'memoria'), 'ram': ('ram', 'memoria'),
+    'processos': ('servico', 'segundo plano'), 'fundo': ('segundo plano',), 'background': ('segundo plano',), 'servicos': ('servico',),
+    'tarefas': ('tarefa',), 'agendadas': ('tarefa',),
+    # aparência
+    'animacao': ('animac', 'efeito'), 'animacoes': ('animac', 'efeito'), 'efeitos': ('efeito', 'animac', 'transpar'), 'transparencia': ('transpar',),
+    'escuro': ('tema escuro', 'escuro'), 'dark': ('tema escuro', 'escuro'), 'tema': ('tema',), 'barra': ('barra de tarefas', 'barra'),
+    'taskbar': ('barra de tarefas',), 'iniciar-menu': ('menu iniciar',), 'menu': ('menu',), 'icones': ('icone',), 'widgets': ('widgets',),
+    'fonte': ('fonte',), 'fontes': ('fonte',), 'tela': ('tela', 'monitor', 'visual'), 'monitor': ('monitor', 'tela'),
+    'explorer': ('explorador', 'explorer', 'pasta'), 'pastas': ('pasta', 'explorador'), 'extensoes': ('extens',), 'ocultos': ('oculto',),
+    'clique': ('clique', 'menu de contexto'), 'contexto': ('menu de contexto',), 'notificacoes': ('notifica',), 'notificacao': ('notifica',),
+    # programas
+    'bloatware': ('fabrica', 'apps', 'remov'), 'bloat': ('fabrica', 'apps', 'remov'), 'desinstalar': ('remov', 'desinstal'), 'remover': ('remov',),
+    'apps': ('apps', 'app'), 'programas': ('programa',), 'fabrica': ('fabrica',), 'mcafee': ('mcafee', 'antivirus'), 'norton': ('norton', 'antivirus'),
+    'antivirus': ('antivirus', 'defender'), 'virus': ('defender', 'antivirus', 'verifica'), 'office': ('office', 'microsoft 365'),
+    'teams': ('teams',), 'skype': ('skype',), 'candy': ('apps', 'instalados sozinhos'), 'tiktok': ('apps', 'instalados sozinhos'),
+    # sistema
+    'atualizacao': ('update', 'atualiz'), 'atualizacoes': ('update', 'atualiz'), 'update': ('update', 'atualiz'), 'updates': ('update', 'atualiz'),
+    'driver': ('driver',), 'drivers': ('driver',), 'reparar': ('repar', 'sfc', 'dism'), 'consertar': ('repar',), 'corrompido': ('repar', 'sfc'),
+    'erro': ('repar', 'erro'), 'azul': ('repar', 'tela azul'), 'bsod': ('repar', 'tela azul'), 'restaurar': ('restaura',), 'backup': ('restaura', 'backup'),
+    'voltar': ('desfaz', 'restaura'), 'undo': ('desfaz',), 'reverter': ('desfaz',), 'seguranca': ('seguranca', 'defender'),
+    'senha': ('senha', 'credencia'), 'firewall': ('firewall',), 'remoto': ('remot',), 'impressora': ('impress', 'spooler'), 'imprimir': ('impress', 'spooler'),
+    'bluetooth': ('bluetooth',), 'som': ('audio', 'som'), 'audio': ('audio', 'som'), 'mouse': ('mouse', 'ponteiro'), 'teclado': ('teclado', 'tecla'),
+    'touchpad': ('touchpad',), 'numlock': ('num lock',), 'agendar': ('agend', 'manutenc'), 'automatico': ('agend', 'automatic', 'segundo plano'),
+    'relatorio': ('relatorio',), 'grafico': ('painel', 'grafico'), 'graficos': ('painel', 'grafico'), 'nota': ('raiox', 'nota'),
+    'diagnostico': ('raiox', 'diagnostico', 'saude'), 'medir': ('medir', 'benchmark'), 'teste': ('benchmark', 'medir'), 'velocidade': ('benchmark', 'medir'),
 }
 
 
@@ -11225,8 +11648,16 @@ def sem_acento(txt):
     return unicodedata.normalize('NFKD', str(txt).lower()).encode('ascii', 'ignore').decode()
 
 
+# palavras de uma frase que não ajudam a achar nada ("como tirar a propaganda do meu pc")
+VAZIAS = set('a o as os um uma de do da dos das no na nos nas em para pra por com sem e ou que como meu minha meus minhas pc computador notebook '
+             'windows tirar tira quero queria preciso fazer deixar deixa mais menos muito pouco esta estou fica ficar ficando ter tem '
+             'se eu ele ela isso esse essa este esta aqui la nao sim ja so the to of my how'.split())
+
+
 def _palavras(texto):
-    return [w for w in re.findall(r'[a-z0-9\-\.]+', sem_acento(texto)) if len(w) >= 2 or w.isdigit()]
+    todas = [w for w in re.findall(r'[a-z0-9\-\.]+', sem_acento(texto)) if len(w) >= 2 or w.isdigit()]
+    uteis = [w for w in todas if w not in VAZIAS]
+    return uteis or todas
 
 
 def _pontos(palavras, campos):
@@ -11282,6 +11713,15 @@ def busca(indice, texto, limite=12):
         perto = [(difflib.get_close_matches(w, vocabulario, n=1, cutoff=0.75) or [w])[0] for w in palavras]
         if perto != palavras:
             r = roda(perto)
+    if not r and len(palavras) > 1:   # frase comprida: vale o que casar com a maior parte das palavras
+        soma = {}
+        for w in palavras:
+            for p, tipo, area, id_, titulo, item in roda([w]):
+                ch = (tipo, area, id_)
+                ant = soma.get(ch, (0, 0, None))
+                soma[ch] = (ant[0] + 1, ant[1] + p, (tipo, area, id_, titulo, item))
+        minimo = (len(palavras) + 1) // 2
+        r = sorted(((pts, *resto) for n, pts, resto in soma.values() if n >= minimo), key=lambda x: -x[0])[:limite]
     return r
 
 
@@ -11643,6 +12083,43 @@ def _defaults(args):
     return args
 
 
+def proximo_passo(e=None, raiox=None, agora=None):
+    """O próximo passo que faz sentido para este PC, pelo que já foi feito: (comando, frase) ou None.
+    A ordem é o caminho de quem chega: medir, aplicar o que o raio-x apontou, conferir o ganho, deixar no automático."""
+    e = estado() if e is None else e
+    agora = agora or datetime.now()
+    usados = e.get('usado') or {}
+    if not usados.get('raiox'):
+        return ('raiox', 'comece medindo o PC: leva cerca de 1 minuto e não muda nada')
+    if raiox is None:
+        try:
+            raiox = ((rel_carrega().get('secoes') or {}).get('raiox') or {}).get('dados') or {}
+        except Exception:
+            raiox = {}
+    aplicados = {n for n, r in (e.get('pacotes') or {}).items() if isinstance(r, dict) and not r.get('revertido')}
+    for a in sorted(raiox.get('achados') or [], key=lambda a: -int(a.get('impacto') or 0)):
+        cmd = str(a.get('comando') or '')
+        if cmd in COMANDOS and cmd not in aplicados and int(a.get('impacto') or 0) >= 2 and not usados.get(cmd):
+            return (cmd, f'o raio-x apontou: {str(a.get("titulo") or "").lower()}')
+    def dias(cmd):
+        try:
+            return (agora - datetime.fromisoformat(str(usados.get(cmd)))).days
+        except (TypeError, ValueError):
+            return None
+    if aplicados and dias('raiox') is not None:
+        try:
+            ultimo = max(datetime.fromisoformat(str(r.get('quando'))) for n, r in (e.get('pacotes') or {}).items() if n in aplicados and r.get('quando'))
+            if ultimo > datetime.fromisoformat(str(usados['raiox'])) and not (usados.get('medir') and datetime.fromisoformat(str(usados['medir'])) > ultimo):
+                return ('medir', 'veja o antes e depois do que você aplicou')
+        except (TypeError, ValueError):
+            pass
+    if len(aplicados) >= 2 and not e.get('manut_freq'):
+        return ('agendar', 'deixe a manutenção rodar sozinha, com o PC parado')
+    if (dias('raiox') or 0) >= 30:
+        return ('raiox', f'o último raio-x foi há {dias("raiox")} dias: veja como o PC está agora')
+    return None
+
+
 def primeira_vez(ctx, args=None):
     """Na primeira abertura: oferece o atalho com ícone na área de trabalho. Nada mais é perguntado."""
     t = ctx.t
@@ -11723,8 +12200,17 @@ def menu(ctx, parser, args, tela=None):
             t.aviso('Este computador não é Windows: dá para ver o menu, mas os comandos só funcionam no Windows.')
         quando = {c: ha_quanto_iso(q) for c, q in usados.items()}
         grupos = grupos_da_tela(tela) if tela else []
+        passo = None
         if not tela:
-            por_numero = t.menu_itens([('', '', MENU)], quando, destaque={'raiox': 'comece aqui'} if not usados.get('raiox') else None)
+            try:
+                passo = proximo_passo()
+            except Exception as ex:   # a dica nunca pode derrubar o menu
+                LOG.escreve(f'próximo passo falhou: {ex!r}')
+            por_numero = t.menu_itens([('', '', MENU)], quando)
+            if passo:
+                t.escreve(f'  {t.p("próximo passo", "destaque", True)}  {t.p(passo[0], "texto")}  {t.p("(Enter)", "apagado")}')
+                t.paragrafo(passo[1][0].upper() + passo[1][1:] + '.', 2, 'apagado')
+                t.escreve()
         elif grupo:
             if grupo[1]:
                 t.paragrafo(grupo[1], 2, 'apagado')
@@ -11761,7 +12247,11 @@ def menu(ctx, parser, args, tela=None):
         if ctx.proximos:
             t.info('sugeridos pelo raio-x: ' + ' · '.join(ctx.proximos))
             t.escreve()
+        if not tela:
+            t.dicas([('número ou nome', 'abre'), ('qualquer palavra', 'procura um ajuste')])
         escolha = t.pergunta('o que fazer').strip().lower()
+        if escolha == '' and passo and not tela:   # Enter segue o próximo passo
+            escolha = passo[0]
         if escolha in ('', '0', 'q', 'sair', 'v', 'voltar'):
             if grupo and tela != 'jogar':
                 grupo = None
