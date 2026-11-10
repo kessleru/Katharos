@@ -2667,6 +2667,45 @@ class TestSegundoPlano(_CasaTemporaria):
         self.assertIn('A placa de vídeo é o limite agora', texto)
 
 
+class TestSegundoPlanoLeve(unittest.TestCase):
+    """O segundo plano faz tudo, mas nunca pesa nem dá pico: é o que estes testes seguram."""
+    CS = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+
+    def test_lista_de_processos_numa_chamada_so_sem_abrir_ninguem(self):
+        # SystemProcessInformation (5) é a lista do sistema; o contador "Process" (caro) só fica de reserva, criado se precisar
+        self.assertIn('NtQuerySystemInformation(SISTEMA_PROCESSOS', self.CS)
+        self.assertIn('SISTEMA_PROCESSOS = 5', self.CS)
+        self.assertNotIn('new Categoria("Process")\n', self.CS.replace('if (procs == null) procs = new Categoria("Process");', ''))
+        self.assertIn('if (procs == null) procs = new Categoria("Process");', self.CS)
+
+    def test_tempo_de_cpu_so_do_proprio_processo(self):
+        self.assertEqual(re.findall(r'GetProcessTimes\((\w+)\(\)', self.CS), ['GetCurrentProcess'])
+
+    def test_leituras_pesadas_espalhadas(self):
+        # no ritmo de 1 s, cada leitura pesada (WMI, nvidia-smi, arquivo, processos) espera a vez: nunca todas no mesmo instante
+        for fonte in ('LeLhm()', 'LeSmi()', 'LeUltima()', 'LeProcessos()'):
+            linha = next(l for l in self.CS.splitlines() if fonte in l and ('if (' in l or 'if (lista.Ok)' in l))
+            if fonte != 'LeProcessos()':
+                self.assertIn('!pesada', linha, fonte)
+        self.assertIn('if (agora >= proxProc && !pesada)', self.CS)
+        self.assertIn('leitor.Espacar = Cfg.IntervaloMs < 2000', self.CS)
+
+    def test_freio_de_seguranca(self):
+        # a leitura nunca ocupa mais de 1/10 do tempo: se ficar cara, o ritmo se espaça sozinho
+        self.assertIn('PassoMedioMs * 9', self.CS)
+        self.assertIn('Thread.Sleep(Math.Max(100, Math.Max(falta, minimo)))', self.CS)
+        self.assertIn('Thread.CurrentThread.Priority = ThreadPriority.BelowNormal', self.CS)
+
+    def test_nada_pesado_logo_ao_ligar(self):
+        self.assertIn('proxRotacao = DateTime.Now.AddMinutes(5)', self.CS)
+
+    def test_custo_medido_e_conferido_no_windows(self):
+        self.assertIn('p["custo"] = leitor.Custo.Json()', self.CS)
+        self.assertIn('d["katharos_cpu"]', self.CS)
+        for wf in ('publicar.yml', 'testes.yml'):
+            self.assertIn("'--teste-custo'", (RAIZ / '.github' / 'workflows' / wf).read_text(encoding='utf-8'), wf)
+
+
 class TestFonte(unittest.TestCase):
     """A fonte está no repositório: o katharos.py publicado é exatamente a soma das partes, na ordem do nome."""
 

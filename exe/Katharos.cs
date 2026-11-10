@@ -257,6 +257,15 @@ namespace KatharosApp
         [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int estado);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool DestroyIcon(IntPtr h);
         [DllImport("kernel32.dll")] public static extern ulong GetTickCount64();
+        // tempo de CPU do PRÓPRIO Katharos.exe: GetCurrentProcess devolve o pseudo-identificador de si mesmo (-1), nunca o de outro processo
+        [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool GetProcessTimes(IntPtr h, out long criacao, out long saida, out long nucleo, out long usuario);
+        public static TimeSpan MeuTempoDeCpu()
+        {
+            long c, e, n, u;
+            return GetProcessTimes(GetCurrentProcess(), out c, out e, out n, out u) ? TimeSpan.FromTicks(n + u) : TimeSpan.Zero;
+        }
 
         // temperatura da placa de vídeo pelo driver (D3DKMT): o mesmo dado da aba Desempenho do Gerenciador de Tarefas
         [StructLayout(LayoutKind.Sequential)] struct LUID { public uint Low; public int High; }
@@ -375,6 +384,100 @@ namespace KatharosApp
                 ant[nomeC] = novo;
             }
             return res;
+        }
+    }
+
+    // ───────── todos os processos numa chamada só ─────────
+    // NtQuerySystemInformation(SystemProcessInformation) é o que o próprio Process.GetProcesses e o Gerenciador de Tarefas usam por baixo:
+    // devolve nome, PID, sessão, tempo de CPU e memória privada de cada processo de uma vez, sem abrir processo nenhum (sem handle, sem
+    // memória de ninguém: seguro com anti-cheat). Custa poucos milissegundos. O contador "Process" do Monitor de Desempenho, que dava o
+    // mesmo, custa dezenas a centenas de milissegundos por leitura e acorda o provedor de contadores do Windows: era o maior pico do ícone.
+    class Processos
+    {
+        [DllImport("ntdll.dll")] static extern int NtQuerySystemInformation(int classe, IntPtr buf, int tam, out int precisa);
+        const int SISTEMA_PROCESSOS = 5, TAMANHO_ERRADO = unchecked((int)0xC0000004);
+        public struct P { public int Pid, Sessao; public string Nome; public double Cpu, Privada; }
+        // o buffer fica guardado entre as leituras: nada de alocar 1 MB a cada 5 s (RAM sobra; o coletor de lixo agradece)
+        IntPtr buf = IntPtr.Zero; int tam;
+        readonly Dictionary<int, long[]> antes = new Dictionary<int, long[]>();   // pid → [criação, tempo de CPU] da leitura anterior
+        long antesQuando;
+        public bool Ok = true;
+
+        public List<P> Le()
+        {
+            var lista = new List<P>();
+            if (!Ok) return lista;
+            try
+            {
+                int precisa = 0, st = TAMANHO_ERRADO;
+                for (int tentativa = 0; tentativa < 6; tentativa++)
+                {
+                    if (buf == IntPtr.Zero || tam < precisa)
+                    {
+                        if (buf != IntPtr.Zero) Marshal.FreeHGlobal(buf);
+                        tam = Math.Max(Math.Max(tam * 2, 1 << 20), precisa + (256 << 10));
+                        buf = Marshal.AllocHGlobal(tam);
+                    }
+                    st = NtQuerySystemInformation(SISTEMA_PROCESSOS, buf, tam, out precisa);
+                    if (st != TAMANHO_ERRADO) break;
+                }
+                if (st != 0) { Ok = false; return lista; }
+                long agora = DateTime.UtcNow.Ticks, passou = antesQuando > 0 ? agora - antesQuando : 0;
+                int nucleos = Math.Max(1, Environment.ProcessorCount);
+                bool x64 = IntPtr.Size == 8;
+                // deslocamentos de SYSTEM_PROCESS_INFORMATION (iguais do Windows Vista ao 11)
+                int oNome = x64 ? 64 : 60, oPid = x64 ? 80 : 68, oSessao = x64 ? 100 : 80;
+                var novo = new Dictionary<int, long[]>();
+                int pos = 0;
+                while (true)
+                {
+                    IntPtr e = new IntPtr(buf.ToInt64() + pos);
+                    int prox = Marshal.ReadInt32(e, 0);
+                    long privada = Marshal.ReadInt64(e, 8), criacao = Marshal.ReadInt64(e, 32);
+                    long cpu = Marshal.ReadInt64(e, 40) + Marshal.ReadInt64(e, 48);
+                    int len = Marshal.ReadInt16(e, 56) & 0xFFFF;
+                    IntPtr pNome = Marshal.ReadIntPtr(e, oNome);
+                    int pid = (int)Marshal.ReadIntPtr(e, oPid).ToInt64();
+                    int sessao = Marshal.ReadInt32(e, oSessao);
+                    string nome = pid == 0 ? "Idle" : (pNome != IntPtr.Zero && len > 0 ? Marshal.PtrToStringUni(pNome, len / 2) : "System");
+                    if (nome.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) nome = nome.Substring(0, nome.Length - 4);
+                    novo[pid] = new[] { criacao, cpu };
+                    double uso = 0; long[] ant;   // o mesmo PID com outra hora de criação é outro processo: não compara
+                    if (passou > 0 && pid != 0 && antes.TryGetValue(pid, out ant) && ant[0] == criacao) uso = Math.Max(0, (cpu - ant[1]) * 100.0 / passou / nucleos);
+                    lista.Add(new P { Pid = pid, Sessao = sessao, Nome = nome, Cpu = uso, Privada = privada });
+                    if (prox <= 0 || pos + prox >= tam) break;
+                    pos += prox;
+                }
+                antes.Clear(); foreach (var kv in novo) antes[kv.Key] = kv.Value;
+                antesQuando = agora;
+            }
+            catch { Ok = false; }
+            return lista;
+        }
+    }
+
+    // ───────── quanto custa cada leitura ─────────
+    // Mede o tempo de cada fonte a cada leitura. Fica no agora.json e no diagnóstico: é a prova de que o segundo plano é leve, e é o que
+    // o freio de segurança usa (se a leitura ficar cara num PC, o ritmo se espaça sozinho, sem nunca travar nada).
+    class Custo
+    {
+        readonly Stopwatch sw = Stopwatch.StartNew();
+        public readonly Dictionary<string, double[]> Fontes = new Dictionary<string, double[]>();   // nome → [vezes, soma ms, maior ms]
+        long t;
+        int n;
+        public void Comeca() { if (++n == 4) Fontes.Clear(); t = sw.ElapsedTicks; }   // as 3 primeiras leituras (carregando) não contam
+        public void Marca(string nome)
+        {
+            long a = sw.ElapsedTicks; double ms = (a - t) * 1000.0 / Stopwatch.Frequency; t = a;
+            double[] f; if (!Fontes.TryGetValue(nome, out f)) { f = new double[3]; Fontes[nome] = f; }
+            f[0]++; f[1] += ms; f[2] = Math.Max(f[2] * 0.999, ms);
+        }
+        public Dictionary<string, object> Json()
+        {
+            var d = new Dictionary<string, object>();
+            foreach (var kv in Fontes)
+                d[kv.Key] = new Dictionary<string, object> { { "media_ms", Math.Round(kv.Value[1] / Math.Max(1, kv.Value[0]), 2) }, { "maior_ms", Math.Round(kv.Value[2], 1) } };
+            return d;
         }
     }
 
@@ -547,8 +650,11 @@ namespace KatharosApp
         readonly Categoria gpuMem = new Categoria("GPU Adapter Memory");
         readonly Categoria rede = new Categoria("Network Interface");
         readonly Categoria zona = new Categoria("Thermal Zone Information");
-        readonly Categoria procs = new Categoria("Process");
+        readonly Processos lista = new Processos();
+        Categoria procs;   // só se a chamada direta falhar (nunca visto): o contador do Monitor de Desempenho, mais caro, a cada 10 s
         DateTime proxCtx = DateTime.MinValue; string ctxManut, ctxTop; double? ctxRamSis, ctxRamConta;
+        public readonly Custo Custo = new Custo();
+        public bool Espacar;   // ritmo de 1 s: no máximo uma leitura pesada por vez
         public Dictionary<int, int> Sessoes = new Dictionary<int, int>();
         // o que, rodando, deixa a medida suja: atualização, Defender verificando, indexação, manutenção do Windows
         static readonly string[] MANUTENCAO = { "tiworker", "trustedinstaller", "mousocoreworker", "wuauclt", "usoclient", "msmpeng", "mpcmdrun",
@@ -625,12 +731,16 @@ namespace KatharosApp
         {
             var a = new Amostra { Quando = DateTime.Now };
             DateTime agora = a.Quando;
+            // as leituras pesadas (WMI, nvidia-smi, arquivo) nunca caem todas no mesmo instante: no ritmo de 1 s, uma por vez
+            bool pesada = false;
+            Custo.Comeca();
             var c = cpuTotal.Le(); if (c.HasValue) a.Cpu = Math.Min(100, c.Value);
             double nm = -1;
             foreach (var n in nucleos) { var v = n.Le(); if (v.HasValue && v.Value > nm) nm = v.Value; }
             if (nm >= 0) a.NucleoMax = Math.Min(100, nm);
             var d = cpuDesemp.Le();
             if (d.HasValue && d.Value > 0) { a.CpuDesempenho = d.Value; if (baseMhz > 0) a.CpuGhz = baseMhz * d.Value / 100.0 / 1000.0; }
+            Custo.Marca("cpu");
 
             try
             {
@@ -643,11 +753,13 @@ namespace KatharosApp
                 }
             }
             catch (Exception e) { Falha("ram", e); }
+            Custo.Marca("ram");
 
             var oc = discoOcioso.Le(); if (oc.HasValue) a.Disco = Math.Max(0, Math.Min(100, 100 - oc.Value));
             var dl = discoLe.Le(); if (dl.HasValue) a.DiscoLe = dl.Value / 1048576.0;
             var dg = discoGrava.Le(); if (dg.HasValue) a.DiscoGrava = dg.Value / 1048576.0;
 
+            Custo.Marca("disco");
             var rr = rede.Le("Bytes Received/sec", "Bytes Sent/sec");
             if (rr.ContainsKey("Bytes Received/sec") && rr["Bytes Received/sec"].Count > 0)
             {
@@ -657,6 +769,7 @@ namespace KatharosApp
                 a.RedeBaixa = baixa / 1048576.0; a.RedeSobe = sobe / 1048576.0;
             }
 
+            Custo.Marca("rede");
             // placa de vídeo: uso = o motor mais ocupado (soma dos processos em cada motor), como o Gerenciador de Tarefas
             var g = gpuMotor.Le("Utilization Percentage");
             if (g.ContainsKey("Utilization Percentage") && g["Utilization Percentage"].Count > 0)
@@ -680,6 +793,7 @@ namespace KatharosApp
                 a.Gpu = Math.Min(100, max);
                 foreach (var kv in por3d) if (kv.Value > a.TopGpu) { a.TopGpu = Math.Min(100, kv.Value); a.TopGpuPid = kv.Key; }
             }
+            Custo.Marca("gpu");
             var gm = gpuMem.Le("Dedicated Usage");
             if (gm.ContainsKey("Dedicated Usage") && gm["Dedicated Usage"].Count > 0)
             {
@@ -688,16 +802,18 @@ namespace KatharosApp
                 a.VramTotalGb = vramTotal;
             }
 
+            Custo.Marca("vram");
             // temperatura: do mais certo para o mais pobre, e diz de onde veio
-            if (lhmExiste && agora >= proxLhm) { proxLhm = agora.AddSeconds(3); LeLhm(); }
+            if (lhmExiste && agora >= proxLhm && !pesada) { pesada = Espacar; proxLhm = agora.AddSeconds(3); LeLhm(); Custo.Marca("temperatura LibreHardwareMonitor"); }
             if (d3dExiste && agora >= proxD3d) { proxD3d = agora.AddSeconds(2); d3dGpu = Nat.TemperaturaGpu(); if (!d3dGpu.HasValue) { d3dExiste = false; } }
             if (agora >= proxExt) { proxExt = agora.AddSeconds(2); ext = Externos.Le(); }
+            Custo.Marca("temperatura");
             if (lhmCpu.HasValue) { a.TempCpu = lhmCpu; a.TempCpuFonte = lhmFonte; }
             else if (ext != null && ext.Cpu.HasValue) { a.TempCpu = ext.Cpu; a.TempCpuFonte = ext.CpuFonte; }
             if (lhmGpu.HasValue) { a.TempGpu = lhmGpu; a.TempGpuFonte = lhmFonte; }
             else if (ext != null && ext.Gpu.HasValue) { a.TempGpu = ext.Gpu; a.TempGpuFonte = ext.GpuFonte; }
             else if (d3dGpu.HasValue) { a.TempGpu = d3dGpu; a.TempGpuFonte = "driver de vídeo"; }
-            else if (smiExiste && !emJogo && agora >= proxSmi) { proxSmi = agora.AddSeconds(15); LeSmi(); }
+            else if (smiExiste && !emJogo && agora >= proxSmi && !pesada) { pesada = Espacar; proxSmi = agora.AddSeconds(15); LeSmi(); Custo.Marca("temperatura nvidia-smi"); }
             if (!a.TempGpu.HasValue && smiGpu.HasValue) { a.TempGpu = smiGpu; a.TempGpuFonte = "nvidia-smi"; }
             if (!a.TempCpu.HasValue)
             {
@@ -717,7 +833,8 @@ namespace KatharosApp
                 }
                 if (best > 0) { a.TempCpu = Math.Round(best, 0); a.TempCpuFonte = "zona térmica"; }
             }
-            if (agora >= proxUltima) { proxUltima = agora.AddSeconds(60); LeUltima(); }
+            Custo.Marca("temperatura (zona térmica)");
+            if (agora >= proxUltima && !pesada) { pesada = Espacar; proxUltima = agora.AddSeconds(60); LeUltima(); Custo.Marca("temperatura do Katharos"); }
             if (!a.TempCpu.HasValue && ultCpu.HasValue) { a.TempCpu = ultCpu; a.TempCpuFonte = "leitura das " + ultQuando; }
             if (!a.TempGpu.HasValue && ultGpu.HasValue) { a.TempGpu = ultGpu; a.TempGpuFonte = "leitura das " + ultQuando; }
 
@@ -735,11 +852,22 @@ namespace KatharosApp
             // quem está na frente e se é tela cheia (para saber se há jogo)
             try { uint pid; Nat.GetWindowThreadProcessId(Nat.GetForegroundWindow(), out pid); a.PrimeiroPlanoPid = (int)pid; } catch { }
             try { int st; if (Nat.SHQueryUserNotificationState(out st) == 0) a.TelaCheia = st == 2 || st == 3 || st == 4; } catch { }
-            if (agora >= proxProc) { proxProc = agora.AddSeconds(5); LeNomes(); }
+            Custo.Marca("bateria e janela");
+            // processos: nomes (jogo, anti-cheat), sessão e quem está usando a CPU, numa chamada só a cada 5 s
+            if (agora >= proxProc && !pesada)
+            {
+                pesada = Espacar; proxProc = agora.AddSeconds(5);
+                if (lista.Ok) LeProcessos();
+                if (!lista.Ok)
+                {
+                    LeNomes();
+                    if (agora >= proxCtx) { proxCtx = agora.AddSeconds(10); LeContexto(); }
+                }
+                Custo.Marca("processos");
+            }
             foreach (var n in cfg.NomesJogo) if (NomesVistos.Contains(n)) { a.AntiCheat = true; break; }
             try { a.UptimeH = Nat.GetTickCount64() / 3600000.0; } catch (Exception e) { Falha("tempo ligado", e); }
             a.Processos = Nomes.Count;
-            if (agora >= proxCtx) { proxCtx = agora.AddSeconds(10); LeContexto(); }
             a.Manutencao = ctxManut; a.Top = ctxTop; a.RamSistemaGb = ctxRamSis; a.RamContaGb = ctxRamConta;
             return a;
         }
@@ -767,12 +895,42 @@ namespace KatharosApp
             Nomes = nomes; NomesVistos = vistos; Sessoes = sess;
         }
 
-        // contadores por processo (o mesmo do Monitor de Desempenho): CPU e memória privada de cada um, sem abrir processo nenhum.
+        // a lista inteira numa chamada: nomes, sessões, CPU e memória privada de cada processo (ver a classe Processos)
+        void LeProcessos()
+        {
+            var l = lista.Le();
+            if (!lista.Ok || l.Count == 0) { if (lista.Ok) lista.Ok = false; Falha("processos (chamada direta)", new Exception("sem dados; usando o contador do Windows")); return; }
+            var nomes = new Dictionary<int, string>(l.Count); var vistos = new HashSet<string>(); var sess = new Dictionary<int, int>(l.Count);
+            double sis = 0, conta = 0; var manut = new List<string>(); var top = new List<KeyValuePair<string, double>>();
+            foreach (var p in l)
+            {
+                nomes[p.Pid] = p.Nome; sess[p.Pid] = p.Sessao;
+                string n = p.Nome.ToLowerInvariant(); vistos.Add(n);
+                if (p.Pid == 0) continue;
+                if (p.Sessao > 0) conta += p.Privada; else sis += p.Privada;
+                if (p.Cpu >= 3 && Array.IndexOf(MANUTENCAO, n) >= 0 && !manut.Contains(p.Nome)) manut.Add(p.Nome);
+                if (p.Cpu >= 1) top.Add(new KeyValuePair<string, double>(p.Nome, p.Cpu));
+            }
+            Nomes = nomes; NomesVistos = vistos; Sessoes = sess;
+            Contexto(sis, conta, manut, top);
+        }
+
+        void Contexto(double sis, double conta, List<string> manut, List<KeyValuePair<string, double>> top)
+        {
+            top.Sort(delegate (KeyValuePair<string, double> x, KeyValuePair<string, double> y) { return y.Value.CompareTo(x.Value); });
+            var t5 = new List<string>(); foreach (var t in top) { if (t5.Count >= 5) break; t5.Add(t.Key + " " + Math.Round(t.Value, 0).ToString(K.INV) + "%"); }
+            ctxManut = manut.Count > 0 ? string.Join(", ", manut.ToArray()) : null;
+            ctxTop = t5.Count > 0 ? string.Join(", ", t5.ToArray()) : null;
+            ctxRamSis = sis / 1073741824.0; ctxRamConta = conta / 1073741824.0;
+        }
+
+        // reserva: contadores por processo (o mesmo do Monitor de Desempenho): CPU e memória privada de cada um, sem abrir processo nenhum.
         // Separa a RAM dos serviços do Windows (sessão 0) da RAM da sua conta, e acha quem está fazendo manutenção agora.
         void LeContexto()
         {
             try
             {
+                if (procs == null) procs = new Categoria("Process");
                 var c = procs.Le("% Processor Time", "Working Set - Private", "ID Process");
                 if (!c.ContainsKey("ID Process") || c["ID Process"].Count == 0) return;
                 var cpu = c["% Processor Time"]; var ws = c["Working Set - Private"]; int nucleos = Math.Max(1, Environment.ProcessorCount);
@@ -788,11 +946,7 @@ namespace KatharosApp
                     if (u >= 3 && Array.IndexOf(MANUTENCAO, nome.ToLowerInvariant()) >= 0 && !manut.Contains(nome)) manut.Add(nome);
                     if (u >= 1) top.Add(new KeyValuePair<string, double>(nome, u));
                 }
-                top.Sort(delegate (KeyValuePair<string, double> x, KeyValuePair<string, double> y) { return y.Value.CompareTo(x.Value); });
-                var t5 = new List<string>(); foreach (var t in top) { if (t5.Count >= 5) break; t5.Add(t.Key + " " + Math.Round(t.Value, 0).ToString(K.INV) + "%"); }
-                ctxManut = manut.Count > 0 ? string.Join(", ", manut.ToArray()) : null;
-                ctxTop = t5.Count > 0 ? string.Join(", ", t5.ToArray()) : null;
-                ctxRamSis = sis / 1073741824.0; ctxRamConta = conta / 1073741824.0;
+                Contexto(sis, conta, manut, top);
             }
             catch (Exception e) { Falha("contexto", e); }
         }
@@ -1185,6 +1339,7 @@ namespace KatharosApp
     {
         public DateTime Inicio; int n; double sCpu, sGpu, sRam, sDisco, sRede; double mCpu, mGpu, mNuc, mTc = -1, mTg = -1, mVram; double mDesemp = 1000; public string Jogo;
         public Dictionary<string, object> FpsMin;
+        public double EuCpu;
         int nManut, nBat, nProc; double sProc, sRamSis, sRamConta, minUp = double.MaxValue; int nRamSis; readonly HashSet<string> manut = new HashSet<string>();
         public Minuto(DateTime t) { Inicio = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0); }
         public void Soma(Amostra a)
@@ -1228,6 +1383,7 @@ namespace KatharosApp
             if (manut.Count > 0) d["manutencao"] = string.Join(", ", new List<string>(manut).ToArray());
             if (nBat > n / 2) d["bateria"] = true;
             if (FpsMin != null) foreach (var kv in FpsMin) d[kv.Key] = kv.Value;
+            d["katharos_cpu"] = Math.Round(EuCpu, 2);   // o quanto o próprio segundo plano pesou neste minuto
             if (nManut * 3 >= n || (minUp < double.MaxValue && minUp * 60 < Lim.G("minutos_depois_do_boot"))) d["sujo"] = true;
             return new JavaScriptSerializer().Serialize(d);
         }
@@ -1260,7 +1416,15 @@ namespace KatharosApp
         public DateTime Desde = DateTime.Now;
         Minuto minuto;
         int candidatoPid; DateTime candidatoDesde, semJogoDesde = DateTime.MaxValue;
-        DateTime proxCfg = DateTime.Now.AddSeconds(30), proxRotacao = DateTime.MinValue;
+        // a rotação dos arquivos (ler e regravar até alguns MB) espera o PC terminar de ligar
+        DateTime proxCfg = DateTime.Now.AddSeconds(30), proxRotacao = DateTime.Now.AddMinutes(5);
+        // custo do próprio segundo plano: tempo de cada passo, CPU e RAM do Katharos.exe
+        readonly Stopwatch relogio = new Stopwatch();
+        public double PassoMedioMs, PassoMaiorMs; int nPassos;
+        public double EuCpuPct, EuRamMb; TimeSpan euCpuAntes; DateTime euAntes = DateTime.MinValue, proxEu = DateTime.MinValue;
+        bool avisouLento; DateTime proxPausa = DateTime.MinValue;
+        readonly JavaScriptSerializer json = new JavaScriptSerializer();
+        public Leitor Leitor { get { return leitor; } }
         public event Action Atualizou;
         public event Action SessaoFechou;
         public readonly object Trava = new object();
@@ -1272,16 +1436,26 @@ namespace KatharosApp
             Thread.Sleep(300);
             while (!parar)
             {
-                var t0 = DateTime.Now;
-                try { Passo(); }
+                relogio.Restart();
+                try { leitor.Espacar = Cfg.IntervaloMs < 2000; Passo(); }
                 catch (Exception e) { Log.Escreve("leitura: " + e); }
-                int falta = Cfg.IntervaloMs - (int)(DateTime.Now - t0).TotalMilliseconds;
-                Thread.Sleep(Math.Max(100, falta));
+                double ms = relogio.Elapsed.TotalMilliseconds;
+                // as 3 primeiras leituras carregam o programa e as fontes (mais lentas, uma vez só): não contam
+                nPassos++;
+                if (nPassos == 4) { PassoMedioMs = ms; PassoMaiorMs = ms; }
+                else if (nPassos > 4) { PassoMedioMs = PassoMedioMs * 0.95 + ms * 0.05; PassoMaiorMs = Math.Max(PassoMaiorMs * 0.999, ms); }   // o maior recente (esquece devagar)
+                // freio de segurança: a leitura nunca ocupa mais que 1/10 do tempo. Num PC em que ela fique cara (muitos processos, driver
+                // lento), o ritmo se espaça sozinho em vez de pesar; volta ao normal quando o custo cai.
+                int falta = Cfg.IntervaloMs - (int)ms;
+                int minimo = nPassos > 10 ? (int)Math.Min(30000, PassoMedioMs * 9) : 0;
+                if (minimo > falta && !avisouLento) { avisouLento = true; Log.Escreve("leitura custando " + Math.Round(PassoMedioMs, 0) + " ms: ritmo espaçado para não pesar"); }
+                Thread.Sleep(Math.Max(100, Math.Max(falta, minimo)));
             }
             try { FechaSessao(); FechaMinuto(); } catch { }
         }
 
         public void Para() { parar = true; }
+        public void RelePausa() { proxPausa = DateTime.MinValue; }   // o clique em pausar vale na próxima leitura
 
         public static bool LeituraPausada()
         {
@@ -1300,7 +1474,8 @@ namespace KatharosApp
             DateTime agora = DateTime.Now;
             if (agora >= proxCfg) { proxCfg = agora.AddSeconds(30); Cfg = Config.Le(); }
             if (agora >= proxRotacao) { proxRotacao = agora.AddHours(6); Rotaciona("minutos.jsonl", 14); Rotaciona("sessoes.jsonl", 400); }
-            Pausado = LeituraPausada();
+            if (agora >= proxPausa) { proxPausa = agora.AddSeconds(5); Pausado = LeituraPausada(); }
+            if (agora >= proxEu) { proxEu = agora.AddSeconds(10); MedeEu(agora); }
             if (Pausado) { if (Atualizou != null) Atualizou(); return; }
             // o PC dormiu ou hibernou: o que estava aberto fecha no momento em que parou, não conta o tempo dormindo
             if (Ultima != null && (agora - Ultima.Quando).TotalSeconds > 60) { FechaSessao(); FechaMinuto(); lock (Trava) { Janela.Clear(); Historico.Clear(); } }
@@ -1327,6 +1502,23 @@ namespace KatharosApp
             minuto.Soma(a);
             GravaAgora(a);
             if (Atualizou != null) Atualizou();
+        }
+
+        // CPU e RAM do próprio Katharos.exe (o processo dele mesmo, nunca o de outro)
+        void MedeEu(DateTime agora)
+        {
+            try
+            {
+                using (var eu = Process.GetCurrentProcess())
+                {
+                    var cpu = Nat.MeuTempoDeCpu();
+                    if (euAntes != DateTime.MinValue)
+                        EuCpuPct = Math.Max(0, (cpu - euCpuAntes).TotalMilliseconds * 100.0 / Math.Max(1, (agora - euAntes).TotalMilliseconds) / Math.Max(1, Environment.ProcessorCount));
+                    euCpuAntes = cpu; euAntes = agora;
+                    EuRamMb = eu.WorkingSet64 / 1048576.0;
+                }
+            }
+            catch { }
         }
 
         void DetectaJogo(Amostra a)
@@ -1378,6 +1570,7 @@ namespace KatharosApp
         {
             if (minuto == null) return;
             minuto.FpsMin = Fps.FechaMinuto();
+            minuto.EuCpu = EuCpuPct;
             string l = minuto.Linha();
             if (l != null) Acrescenta("minutos.jsonl", l);
             minuto = null;
@@ -1436,13 +1629,12 @@ namespace KatharosApp
             var cs = new List<object>();
             foreach (var c in Conclusoes) { var x = new Dictionary<string, object>(); x["id"] = c.Id; x["nivel"] = c.Nivel; x["titulo"] = c.Titulo; x["texto"] = c.Texto; x["comando"] = c.Comando; cs.Add(x); }
             d["conclusoes"] = cs;
-            using (var eu = Process.GetCurrentProcess())
-            {
-                var p = new Dictionary<string, object>();
-                p["ram_mb"] = Math.Round(eu.WorkingSet64 / 1048576.0, 1); p["desde"] = K.Iso(Desde);
-                d["segundo_plano"] = p;
-            }
-            try { K.GravaAtomico(K.Arq("agora.json"), new JavaScriptSerializer().Serialize(d)); } catch { }
+            var p = new Dictionary<string, object>();
+            p["ram_mb"] = Math.Round(EuRamMb, 1); p["cpu_pct"] = Math.Round(EuCpuPct, 2); p["desde"] = K.Iso(Desde);
+            p["leitura_ms"] = Math.Round(PassoMedioMs, 1); p["leitura_maior_ms"] = Math.Round(PassoMaiorMs, 1);
+            p["custo"] = leitor.Custo.Json();
+            d["segundo_plano"] = p;
+            try { K.GravaAtomico(K.Arq("agora.json"), json.Serialize(d)); } catch { }
         }
     }
 
@@ -2087,6 +2279,7 @@ namespace KatharosApp
                 else File.WriteAllText(arq, DateTime.Now.AddHours(1).ToString("yyyy-MM-ddTHH:mm:ss", K.INV), Encoding.ASCII);
             }
             catch { }
+            motor.RelePausa();
         }
 
         void Abre(string[] args)
@@ -2116,7 +2309,9 @@ namespace KatharosApp
                 if (a.TempCpu.HasValue || a.TempGpu.HasValue) dica += " · " + K.Num(a.TempCpu ?? a.TempGpu, 0) + " °C";
                 if (ses != null) dica += "\n" + ses.Jogo;
             }
-            ni.Text = dica.Length > 63 ? dica.Substring(0, 63) : dica;
+            // só fala com a barra de tarefas (explorer) quando o texto muda de verdade
+            dica = dica.Length > 63 ? dica.Substring(0, 63) : dica;
+            if (dica != ni.Text) ni.Text = dica;
             if (iStatus != null) iStatus.Text = a == null ? (motor.Pausado ? "pausado" : "lendo...") :
                 ("CPU " + K.Num(a.Cpu, 0) + " %   GPU " + K.Num(a.Gpu, 0) + " %   RAM " + K.Num(a.RamPct, 0) + " %" + (a.TempCpu.HasValue ? "   " + K.Num(a.TempCpu, 0) + " °C" : ""));
             painel.Atualiza();
@@ -2288,6 +2483,50 @@ namespace KatharosApp
         }
 
         // tempos de quadro sintéticos: 990 a 120 FPS, 9 travadas de 50 ms, 1 de 100 ms
+        // quanto o segundo plano pesa: 30 leituras no ritmo mais rápido (1 s), com o custo de cada fonte, o maior pico, CPU e RAM do
+        // próprio processo; e confere a lista de processos da chamada direta contra a do .NET. Roda no CI e no PC real (teste-no-pc).
+        public static int TesteCusto(string destino, int n)
+        {
+            var cfg = Config.Le();
+            var l = new Leitor { Espacar = true };
+            var sw = new Stopwatch(); var passos = new List<double>();
+            TimeSpan cpu0 = Nat.MeuTempoDeCpu();
+            var t0 = DateTime.Now;
+            for (int i = 0; i < n; i++)
+            {
+                sw.Restart(); l.Le(cfg, false); double ms = sw.Elapsed.TotalMilliseconds;
+                if (i >= 3) passos.Add(ms);
+                Thread.Sleep(Math.Max(100, 1000 - (int)ms));
+            }
+            double cpuPct, ramMb;
+            using (var eu = Process.GetCurrentProcess())
+            {
+                cpuPct = (Nat.MeuTempoDeCpu() - cpu0).TotalMilliseconds * 100.0 / (DateTime.Now - t0).TotalMilliseconds / Math.Max(1, Environment.ProcessorCount);
+                ramMb = eu.WorkingSet64 / 1048576.0;
+            }
+            passos.Sort();
+            double media = 0; foreach (var x in passos) media += x; media /= Math.Max(1, passos.Count);
+            double maior = passos.Count > 0 ? passos[passos.Count - 1] : 0, p95 = passos.Count > 0 ? passos[(int)(passos.Count * 0.95)] : 0;
+            // a lista direta tem de bater com a do Windows (.NET): os mesmos PIDs, o próprio processo com o nome e a sessão certos
+            var direta = new Processos().Le(); var pids = new HashSet<int>(); foreach (var p in direta) pids.Add(p.Pid);
+            int net = 0, achados = 0; string meuNome = null; int minhaSessao = -1, euPid;
+            using (var eu = Process.GetCurrentProcess()) { euPid = eu.Id; minhaSessao = eu.SessionId; }
+            foreach (var p in Process.GetProcesses()) { net++; if (pids.Contains(p.Id)) achados++; p.Dispose(); }
+            foreach (var p in direta) if (p.Pid == euPid) { meuNome = p.Nome; if (p.Sessao != minhaSessao) meuNome += " (sessão errada)"; }
+            bool listaOk = direta.Count > 0 && achados >= net * 0.9 && meuNome == "Katharos";
+            bool leve = media < 50 && cpuPct < 2;
+            var res = new List<string>();
+            res.Add("leituras: " + passos.Count + " (depois das 3 de aquecimento), " + Environment.ProcessorCount + " núcleos, " + Environment.OSVersion.VersionString);
+            res.Add("por leitura: média " + media.ToString("0.0", K.INV) + " ms, 95% abaixo de " + p95.ToString("0.0", K.INV) + " ms, maior " + maior.ToString("0.0", K.INV) + " ms");
+            res.Add("Katharos.exe: CPU " + cpuPct.ToString("0.00", K.INV) + " % (de todo o PC), RAM " + ramMb.ToString("0", K.INV) + " MB");
+            foreach (var kv in l.Custo.Fontes)
+                res.Add("  " + kv.Key + ": média " + (kv.Value[1] / Math.Max(1, kv.Value[0])).ToString("0.00", K.INV) + " ms, maior " + kv.Value[2].ToString("0.0", K.INV) + " ms");
+            res.Add("lista de processos direta: " + direta.Count + " (o .NET vê " + net + ", " + achados + " em comum), eu = " + (meuNome ?? "não achei") + (listaOk ? " ok" : " ERRADO"));
+            res.Add(leve ? "leve ok" : "PESADO: média acima de 50 ms ou CPU acima de 2 %");
+            K.GravaAtomico(destino, string.Join("\r\n", res.ToArray()) + "\r\n");
+            return listaOk && leve ? 0 : 1;
+        }
+
         public static int TesteFps(string destino)
         {
             var f = new Fps();
@@ -2355,6 +2594,17 @@ namespace KatharosApp
             {
                 try { int i = lista.IndexOf("--teste-fps"); return Testes.TesteFps(i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-fps.txt")); }
                 catch (Exception e) { Log.Escreve("teste fps: " + e); return 3; }
+            }
+            if (lista.Contains("--teste-custo"))
+            {
+                try
+                {
+                    int i = lista.IndexOf("--teste-custo"), n;
+                    string dest = i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-custo.txt");
+                    if (!(i + 2 < lista.Count && int.TryParse(lista[i + 2], out n))) n = 30;
+                    return Testes.TesteCusto(dest, Math.Max(5, Math.Min(600, n)));
+                }
+                catch (Exception e) { Log.Escreve("teste custo: " + e); return 3; }
             }
             if (lista.Contains("--teste-externos"))
             {

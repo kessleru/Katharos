@@ -488,7 +488,22 @@ Ferramentas para isso (usar, não só citar):
 inteligência, FPS de verdade, versões do Windows, segurança, CLI x GUI) e tirar as que não fazem mais sentido. Nada fica como está só porque
 já existia; o hero é a única parte que mantém a pegada.
 
+**Vídeos do programa em uso** (pedido de 10 nov, 20:02): o site mostra o Katharos funcionando em vídeo, não só em print. Vídeos curtos
+rodando sozinhos (sem som, em laço, leves), gravados da interface nova de verdade (fase 2), editados em nível profissional: cortes
+limpos, zoom suave no que importa, cursor visível, ritmo rápido, nada de tela parada. No mesmo visual do site (moldura, cores e "+" dos
+containers) e bem visíveis. Um para a capa (thumb do hero e prévia nas redes) e um por seção que mostra ação (raio-x, aplicar e
+desfazer, painel ao vivo, central de inteligência, FPS em jogo).
+
+**Site épico e profissional**: antes de desenhar, pesquisar o que os melhores sites de produto fazem bem (velocidade, clareza da
+primeira tela, prova visual, ritmo de leitura, vídeo e movimento que servem ao conteúdo) e registrar no cofre (`03 • Research`).
+
 Tarefas a mais desta reformulação:
+- [ ] **6.R** Pesquisa de sites de produto excelentes (lançamentos de apps de desktop, ferramentas de dev, sites premiados): o que
+  repetem, o que evitam, como usam vídeo sem pesar. Nota no cofre e critérios para a revisão 6.6.
+- [ ] **6.V** Vídeos: roteiro de cada um (5 a 15 s), gravação da interface com dados de exemplo (o modo `--foto` vira `--video`:
+  roteiro de cliques e telas, quadro a quadro, sem depender de tela real), edição com ffmpeg (zoom, cortes, moldura), saída em AV1 ou
+  H.264 + WebM com poster, `preload="none"` e tocar só quando aparece na tela (sem pesar no celular nem no Lighthouse). Uma versão
+  curta em GIF ou MP4 para o README.
 - [ ] **6.0** Direção visual antes de codar: 2 ou 3 propostas para as seções depois do hero (rascunho no Figma ou em HTML), escolha com o
   dono e registro da escolha no cofre (`04 • Decisions`).
 - [ ] **6.0b** Mapa das seções novas: o que cada uma precisa contar (baixar CLI ou GUI, o que ele faz, o painel ao vivo, a central de
@@ -547,6 +562,11 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
   serviços antes e depois.
 - [x] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
   teste.
+- [x] **S3** Segundo plano leve sem perder nada (pedido de 10 nov, 19:57): RAM pode usar, mas nunca pico de CPU nem muita coisa no mesmo
+  instante. Lista de processos numa chamada só (NtQuerySystemInformation, poucos ms, sem abrir processo) no lugar do contador "Process"
+  (dezenas a centenas de ms); leituras pesadas espalhadas (uma por vez no ritmo de 1 s); freio que espaça o ritmo se a leitura passar
+  de 1/10 do tempo; nada pesado nos primeiros minutos depois de ligar; barra de tarefas só atualizada quando o texto muda; custo de
+  cada fonte medido e gravado (`agora.json`, `katharos_cpu` em cada minuto); `--teste-custo` no Windows do CI (média < 50 ms, CPU < 2 %).
 
 ## 7. Regras que continuam valendo
 - Mostrar cada mudança antes, desfazer tudo, ponto de restauração, nunca mexer em arquivo pessoal sem desfazer.
@@ -589,3 +609,5 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | S2 lista única de processos protegidos (`NUNCA_ENCERRAR` em `28-windows.py`, ampliada) e `pode_sugerir_fechar`; a bancada do benchmark só sugere fechar programa da pessoa | 3.1.2 | ramo v4 | |
 | 10 nov 2026 | 2c.3 a 2c.6 e 2c.8: FPS pelo PresentMon (Intel, MIT, v2.6.0 fixa no zip), só durante a sessão de jogo; média, 1% low e 0,1% low (média dos quadros mais lentos), travadas; permissão pelo grupo Usuários de log de desempenho com confirmação e volta; FPS no ícone, no `aovivo`, nas sessões e no painel; antes e depois por jogo com margem e proposta de desfazer quando piora | 3.1.2 | ramo v4 | autoteste `--teste-fps` |
 | 10 nov 2026 | site: todas as seções repaginadas, criar e tirar seções (fase 6) | 3.1.2 | ramo v4 | pedido do usuário |
+| 10 nov 2026 | S3: segundo plano leve (processos numa chamada só, leituras espalhadas, freio de 1/10, custo medido, `--teste-custo` no CI) | 3.1.2 | ramo v4 | testes 304 |
+| 10 nov 2026 | site: vídeos do programa em uso, editados, e pesquisa de sites de produto excelentes (6.R, 6.V) | 3.1.2 | ramo v4 | pedido do usuário |
