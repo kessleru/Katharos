@@ -62,6 +62,12 @@ e, se mexeu em itens, perfis ou comandos, atualize o `CHANGELOG.md`.
 
 O número tem três partes, MAIOR.MENOR.CORREÇÃO, e as regras de quando cada uma sobe estão no [CHANGELOG.md](CHANGELOG.md). Uma versão é uma entrega com tag (`v1.2.0`), não um commit: mudanças de site, documentação, testes e CI não geram versão. Se a sua mudança altera o que o usuário vê, diga no pull request se é MENOR ou CORREÇÃO; quem publica a versão atualiza `VERSAO`, a data e o CHANGELOG juntos.
 
+### Publicar uma versão
+
+É automático. Antes: suba `VERSAO` e a data em `partes/00-cabecalho.py`, escreva a entrada `## X.Y.Z` no CHANGELOG.md e faça o commit na `main` com os testes verdes. Depois, no GitHub: **Actions > publicar > Run workflow**. Deixe "publicar" desmarcado para um ensaio (confere tudo e mostra o texto da release, sem publicar nada) e marque para publicar de verdade. Também dá para empurrar a tag (`git tag vX.Y.Z && git push --tags`), que precisa ser igual a `v` + `VERSAO`.
+
+O fluxo confere versão, changelog e hashes, roda os testes, monta o `Katharos.zip`, assina os arquivos (atestado de procedência do GitHub) e cria a release com o texto do changelog. Se a versão já foi publicada, ele para.
+
 ## Crédito
 
 Quem ajuda aparece pelo nome:

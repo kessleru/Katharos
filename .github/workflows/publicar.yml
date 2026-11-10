@@ -1,0 +1,78 @@
+name: publicar
+# Publica a release sozinho. Duas formas de começar:
+#   1. Actions > publicar > Run workflow  (deixe "publicar" desmarcado para um ensaio: faz tudo menos criar a release)
+#   2. git tag vX.Y.Z && git push --tags   (a tag precisa ser igual a "v" + VERSAO do programa)
+# Antes: subir VERSAO em partes/00-cabecalho.py e escrever a entrada "## X.Y.Z" no CHANGELOG.md.
+# O que ele faz: confere versão, changelog e hashes, roda os testes, monta o Katharos.zip, assina tudo (atestado do GitHub),
+# e cria a release com o texto do changelog. Quem baixa confere com:  gh attestation verify Katharos.zip --repo kessleru/Katharos
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Marque para criar a release de verdade. Desmarcado = ensaio, não publica nada.'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+concurrency: publicar
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLICA: ${{ github.event_name == 'push' || inputs.publicar }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: versão, changelog e tag
+        id: v
+        run: |
+          V=$(python - <<'PY'
+          import re
+          print(re.search(r"^VERSAO = '([^']+)'", open('programa/katharos.py', encoding='utf-8').read(), re.M).group(1))
+          PY
+          )
+          echo "versao=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$V" ]; then
+            echo "::error::a tag ${GITHUB_REF_NAME} não é igual a v$V (VERSAO do programa)"; exit 1
+          fi
+          if [ "$PUBLICA" = "true" ] && gh release view "v$V" >/dev/null 2>&1; then
+            echo "::error::a release v$V já existe; suba a versão antes de publicar de novo"; exit 1
+          fi
+          python .github/scripts/notas_release.py "$V" > notas.md
+          case "$V" in *-*) echo "pre=--prerelease" >> "$GITHUB_OUTPUT" ;; *) echo "pre=" >> "$GITHUB_OUTPUT" ;; esac
+      - name: testes
+        run: python -m unittest discover -s tests
+      - name: SHA256SUMS.txt bate com os arquivos
+        run: sha256sum --check SHA256SUMS.txt
+      - name: monta os arquivos da release
+        run: |
+          mkdir -p saida
+          git archive --format=zip --prefix=Katharos/ HEAD KATHAROS.bat programa README.md LICENSE SECURITY.md CHANGELOG.md SHA256SUMS.txt -o saida/Katharos.zip
+          cp programa/katharos.py saida/katharos.py
+          (cd saida && sha256sum katharos.py Katharos.zip > SHA256SUMS-release.txt)
+          python .github/scripts/notas_release.py "${{ steps.v.outputs.versao }}" "$(sha256sum programa/katharos.py | cut -d' ' -f1)" > notas.md
+          cat saida/SHA256SUMS-release.txt
+      - name: atestado de procedência (assinatura do GitHub)
+        if: env.PUBLICA == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            saida/Katharos.zip
+            saida/katharos.py
+      - name: cria a release
+        if: env.PUBLICA == 'true'
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" saida/Katharos.zip saida/katharos.py saida/SHA256SUMS-release.txt \
+            --title "Katharos ${{ steps.v.outputs.versao }}" --notes-file notas.md --target "$GITHUB_SHA" --latest ${{ steps.v.outputs.pre }}
+      - name: ensaio
+        if: env.PUBLICA != 'true'
+        run: |
+          echo "Ensaio: tudo conferido, nada publicado. A release teria o título 'Katharos ${{ steps.v.outputs.versao }}' e este texto:"
+          cat notas.md

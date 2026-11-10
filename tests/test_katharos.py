@@ -2302,6 +2302,21 @@ class TestAutenticidade(_CasaTemporaria):
             self.assertTrue(k.mostra_autenticidade_no_aceite(t))
 
     def test_workflow_de_release_existe_com_atestado(self):
-        y = (RAIZ / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
+        y = (RAIZ / '.github' / 'workflows' / 'publicar.yml').read_text(encoding='utf-8')
         self.assertIn('attest-build-provenance', y)
         self.assertIn('attestations: write', y)
+
+    def test_notas_da_release_saem_do_changelog(self):
+        spec_ = importlib.util.spec_from_file_location('notas', RAIZ / '.github' / 'scripts' / 'notas_release.py')
+        n = importlib.util.module_from_spec(spec_)
+        spec_.loader.exec_module(n)
+        texto = n.notas(k.VERSAO, 'abc')
+        self.assertIn('abc', texto)
+        self.assertIn('Antes de usar', texto)
+        self.assertNotIn(f'## {k.VERSAO}', texto)
+        with self.assertRaises(SystemExit):
+            n.notas('0.0.0')
+        self.assertEqual(n.entrada('1.0', '## 1.0 · x\ncorpo\n\n## 0.9\noutro'), 'corpo')
+
+    def test_changelog_tem_a_versao_atual(self):
+        self.assertRegex((RAIZ / 'CHANGELOG.md').read_text(encoding='utf-8'), r'(?m)^## ' + re.escape(k.VERSAO) + r'\b')
