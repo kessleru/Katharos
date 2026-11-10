@@ -466,6 +466,17 @@ class TestBenchmark(unittest.TestCase):
 
 
 class TestJaFeito(unittest.TestCase):
+    def test_acao_que_se_repete_nao_conta_como_ja_feito(self):
+        """Limpar e otimizar não ficam gravados no Windows: com o tempo o PC volta a precisar, então não entram na lista."""
+        a = k.Item('a', 'A', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'a' 1")
+        r = k.Item('r', 'R', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'r' 1", recorrente=True)
+        s = k.Saida(); s.dados = {'ja:a': True, 'ja:r': True}
+        ctx = mock.Mock(t=mock.Mock(), mult=1.0, ja=None)
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s) as m:
+            k.confere_itens(ctx, [a, r], 'x')
+            self.assertNotIn("ja:r", m.call_args.args[1])
+        self.assertIs(a.ja, True); self.assertIsNone(r.ja)
+
     def test_confere_marca_o_que_ja_esta_feito_e_nao_marca_de_novo(self):
         a = k.Item('a', 'A', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'a' 1")
         b = k.Item('b', 'B', 'x', nivel=1, ps="Set-Valor 'HKCU:\\X' 'b' 1")

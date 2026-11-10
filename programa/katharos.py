@@ -22,7 +22,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '3.0.0'
+VERSAO = '3.0.1'
 DATA_VERSAO = '10 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -3693,12 +3693,13 @@ class Item:
     nota: o que este PC tem que mudou a recomendação."""
 
     def __init__(self, id, titulo, explica, ganho='', custo='', nivel=1, ps=None, py=None, minutos=3,
-                 sozinho=False, grupo=None, nota='', reverte=True, dados=None, conflita=(), alerta=''):
+                 sozinho=False, grupo=None, nota='', reverte=True, dados=None, conflita=(), alerta='', recorrente=False):
         self.id, self.titulo, self.explica, self.ganho, self.custo = id, titulo, explica, ganho, custo
         self.nivel, self.ps, self.py, self.minutos, self.sozinho = nivel, ps, py, minutos, sozinho
         self.grupo, self.nota, self.reverte, self.dados = grupo, nota, reverte, dados
         self.conflita = set(conflita)  # ids que não fazem sentido junto com este (marcar este desmarca aqueles)
         self.alerta = alerta  # o que pode dar problema depois (ex.: anti-cheat), mostrado em amarelo
+        self.recorrente = recorrente  # ação que se repete (limpar, otimizar): nunca conta como "já feito", porque o PC volta a precisar
         self.marcado = False
 
 
@@ -3786,7 +3787,7 @@ def _detalhe_item(t, it):
 
 def confere_itens(ctx, itens, pacote_=None):
     """Antes de aplicar: roda os itens em modo teste (nada muda) e marca em cada um it.ja = True (o PC já está assim),
-    False (ainda falta) ou None (não dá para conferir sem aplicar: itens de Python, que rodam sozinhos, ou que deram erro).
+    False (ainda falta) ou None (não entra na conta: itens de Python, que rodam sozinhos, ações que se repetem, ou que deram erro).
     Guarda em ctx.ja para não conferir duas vezes na mesma sessão."""
     cache = getattr(ctx, 'ja', None)
     if cache is None:
@@ -3798,7 +3799,7 @@ def confere_itens(ctx, itens, pacote_=None):
             i.ja = cache[chave]
             continue
         i.ja = None
-        if i.ps and not i.py and not i.sozinho:
+        if i.ps and not i.py and not i.sozinho and not i.recorrente:
             vs.append((chave, i))
     if not WINDOWS or not vs:
         return
@@ -5818,10 +5819,10 @@ if ($__q -match '(?m)^\s*(?:NTFS\s+)?DisableDeleteNotify\s*=\s*1') { if ($TESTE)
              'terminou de carregar.', 'boot e área de trabalho prontos mais cedo', 'esses serviços demoram ~2 min para subir', 2,
              "foreach ($__s in 'ClickToRunSvc','AdobeUpdateService','AGSService') { $__m = Get-ModoServico $__s; if ($__m -and $__m.modo -eq 'auto') { Set-Servico $__s 'delayed-auto' | Out-Null } }"),
         Item('boot-hd', 'reorganizar os arquivos do boot no HD', 'O Windows junta no HD os arquivos do boot e dos programas mais usados.',
-             'boot e abertura mais rápidos em HD', 'demora até 30 min', 2, py=boot_hd) if hd else None,
+             'boot e abertura mais rápidos em HD', 'demora até 30 min', 2, py=boot_hd, recorrente=True) if hd else None,
         Item('unidade', 'otimizar a unidade', 'Desfragmenta se for HD; se for SSD, só manda o TRIM (nunca desfragmenta SSD).',
              'disco mais rápido' + (' (HD fragmentado é muito lento)' if hd else ''), 'demora' + (' (até 2 h em HD)' if hd else ' pouco'),
-             1, py=otimiza_unidade),
+             1, py=otimiza_unidade, recorrente=True),
         Item('pagefile', 'memória virtual de volta ao automático', 'O arquivo de paginação está desligado ou fixo. Ninguém recomenda '
              'desligar: programas fecham sozinhos sem ele.', 'estabilidade', 'nenhum', 1, r'''
 $__c = Get-CimInstance Win32_ComputerSystem
@@ -6020,7 +6021,7 @@ def itens_interface(ctx):
         Item('este-pc', 'ícone "Este Computador" na área de trabalho', 'Mostra o atalho para os discos.', 'acesso rápido', 'nenhum', 2,
              R(icones, '{20D04FE0-3AEA-1069-A2D8-08002B30309D}', 0)),
         Item('limpa', 'área de trabalho só com a Lixeira', 'Todos os atalhos (.lnk e .url) da área de trabalho vão para o backup. '
-             'Arquivos e pastas seus ficam.', 'visual limpo', 'você abre programas pelo menu Iniciar', 3, limpa),
+             'Arquivos e pastas seus ficam.', 'visual limpo', 'você abre programas pelo menu Iniciar', 3, limpa, recorrente=True),
     ]
 
 
@@ -6983,7 +6984,8 @@ def ferramenta_aplicado(ctx, args):
     t = ctx.t
     t.aba('o que já está feito neste PC, área por área (feito pelo Katharos, por você ou por outro programa)')
     t.paragrafo('Cada ajuste é conferido do jeito que seria aplicado, só que sem gravar nada: se o PC já está como o ajuste deixaria, '
-                'ele conta como feito. Ajustes que só dá para saber aplicando (remover apps, limpar) ficam de fora.', 2, 'sub')
+                'ele conta como feito. Só entram ajustes que ficam gravados no Windows. Ações que se repetem (limpar disco, otimizar a unidade) '
+                'e as que só dá para saber aplicando ficam de fora, porque com o tempo o PC volta a precisar delas.', 2, 'sub')
     if not precisa_admin(ctx, args):
         return 1
     perfil_pc(ctx)

@@ -18,6 +18,12 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.0.1 · 10 de novembro de 2026
+
+Lista do que já está feito só com o que é definitivo.
+
+- **"Já feito" só conta ajuste que fica gravado no Windows**: ações que se repetem, como otimizar a unidade, reorganizar o boot no HD e limpar a área de trabalho, não entram na lista do `aplicado` nem aparecem como feitas no `turbo`, porque com o tempo o PC volta a precisar delas.
+
 ## 3.0.0 · 10 de novembro de 2026
 
 Três escolhas só: seguro, equilibrado e extremo. Jogos vêm dentro delas.
