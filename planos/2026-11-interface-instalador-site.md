@@ -13,7 +13,7 @@ cada tarefa tem um código; quando ficar pronta, marque `[x]`, anote no **Regist
 | 1 | motor com API (o Python conversa com a interface por JSON) | a fazer |
 | 2 | o aplicativo com janelas (Katharos.App), com o painel dentro dele | a fazer |
 | 2b | raio-x mais completo e otimizações guiadas por evidência | a fazer |
-| 2c | prova em jogo: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | a fazer |
+| 2c | prova em jogo: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver; notebook na tomada e na bateria | a fazer |
 | 3 | o segundo plano dentro do aplicativo | a fazer |
 | 4 | instalador e atualização (Velopack) | a fazer |
 | 5 | publicação dos dois produtos e assinatura do executável | a fazer |
@@ -264,6 +264,15 @@ Travadas por driver:
 - [ ] **2c.11** Rodar sozinho uma vez quando a sessão de jogo tiver travadas sem nenhum limite (CPU, GPU, RAM, disco e calor normais) e
   entrar no raio-x como achado.
 
+Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pessoa ligar**):
+- [ ] **2c.12** Opção "trocar o perfil sozinho na tomada e na bateria", desligada até a pessoa ligar (na interface, nas Configurações e
+  na primeira abertura num notebook, com uma frase do que faz; na CLI, `config energia-automatica sim`). Só aparece em notebook.
+- [ ] **2c.13** Na tomada: o perfil de desempenho do modo escolhido. Na bateria: economia (plano equilibrado ou economia de energia,
+  processador com teto mais baixo, brilho e efeitos como a pessoa definir). O segundo plano percebe a troca na hora e aplica.
+- [ ] **2c.14** Mostrar a troca (aviso discreto no ícone: "na bateria: economia") e permitir travar um perfil por um tempo ("manter
+  desempenho por 1 hora na bateria").
+- [ ] **2c.15** Tudo pelo `powercfg` e pelo que o pacote energia já guarda para desfazer; desligar a opção volta o plano de antes.
+
 ### Fase 3: o segundo plano dentro do aplicativo
 - [ ] **3.1** Levar o código de `exe/Katharos.cs` (leitura, regras, sessões, minutos, ícone, painel ao vivo, sensores externos) para o
   aplicativo, como um modo `--segundo-plano` do mesmo executável. Mantém os formatos de `agora.json`, `minutos.jsonl` e `sessoes.jsonl`.
@@ -349,4 +358,5 @@ Travadas por driver:
 | 10 nov 2026 | plano escrito | 3.1.2 | (este commit) | pesquisa: Velopack, Avalonia/WPF, assinatura, Astro + shadcn + Magic UI |
 | 10 nov 2026 | plano ampliado: painel dentro da interface (D8), fácil para leigos (D9), fase 2b (raio-x e otimizações) | 3.1.2 | 5380a0f | pedido do usuário |
 | 10 nov 2026 | bibliotecas de referência grátis no lugar do Magic (21st.dev) | 3.1.2 | 960b503 | shadcn MCP, Magic UI MCP, React Bits, Aceternity, Context7 |
-| 10 nov 2026 | fase 2c: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | 3.1.2 | (este commit) | pedido do usuário (itens 1, 2, 3 e 5 das sugestões) |
+| 10 nov 2026 | fase 2c: teste no PC real, FPS de verdade, antes e depois por jogo, travadas por driver | 3.1.2 | 014ff01 | pedido do usuário (itens 1, 2, 3 e 5 das sugestões) |
+| 10 nov 2026 | 2c.12 a 2c.15: notebook na tomada e na bateria, desligado por padrão | 3.1.2 | (local, sem commit) | pedido do usuário (item 6); não publicar |
