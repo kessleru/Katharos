@@ -56,6 +56,9 @@ jobs:
           $p = Start-Process .\Katharos.exe -ArgumentList '--teste-custo', "$d\teste-custo.txt", '30' -Wait -PassThru
           Get-Content "$d\teste-custo.txt"
           if ($p.ExitCode) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
+          $p = Start-Process .\Katharos.exe -ArgumentList '--teste-no-pc', "$d\teste-no-pc.txt" -Wait -PassThru
+          Get-Content "$d\teste-no-pc.txt"
+          if ($p.ExitCode) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--teste-externos', "$d\teste-externos.txt" -Wait -PassThru
           Get-Content "$d\teste-externos.txt"
           if ($p.ExitCode) { exit 1 }

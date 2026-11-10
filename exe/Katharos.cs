@@ -2660,6 +2660,14 @@ namespace KatharosApp
         // próprio processo; e confere a lista de processos da chamada direta contra a do .NET. Roda no CI e no PC real (teste-no-pc).
         public static int TesteCusto(string destino, int n)
         {
+            bool listaOk, leve;
+            var res = MedeCusto(n, out listaOk, out leve);
+            K.GravaAtomico(destino, string.Join("\r\n", res.ToArray()) + "\r\n");
+            return listaOk && leve ? 0 : 1;
+        }
+
+        static List<string> MedeCusto(int n, out bool listaOk, out bool leve)
+        {
             var cfg = Config.Le();
             var l = new Leitor { Espacar = true };
             var sw = new Stopwatch(); var passos = new List<double>();
@@ -2686,8 +2694,8 @@ namespace KatharosApp
             using (var eu = Process.GetCurrentProcess()) { euPid = eu.Id; minhaSessao = eu.SessionId; }
             foreach (var p in Process.GetProcesses()) { net++; if (pids.Contains(p.Id)) achados++; p.Dispose(); }
             foreach (var p in direta) if (p.Pid == euPid) { meuNome = p.Nome; if (p.Sessao != minhaSessao) meuNome += " (sessão errada)"; }
-            bool listaOk = direta.Count > 0 && achados >= net * 0.9 && meuNome == "Katharos";
-            bool leve = media < 50 && cpuPct < 2;
+            listaOk = direta.Count > 0 && achados >= net * 0.9 && meuNome == "Katharos";
+            leve = media < 50 && cpuPct < 2;
             var res = new List<string>();
             res.Add("leituras: " + passos.Count + " (depois das 3 de aquecimento), " + Environment.ProcessorCount + " núcleos, " + Environment.OSVersion.VersionString);
             res.Add("por leitura: média " + media.ToString("0.0", K.INV) + " ms, 95% abaixo de " + p95.ToString("0.0", K.INV) + " ms, maior " + maior.ToString("0.0", K.INV) + " ms");
@@ -2696,8 +2704,92 @@ namespace KatharosApp
                 res.Add("  " + kv.Key + ": média " + (kv.Value[1] / Math.Max(1, kv.Value[0])).ToString("0.00", K.INV) + " ms, maior " + kv.Value[2].ToString("0.0", K.INV) + " ms");
             res.Add("lista de processos direta: " + direta.Count + " (o .NET vê " + net + ", " + achados + " em comum), eu = " + (meuNome ?? "não achei") + (listaOk ? " ok" : " ERRADO"));
             res.Add(leve ? "leve ok" : "PESADO: média acima de 50 ms ou CPU acima de 2 %");
-            K.GravaAtomico(destino, string.Join("\r\n", res.ToArray()) + "\r\n");
-            return listaOk && leve ? 0 : 1;
+            return res;
+        }
+
+        // Teste no PC de verdade (fase 2c.1): tudo o que dá para conferir sem a pessoa, num relatório só, em ~/.katharos/teste-no-pc.txt.
+        // Cada linha diz o que foi visto e de onde veio; "?" quando não deu para saber. Nada é mudado no PC.
+        public static int TesteNoPc(string destino)
+        {
+            var r = new List<string>();
+            Action<string> L = delegate (string x) { r.Add(x); };
+            L("Katharos " + K.VERSAO + " · teste no PC · " + DateTime.Now.ToString("dd/MM/yyyy HH:mm", K.INV));
+            L("Windows: " + Environment.OSVersion.VersionString + (Environment.Is64BitOperatingSystem ? " 64 bits" : " 32 bits") + " · " + Environment.ProcessorCount + " núcleos");
+            L("");
+            L("[segundo plano]");
+            bool rodando = false;
+            try { Mutex m; rodando = Mutex.TryOpenExisting(K.MUTEX, out m); if (m != null) m.Dispose(); } catch { }
+            L("rodando agora: " + (rodando ? "sim" : "não"));
+            try { using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) L("abre com o Windows: " + (k != null && k.GetValue("Katharos") != null ? "sim" : "não")); } catch { L("abre com o Windows: ?"); }
+            try
+            {
+                string ag = K.Arq("agora.json");
+                if (File.Exists(ag))
+                {
+                    var d = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(ag, Encoding.UTF8)) as Dictionary<string, object>;
+                    object q, sp; d.TryGetValue("quando", out q); d.TryGetValue("segundo_plano", out sp);
+                    L("última leitura gravada: " + q);
+                    var spd = sp as Dictionary<string, object>;
+                    if (spd != null) L("custo gravado pelo segundo plano: leitura " + Convert.ToString(spd.ContainsKey("leitura_ms") ? spd["leitura_ms"] : "?", K.INV) + " ms, CPU " +
+                                       Convert.ToString(spd.ContainsKey("cpu_pct") ? spd["cpu_pct"] : "?", K.INV) + " %, RAM " + Convert.ToString(spd.ContainsKey("ram_mb") ? spd["ram_mb"] : "?", K.INV) + " MB");
+                }
+                else L("agora.json: não existe (o segundo plano nunca rodou nesta conta)");
+                foreach (var nome in new[] { "minutos.jsonl", "sessoes.jsonl" })
+                {
+                    string a = K.Arq(nome);
+                    L(nome + ": " + (File.Exists(a) ? File.ReadAllLines(a).Length + " linhas" : "não existe"));
+                }
+            }
+            catch (Exception e) { L("arquivos do segundo plano: erro " + e.Message); }
+            L("");
+            L("[temperatura]");
+            var lista = new Processos().Le(); var abertos = new HashSet<string>();
+            foreach (var p in lista) abertos.Add(p.Nome.ToLowerInvariant());
+            foreach (var prog in new[] { "MSIAfterburner", "HWiNFO64", "LibreHardwareMonitor", "CoreTemp", "aida64", "RTSS" })
+                if (abertos.Contains(prog.ToLowerInvariant())) L("aberto: " + prog);
+            var ext = Externos.Le();
+            L("dos programas de monitoramento: CPU " + (ext.Cpu.HasValue ? ext.Cpu + " °C (" + ext.CpuFonte + ")" : "nada") + ", GPU " + (ext.Gpu.HasValue ? ext.Gpu + " °C (" + ext.GpuFonte + ")" : "nada"));
+            var leitor = new Leitor();
+            Amostra am = null;
+            for (int i = 0; i < 3; i++) { am = leitor.Le(Config.Le(), false); Thread.Sleep(1000); }
+            L("o que o Katharos usa: CPU " + (am.TempCpu.HasValue ? am.TempCpu + " °C (" + am.TempCpuFonte + ")" : "sem leitura") + ", GPU " + (am.TempGpu.HasValue ? am.TempGpu + " °C (" + am.TempGpuFonte + ")" : "sem leitura"));
+            L("compare com o que o MSI Afterburner (ou o HWiNFO) mostra agora: a diferença deve ser de 1 ou 2 °C");
+            L("");
+            L("[leitura agora]");
+            L("CPU " + K.Num(am.Cpu, 0) + " % (núcleo mais usado " + K.Num(am.NucleoMax, 0) + " %, " + K.Num(am.CpuGhz, 2) + " GHz) · GPU " + K.Num(am.Gpu, 0) + " % · VRAM " +
+              K.Num(am.VramGb, 1) + " de " + K.Num(am.VramTotalGb, 1) + " GB · RAM " + K.Num(am.RamPct, 0) + " % · disco " + K.Num(am.Disco, 0) + " %");
+            L("processos: " + am.Processos + " · ligado há " + K.Num(am.UptimeH, 1) + " h" + (am.Manutencao != null ? " · manutenção do Windows rodando: " + am.Manutencao : ""));
+            L("");
+            L("[FPS nos jogos]");
+            string pm = Fps.Caminho();
+            L("PresentMon: " + (pm == null ? "não encontrado" : pm + (Fps.Confere(pm) ? " (impressão digital ok)" : " (IMPRESSÃO DIGITAL DIFERENTE: não vai rodar)")));
+            bool grupo = false;
+            try { grupo = new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(new System.Security.Principal.SecurityIdentifier("S-1-5-32-559")); } catch { }
+            L("permissão (grupo Usuários de log de desempenho, valendo nesta sessão): " + (grupo ? "sim" : "não (Katharos > segundo plano > f; depois saia e entre na conta)"));
+            L("");
+            L("[energia]");
+            var ps = SystemInformation.PowerStatus;
+            bool bat = ps.BatteryChargeStatus != BatteryChargeStatus.NoSystemBattery;
+            L(bat ? "bateria: " + (int)(ps.BatteryLifePercent * 100) + " %, " + (ps.PowerLineStatus == PowerLineStatus.Offline ? "na bateria" : "na tomada") : "sem bateria (desktop)");
+            var cfg = Config.Le();
+            L("troca automática de plano: " + (cfg.EnergiaAuto ? "ligada (" + cfg.EnergiaTomadaNome + " / " + cfg.EnergiaBateriaNome + ")" : "desligada"));
+            var ativo = Energia.Ativo();
+            L("plano ativo: " + (ativo.HasValue ? ativo.Value.ToString() : "?") + (cfg.EnergiaAuto && ativo.HasValue ? (ativo == cfg.EnergiaTomada ? " = o da tomada" : ativo == cfg.EnergiaBateria ? " = o da bateria" : " = NENHUM dos escolhidos") : ""));
+            L("");
+            L("[peso do segundo plano: 30 leituras no ritmo de 1 s]");
+            bool listaOk, leve;
+            foreach (var x in MedeCusto(30, out listaOk, out leve)) L(x);
+            L("");
+            L("[o que só você pode conferir: anote ao lado]");
+            L("1. o ícone aparece perto do relógio e o painel abre no clique: ");
+            L("2. jogue 10 min; depois, `katharos segundo-plano`: a sessão aparece com o jogo certo e o limite (compare com o Afterburner): ");
+            L("3. FPS médio do Katharos x o do overlay do Afterburner/RTSS (diferença de até 5 %): ");
+            L("4. pausar e voltar no menu do ícone; trocar o ritmo para 5 s: ");
+            L("5. reiniciar o PC: o ícone volta sozinho: ");
+            L("6. o Windows (SmartScreen ou antivírus) avisou algo ao abrir? o quê: ");
+            L("7. notebook: tirar e pôr o carregador com a troca ligada; o ícone avisa o plano (ou o erro): ");
+            K.GravaAtomico(destino, string.Join("\r\n", r.ToArray()) + "\r\n");
+            return listaOk ? 0 : 1;
         }
 
         public static int TesteFps(string destino)
@@ -2767,6 +2859,18 @@ namespace KatharosApp
             {
                 try { int i = lista.IndexOf("--teste-fps"); return Testes.TesteFps(i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-fps.txt")); }
                 catch (Exception e) { Log.Escreve("teste fps: " + e); return 3; }
+            }
+            if (lista.Contains("--teste-no-pc"))
+            {
+                try
+                {
+                    int i = lista.IndexOf("--teste-no-pc");
+                    string dest = i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-no-pc.txt");
+                    int c = Testes.TesteNoPc(dest);
+                    if (i + 1 >= lista.Count) try { Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true }); } catch { }   // sem destino: abre o relatório no Bloco de Notas
+                    return c;
+                }
+                catch (Exception e) { Log.Escreve("teste no pc: " + e); return 3; }
             }
             if (lista.Contains("--teste-custo"))
             {

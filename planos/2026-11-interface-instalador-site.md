@@ -351,6 +351,9 @@ Teste no PC real (primeiro, antes de tudo o que vem abaixo):
 - [ ] **2c.1** Roteiro de teste no kesslerupc, com a pessoa jogando: `Katharos.exe --sensores` com o MSI Afterburner aberto (temperatura da
   CPU), ícone e painel ao vivo, sessão de jogo gravada e o limite certo (comparar com o que o Afterburner mostra), migração do acompanhamento
   contínuo, aviso do SmartScreen, pausar, ritmo, sair e voltar no próximo início do Windows.
+  Pronto para rodar: `Katharos.exe --teste-no-pc` (ou `segundo-plano`, opção t) lê o PC por 40 s sem mudar nada e grava
+  `~/.katharos/teste-no-pc.txt` com segundo plano, temperatura e de onde veio, FPS (PresentMon conferido, permissão valendo), energia,
+  peso do segundo plano e a lista do que só a pessoa confere. Roda também no CI. Falta rodar no kesslerupc.
 - [ ] **2c.2** Anotar o resultado de cada ponto (funcionou, falhou, com print) na ficha do kesslerupc no cofre e corrigir o que falhar,
   com teste novo para cada falha.
 
@@ -631,3 +634,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | 2c.12 a 2c.15: notebook troca o plano de energia na tomada e na bateria, desligado até ligar (`segundo-plano` opção e, `config energia-automatica`); só troca o plano ativo (sem administrador); "manter desempenho 1 h" no ícone; desligar volta o plano de antes | 3.1.2 | ramo v4 | testes |
 | 10 nov 2026 | S4 começado: sem falso positivo na energia (prova ao ligar, leitura de volta na hora e 15 s depois) e na permissão de FPS | 3.1.2 | ramo v4 | testes 310 |
 | 10 nov 2026 | S5 começado: sem porta de rede, PowerShell pelo caminho completo, PresentMon conferido por SHA-256, Defender no CI; interface no design da landing (2.0) | 3.1.2 | ramo v4 | testes 316 |
+| 10 nov 2026 | 2c.1 preparado: `--teste-no-pc` (relatório do PC real, só lê) e opção t no `segundo-plano`; Defender limpo no CI (motor 1.1.26100.4) | 3.1.2 | ramo v4 | ensaio no Windows |

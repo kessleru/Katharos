@@ -475,7 +475,7 @@ def ferramenta_segundo_plano(ctx, args):
         return 0
     t.escreve()
     t.paragrafo('l = ligar (e abrir o painel) · d = desligar · r = ritmo (1, 2, 5 ou 10 s) · j = com jogo aberto (continuar ou pausar) · '
-                'a = avisos (sim ou não) · f = medir FPS nos jogos · e = notebook: energia sozinha na tomada e na bateria · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
+                'a = avisos (sim ou não) · f = medir FPS nos jogos · e = notebook: energia sozinha na tomada e na bateria · t = testar neste PC (relatório) · v = ver ao vivo aqui · Enter = voltar', 2, 'apagado')
     r = t.pergunta('fazer').strip().lower()[:1]
     if r == 'l':
         return 0 if instala_segundo_plano(ctx, mostrar=True) else 1
@@ -498,10 +498,34 @@ def ferramenta_segundo_plano(ctx, args):
         t.ok('Avisos: ' + config('avisos'))
     elif r == 'f':
         return liga_fps(ctx, args)
+    elif r == 't':
+        return teste_no_pc(ctx, exe)
     elif r == 'e':
         return desliga_energia_automatica(ctx) if config('energia-automatica', 'nao') == 'sim' else liga_energia_automatica(ctx, args)
     elif r == 'v':
         return ferramenta_aovivo(ctx, args)
+    return 0
+
+
+def teste_no_pc(ctx, exe):
+    """Roda o Katharos.exe --teste-no-pc (uns 40 s, só lê) e mostra o relatório: o que o segundo plano vê neste PC, quanto pesa, e a lista
+    do que só você pode conferir. O arquivo fica em ~/.katharos/teste-no-pc.txt."""
+    t = ctx.t
+    destino = CASA / 'teste-no-pc.txt'
+    t.nota('Lendo o PC por uns 40 segundos (nada muda). Se tiver o MSI Afterburner ou o HWiNFO, deixe aberto.')
+    try:
+        subprocess.run([str(exe), '--teste-no-pc', str(destino)], timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        t.erro(f'o teste não terminou: {e}')
+        return 1
+    try:
+        texto = destino.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        t.erro('o teste não gravou o relatório (veja ~/.katharos/segundo-plano.log).')
+        return 1
+    for linha in texto.splitlines():
+        t.escreve(linha)
+    t.ok(f'Relatório em {destino}. Anote o que só você pode conferir no fim dele.')
     return 0
 
 
