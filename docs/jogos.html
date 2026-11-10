@@ -35,6 +35,7 @@
     --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --largura: 1200px;
     --borda: max(16px, calc((100vw - var(--largura)) / 2));
+    --pad: clamp(20px, 2.4vw, 32px);
     --fora: clamp(0px, calc((100vw - var(--largura)) / 2 - 24px), 72px);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -91,7 +92,7 @@
   .botao.grande { padding: 16px 22px; font-size: 14px; }
 
   .cab { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .cab > * { padding: clamp(44px, 6vw, 72px) clamp(20px, 3vw, 40px) clamp(20px, 2.4vw, 28px); display: flex; flex-direction: column; justify-content: center; }
+  .cab > * { padding: clamp(32px, 4vw, 48px) var(--pad) clamp(16px, 2vw, 22px); display: flex; flex-direction: column; justify-content: center; }
   .cab h2 { font: 800 clamp(26px, 2.6vw, 34px)/1 var(--mono); color: var(--osso); letter-spacing: -.045em; }
   .cab h2 span { color: var(--ambar); }
   .cab h2 + p { margin-top: 10px; }
