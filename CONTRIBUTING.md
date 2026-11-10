@@ -66,6 +66,8 @@ O número tem três partes, MAIOR.MENOR.CORREÇÃO, e as regras de quando cada u
 
 É automático. Antes: suba `VERSAO` e a data em `partes/00-cabecalho.py`, escreva a entrada `## X.Y.Z` no CHANGELOG.md e faça o commit na `main` com os testes verdes. Depois, no GitHub: **Actions > publicar > Run workflow**. Deixe "publicar" desmarcado para um ensaio (confere tudo e mostra o texto da release, sem publicar nada) e marque para publicar de verdade. Também dá para empurrar a tag (`git tag vX.Y.Z && git push --tags`), que precisa ser igual a `v` + `VERSAO`.
 
+Os testes do GitHub (`testes`) só rodam quando você manda (Actions > testes > Run workflow), para não gastar minutos a cada commit: use em mudanças grandes e antes de publicar. Localmente, `python -m unittest discover -s tests` roda em segundos.
+
 O fluxo confere versão, changelog e hashes, roda os testes, monta o `Katharos.zip`, assina os arquivos (atestado de procedência do GitHub) e cria a release com o texto do changelog. Se a versão já foi publicada, ele para.
 
 ## Crédito

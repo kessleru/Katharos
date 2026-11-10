@@ -1,5 +1,7 @@
 name: testes
-on: [push, pull_request]
+# Só roda quando você manda (Actions > testes > Run workflow), para não gastar minutos do GitHub a cada commit.
+# Rodar em mudanças grandes e antes de publicar uma versão; os testes locais (python -m unittest) rodam em todo commit.
+on: workflow_dispatch
 jobs:
   python:
     # 3.8 é o mínimo prometido; o runner novo do Ubuntu não traz essa versão, por isso a 22.04 para ela.
