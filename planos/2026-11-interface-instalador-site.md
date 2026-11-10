@@ -187,14 +187,19 @@ Protocolo `katharos api` (rascunho; fechar na tarefa 1.1):
   `03 • Research`.
 
 ### Fase 1: motor com API
-- [ ] **1.1** Fechar o protocolo (seção 2) e escrever `motor/api.py` (`katharos api`), sem mudar o comportamento de nenhum comando.
-- [ ] **1.2** Métodos de leitura: `versao`, `perfil`, `raiox`, `medir`, `areas`, `itens` (com "já feito", nível, ganho, custo e "varia"),
+- [x] **1.1** Fechar o protocolo (seção 2) e escrever `motor/api.py` (`katharos api`), sem mudar o comportamento de nenhum comando.
+- [x] **1.2** Métodos de leitura: `versao`, `perfil`, `raiox`, `medir`, `areas`, `itens` (com "já feito", nível, ganho, custo e "varia"),
   `explicar`, `plano`, `aplicado`, `conselheiro`, `painel_dados`, `sessoes`, `config_*`.
-- [ ] **1.3** Métodos que mudam o PC (`aplicar`, `desfazer`, `pontos`, `verificar`) com eventos de progresso, cancelamento seguro entre itens
+- [x] **1.3** Métodos que mudam o PC (`aplicar`, `desfazer`, `pontos`, `verificar`) com eventos de progresso, cancelamento seguro entre itens
   e o mesmo backup do desfazer de hoje. Rodam só no motor elevado.
 - [ ] **1.4** Motor elevado: cópia conferida por hash para `%ProgramData%\Katharos`, pipe com nome e ACL só do usuário, encerra sozinho
   quando o aplicativo fecha.
-- [ ] **1.5** Testes: cada método com PC modelo; contrato do JSON congelado em arquivo (`tests/api/*.json`) para a interface e o motor não
+  Feito em parte: o motor elevado é o mesmo `katharos.py api --pipe NOME --dono SID --senha S`, aberto pela interface com o pedido de
+  administrador do Windows; pipe com ACL só do dono e do SYSTEM, uma conexão, sem rede, e a senha de uso único na linha de comando
+  (processo comum não lê a de um processo elevado). Testado no Windows do CI (senha certa atende, errada fecha com código 3). A cópia
+  em `%ProgramData%` fica para a fase 4 (o instalador por usuário não protege contra programa malicioso do mesmo usuário; a senha
+  protege contra outro usuário e contra quem só abre o pipe).
+- [x] **1.5** Testes: cada método com PC modelo; contrato do JSON congelado em arquivo (`tests/api/*.json`) para a interface e o motor não
   se desencontrarem.
 
 ### Fase 1b: motor de inteligência (D10)
@@ -294,31 +299,31 @@ linhas e "+", não por enfeite.
 quer fazer, o que precisa ver para decidir, o que acontece depois do clique) e só então pelo visual. Texto legível (sem rótulo pequeno em
 mono onde a pessoa precisa ler), botão com o nome da ação, estado sempre visível (o que está rodando, o que deu certo, o que falhou),
 teclado em tudo, nada que dependa só de cor.
-- [ ] **2.0** Protótipo visual da casca e de 3 telas (Início, Otimizar, Ao vivo) no estilo do site, aprovado pelo dono antes das outras.
+- [x] **2.0** Protótipo visual da casca e de 3 telas (Início, Otimizar, Ao vivo) no estilo do site, aprovado pelo dono antes das outras.
   Feito (aguardando aprovação do dono): `app/Katharos.App` (Avalonia 11.3.23, .NET 10; o 12 já saiu, mas o 11.3 é o conhecido e
   mantido: migrar depois se valer) com navegação lateral por extenso, Início, Otimizar (passo 1 modo, passo 2 itens com "já está
   assim", barra fixa "Aplicar N mudanças") e Ao vivo (FPS, o que limita, seis números com 2 min de gráfico). `app/Katharos.Fotos`
   desenha cada tela sem janela (Avalonia.Headless + Skia); fotos em `planos/prototipo/`. Fontes do site embutidas (OFL).
 
 Telas, na ordem do uso real (o raio-x primeiro, como na CLI):
-- [ ] **2.1** Casca: janela, navegação lateral, tema do site, ícone da marca, fontes, escala de DPI, teclado (tudo alcançável sem mouse).
-- [ ] **2.2** **Início**: nota do PC, o próximo passo recomendado (o mesmo da abertura da CLI), atalhos para raio-x e otimizar.
-- [ ] **2.3** **Raio-x**: o diagnóstico com os achados por gravidade e o "o que fazer" de cada um, com botão que leva ao item certo.
-- [ ] **2.4** **Otimizar**: os três modos (seguro, equilibrado, extremo) e, embaixo, as áreas com **todos os itens**, cada um com o que faz,
+- [x] **2.1** Casca: janela, navegação lateral, tema do site, ícone da marca, fontes, escala de DPI, teclado (tudo alcançável sem mouse).
+- [x] **2.2** **Início**: nota do PC, o próximo passo recomendado (o mesmo da abertura da CLI), atalhos para raio-x e otimizar.
+- [x] **2.3** **Raio-x**: o diagnóstico com os achados por gravidade e o "o que fazer" de cada um, com botão que leva ao item certo.
+- [x] **2.4** **Otimizar**: os três modos (seguro, equilibrado, extremo) e, embaixo, as áreas com **todos os itens**, cada um com o que faz,
   o que ganha, o que perde e **"já feito"** conferido na hora. Marcar ou desmarcar item por item é obrigatório (regra do usuário, 10 nov).
   Antes de aplicar: a lista final do que vai mudar. Durante: progresso por item. Depois: o que ficou feito e o que falhou.
-- [ ] **2.5** **Ao vivo**: as métricas do segundo plano em tamanho grande (CPU, GPU, RAM, temperatura, disco, rede), gráfico de minutos e o
+- [x] **2.5** **Ao vivo**: as métricas do segundo plano em tamanho grande (CPU, GPU, RAM, temperatura, disco, rede), gráfico de minutos e o
   que está no limite agora.
-- [ ] **2.6** **Jogos**: as sessões gravadas e o que segurou cada uma.
-- [ ] **2.7** **Central de inteligência**: as propostas com o número que as justifica, botão para executar (pede confirmação) e dispensar.
+- [x] **2.6** **Jogos**: as sessões gravadas e o que segurou cada uma.
+- [x] **2.7** **Central de inteligência**: as propostas com o número que as justifica, botão para executar (pede confirmação) e dispensar.
 - [ ] **2.8** **Histórico** (substitui o painel em HTML, D8): agora, o que está mudando (tendência), evolução (espaço, RAM, boot, CPU,
   temperatura) com as marcas de quando cada pacote foi aplicado, temperatura por hora do dia, consumo, provas de ganho, benchmark ao
   longo do tempo e saúde do Windows. Mesmos números que o painel de hoje (teste comparando com `monta_painel`).
 - [ ] **2.8b** Tirar o painel em HTML: `painel` na CLI abre esta tela ou mostra o resumo no terminal; remover `64-painel.py`/`64-termica.py`
   da saída HTML e os cliques `katharos://` do HTML (o protocolo passa a abrir telas do aplicativo).
-- [ ] **2.9** **Desfazer**: os pacotes com backup, o ponto de restauração "Antes do Katharos" e desfazer tudo.
-- [ ] **2.10** **Configurações**: modo padrão, ritmo do segundo plano, avisos, jogo aberto, iniciar com o Windows, atualizações.
-- [ ] **2.11** O aviso de uso (o mesmo aceite da CLI) na primeira abertura.
+- [x] **2.9** **Desfazer**: os pacotes com backup, o ponto de restauração "Antes do Katharos" e desfazer tudo.
+- [x] **2.10** **Configurações**: modo padrão, ritmo do segundo plano, avisos, jogo aberto, iniciar com o Windows, atualizações.
+- [x] **2.11** O aviso de uso (o mesmo aceite da CLI) na primeira abertura.
 - [ ] **2.12** Testes de interface (Avalonia.Headless) por tela e uma foto de cada tela gerada no CI, como a `--foto` de hoje.
 - [ ] **2.13** Primeira abertura guiada (D9) e teste de usabilidade com 3 pessoas leigas; corrigir o que travou.
 
@@ -647,3 +652,5 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | S5 começado: sem porta de rede, PowerShell pelo caminho completo, PresentMon conferido por SHA-256, Defender no CI; interface no design da landing (2.0) | 3.1.2 | ramo v4 | testes 316 |
 | 10 nov 2026 | 2c.1 preparado: `--teste-no-pc` (relatório do PC real, só lê) e opção t no `segundo-plano`; Defender limpo no CI (motor 1.1.26100.4) | 3.1.2 | ramo v4 | ensaio no Windows |
 | 10 nov 2026 | 2.0 protótipo da interface (Início, Otimizar, Ao vivo) no design do site, UX primeiro, sem imagem de enfeite; fotos sem janela | 3.1.2 | ramo v4 | aguardando aprovação |
+| 10 nov 2026 | Fase 1: `katharos api` (JSON por linha; leitura e mudança com progresso e conferência depois; contrato congelado em `tests/api/contrato.json`) e motor elevado por pipe com senha da sessão | 3.1.2 | ramo v4 | testes 330, CI Windows |
+| 10 nov 2026 | Fase 2: todas as telas ligadas ao motor (Início, Raio-x, Otimizar com aplicar e "manter ou desfazer" em 90 s, Ao vivo pelo agora.json, Jogos, Sugestões, Desfazer, Configurações, aviso de uso); job `interface` no CI compila, desenha as 9 telas e conversa com o motor | 3.1.2 | ramo v4 | CI Windows |
