@@ -18,6 +18,13 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 3.1.2 · 10 de novembro de 2026
+
+Menu do ícone mais curto, só com o que se resolve num clique.
+
+- **Menu do ícone enxuto**: painel ao vivo, abrir o Katharos, pausar por 1 hora, ritmo da leitura (1, 2, 5 ou 10 s), avisos ligados ou não, iniciar com o Windows e sair. Turbo, raio-x, limpar, desfazer e o resto ficam no Katharos, a um clique em "Abrir o Katharos".
+- Ritmo e avisos mudados no ícone valem na hora e ficam salvos nas preferências do Katharos (as mesmas do `config`).
+
 ## 3.1.1 · 10 de novembro de 2026
 
 Temperatura da CPU onde o Windows não mostra, e o painel do ícone com X.

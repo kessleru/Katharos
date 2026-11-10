@@ -45,14 +45,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Katharos: abre o otimizador e acompanha o PC em segundo plano")]
 [assembly: AssemblyCompany("Katharos, código aberto (github.com/kessleru/Katharos)")]
 [assembly: AssemblyCopyright("Licença MIT")]
-[assembly: AssemblyVersion("3.1.1.0")]
-[assembly: AssemblyFileVersion("3.1.1.0")]
+[assembly: AssemblyVersion("3.1.2.0")]
+[assembly: AssemblyFileVersion("3.1.2.0")]
 
 namespace KatharosApp
 {
     static class K
     {
-        public const string VERSAO = "3.1.1";
+        public const string VERSAO = "3.1.2";
         public const string MUTEX = "Local\\KatharosSegundoPlano";
         public const string EV_SAIR = "Local\\KatharosSegundoPlanoSair";
         public const string EV_MOSTRAR = "Local\\KatharosSegundoPlanoMostrar";
@@ -1566,7 +1566,7 @@ namespace KatharosApp
         readonly PainelAoVivo painel;
         readonly Icon marca, marcaPequena;
         readonly Control ui = new Control();
-        ToolStripMenuItem iStatus, iPausa, iInicio;
+        ToolStripMenuItem iStatus, iPausa, iInicio, iAvisos, iRitmo;
         IntPtr iconeAtual = IntPtr.Zero; string estadoIcone = "";
         readonly Dictionary<string, DateTime> avisado = new Dictionary<string, DateTime>();
         DateTime proxPropostas = DateTime.Now.AddMinutes(2);
@@ -1626,24 +1626,26 @@ namespace KatharosApp
         {
             menu.Renderer = new Desenho(); menu.ShowImageMargin = false; menu.ShowCheckMargin = true;
             menu.Font = new Font("Segoe UI", 9f); menu.BackColor = Cor.Painel; menu.ForeColor = Cor.Texto;
-            var t = Item("Katharos " + K.VERSAO + ", acompanhando", null); t.Tag = "titulo"; t.Font = new Font("Segoe UI Semibold", 9f);
+            var t = Item("Katharos " + K.VERSAO, null); t.Tag = "titulo"; t.Font = new Font("Segoe UI Semibold", 9f);
             iStatus = Item("lendo...", null);
             menu.Items.Add(new ToolStripSeparator());
             Item("Painel ao vivo", delegate { painel.Mostra(); });
             Item("Abrir o Katharos", delegate { Abre(new string[0]); });
-            Item("Central de inteligência", delegate { Abre(new[] { "conselheiro" }); });
-            Item("Gráficos do PC e dos jogos", delegate { Abre(new[] { "painel" }); });
-            Item("Ao vivo no terminal", delegate { Abre(new[] { "aovivo" }); });
-            Item("Raio-x", delegate { Abre(new[] { "raiox" }); });
-                        menu.Items.Add(new ToolStripSeparator());
-            Item("Turbo", delegate { Abre(new[] { "turbo" }); });
-            Item("Conferir se os ajustes continuam", delegate { Abre(new[] { "verificar" }); });
-            Item("Limpar", delegate { Abre(new[] { "limpar" }); });
-            Item("Desfazer mudanças", delegate { Abre(new[] { "desfazer" }); });
             menu.Items.Add(new ToolStripSeparator());
+            // o que é do próprio ícone e se resolve num clique; o resto está no Katharos
             iPausa = Item("Pausar por 1 hora", delegate { AlternaPausa(); });
+            iRitmo = new ToolStripMenuItem("Ler a cada");
+            foreach (var seg in new[] { "1", "2", "5", "10" })
+            {
+                var x = new ToolStripMenuItem(seg + " s"); x.Tag = seg;
+                x.Click += delegate (object o, EventArgs e) { MudaConfig("tempo-real", (string)((ToolStripItem)o).Tag); };
+                iRitmo.DropDownItems.Add(x);
+            }
+            iRitmo.DropDown.BackColor = Cor.Painel; ((ToolStripDropDownMenu)iRitmo.DropDown).ShowImageMargin = false; ((ToolStripDropDownMenu)iRitmo.DropDown).ShowCheckMargin = true;
+            iRitmo.DropDown.Renderer = new Desenho();
+            menu.Items.Add(iRitmo);
+            iAvisos = Item("Avisar quando algo ficar no limite", delegate { MudaConfig("avisos", motor.Cfg.Notificar ? "nao" : "sim"); });
             iInicio = Item("Iniciar com o Windows", delegate { AlternaInicio(); });
-            Item("Abrir a pasta dos dados", delegate { try { Process.Start("explorer.exe", K.Q(K.CASA)); } catch { } });
             menu.Items.Add(new ToolStripSeparator());
             Item("Sair do segundo plano", delegate { Sai(); });
             menu.Opening += delegate { AtualizaMenu(); };
@@ -1653,6 +1655,32 @@ namespace KatharosApp
         {
             iPausa.Text = Motor.LeituraPausada() ? "Retomar agora" : "Pausar por 1 hora";
             iInicio.Checked = IniciaComWindows();
+            iAvisos.Checked = motor.Cfg.Notificar;
+            string atual = (motor.Cfg.IntervaloMs / 1000).ToString(K.INV);
+            iRitmo.Text = "Ler a cada " + atual + " s";
+            foreach (ToolStripMenuItem x in iRitmo.DropDownItems) x.Checked = (string)x.Tag == atual;
+        }
+
+        // muda a preferência no mesmo arquivo do Katharos (config.json) e na config do segundo plano; vale na hora
+        void MudaConfig(string chave, string valor)
+        {
+            try
+            {
+                var js = new JavaScriptSerializer();
+                foreach (var nome in new[] { "config.json", "segundo-plano.json" })
+                {
+                    string arq = K.Arq(nome);
+                    Dictionary<string, object> d = null;
+                    if (File.Exists(arq)) d = js.DeserializeObject(File.ReadAllText(arq, Encoding.UTF8)) as Dictionary<string, object>;
+                    if (d == null) d = new Dictionary<string, object>();
+                    if (nome == "config.json") d[chave] = valor;
+                    else if (chave == "tempo-real") d["intervalo_s"] = double.Parse(valor, K.INV);
+                    else if (chave == "avisos") d["notificar"] = valor;
+                    K.GravaAtomico(arq, js.Serialize(d));
+                }
+                motor.Cfg = Config.Le();
+            }
+            catch (Exception e) { Log.Escreve("preferência: " + e.Message); }
         }
 
         static bool IniciaComWindows()

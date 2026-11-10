@@ -43,7 +43,7 @@ O Windows pode avisar "aplicativo não reconhecido" na primeira vez: é o aviso 
 
 `segundo-plano` (no menu: mais › acompanhamento) liga o **Katharos.exe perto do relógio**, com o ícone da marca. Ele lê o PC sem parar, no ritmo que você escolher (`config tempo-real`: 1, 2, 5 ou 10 s): CPU por núcleo e a frequência de verdade, placa de vídeo (uso e memória), RAM, disco, rede, temperatura e bateria.
 
-- **Clique no ícone**: o painel ao vivo, com gráfico dos últimos 2 minutos de cada métrica, o que está no limite agora e o que a central de inteligência propõe. Botão direito: atalhos (turbo, raio-x, verificar, limpar, desfazer, pausar, iniciar com o Windows).
+- **Clique no ícone**: o painel ao vivo, com gráfico dos últimos 2 minutos de cada métrica, o que está no limite agora e o que a central de inteligência propõe. Botão direito: o que se resolve num clique (abrir o Katharos, pausar, ritmo da leitura, avisos, iniciar com o Windows, sair).
 - **Jogos**: ele percebe quando há um jogo aberto (quem usa a placa de vídeo, na frente ou em tela cheia) e grava a sessão: quanto tempo, o que ficou no limite (placa de vídeo, CPU, CPU freando, RAM, memória de vídeo, disco, calor).
 - **Central de inteligência** (`conselheiro`): aprende com as sessões e com as últimas 24 horas minuto a minuto. Exemplo: "a CPU segura seus jogos em 40 % do tempo" vira uma proposta com o comando que resolve.
 - **Painel** (`painel`): seção "Ao vivo e jogos", com as últimas 24 horas e a tabela das sessões.
