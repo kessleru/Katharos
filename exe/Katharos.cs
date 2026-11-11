@@ -2313,6 +2313,8 @@ namespace KatharosApp
             MontaMenu();
             ni.Icon = marcaPequena; ni.Text = "Katharos"; ni.ContextMenuStrip = menu; ni.Visible = true;
             ni.MouseUp += delegate (object o, MouseEventArgs e) { if (e.Button == MouseButtons.Left) AlternaPainel(); };
+            // clicar no aviso abre o Katharos com janelas na tela certa (ou o terminal, na versão de terminal)
+            ni.BalloonTipClicked += delegate { AbreJanela("aovivo"); };
             motor.Atualizou += delegate { try { ui.BeginInvoke(new Action(Atualiza)); } catch { } };
             motor.SessaoFechou += delegate { Pensa("fim de sessão de jogo"); };
             fio = new Thread(motor.Roda); fio.IsBackground = true; fio.Name = "leitura"; fio.Start();
@@ -2363,7 +2365,8 @@ namespace KatharosApp
             iStatus = Item("lendo...", null);
             menu.Items.Add(new ToolStripSeparator());
             Item("Painel ao vivo", delegate { painel.Mostra(); });
-            Item("Abrir o Katharos", delegate { Abre(new string[0]); });
+            Item("Abrir o Katharos", delegate { AbreJanela("inicio"); });
+            if (Janela() != null) Item("O que a central concluiu", delegate { AbreJanela("sugestoes"); });
             menu.Items.Add(new ToolStripSeparator());
             // o que é do próprio ícone e se resolve num clique; o resto está no Katharos
             iPausa = Item("Pausar por 1 hora", delegate { AlternaPausa(); });
@@ -2476,8 +2479,37 @@ namespace KatharosApp
             Abridor.Abre(args);
         }
 
+        /// <summary>O Katharos com janelas, quando este segundo plano veio com ele (instalado: app\Katharos.exe e app\motor\Katharos.exe).</summary>
+        static string Janela()
+        {
+            try
+            {
+                string pasta = Path.GetDirectoryName(Path.GetDirectoryName(Application.ExecutablePath));
+                string app = Path.Combine(pasta, "Katharos.exe");
+                return File.Exists(app) && Directory.Exists(Path.Combine(pasta, "python")) && !string.Equals(app, Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) ? app : null;
+            }
+            catch { return null; }
+        }
+
+        void AbreJanela(string tela)
+        {
+            string app = Janela();
+            if (app == null) { Abre(new string[0]); return; }
+            try { Process.Start(new ProcessStartInfo(app, "--tela " + tela) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(app) }); }
+            catch (Exception e) { Log.Escreve("abrir a janela: " + e.Message); Abre(new string[0]); }
+        }
+
+        DateTime proxSair = DateTime.MinValue;
+
         void Atualiza()
         {
+            // a janela pede para o segundo plano sair (antes de trocar de versão ou ao desinstalar): sai e a janela reabre depois
+            if (DateTime.Now >= proxSair)
+            {
+                proxSair = DateTime.Now.AddSeconds(3);
+                string pedido = K.Arq("segundo-plano-sair.txt");
+                if (File.Exists(pedido)) { try { File.Delete(pedido); } catch { } Log.Escreve("saindo a pedido da janela (troca de versão)"); Sai(false); return; }
+            }
             Amostra a; Sessao ses; List<Conclusao> concl;
             lock (motor.Trava) { a = motor.Ultima; ses = motor.Sessao; concl = new List<Conclusao>(motor.Conclusoes); }
             string est = motor.Pausado ? "pausa" : (concl.Count > 0 ? (concl[0].Nivel >= 2 ? "grave" : concl[0].Nivel == 1 ? "atencao" : "") : "");

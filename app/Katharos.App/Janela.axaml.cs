@@ -23,15 +23,20 @@ public partial class Janela : Window
         Atual = this;
         foreach (var b in Botoes()) b.Click += Navega;
         this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}" : "4.0";
-        relogio.Tick += (_, _) => AtualizaEstado();
+        relogio.Tick += (_, _) =>
+        {
+            AtualizaEstado();
+            if (SegundoPlano.TelaPedida() is string t) { Mostra(t); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
+        };
         relogio.Start();
         AtualizaEstado();
         KeyDown += (_, e) => { if (e.Key == Key.Escape && caixaFechavel && resposta != null) Responde(false); };
-        Closing += async (_, _) => await Servico.Fecha();
-        Mostra("inicio");
+        Closing += async (_, _) => { if (Atualizacao.AoFechar) SegundoPlano.PedeParaSair(reabrir: true); await Servico.Fecha(); };
+        Mostra(Program.TelaInicial);
         Opened += async (_, _) =>
         {
-            try { var c = await Servico.Le("config_ler"); await Atualizacao.Confere(c?["atualizacoes"].S("valor", "avisar") ?? "avisar"); }
+            if (!Servico.Exemplo) await SegundoPlano.ReabreSePreciso();
+            try { var c = await Servico.Le("config_ler"); await Atualizacao.Confere(c?["atualizacoes"].S("valor", "avisar") ?? "avisar", c?["canal"].S("valor", "estavel") ?? "estavel"); }
             catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
         };
         Atualizacao.Mudou += () => Dispatcher.UIThread.Post(() => { if (this.FindControl<ContentControl>("Tela")!.Content is Inicio i) _ = i.Recarrega(); });
