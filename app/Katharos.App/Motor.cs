@@ -175,9 +175,17 @@ public sealed class MotorElevado : Conversa
             {
                 int cod = -1; try { cod = lancador.ExitCode; } catch { }
                 if (cod != 0)
+                {
+                    try
+                    {
+                        var arq = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "motor-elevado-erro.txt");
+                        if (File.Exists(arq)) { Registro.Escreve("motor elevado: " + File.ReadAllText(arq).Trim()); File.Delete(arq); }
+                    }
+                    catch { }
                     throw new ErroDoMotor("motor_alterado", cod is 11 or 12
                         ? "Os arquivos do Katharos não conferem com os desta instalação (alguém mexeu neles). Nada foi alterado. Reinstale o Katharos pelo site."
                         : $"O motor de administrador não abriu (código {cod}). Nada foi alterado.");
+                }
             }
         }
         await liga;
@@ -213,6 +221,7 @@ public static class CopiaProtegida
         string Q(string s) => "'" + s.Replace("'", "''") + "'";
         string script = $$"""
             $ErrorActionPreference = 'Stop'
+            trap { try { ($_ | Out-String) | Set-Content -LiteralPath (Join-Path $env:USERPROFILE '.katharos\motor-elevado-erro.txt') -Encoding UTF8 } catch { }; exit 13 }
             $src = {{Q(app)}}; $ver = {{Q(ver)}}; $esperado = {{Q(h)}}
             $base = Join-Path $env:ProgramData 'Katharos'; $dst = Join-Path $base $ver
             $man = Join-Path $src 'motor\manifesto.json'
@@ -233,7 +242,6 @@ public static class CopiaProtegida
                 foreach ($r in @(@('S-1-5-32-544', 'FullControl'), @('S-1-5-18', 'FullControl'), @('S-1-5-32-545', 'ReadAndExecute'))) {
                     $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier $r[0]), $r[1], 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
                 }
-                $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'))
                 Set-Acl -LiteralPath $base -AclObject $acl
                 $tmp = $dst + '.novo'
                 if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }

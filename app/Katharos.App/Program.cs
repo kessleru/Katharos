@@ -47,7 +47,7 @@ static class Program
             Registro.Escreve("ensaio do motor elevado: " + v?.ToJsonString() + " (cópia protegida: " + (CopiaProtegida.HashEsperado() != null) + ")");
             return v?["versao"] != null ? 0 : 4;
         }
-        catch (Exception e) { Registro.Escreve("ensaio do motor elevado: " + e); return e is ErroDoMotor { Codigo: "motor_alterado" } ? 11 : 1; }
+        catch (Exception e) { Registro.Escreve("ensaio do motor elevado: " + e); return e is ErroDoMotor { Codigo: "motor_alterado" } m && m.Message.Contains("não conferem") ? 11 : 1; }
     }
 
     static int TesteAtualizacao(string pasta)
