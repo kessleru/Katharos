@@ -169,7 +169,9 @@ public class Configuracoes : Tela
         acoes.Children.Add(Botao("Apagar", false, async () => await Apaga()));
         var memoria = S(new StackPanel { Children = { Subtitulo("Memória do PC", "Tudo o que o Katharos aprendeu deste PC fica neste computador, em ~/.katharos. Nada vai para a internet."),
                                                       Linha("O que ele guarda", resumo, null, acoes) } });
-        Monta(cab, S(lista), S(motor), memoria);
+        var versao = S(new StackPanel { Children = { Subtitulo("Esta versão"),
+                                                     Linha("Novidades", "O que mudou nas últimas versões do Katharos.", null, Botao("Ver", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false))) } });
+        Monta(cab, S(lista), S(motor), memoria, versao);
     }
 
     void Preferencia(JsonNode? d, string k, StackPanel lista)

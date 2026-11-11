@@ -18,6 +18,13 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.1.0 · 11 de novembro de 2026
+
+A janela agora conta o que mudou depois de cada atualização.
+
+- **Novidades ao abrir**: na primeira abertura depois de atualizar, uma caixa mostra o que mudou desde a última versão que você viu, com o mesmo texto deste histórico. Aparece uma vez só por versão e nunca na primeira instalação. Para rever depois, vá em Configurações > Novidades.
+- **Esc fecha as caixas**: as caixas de aviso e de resultado também fecham com a tecla Esc.
+
 ## 4.0.2 · 11 de novembro de 2026
 
 Correção da interface, vista num notebook Acer: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.

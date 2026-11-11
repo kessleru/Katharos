@@ -61,4 +61,18 @@ foreach (var tela in espera.Keys)
     foto!.Save(arq);
     Console.WriteLine(arq);
 }
+// a caixa de novidades (aberta pelas Configurações; ao abrir depois de atualizar é a mesma)
+{
+    j.Mostra("config");
+    for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
+    _ = j.MostraNovidades(soSePrecisa: false);
+    for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
+    var textos = j.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text ?? "").ToList();
+    if (!textos.Contains("Novidades") || !textos.Any(t => t.StartsWith("4.0.2 ·"))) { Console.Error.WriteLine("novidades: a caixa não abriu"); falhas++; }
+    using var foto = j.CaptureRenderedFrame();
+    var arq = Path.Combine(pasta, "novidades.png");
+    foto!.Save(arq);
+    Console.WriteLine(arq);
+    j.FechaCaixa();
+}
 if (falhas > 0) { Console.Error.WriteLine($"{falhas} tela(s) com problema"); Environment.Exit(1); }

@@ -739,6 +739,26 @@ def roda_api_elevada(nome, sid, senha):
     return roda_api([], entrada=linhas, saida=canal, permitidos=METODOS_ELEVADOS)
 
 
+@metodo_api('novidades')
+def api_novidades(ctx, p, ev):
+    """O que mudou, para a janela mostrar uma vez depois de atualizar. Com {"vista": true}, marca a versão atual como vista.
+    Instalação nova não mostra nada (não há o que comparar); quem já usava vê só as versões novas desde a última que viu."""
+    if p.get('vista') is True:
+        marca_estado('novidades_vista', VERSAO)
+        return {'versao': VERSAO, 'mostrar': False, 'versoes': []}
+    vista = estado().get('novidades_vista')
+    if not isinstance(vista, str) or not re.match(r'^\d+\.\d+\.\d+$', vista):
+        vista = None
+    if vista is None and not aviso_aceito():   # instalação nova: a primeira abertura é o aviso de uso, não novidade
+        marca_estado('novidades_vista', VERSAO)
+        return {'versao': VERSAO, 'mostrar': False, 'versoes': NOVIDADES[:1]}
+    if vista is None:   # já usava antes de existir esta tela: mostra só a versão de agora
+        novas = [n for n in NOVIDADES if n['versao'] == VERSAO]
+    else:
+        novas = [n for n in NOVIDADES if _v(n['versao']) > _v(vista) and _v(n['versao']) <= _v(VERSAO)]
+    return {'versao': VERSAO, 'mostrar': bool(novas), 'versoes': (novas or NOVIDADES[:1])[:3]}
+
+
 @metodo_api('segundo_plano')
 def api_segundo_plano(ctx, p, ev):
     """Liga ou desliga o acompanhamento (o ícone perto do relógio). Roda como o usuário. Só diz "rodando" se o processo está mesmo de pé."""

@@ -51,6 +51,9 @@
   "metodos": {
    "muda": false
   },
+  "novidades": {
+   "muda": false
+  },
   "perguntar": {
    "muda": false
   },
@@ -102,5 +105,10 @@
   "recorrente",
   "sem_volta",
   "titulo"
+ ],
+ "novidades": [
+  "mostrar",
+  "versao",
+  "versoes"
  ]
 }

@@ -130,6 +130,12 @@ public static class DadosDeExemplo
                                 {"id": "servicos", "titulo": "Serviços que este PC não usa", "quando": "2026-10-28T19:00", "previsto": "menos RAM em uso", "veredito": "sem diferença", "cor": "cinza", "antes": 6.6, "depois": 6.5, "un": "GB"}]}
             """),
         "sessoes" => Sessoes(),
+        "novidades" => JsonNode.Parse("""
+            {"versao": "4.0.2", "mostrar": true, "versoes": [{"versao": "4.0.2", "data": "11 de novembro de 2026",
+              "resumo": "Correção da interface: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.",
+              "itens": [{"titulo": "Ligar o acompanhamento", "texto": "a tela Ao vivo não se refaz mais a cada segundo, e o clique no botão pega."},
+                        {"titulo": "Carregando para sempre", "texto": "o motor avisa que está pronto antes do preparo, e a janela desiste de um motor mudo com \"tentar de novo\"."}]}]}
+            """),
         "linha_de_base" => JsonNode.Parse("""{"metricas": {"cpu": {"jogo": {"p10": 22, "p90": 58, "dias": 12}}, "ram": {"jogo": {"p10": 52, "p90": 66, "dias": 12}}, "temp_cpu": {"jogo": {"p10": 61, "p90": 78, "dias": 12}}, "disco": {"jogo": {"p10": 1, "p90": 12, "dias": 12}}}}"""),
         "memoria" => JsonNode.Parse("""{"contagens": {"minutos": 41230, "horas": 0, "sessoes": 14, "resultados": 3}, "desde": "2026-09-30T18:02:00", "bytes": 9400000}"""),
         "perguntar" => JsonNode.Parse("""

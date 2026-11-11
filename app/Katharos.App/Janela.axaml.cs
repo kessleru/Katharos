@@ -1,9 +1,12 @@
 using Avalonia;
+using System.Text.Json.Nodes;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Katharos.App.Telas;
 using static Katharos.App.Ui;
@@ -22,7 +25,7 @@ public partial class Janela : Window
         AvaloniaXamlLoader.Load(this);
         Atual = this;
         foreach (var b in Botoes()) b.Click += Navega;
-        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.0.2";
+        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.1.0";
         relogio.Tick += (_, _) =>
         {
             AtualizaEstado();
@@ -30,7 +33,7 @@ public partial class Janela : Window
         };
         relogio.Start();
         AtualizaEstado();
-        KeyDown += (_, e) => { if (e.Key == Key.Escape && caixaFechavel && resposta != null) Responde(false); };
+        KeyDown += (_, e) => { if (e.Key == Key.Escape && caixaFechavel) { if (resposta != null) Responde(false); else FechaCaixa(); } };
         Closing += async (_, _) => { if (Atualizacao.AoFechar) SegundoPlano.PedeParaSair(reabrir: true); await Servico.Fecha(); };
         Mostra(Program.TelaInicial);
         Opened += async (_, _) =>
@@ -38,6 +41,8 @@ public partial class Janela : Window
             if (!Servico.Exemplo) await SegundoPlano.ReabreSePreciso();
             try { var c = await Servico.Le("config_ler"); await Atualizacao.Confere(c?["atualizacoes"].S("valor", "avisar") ?? "avisar", c?["canal"].S("valor", "estavel") ?? "estavel"); }
             catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
+            // depois de atualizar: o que mudou, uma vez por versão (instalação nova não mostra)
+            if (!Servico.Exemplo) await MostraNovidades(soSePrecisa: true);
         };
         Atualizacao.Mudou += () => Dispatcher.UIThread.Post(() => { if (this.FindControl<ContentControl>("Tela")!.Content is Inicio i) _ = i.Recarrega(); });
     }
@@ -86,6 +91,40 @@ public partial class Janela : Window
         luz.Fill = Tema.Verde;
         est.Text = a["jogo"] is { } j ? "Jogando: " + j.S("nome") : "Acompanhando o PC";
         mais.Text = "leve: " + Num(a["segundo_plano"].D("cpu_pct"), 1) + " % da CPU";
+    }
+
+    /// <summary>As novidades das versões (do CHANGELOG, embutido no motor). Ao abrir, só se a versão mudou desde a última vista, e marca
+    /// como vista na hora; pelas Configurações, sempre.</summary>
+    public async Task MostraNovidades(bool soSePrecisa)
+    {
+        JsonNode? d;
+        try { d = await Servico.Le("novidades"); }
+        catch (Exception e) { Registro.Escreve("novidades: " + e.Message); if (!soSePrecisa) MostraErro(e); return; }
+        if (d == null || (soSePrecisa && !d.B("mostrar"))) return;
+        if (soSePrecisa && this.FindControl<Border>("Veu")!.IsVisible) return;   // já há uma caixa aberta (confirmação, erro): não cobre
+        var corpo = new StackPanel { Spacing = 18, MaxWidth = 620 };
+        foreach (var v in d.A("versoes"))
+        {
+            var p = new StackPanel { Spacing = 8 };
+            p.Children.Add(T(v.S("versao") + " · " + v.S("data"), "rotulo"));
+            if (v.S("resumo") != "") p.Children.Add(T(v.S("resumo"), "sub", quebra: true));
+            foreach (var i in v.A("itens"))
+            {
+                var t = T("", "sub", quebra: true);
+                t.Inlines = new InlineCollection();
+                if (i.S("titulo") != "") t.Inlines.Add(new Run(i.S("titulo") + ": ") { Foreground = Tema.Osso, FontWeight = FontWeight.SemiBold });
+                t.Inlines.Add(new Run(i.S("texto")));
+                p.Children.Add(t);
+            }
+            corpo.Children.Add(p);
+        }
+        var ok = Botao("Entendi", true, FechaCaixa);
+        var rodape = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0), Children = { ok } };
+        MostraCaixa(Caixa(soSePrecisa ? "Novidades da " + d.S("versao") : "Novidades", corpo, rodape), true);
+        ok.Focus();
+        if (soSePrecisa)
+            try { await Servico.Le("novidades", new { vista = true }); }   // vista ao aparecer: fechar a janela sem clicar não repete
+            catch (Exception e) { Registro.Escreve("novidades: marcar como vista: " + e.Message); }
     }
 
     // ───── painel por cima (confirmação, progresso, resultado) ─────

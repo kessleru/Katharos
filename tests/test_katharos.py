@@ -2963,11 +2963,46 @@ class TestApi(_CasaTemporaria):
         self.assertEqual(self.um('config_gravar', {'chave': 'energia-automatica', 'valor': 'sim'})['erro']['codigo'], 'precisa_fluxo')
         self.assertEqual(self.um('config_ler')['dados']['modo']['valor'], 'extremo')
 
+    def test_novidades_uma_vez_por_versao(self):
+        """A tela de novidades: instalação nova não mostra; quem já usava vê a versão de agora uma vez; versões novas desde a última
+        vista aparecem; marcar como vista apaga o aviso. O texto é o do CHANGELOG (gerado na montagem, nunca desatualizado)."""
+        import importlib.util
+        sp = importlib.util.spec_from_file_location('nov', str(Path(__file__).resolve().parent.parent / 'scripts' / 'novidades.py'))
+        nov = importlib.util.module_from_spec(sp); sp.loader.exec_module(nov)
+        self.assertEqual(k.NOVIDADES, nov.le((Path(__file__).resolve().parent.parent / 'CHANGELOG.md').read_text(encoding='utf-8')),
+                         'partes/67-novidades.py desatualizado: rode scripts/monta.sh')
+        self.assertEqual(k.NOVIDADES[0]['versao'], k.VERSAO)
+        self.assertTrue(all(n['itens'] and all(i['texto'] for i in n['itens']) for n in k.NOVIDADES))
+        self.assertNotIn('**', json.dumps(k.NOVIDADES))
+        # instalação nova (aviso não aceito): não mostra e já marca
+        with mock.patch.object(k, 'aviso_aceito', return_value=False):
+            r = self.um('novidades')['dados']
+        self.assertFalse(r['mostrar'])
+        self.assertEqual(k.estado().get('novidades_vista'), k.VERSAO)
+        # quem já usava: veio de uma versão antiga e vê as novas, a mais nova primeiro
+        k.marca_estado('novidades_vista', '4.0.0')
+        with mock.patch.object(k, 'aviso_aceito', return_value=True):
+            r = self.um('novidades')['dados']
+        self.assertTrue(r['mostrar'])
+        self.assertEqual(r['versoes'][0]['versao'], k.VERSAO)
+        self.assertNotIn('4.0.0', [v['versao'] for v in r['versoes']])
+        # marcar como vista: não mostra mais
+        self.assertTrue(self.um('novidades', {'vista': True})['ok'])
+        with mock.patch.object(k, 'aviso_aceito', return_value=True):
+            self.assertFalse(self.um('novidades')['dados']['mostrar'])
+        # versão vista ilegível não derruba: conta como quem já usava
+        k.marca_estado('novidades_vista', ['lixo'])
+        with mock.patch.object(k, 'aviso_aceito', return_value=True):
+            r = self.um('novidades')['dados']
+        self.assertTrue(r['mostrar'])
+        self.assertEqual([v['versao'] for v in r['versoes']], [k.VERSAO])
+
     def test_contrato_congelado(self):
         """O contrato com a interface (tests/api/contrato.json): mudar um método ou um campo exige mudar o C# junto."""
         contrato = json.loads((RAIZ / 'tests' / 'api' / 'contrato.json').read_text(encoding='utf-8'))
         self.assertEqual(self.um('metodos')['dados'], contrato['metodos'])
         self.assertEqual(sorted(self.um('inicio')['dados']), contrato['inicio'])
+        self.assertEqual(sorted(self.um('novidades')['dados']), contrato['novidades'])
         item = next(a['itens'][0] for a in self.um('itens', {'modo': 'seguro'})['dados']['areas'] if a['itens'])
         self.assertEqual(sorted(item), contrato['item'])
 
