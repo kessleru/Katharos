@@ -21,7 +21,7 @@ public static class Servico
     {
         if (Exemplo) return Simulador != null ? await Simulador(metodo, p, evento) : DadosDeExemplo.Para(metodo);
         await abrindo.WaitAsync();
-        try { comum ??= await MotorComum.Abre(); comum.Caiu += _ => comum = null; }
+        try { if (comum == null) { var c = await MotorComum.Abre(); c.Caiu += _ => { if (comum == c) comum = null; }; comum = c; } }
         finally { abrindo.Release(); }
         return await comum.Pede(metodo, p, evento);
     }
@@ -31,11 +31,11 @@ public static class Servico
     {
         if (Exemplo) return Simulador != null ? await Simulador(metodo, p, evento) : DadosDeExemplo.Para(metodo);
         await abrindo.WaitAsync();
-        try { elevado ??= await MotorElevado.Abre(); elevado.Caiu += _ => elevado = null; }
+        try { if (elevado == null) { var e = await MotorElevado.Abre(); e.Caiu += _ => { if (elevado == e) elevado = null; }; elevado = e; } }
         finally { abrindo.Release(); }
-        Atualizacao.Ocupado = true;   // nada de trocar de versão no meio de uma mudança
-        try { return await elevado.Pede(metodo, p, evento); }
-        finally { Atualizacao.Ocupado = false; }
+        Interlocked.Increment(ref Atualizacao.EmUso);   // nada de trocar de versão no meio de uma mudança (contador: podem ser duas)
+        try { return await elevado!.Pede(metodo, p, evento); }
+        finally { Interlocked.Decrement(ref Atualizacao.EmUso); }
     }
 
     public static async Task Fecha()

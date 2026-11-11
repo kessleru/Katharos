@@ -34,7 +34,7 @@ public class Historico : Tela
         if (ts.Count > 0)
         {
             var p = new StackPanel { Children = { Subtitulo("Mudando agora") } };
-            foreach (var t in ts) p.Children.Add(Linha(char.ToUpper(t[0]) + t[1..] + ".", null, Etiqueta("atenção", Tema.Ambar)));
+            foreach (var t in ts) p.Children.Add(Linha(Maiuscula(t) + ".", null, Etiqueta("atenção", Tema.Ambar)));
             tend = S(p);
         }
 
@@ -56,7 +56,7 @@ public class Historico : Tela
             string rot = s.S("rotulo");
             var corpo = new StackPanel { Spacing = 4, Children =
             {
-                T(char.ToUpper(rot[0]) + rot[1..], "rotulo"),
+                T(Maiuscula(rot), "rotulo"),
                 new StackPanel { Orientation = Orientation.Horizontal, Children = { T(Num(vals[^1], casas), "numero"), T(un, "unidade") } },
                 T($"era {Num(vals[0], casas)} {un} em {ini:dd/MM}".Replace("  ", " "), "rotulo", tamanho: 13),
                 g,
@@ -75,7 +75,7 @@ public class Historico : Tela
             {
                 string vezes = (x.D("dias") ?? 1) > 1 ? $" · apareceu em {Num(x.D("dias"))} dias" : "";
                 var exp = new Expander { Header = T($"{x.S("titulo")} ({Quando(x.S("dia") + "T12:00")}{vezes})", null, Tema.Osso, 15), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-                                         Content = T(char.ToUpper(x.S("vi")[0]) + x.S("vi")[1..] + ". Confiança " + x.S("confianca") + ".", "rotulo", quebra: true), Margin = new Thickness(32, 8) };
+                                         Content = T(Maiuscula(x.S("vi")) + ". Confiança " + x.S("confianca") + ".", "rotulo", quebra: true), Margin = new Thickness(32, 8) };
                 p.Children.Add(exp);
             }
             anomalias = S(p);
@@ -96,8 +96,8 @@ public class Historico : Tela
                 }).ToList();
                 string titulo = e.S("titulo");
                 string q = e?["qualidade"].S("texto") ?? "";
-                if (q != "" && e?["qualidade"].S("nivel") != "") linhas.Add(char.ToUpper(q[0]) + q[1..] + ".");
-                p.Children.Add(Linha($"{char.ToUpper(titulo[0]) + titulo[1..]}, {Quando(e.S("quando"))}",
+                if (q != "" && e?["qualidade"].S("nivel") != "") linhas.Add(Maiuscula(q) + ".");
+                p.Children.Add(Linha($"{Maiuscula(titulo)}, {Quando(e.S("quando"))}",
                                      linhas.Count > 0 ? string.Join("\n", linhas) : "Poucas medidas antes e depois para dizer algo com certeza."));
             }
             efeitos = S(p);

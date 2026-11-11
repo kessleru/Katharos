@@ -104,7 +104,7 @@ public class Desfazer : Tela
             string nome = p.S("pacote"), titulo = p.S("titulo");
             int n = p.A("itens").Count();
             var acao = p.B("desfaz") ? Botao("Desfazer", false, async () => await Volta(new[] { nome }, titulo)) : null;
-            lista.Children.Add(Linha($"{char.ToUpper(titulo[0]) + titulo[1..]}: {n} {(n == 1 ? "item" : "itens")}", $"aplicado {Quando(p.S("quando"))}" + (p.B("desfaz") ? "" : " · remoções não voltam por aqui"), null, acao));
+            lista.Children.Add(Linha($"{Maiuscula(titulo)}: {n} {(n == 1 ? "item" : "itens")}", $"aplicado {Quando(p.S("quando"))}" + (p.B("desfaz") ? "" : " · remoções não voltam por aqui"), null, acao));
         }
         var tudo = Botao("Desfazer tudo", false, async () => await Volta(ps.Where(p => p.B("desfaz")).Select(p => p.S("pacote")).ToArray(), "tudo"));
         var ponto = d.S("ponto");
@@ -185,7 +185,7 @@ public class Configuracoes : Tela
             if (k == "avisos-intervalo") rot = o + " h";
             ops.Children.Add(Botao(rot, o == atual, async () => { await Servico.Le("config_gravar", new { chave = k, valor = o }); await Recarrega(); }));
         }
-        lista.Children.Add(Linha(char.ToUpper(c.S("rotulo")[0]) + c.S("rotulo")[1..], c.S("explica"), null, ops));
+        lista.Children.Add(Linha(Maiuscula(c.S("rotulo")), c.S("explica"), null, ops));
     }
 
     async Task Exporta()

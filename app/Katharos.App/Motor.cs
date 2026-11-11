@@ -230,7 +230,23 @@ public static class CopiaProtegida
             $man = Join-Path $src 'motor\manifesto.json'
             if ((Get-FileHash -LiteralPath $man -Algorithm SHA256).Hash.ToLower() -ne $esperado) { exit 11 }
             $m = Get-Content -LiteralPath $man -Raw | ConvertFrom-Json
+            $admins = New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'; $sistema = 'S-1-5-18'
+            function DonoSeguro($caminho) {
+                $o = (Get-Acl -LiteralPath $caminho).GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+                return ($o -eq $admins.Value -or $o -eq $sistema)
+            }
+            function Apaga($caminho) {
+                # rd não segue junção (apaga só o link); nunca Remove-Item -Recurse aqui, que no 5.1 pode seguir
+                & (Join-Path $env:SystemRoot 'System32\cmd.exe') /d /c rd /s /q ('"' + $caminho + '"') | Out-Null
+            }
             function Confere($raiz) {
+                if (-not (DonoSeguro $raiz)) { return $false }
+                # exatamente os arquivos do manifesto: nada a mais (uma DLL plantada), nenhum link, todos com dono administrador
+                $tem = @(Get-ChildItem -LiteralPath $raiz -Recurse -Force)
+                if (@($tem | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { return $false }
+                $arqs = @($tem | Where-Object { -not $_.PSIsContainer })
+                if ($arqs.Count -ne @($m.arquivos.PSObject.Properties).Count) { return $false }
+                foreach ($f in $arqs) { if (-not (DonoSeguro $f.FullName)) { return $false } }
                 foreach ($p in $m.arquivos.PSObject.Properties) {
                     $f = Join-Path $raiz ($p.Name -replace '/', '\')
                     if (-not (Test-Path -LiteralPath $f)) { return $false }
@@ -238,16 +254,22 @@ public static class CopiaProtegida
                 }
                 return $true
             }
+            # a pasta base tem que ser nossa desde o começo: criada por outro (ou um link), some inteira e é criada de novo
+            if (Test-Path -LiteralPath $base) {
+                $bi = Get-Item -LiteralPath $base -Force
+                if (($bi.Attributes -band [IO.FileAttributes]::ReparsePoint) -or -not (DonoSeguro $base)) { Apaga $base }
+            }
+            if (-not (Test-Path -LiteralPath $base)) { New-Item -ItemType Directory -Path $base | Out-Null }
             if (-not ((Test-Path -LiteralPath $dst) -and (Confere $dst))) {
-                if (-not (Test-Path -LiteralPath $base)) { New-Item -ItemType Directory -Path $base | Out-Null }
                 $acl = New-Object System.Security.AccessControl.DirectorySecurity
                 $acl.SetAccessRuleProtection($true, $false)
+                $acl.SetOwner($admins)
                 foreach ($r in @(@('S-1-5-32-544', 'FullControl'), @('S-1-5-18', 'FullControl'), @('S-1-5-32-545', 'ReadAndExecute'))) {
                     $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier $r[0]), $r[1], 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
                 }
                 Set-Acl -LiteralPath $base -AclObject $acl
                 $tmp = $dst + '.novo'
-                if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+                if (Test-Path -LiteralPath $tmp) { Apaga $tmp }
                 New-Item -ItemType Directory -Path $tmp | Out-Null
                 foreach ($p in $m.arquivos.PSObject.Properties) {
                     $rel = $p.Name -replace '/', '\'
@@ -255,10 +277,12 @@ public static class CopiaProtegida
                     New-Item -ItemType Directory -Force -Path (Split-Path $para) | Out-Null
                     Copy-Item -LiteralPath (Join-Path $src $rel) -Destination $para -Force
                 }
-                if (-not (Confere $tmp)) { Remove-Item -LiteralPath $tmp -Recurse -Force; exit 12 }
-                if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
+                # dono Administradores em tudo (em PCs onde o dono padrão é o próprio usuário, ele poderia trocar a permissão depois)
+                & (Join-Path $env:SystemRoot 'System32\icacls.exe') $tmp /setowner '*S-1-5-32-544' /T /C /Q | Out-Null
+                if (-not (Confere $tmp)) { Apaga $tmp; exit 12 }
+                if (Test-Path -LiteralPath $dst) { Apaga $dst }
                 Rename-Item -LiteralPath $tmp -NewName (Split-Path $dst -Leaf)
-                Get-ChildItem -LiteralPath $base -Directory | Where-Object { $_.Name -ne $ver } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                Get-ChildItem -LiteralPath $base -Force | Where-Object { $_.Name -ne $ver } | ForEach-Object { Apaga $_.FullName }
             }
             $py = Join-Path $dst 'python\python.exe'; $kpy = Join-Path $dst 'motor\programa\katharos.py'
             Start-Process -FilePath $py -WindowStyle Hidden -ArgumentList @('-X', 'utf8', ('"' + $kpy + '"'), 'api', '--pipe', {{Q(pipe)}}, '--dono', {{Q(sid)}}, '--senha', {{Q(senha)}})

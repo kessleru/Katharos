@@ -3047,7 +3047,17 @@ namespace KatharosApp
             IntPtr props = Propriedades(); ulong h; int cod = 0; bool iniciou = false;
             try
             {
+                // marcador: se um teste anterior foi encerrado no meio, a sessão dele ficou ligada; com o marcador, é nossa e pode parar
+                string marca = K.Arq("travadas-sessao.txt");
                 uint e = StartTraceW(out h, NOME, props);
+                if (e == 183 && File.Exists(marca))
+                {
+                    ControlTraceW(0, NOME, props, EVENT_TRACE_CONTROL_STOP);
+                    try { File.Delete(marca); } catch { }
+                    Marshal.FreeHGlobal(props); props = Propriedades();
+                    e = StartTraceW(out h, NOME, props);
+                }
+                if (e == 0) try { File.WriteAllText(marca, K.Iso(DateTime.Now)); } catch { }
                 if (e == 5) { res["erro"] = "precisa de administrador"; cod = 2; }
                 else if (e == 183) { res["erro"] = "outro programa está usando o rastreio do kernel (LatencyMon, xperf, Process Monitor...): feche-o e tente de novo"; cod = 4; }
                 else if (e != 0) { res["erro"] = "o Windows recusou o rastreio (código " + e + ")"; cod = 3; }
@@ -3057,12 +3067,20 @@ namespace KatharosApp
                     var log = new EVENT_TRACE_LOGFILE { LoggerName = NOME, ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD | PROCESS_TRACE_MODE_RAW_TIMESTAMP,
                                                         CurrentEvent = new byte[88], LogfileHeader = new byte[280], EventRecordCallback = cbEvento, BufferCallback = cbBuffer };
                     ulong leitor = OpenTraceW(ref log);
-                    var t = new Thread(() => { try { ProcessTrace(new[] { leitor }, 1, IntPtr.Zero, IntPtr.Zero); } catch { } }) { IsBackground = true };
-                    t.Start();
-                    Thread.Sleep(Math.Max(5, Math.Min(300, segundos)) * 1000);
+                    uint rp = 0;
+                    if (leitor == ulong.MaxValue) { res["erro"] = "o Windows não abriu a leitura do rastreio"; cod = 3; }
+                    else
+                    {
+                        var t = new Thread(() => { try { rp = ProcessTrace(new[] { leitor }, 1, IntPtr.Zero, IntPtr.Zero); } catch { rp = 1; } }) { IsBackground = true };
+                        t.Start();
+                        Thread.Sleep(Math.Max(5, Math.Min(300, segundos)) * 1000);
+                        ControlTraceW(0, NOME, props, EVENT_TRACE_CONTROL_STOP);
+                        t.Join(5000); CloseTrace(leitor);
+                        if (rp != 0 && rp != 1223 && eventos < 100) { res["erro"] = "a leitura do rastreio parou no meio (código " + rp + ")"; cod = 3; }
+                    }
                     // sempre para a sessão (mesmo com erro acima): nada fica ligado depois do teste
                     ControlTraceW(0, NOME, props, EVENT_TRACE_CONTROL_STOP);
-                    t.Join(5000); CloseTrace(leitor);
+                    try { File.Delete(K.Arq("travadas-sessao.txt")); } catch { }
                 }
             }
             catch (Exception ex) { res["erro"] = ex.Message; cod = 3; if (iniciou) try { ControlTraceW(0, NOME, props, EVENT_TRACE_CONTROL_STOP); } catch { } }

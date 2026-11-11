@@ -14,7 +14,8 @@ public static class Atualizacao
     static UpdateInfo? pronta;
     public static string? VersaoPronta => pronta?.TargetFullRelease.Version.ToString();
     public static event Action? Mudou;
-    public static bool Ocupado;
+    public static int EmUso;
+    public static bool Ocupado => Volatile.Read(ref EmUso) > 0;
     /// <summary>A versão nova entra quando a janela fechar: o segundo plano sai junto e volta sozinho depois da troca.</summary>
     public static bool AoFechar;   // true enquanto o motor elevado aplica ou desfaz algo
 
@@ -35,6 +36,7 @@ public static class Atualizacao
     public static async Task Confere(string modo, string canalPedido = "estavel")
     {
         if (modo == "nunca") return;
+        if (canalPedido != canal) gerente = null;   // trocou de canal: o gerente novo procura no canal certo
         canal = canalPedido;
         var g = Gerente();
         if (g == null) return;

@@ -75,8 +75,22 @@ public static class SegundoPlano
     static string Casa => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos");
     static string Arq(string nome) => Path.Combine(Casa, nome);
 
-    /// <summary>O segundo plano está lendo (o agora.json foi escrito há pouco)?</summary>
-    public static bool Rodando() => File.Exists(Arq("agora.json")) && (DateTime.Now - File.GetLastWriteTime(Arq("agora.json"))).TotalSeconds < 20;
+    /// <summary>Os processos do segundo plano desta instalação (motor\Katharos.exe), achados pelo caminho: funciona mesmo com a
+    /// leitura pausada (aí o agora.json fica parado).</summary>
+    static List<System.Diagnostics.Process> Processos()
+    {
+        string exe = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "motor", "Katharos.exe"));
+        var out_ = new List<System.Diagnostics.Process>();
+        foreach (var p in System.Diagnostics.Process.GetProcessesByName("Katharos"))
+        {
+            try { if (p.Id != Environment.ProcessId && string.Equals(p.MainModule?.FileName, exe, StringComparison.OrdinalIgnoreCase)) { out_.Add(p); continue; } } catch { }
+            p.Dispose();
+        }
+        return out_;
+    }
+
+    /// <summary>O segundo plano está rodando (pelo processo; o agora.json recente vale para a versão de terminal).</summary>
+    public static bool Rodando() => Processos().Count > 0 || (File.Exists(Arq("agora.json")) && (DateTime.Now - File.GetLastWriteTime(Arq("agora.json"))).TotalSeconds < 20);
 
     /// <summary>Pede para o segundo plano sair (ele confere a cada 3 s) e, se pedir, marca para reabrir na próxima abertura da janela.
     /// Usado antes de trocar de versão (os arquivos dele vão ser trocados) e ao desinstalar.</summary>
@@ -84,11 +98,12 @@ public static class SegundoPlano
     {
         try
         {
-            if (!Rodando()) return;
+            var ps = Processos();
+            if (ps.Count == 0) return;
             Directory.CreateDirectory(Casa);
             if (reabrir) File.WriteAllText(Arq("reabrir-segundo-plano.txt"), DateTime.Now.ToString("s"));
             File.WriteAllText(Arq("segundo-plano-sair.txt"), DateTime.Now.ToString("s"));
-            for (int i = 0; i < 40 && File.Exists(Arq("segundo-plano-sair.txt")); i++) Thread.Sleep(250);   // ele apaga o pedido ao sair
+            foreach (var p in ps) { try { p.WaitForExit(15000); } catch { } p.Dispose(); }   // espera o processo sair de verdade
             try { File.Delete(Arq("segundo-plano-sair.txt")); } catch { }   // ninguém atendeu: não fica pedido velho para o próximo
         }
         catch (Exception e) { Registro.Escreve("segundo plano: pedir para sair: " + e.Message); }

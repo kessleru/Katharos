@@ -13,14 +13,16 @@ $guarda = Join-Path $casa 'versoes'
 $repo = 'kessleru/Katharos'
 
 function SegundoPlanoSai {
-    # o Katharos.exe (segundo plano) fica com o arquivo aberto: pede para ele sair e lembra de religar
-    $agora = Join-Path $casa 'agora.json'
-    if ((Test-Path $agora) -and ((Get-Date) - (Get-Item $agora).LastWriteTime).TotalSeconds -lt 20) {
-        Set-Content -LiteralPath (Join-Path $casa 'segundo-plano-sair.txt') -Value (Get-Date -Format s) -Encoding ascii
-        for ($i = 0; $i -lt 40 -and ((Get-Date) - (Get-Item $agora).LastWriteTime).TotalSeconds -lt 6; $i++) { Start-Sleep -Milliseconds 250 }
-        return $true
-    }
-    return $false
+    # o Katharos.exe (segundo plano) fica com o proprio arquivo aberto: acha o processo pelo caminho, pede para sair e espera ele sair
+    $exe = Join-Path $Pasta 'Katharos.exe'
+    $p = @(Get-Process Katharos -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -ieq $exe) })
+    if ($p.Count -eq 0) { return $false }
+    New-Item -ItemType Directory -Force -Path $casa | Out-Null
+    Set-Content -LiteralPath (Join-Path $casa 'segundo-plano-sair.txt') -Value (Get-Date -Format s) -Encoding ascii
+    $p | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $casa 'segundo-plano-sair.txt') -ErrorAction SilentlyContinue
+    if (@(Get-Process -Id ($p.Id) -ErrorAction SilentlyContinue).Count) { throw 'o segundo plano nao fechou: feche pelo icone (Sair) e tente de novo' }
+    return $true
 }
 
 function Copia([string]$de, [string]$para) {
@@ -68,7 +70,12 @@ try {
     $copia = Join-Path $guarda $Atual
     Copia $Pasta $copia
     $religa = SegundoPlanoSai
-    Copia $novaPasta $Pasta
+    try { Copia $novaPasta $Pasta }
+    catch {
+        # trocou pela metade: volta a copia guardada inteira, para nao ficar meio nova e meio velha
+        Copia $copia $Pasta
+        throw "a troca falhou no meio ($($_.Exception.Message)); a versao $Atual foi restaurada"
+    }
     Write-Host "Atualizado de $Atual para $nova. A versao anterior ficou guardada; para voltar: katharos versoes --voltar"
     if ($religa -and (Test-Path (Join-Path $Pasta 'Katharos.exe'))) { Start-Process (Join-Path $Pasta 'Katharos.exe') -ArgumentList '--segundo-plano' }
     exit 0

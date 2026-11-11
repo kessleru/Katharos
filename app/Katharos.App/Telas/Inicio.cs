@@ -88,7 +88,11 @@ public class Inicio : Tela
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 18),
             Children = { new StackPanel { Spacing = 2, Children = { T($"Versão {v} pronta", null, Tema.Osso, 15).Com(t => t.FontWeight = Avalonia.Media.FontWeight.SemiBold), T("Já baixada. Reinicia em segundos e nada do que você fez se perde.", "rotulo") } },
-                         Botao("Reiniciar agora", false, () => Atualizacao.Aplica()).Com(b => Avalonia.Controls.Grid.SetColumn(b, 1)) },
+                         Botao("Reiniciar agora", false, () =>
+                         {
+                             if (!Atualizacao.Aplica())
+                                 Janela.Atual?.MostraCaixa(Janela.Caixa("Daqui a pouco", T("O Katharos está mudando algo no PC agora. A versão nova entra assim que terminar.", "sub"), Botao("Fechar", true, () => Janela.Atual!.FechaCaixa())), true);
+                         }).Com(b => Avalonia.Controls.Grid.SetColumn(b, 1)) },
         }) : null;
         Monta(cab, versao, passo, numeros, lista, ultima);
     }

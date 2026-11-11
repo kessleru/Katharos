@@ -79,6 +79,22 @@ public static class Ui
         return b;
     }
 
+    /// <summary>Botão que faz algo assíncrono (conversa com o motor): um erro vira a caixa de erro, nunca fecha o aplicativo.</summary>
+    public static Button Botao(string texto, bool primario, Func<Task> acao, bool ativo = true) => Botao(texto, primario, (Action)(async () =>
+    {
+        try { await acao(); }
+        catch (Exception e) { MostraErro(e); }
+    }), ativo);
+
+    public static void MostraErro(Exception e)
+    {
+        Registro.Escreve("erro na tela: " + e);
+        var j = Janela.Atual;
+        if (j == null) return;
+        string texto = e is ErroDoMotor m ? m.Message : "Algo deu errado: " + e.Message;
+        j.MostraCaixa(Janela.Caixa("Não deu certo", T(texto + " Nada além disso mudou.", "sub", quebra: true), Botao("Fechar", true, j.FechaCaixa)), true);
+    }
+
     public static Border Etiqueta(string texto, IBrush cor) =>
         new() { Classes = { "etiqueta" }, BorderBrush = cor, HorizontalAlignment = HorizontalAlignment.Left, Child = T(texto, null, cor) };
 
@@ -153,6 +169,9 @@ public static class Ui
         string dia = d.Date == hoje ? "hoje" : d.Date == hoje.AddDays(-1) ? "ontem" : d.ToString("dd/MM", Br);
         return $"{dia}, {d:HH:mm}";
     }
+
+    /// <summary>Primeira letra maiúscula, sem quebrar com texto vazio.</summary>
+    public static string Maiuscula(string? s) => string.IsNullOrEmpty(s) ? "" : char.ToUpper(s[0]) + s[1..];
 
     public static T Com<T>(this T c, Action<T> f) { f(c); return c; }
 }
