@@ -1413,7 +1413,7 @@ def env_ps():
     env = dict(os.environ)
     mp = env.get('PSModulePath')
     if mp:
-        env['PSModulePath'] = os.pathsep.join(x for x in mp.split(os.pathsep)
+        env['PSModulePath'] = ';'.join(x for x in mp.split(';')
                                               if 'WindowsPowerShell' in x or not re.search(r'[\\/]PowerShell[\\/]', x, re.I))
     return env
 

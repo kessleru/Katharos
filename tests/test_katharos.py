@@ -3559,8 +3559,8 @@ class TestItensNoFormatoD9(unittest.TestCase):
 
 class TestEnvPs(unittest.TestCase):
     def test_tira_os_modulos_do_powershell_7(self):
-        mp = os.pathsep.join([r'C:\Users\a\Documents\PowerShell\Modules', r'C:\Program Files\PowerShell\7\Modules',
+        mp = ';'.join([r'C:\Users\a\Documents\PowerShell\Modules', r'C:\Program Files\PowerShell\7\Modules',
                               r'C:\Users\a\Documents\WindowsPowerShell\Modules', r'C:\Windows\system32\WindowsPowerShell\v1.0\Modules', r'C:\Outro\Modules'])
         with mock.patch.dict(os.environ, {'PSModulePath': mp}):
-            fica = k.env_ps()['PSModulePath'].split(os.pathsep)
+            fica = k.env_ps()['PSModulePath'].split(';')
         self.assertEqual(fica, [r'C:\Users\a\Documents\WindowsPowerShell\Modules', r'C:\Windows\system32\WindowsPowerShell\v1.0\Modules', r'C:\Outro\Modules'])
