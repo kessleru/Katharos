@@ -1,7 +1,7 @@
 # Plano: personalização, otimização, relatório com envio e proteção do projeto
 
 Pedido de 11 nov 2026: mais otimização, **muito mais personalização do Windows** com prévia em imagem e vídeo (hospedada fora do programa),
-melhorias de interface, segurança e bugs, **relatório completo com envio direto ao dono** e aviso claro de que o projeto **não tem fins
+melhorias de interface e segurança, **relatório completo com envio direto ao dono** e aviso claro de que o projeto **não tem fins
 lucrativos**. Personalizações funcionais e sem problemas. Só entra o que dá para fazer hoje.
 
 Marque `[x]` ao concluir e anote no **Registro** (fim) a data, a versão e o commit. Pesquisa de apoio: [cofre/2026-11-11-pesquisa-personalizacao.md](cofre/2026-11-11-pesquisa-personalizacao.md).
@@ -11,7 +11,7 @@ Marque `[x]` ao concluir e anote no **Registro** (fim) a data, a versão e o com
 | fase | versão | o quê |
 |---|---|---|
 | 0 | — | confirmar no Windows do CI as chaves e o PowerToys |
-| 1 | 4.1.0 | proteção jurídica e bugs |
+| 1 | 4.1.0 | proteção jurídica |
 | 2 | 4.1.0 | relatório completo com envio |
 | 3 | 4.2.0 | personalização nativa com galeria |
 | 4 | 4.3.0 | PowerToys |
@@ -38,7 +38,7 @@ gera as capturas (próprias, nunca de terceiros) aplicando cada opção numa má
 
 **P4. Relatório.** Sem conta: o aplicativo envia o relatório já limpo a um Cloudflare Worker (grátis) que abre uma issue no repositório
 **privado** `kessleru/katharos-relatorios`; a pessoa recebe um código `KTH-...`. Limites: 200 KB, esquema validado, limite por IP, Turnstile,
-nada guardado no Worker. É o **único** caminho de envio: sem conta no GitHub e sem issue pública. Sempre com prévia e consentimento.
+nada guardado no Worker. É o **único** caminho de envio: sem conta no GitHub e sem issue pública. **Nunca envia sozinho:** só sai quando a pessoa clica em Enviar relatório, sempre com prévia e consentimento.
 **(dono)** cria a conta grátis da Cloudflare e o repositório privado `katharos-relatorios`.
 
 **P5. Sem fins lucrativos.** Pessoal, gratuito, MIT, sem venda, anúncio, rastreamento ou doação. Aparece no site, no aplicativo, no README,
@@ -75,7 +75,7 @@ empacota programa de terceiro. Nenhum outro programa é integrado nem indicado.
 - [ ] **0.3** PowerToys no CI: onde fica o `settings.json` de cada módulo e se ligar por arquivo vale.
 - [ ] **0.4** Protótipo da galeria: 5 opções com foto antes e depois e um vídeo, no `katharos-galeria`.
 
-### Fase 1: proteção jurídica e bugs (4.1.0)
+### Fase 1: proteção jurídica (4.1.0)
 Proteção jurídica:
 - [ ] **J1** Site: rodapé "Projeto pessoal, gratuito e de código aberto, sem fins lucrativos. Sem anúncios, venda ou rastreamento. Não é afiliado à Microsoft nem a outras marcas citadas." Mais página **Aviso legal**.
 - [ ] **J2** Aplicativo: tela **Sobre** (aviso, MIT, sem garantia, licenças de terceiros) e o aviso curto na primeira abertura, sem bloquear.
@@ -86,19 +86,11 @@ Proteção jurídica:
 - [ ] **J7** Política de privacidade (LGPD) no site e no aplicativo antes do envio existir: o que vai, para quê, onde fica, 90 dias, como pedir para apagar pelo `KTH-...`, nada vendido.
 - [ ] **J8** Doação, patrocínio e venda não entram.
 
-Bugs:
-- [ ] **1.1** Pendências da 4.0: 2.13 (3 pessoas leigas), 2c.1 e 2c.2 (teste jogando no kesslerupc).
-- [ ] **1.2** Testes de abuso desta sessão viram testes permanentes no CI (estado corrompido, 57 comandos, sintaxe PowerShell 5.1, `pyflakes`, Python 3.8).
-- [ ] **1.3** Ida e volta (aplicar e desfazer, registro e serviços iguais) para **todos** os pacotes no CI.
-- [ ] **1.4** Lighthouse no celular (hoje 75), sem tocar na imagem do herói.
-
 ### Fase 2: relatório completo (4.1.0)
 - [ ] **2.1** Conteúdo novo: erros internos do motor e da janela, itens que "não ficaram", tempo de cada etapa, versão e histórico de atualização; Windows (build, edição, idioma), antivírus e se algum mexeu em arquivo do Katharos; telas azuis, desligamentos, disco, temperatura, travadas.
 - [ ] **2.2** Limpeza antes de sair: nome de usuário, nome do PC, números de série, IP, MAC, Wi-Fi, e-mails, arquivos de pastas pessoais. Teste com relatório "envenenado".
-- [ ] **2.3** Tela **Enviar relatório**: prévia, seções que dá para tirar, campo "o que aconteceu?", consentimento, envio sem conta (P4), código `KTH-...` no Histórico.
+- [ ] **2.3** Tela **Enviar relatório**, com o botão **Enviar relatório** bem visível (grande, sempre à mostra na tela inicial e na do relatório): prévia, seções que dá para tirar, campo "o que aconteceu?", consentimento, envio sem conta (P4), código `KTH-...` no Histórico.
 - [ ] **2.4** Worker de recebimento (P4): em `servidor/relatorio-worker`, com testes e deploy pelo CI.
-- [ ] **2.5** Envio automático em erro: desligado por padrão; ligado, ainda mostra a prévia no primeiro envio.
-- [ ] **2.6** Resumo semanal para o dono, feito pelo CI a partir do repositório privado.
 
 ### Fase 3: personalização nativa com galeria (4.2.0)
 - [ ] **3.1** Pacote `personalizar` no motor, fora dos modos, com as opções nativas da seção 2; cada uma lida de volta e com desfazer.
@@ -112,23 +104,14 @@ Bugs:
 
 ### Fase 5: otimizações novas (4.4.0)
 - [ ] **5.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
-- [ ] **5.2** Placa de vídeo por jogo em notebook com duas placas (preferência "alto desempenho" de Configurações > Tela > Gráficos), com desfazer.
-- [ ] **5.3** Limite de banda da Otimização de Entrega e horário ativo do Windows Update (políticas oficiais).
-- [ ] **5.4** Segundo plano por app, com o custo medido de cada um.
-- [ ] **5.5** Inicialização atrasada em vez de removida, medida no boot seguinte.
-- [ ] **5.6** Modo de energia do Windows 11 (melhor desempenho e melhor eficiência), lido de volta.
-- [ ] **5.7** Disco pequeno: compactação do Windows só em SSD pequeno e quase cheio, com o ganho estimado antes.
-- [ ] **5.8** Kits de programas pelo winget (jogos, escritório, estudo), com os já instalados marcados.
-- [ ] **5.9** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
+- [ ] **5.2** Segundo plano por app, com o custo medido de cada um.
+- [ ] **5.3** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
 
 ### Fase 6: interface (4.5.0)
 - [ ] **6.1** Busca em tudo (Ctrl+K), com prévia.
 - [ ] **6.2** Prévia também no Otimizar, usando a mesma galeria.
-- [ ] **6.3** Modo simples e avançado.
-- [ ] **6.4** Acessibilidade: teclado, leitor de tela, alto contraste, tamanho de texto.
-- [ ] **6.5** Histórico com o "antes e depois" de cada valor.
-- [ ] **6.6** Novidades da versão na primeira abertura depois de atualizar.
-- [ ] **6.7** Inglês no aplicativo, no site e na galeria.
+- [ ] **6.3** Histórico com o "antes e depois" de cada valor.
+- [ ] **6.4** Novidades da versão na primeira abertura depois de atualizar.
 
 ---
 
@@ -166,3 +149,4 @@ Bugs:
 - 11 nov 2026 (08:52): relatório só sem conta (Worker e repositório privado); saíram o caminho pelo GitHub e o formulário de issue pública.
 - 11 nov 2026 (08:53): a seção de antivírus saiu da fase 1, só por agora; guardada em [adiado-antivirus.md](adiado-antivirus.md).
 - 11 nov 2026 (08:57): a pedido do dono, voltou ao estado de antes das personalizações próprias: PowerToys de volta, kits do winget de volta; seguem fora estilos prontos, exportar e importar, Windhawk, outros programas, antivírus (adiado) e relatório pelo GitHub.
+- 11 nov 2026 (09:02): saíram o bloco de bugs da fase 1, o envio automático e o resumo semanal, a placa de vídeo por jogo, o limite de banda, a inicialização atrasada, o modo de energia, a compactação de disco, o modo simples, a acessibilidade e o inglês. O relatório só sai quando a pessoa clica no botão, que fica bem visível.
