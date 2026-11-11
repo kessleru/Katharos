@@ -693,7 +693,7 @@ function Reinicia-Explorer {
 }
 function TamanhoPasta([string]$P) {
     if (-not (Test-Path -LiteralPath $P)) { return 0 }
-    $s = (Get-ChildItem -LiteralPath $P -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+    $s = (ListaSemLinks $P | Measure-Object Length -Sum).Sum
     if ($s) { return [double]$s } else { return 0 }
 }
 function CaminhoSeguro([string]$P) {
@@ -707,20 +707,33 @@ function CaminhoSeguro([string]$P) {
     if ($prot -contains $c) { return $false }
     return (($c -split '\\').Count -ge 3)
 }
+function ListaSemLinks([string]$P, [switch]$Pastas) {
+    # Anda pela pasta SEM entrar em junção nem link simbólico (o Get-ChildItem -Recurse do Windows PowerShell 5.1 entra, e a limpeza
+    # apagaria arquivos de fora da pasta). Devolve os arquivos (ou, com -Pastas, as subpastas, das mais fundas para as mais rasas).
+    $pilha = New-Object System.Collections.Generic.Stack[string]; $pilha.Push($P); $achadas = New-Object System.Collections.Generic.List[string]
+    while ($pilha.Count) {
+        $d = $pilha.Pop()
+        foreach ($e in @(Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)) {
+            if ($e.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+            if ($e.PSIsContainer) { $pilha.Push($e.FullName); $achadas.Add($e.FullName) } elseif (-not $Pastas) { $e }
+        }
+    }
+    if ($Pastas) { $achadas.Sort(); $achadas.Reverse(); return $achadas.ToArray() }
+}
 function LimpaAntigos([string]$P, [double]$Dias = 0) {
-    # Apaga arquivos mais velhos que N dias (arquivo em uso fica). Devolve os bytes liberados.
+    # Apaga arquivos mais velhos que N dias (arquivo em uso fica). Devolve os bytes liberados. Nunca entra em junção nem link simbólico.
     if (-not (CaminhoSeguro $P)) { if ($P) { Aviso ("pulei {0}: caminho fora do esperado" -f $P) }; return 0 }
     if (-not (Test-Path -LiteralPath $P)) { return 0 }
+    if ((Get-Item -LiteralPath $P -Force -ErrorAction SilentlyContinue).Attributes -band [IO.FileAttributes]::ReparsePoint) { Aviso ("pulei {0}: e um link para outra pasta" -f $P); return 0 }
     $limite = (Get-Date).AddDays(-$Dias); $livre = 0
-    foreach ($f in @(Get-ChildItem -LiteralPath $P -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt $limite })) {
+    foreach ($f in @(ListaSemLinks $P | Where-Object { $_.LastWriteTime -lt $limite })) {
         if ($TESTE) { $livre += $f.Length; continue }
         $len = $f.Length
         Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $f.FullName)) { $livre += $len }
     }
     if (-not $TESTE) {
-        Get-ChildItem -LiteralPath $P -Recurse -Force -Directory -ErrorAction SilentlyContinue | Sort-Object { $_.FullName.Length } -Descending |
-            Where-Object { -not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue) } | Remove-Item -Force -ErrorAction SilentlyContinue
+        foreach ($d in @(ListaSemLinks $P -Pastas)) { if (-not (Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath $d -Force -ErrorAction SilentlyContinue } }
     }
     return $livre
 }
