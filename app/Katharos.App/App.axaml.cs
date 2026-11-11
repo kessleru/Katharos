@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 
@@ -14,7 +15,25 @@ public partial class App : Application
         Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) => { e.Handled = true; Ui.MostraErro(e.Exception); };
         TaskScheduler.UnobservedTaskException += (_, e) => { Registro.Escreve("tarefa: " + e.Exception); e.SetObserved(); };
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d)
-            d.MainWindow = new Janela();
+        {
+            if (Servico.Exemplo) d.MainWindow = new Janela();
+            else
+            {
+                // a tela de abertura prepara tudo (motor, guardados, a conferência do que o Início cita); a janela principal abre já pronta
+                d.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var ab = new Abertura();
+                d.MainWindow = ab;
+                ab.Opened += async (_, _) =>
+                {
+                    await ab.Prepara();
+                    var j = new Janela();
+                    d.MainWindow = j;
+                    j.Show();
+                    d.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                    await ab.Sai();
+                };
+            }
+        }
         base.OnFrameworkInitializationCompleted();
     }
 }

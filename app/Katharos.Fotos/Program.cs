@@ -64,6 +64,17 @@ foreach (var tela in espera.Keys)
     foto!.Save(arq);
     Console.WriteLine(arq);
 }
+// a tela de abertura, na etapa do meio (o quadro "Lendo" do Figma)
+{
+    var ab = new Abertura();
+    ab.Show();
+    ab.Etapa(2, "Lendo o que já sei deste PC");
+    for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
+    using var foto = ab.CaptureRenderedFrame();
+    foto!.Save(Path.Combine(pasta, "abertura.png"));
+    Console.WriteLine(Path.Combine(pasta, "abertura.png"));
+    ab.Close();
+}
 // a caixa de novidades (aberta pelas Configurações; ao abrir depois de atualizar é a mesma)
 {
     j.Mostra("config");

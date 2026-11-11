@@ -1,6 +1,57 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "4.3.0",
+  "data": "11 de novembro de 2026",
+  "resumo": "Corrige o que apareceu no primeiro teste da 4.2.0 num PC de verdade e deixa a janela mais fácil de entender: abre na hora, cada botão leva ao lugar certo e o Início nunca sugere o que já está feito.",
+  "itens": [
+   {
+    "titulo": "Abre na hora",
+    "texto": "o que o Katharos conferiu no PC fica guardado e vale até você aplicar ou desfazer, o Windows atualizar ou passar um dia. Quando precisa ler de novo, lê uma área por vez, por trás, sem travar a janela: só a linha muda quando chega."
+   },
+   {
+    "titulo": "Tela de abertura",
+    "texto": "com o cavaleiro do site. Ela prepara tudo antes da janela abrir, inclusive conferir o que o Início vai mostrar."
+   },
+   {
+    "titulo": "O Início não se contradiz",
+    "texto": "o que já foi resolvido depois do raio-x sai da lista e a nota sobe junto. A inicialização mostra quantos programas abrem agora, os mesmos que a tela seguinte mostra."
+   },
+   {
+    "titulo": "Cada botão leva ao lugar certo",
+    "texto": "\"Aplicar esta correção\" mostra só os itens daquela sugestão. Achado que só se investiga (desligamento, tela azul, driver) mostra o passo a passo e nunca abre o Otimizar."
+   },
+   {
+    "titulo": "Tela de detalhe",
+    "texto": "o que é, o que o Katharos viu neste PC, por que importa, como resolver e como desfazer, para qualquer achado."
+   },
+   {
+    "titulo": "O que abre com o Windows",
+    "texto": "uma tela própria, com o ícone de cada programa, o atraso medido no boot e um interruptor. Os que o Katharos desligou ficam embaixo, com Religar."
+   },
+   {
+    "titulo": "Desfazer por item",
+    "texto": "escolha quais itens voltam e o resto continua aplicado. O que foi aplicado antes desta versão só volta com a área inteira, e a tela diz isso."
+   },
+   {
+    "titulo": "Memória",
+    "texto": "quem usa a RAM, com a média e o pico do dia e da semana, e se ela está cheia de verdade ou só alta. Windows, drivers e proteção aparecem sem nenhuma ação; o que o Katharos não conhece diz \"não conheço\"."
+   },
+   {
+    "titulo": "Gráficos",
+    "texto": "passe o mouse para ver o valor e a data, clique numa marca para ver o que foi aplicado, amplie com dois cliques (zoom com a roda, comparar duas medidas). Dia sem leitura fica em branco, e não mais como zero."
+   },
+   {
+    "titulo": "Sem falso alarme",
+    "texto": "as tarefas do próprio Katharos não aparecem mais como suspeitas, e programa com assinatura digital vira \"para conferir\". O driver do Ryzen Master fechado é explicado como comum. No desligamento, o que é certo (aconteceu) fica separado do que é provável (a causa)."
+   },
+   {
+    "titulo": "Visual",
+    "texto": "ícones no menu e nas seções, listas com marcador, menos texto, Jogos dentro do Início e animações curtas que respeitam o \"reduzir animações\" do Windows (dá para desligar nas Configurações)."
+   }
+  ]
+ },
+ {
   "versao": "4.2.0",
   "data": "11 de novembro de 2026",
   "resumo": "Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.",
@@ -200,33 +251,6 @@ NOVIDADES = [
    {
     "titulo": "",
     "texto": "Ritmo e avisos mudados no ícone valem na hora e ficam salvos nas preferências do Katharos (as mesmas do config)."
-   }
-  ]
- },
- {
-  "versao": "3.1.1",
-  "data": "10 de novembro de 2026",
-  "resumo": "Temperatura da CPU onde o Windows não mostra, e o painel do ícone com X.",
-  "itens": [
-   {
-    "titulo": "Temperatura da CPU pelos programas de monitoramento",
-    "texto": "o Windows só mostra a temperatura da CPU para quem tem driver no kernel, por isso muitos PCs davam \"sem sensor\". Agora o Katharos lê do MSI Afterburner, do HWiNFO (com \"Shared Memory Support\" ligado), do Core Temp e do AIDA64 quando estão abertos, pela memória compartilhada que eles publicam (a mesma que o overlay do RivaTuner usa durante os jogos). Só leitura, sem instalar driver nenhum: driver de sensor é o que anti-cheat bloqueia e o Defender marca. Vale no ícone, no medir, no raio-x e na leitura de 15 minutos."
-   },
-   {
-    "titulo": "X no painel do ícone",
-    "texto": "fecha o painel; o segundo plano continua. Clicar no ícone com o painel aberto também fecha (antes ele fechava e abria de novo)."
-   },
-   {
-    "titulo": "Sair pelo ícone vale",
-    "texto": "o segundo plano não volta sozinho em 15 minutos; volta no próximo início do Windows ou quando você ligar de novo."
-   },
-   {
-    "titulo": "PC que dormiu com jogo aberto",
-    "texto": "a sessão fecha quando o PC parou, sem contar o tempo dormindo."
-   },
-   {
-    "titulo": "",
-    "texto": "O executável novo é instalado quando o conteúdo muda (antes, só quando o tamanho mudava)."
    }
   ]
  }

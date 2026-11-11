@@ -168,12 +168,32 @@ public class AoVivo : Tela
         foreach (var c in cels)
         {
             c.Numero = T("-", "numero"); c.Texto = T("", null, null, 13).Com(t => t.TextTrimming = TextTrimming.CharacterEllipsis);
-            c.G = new Grafico { Height = 54, Margin = new Thickness(0, 10, 0, 0), Maximo = c.Max, Limite = c.Limite };
+            var cc = c;
+            c.G = new Grafico { Height = 54, Margin = new Thickness(0, 10, 0, 0), Maximo = c.Max, Limite = c.Limite, Formata = v => (Num(v) + " " + cc.Unidade).Trim() };
+            // ampliar: a mesma série, grande, com eixos (é a foto deste instante; o Ao vivo continua andando atrás)
+            c.G.PedeAmpliar += () => Amplia(cc);
+            var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { T(c.Rotulo, "rotulo") } };
+            if (c.Rotulo.Contains("RAM") || c.Rotulo.Contains("Memória"))
+                topo.Children.Add(Link("Quem usa", () => Abre("memoria")).Com(b => { Grid.SetColumn(b, 1); b.Padding = new Thickness(4, 0); }));
             grade.Children.Add(new Border { Padding = new Thickness(32, 22, 32, 20), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 1, 1),
-                Child = new StackPanel { Spacing = 4, Children = { T(c.Rotulo, "rotulo"), new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.Texto, c.G } } });
+                Child = new StackPanel { Spacing = 4, Children = { topo, new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.Texto, c.G } } });
         }
         conclusoes = new StackPanel();
         Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo.", luz), S(jogo), S(grade), S(conclusoes));
+    }
+
+    void Amplia(Cel c)
+    {
+        var j = Janela.Atual!;
+        var vals = c.G?.Valores?.ToArray() ?? Array.Empty<double>();
+        int n = vals.Length;
+        var g = new Grafico { Height = 380, Eixos = true, Valores = vals, Maximo = c.Max, Limite = c.Limite, Formata = v => (Num(v) + " " + c.Unidade).Trim(),
+                              Rotulos = Enumerable.Range(0, n).Select(i => "há " + (n - 1 - i) + " s").ToArray() };
+        var verTudo = Botao("Ver tudo", false, () => g.VerTudo()).Com(b => b.IsVisible = false);
+        g.ZoomMudou += () => verTudo.IsVisible = g.ComZoom;
+        j.MostraCaixa(Janela.Caixa(c.Rotulo + " agora", new StackPanel { Spacing = 10, Children = { verTudo, g,
+            T("Os últimos segundos, como estavam ao abrir. A roda aproxima e afasta; arrastar escolhe um trecho. Esc fecha.", "rotulo", tamanho: 12.5) } },
+            Botao("Fechar", true, j.FechaCaixa).Com(b => b.HorizontalAlignment = HorizontalAlignment.Right)), true);
     }
 
     async Task Liga()

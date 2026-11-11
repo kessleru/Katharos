@@ -18,6 +18,22 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.3.0 · 11 de novembro de 2026
+
+Corrige o que apareceu no primeiro teste da 4.2.0 num PC de verdade e deixa a janela mais fácil de entender: abre na hora, cada botão leva ao lugar certo e o Início nunca sugere o que já está feito.
+
+- **Abre na hora**: o que o Katharos conferiu no PC fica guardado e vale até você aplicar ou desfazer, o Windows atualizar ou passar um dia. Quando precisa ler de novo, lê uma área por vez, por trás, sem travar a janela: só a linha muda quando chega.
+- **Tela de abertura**: com o cavaleiro do site. Ela prepara tudo antes da janela abrir, inclusive conferir o que o Início vai mostrar.
+- **O Início não se contradiz**: o que já foi resolvido depois do raio-x sai da lista e a nota sobe junto. A inicialização mostra quantos programas abrem agora, os mesmos que a tela seguinte mostra.
+- **Cada botão leva ao lugar certo**: "Aplicar esta correção" mostra só os itens daquela sugestão. Achado que só se investiga (desligamento, tela azul, driver) mostra o passo a passo e nunca abre o Otimizar.
+- **Tela de detalhe**: o que é, o que o Katharos viu neste PC, por que importa, como resolver e como desfazer, para qualquer achado.
+- **O que abre com o Windows**: uma tela própria, com o ícone de cada programa, o atraso medido no boot e um interruptor. Os que o Katharos desligou ficam embaixo, com Religar.
+- **Desfazer por item**: escolha quais itens voltam e o resto continua aplicado. O que foi aplicado antes desta versão só volta com a área inteira, e a tela diz isso.
+- **Memória**: quem usa a RAM, com a média e o pico do dia e da semana, e se ela está cheia de verdade ou só alta. Windows, drivers e proteção aparecem sem nenhuma ação; o que o Katharos não conhece diz "não conheço".
+- **Gráficos**: passe o mouse para ver o valor e a data, clique numa marca para ver o que foi aplicado, amplie com dois cliques (zoom com a roda, comparar duas medidas). Dia sem leitura fica em branco, e não mais como zero.
+- **Sem falso alarme**: as tarefas do próprio Katharos não aparecem mais como suspeitas, e programa com assinatura digital vira "para conferir". O driver do Ryzen Master fechado é explicado como comum. No desligamento, o que é certo (aconteceu) fica separado do que é provável (a causa).
+- **Visual**: ícones no menu e nas seções, listas com marcador, menos texto, Jogos dentro do Início e animações curtas que respeitam o "reduzir animações" do Windows (dá para desligar nas Configurações).
+
 ## 4.2.0 · 11 de novembro de 2026
 
 Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.

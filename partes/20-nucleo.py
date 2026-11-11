@@ -32,7 +32,7 @@ EXPLICA_MODOS = [
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
            'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar',
-           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel'}
+           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel', 'animacoes': 'ligadas'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -56,6 +56,8 @@ DESCR_CONFIG = {
                      'troca quando você fechar; nunca: não confere'),
     'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
+    'animacoes': ('animações da janela', 'ligadas (padrão): movimentos curtos ao trocar de tela e abrir caixas; desligadas: tudo parado. Com '
+                  '"Mostrar animações no Windows" desligado, ficam paradas de qualquer jeito'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
 

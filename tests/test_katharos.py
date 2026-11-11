@@ -3864,3 +3864,155 @@ class TestEnvPs(unittest.TestCase):
             fica = env[next(c for c in env if c.lower() == 'psmodulepath')].split(';')
         self.assertEqual(fica, [r'C:\Users\a\Documents\WindowsPowerShell\Modules', r'C:\Windows\system32\WindowsPowerShell\v1.0\Modules', r'C:\Outro\Modules'])
 
+
+
+class TestPosTeste421(unittest.TestCase):
+    """O que o teste da 4.2.0 no Windows mostrou: Início de acordo com o Otimizar, todo comando com destino, desfazer por item,
+    RAM por programa e saúde sem falso alarme."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._casa0, k.CASA = k.CASA, Path(self._tmp.name)
+
+    def tearDown(self):
+        k.CASA = self._casa0
+        self._tmp.cleanup()
+
+    def test_todo_comando_que_o_motor_emite_tem_destino_na_janela(self):
+        """Antes, "medir" caía no Otimizar com o modo inteiro marcado. Todo comando de achado, proposta e saúde aparece em Rotas.cs."""
+        import ast
+        arv = ast.parse((RAIZ / 'programa' / 'katharos.py').read_text(encoding='utf-8'))
+        cmds = set()
+        def junta(no):
+            if isinstance(no, ast.Constant) and isinstance(no.value, str):
+                cmds.add(no.value.split(' ')[0])
+            elif isinstance(no, ast.IfExp):
+                junta(no.body); junta(no.orelse)
+            elif isinstance(no, ast.JoinedStr) and no.values and isinstance(no.values[0], ast.Constant):
+                cmds.add(no.values[0].value.split(' ')[0])
+        for n in ast.walk(arv):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in ('Achado', '_sug', '_prob'):
+                pos = {'Achado': 5, '_sug': 3, '_prob': 7}[n.func.id]
+                if len(n.args) > pos:
+                    junta(n.args[pos])
+                for kw in n.keywords:
+                    if kw.arg == 'comando':
+                        junta(kw.value)
+        for tab in (k.CATALOGO_PROVEDORES, k.CATALOGO_ERROS):
+            cmds |= {v[4].split(' ')[0] for v in tab.values()}
+        cmds |= {d['acao'] for d in k.CAUSAS_DE_DIAGNOSTICO.values()} if hasattr(k, 'CAUSAS_DE_DIAGNOSTICO') else set()
+        cmds.discard('')
+        rotas = (RAIZ / 'app' / 'Katharos.App' / 'Rotas.cs').read_text(encoding='utf-8')
+        sem = sorted(c for c in cmds if f'"{c}"' not in rotas)
+        self.assertEqual(sem, [], 'comandos sem destino em Rotas.cs')
+        self.assertGreater(len(cmds), 15)
+
+    def test_inicio_nao_sugere_o_que_ja_foi_feito(self):
+        """Raio-x viu 15 programas; depois a inicialização foi conferida sem nada faltando: o Início não mostra mais o achado e a nota sobe."""
+        rx = {'nota': 80, 'achados': [
+            {'titulo': 'Muita coisa abrindo com o Windows', 'impacto': 2, 'evidencia': '15 itens', 'comando': 'inicializacao'},
+            {'titulo': 'Driver antigo', 'impacto': 3, 'evidencia': 'x', 'comando': 'atualizar'}]}
+        t_rx = '2026-11-10T09:00:00'
+        depois = datetime(2026, 11, 11, 10, 0).timestamp()
+        with mock.patch.object(k, '_raiox_guardado', return_value=(t_rx, rx, {})), \
+             mock.patch.object(k, 'le_areas_conferidas', return_value={'inicializacao': {'t': depois, 'falta': 0, 'total': 6, 'sem_leitura': 0}}), \
+             mock.patch.object(k, 'pacotes_aplicados_dt', return_value=[]):
+            d = k.api_inicio(mock.Mock(), {}, lambda *a: None)
+        self.assertEqual([a['titulo'] for a in d['raiox']['achados']], ['Driver antigo'])
+        self.assertEqual(d['raiox']['resolvidos'], 1)
+        self.assertEqual(d['raiox']['nota'], 100 - 14)
+        self.assertEqual(d['raiox']['nota_raiox'], 80)
+
+    def test_inicializacao_conferida_mostra_a_contagem_de_agora(self):
+        a = {'titulo': 'Muita coisa abrindo com o Windows', 'impacto': 2, 'evidencia': '15 itens', 'comando': 'inicializacao'}
+        depois = datetime(2026, 11, 11, 10, 0).timestamp()
+        s = k.situacao_achado(a, '2026-11-10T09:00:00', {'inicializacao': {'t': depois, 'falta': 3, 'total': 8, 'titulos': ['Teams', 'Spotify', 'Steam']}}, {})
+        self.assertIn('3 programas que dá para desligar ainda abrem', s['evidencia'])
+        self.assertIn('Teams, Spotify, Steam', s['evidencia'])
+        # conferida ANTES do raio-x não vale: o raio-x é mais novo
+        antes = datetime(2026, 11, 9, 10, 0).timestamp()
+        self.assertIsNone(k.situacao_achado(a, '2026-11-10T09:00:00', {'inicializacao': {'t': antes, 'falta': 0, 'total': 8}}, {}))
+        # aplicada depois do raio-x: a pessoa agiu
+        s = k.situacao_achado(a, '2026-11-10T09:00:00', {}, {'inicializacao': depois})
+        self.assertIn('aplicado em', s['resolvido'])
+        # achado de leitura (sem área) nunca é "resolvido" sozinho
+        self.assertIsNone(k.situacao_achado({'comando': 'medir'}, '2026-11-10T09:00:00', {}, {'medir': depois}))
+
+    def test_proposta_resolvida_sai_da_central(self):
+        depois = datetime(2026, 11, 11, 10, 0).timestamp()
+        d = {'quando': '2026-11-10T09:00:00', 'propostas': [{'id': 'a', 'comando': 'inicializacao', 'tipo': 'acao'}, {'id': 'b', 'comando': 'energia', 'tipo': 'acao'}]}
+        with mock.patch.object(k, 'le_areas_conferidas', return_value={'inicializacao': {'t': depois, 'falta': 0, 'total': 4, 'sem_leitura': 0}}), \
+             mock.patch.object(k, 'pacotes_aplicados_dt', return_value=[]):
+            self.assertEqual([x['id'] for x in k.propostas_que_valem(d)], ['b'])
+
+    def test_raiox_conta_so_o_que_da_para_desligar(self):
+        """15 entradas, mas só antivírus e drivers: nenhum achado (o Otimizar não teria o que oferecer)."""
+        ini = [{'nome': 'SecurityHealth', 'cmd': 'SecurityHealthSystray.exe'}] * 15
+        with mock.patch.object(k, 'ja_aplicados', lambda: set()), mock.patch.object(k.shutil, 'which', lambda x: None):
+            p = {'so': {'win11': True, 'build': 26200, 'edicao': 'Professional'}, 'pc': {}, 'ram': {'total': 16, 'usada': 6}, 'disco': {'tipo': 'SSD', 'livre': 200, 'total': 500},
+                 'defender': {'tempo_real': True}, 'sistema': {'uptime_h': 5}, 'memoria': {'pagefile_auto': True, 'compressao': True}, 'energia': {'plano': 'desempenho'}, 'tem': {}}
+            tit = [a.titulo for a in k.analisa(p, {}, {'inicializacao': ini})]
+        self.assertNotIn('Muita coisa abrindo com o Windows', tit)
+
+    def test_desfazer_por_item(self):
+        self.assertIn('$script:ITEM', k._envolve(k.Item('x1', 'X', 'x', ps="Set-Valor 'HKCU:\\X' 'a' 1")))
+        self.assertIn("$Obj['item']", k.PRELUDIO_PS)
+        self.assertIn('ITENS_DESFAZER', k.DESFAZ_PS)
+        bk = k.dir_backup() / 'servicos'
+        bk.mkdir(parents=True)
+        (bk / 'mudancas.jsonl').write_text('{"k":"svc|a","t":"svc","item":"fax"}\n{"k":"svc|b","t":"svc","item":"fax"}\n{"k":"svc|c","t":"svc"}\n', encoding='utf-8')
+        self.assertEqual(k.itens_desfaziveis('servicos'), ({'fax': 2}, 1))
+        s = k.Saida(); s.dados = {'desfazer:restam': 1}
+        with mock.patch.object(k, 'roda_ps', return_value=s) as r, mock.patch.object(k, 'invalida_cache_ja'):
+            k.grava_json(k.CASA / 'estado.json', {'pacotes': {'servicos': {'quando': '2026-11-10T10:00:00', 'itens': ['fax', 'mapas'], 'revertido': False}}})
+            k.desfaz_pacote(mock.Mock(t=mock.Mock()), 'servicos', itens=['fax'])
+            self.assertIn("$script:ITENS_DESFAZER = @('fax')", r.call_args.args[1])
+        reg = k.estado()['pacotes']['servicos']
+        self.assertEqual(reg['itens'], ['mapas'])
+        self.assertFalse(reg['revertido'], 'desfazer um item não marca a área inteira como desfeita')
+
+    def test_api_desfazer_aceita_itens(self):
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'desfaz_pacote', return_value=0) as d, \
+             mock.patch.object(k, 'Trava', mock.Mock(return_value=mock.Mock(pega=lambda: True, solta=lambda: None))), \
+             mock.patch.object(k, 'dir_backup', return_value=k.CASA), mock.patch.object(k, 'marca_propostas_feitas'), \
+             mock.patch.object(k, 'publica_evento'), mock.patch.object(k, 'exporta_propostas'):
+            (k.CASA / 'servicos').mkdir()
+            (k.CASA / 'servicos' / 'mudancas.jsonl').write_text('{}\n', encoding='utf-8')
+            k.api_desfazer(mock.Mock(), {'itens': {'servicos': ['fax']}}, lambda *a: None)
+            self.assertEqual(d.call_args.kwargs.get('itens'), ['fax'])
+
+    def test_ram_por_programa(self):
+        agora = datetime(2026, 11, 11, 12, 0)
+        linhas = []
+        for m in range(0, 180):
+            t = agora - timedelta(minutes=180 - m)
+            linhas.append(json.dumps({'t': t.isoformat(timespec='seconds'), 'p': [['chrome', 2000 + m], ['svchost', 900], ['zzdesconhecido', 100]],
+                                      'commit_pct': 92, 'comprimida_mb': 600}))
+        (k.CASA / 'ram.jsonl').write_text('\n'.join(linhas) + '\n', encoding='utf-8')
+        with mock.patch.object(k, 'datetime', mock.Mock(wraps=datetime, now=lambda: agora, fromisoformat=datetime.fromisoformat)), \
+             mock.patch.object(k, 'le_agora', return_value={'ram_total_gb': 16}):
+            d = k.api_memoria_programas(mock.Mock(perfil=None), {}, lambda *a: None)
+        por = {x['processo']: x for x in d['programas']}
+        self.assertEqual(por['chrome']['classe'], 'conhecido')
+        self.assertIn('fechar', por['chrome']['acoes'])
+        self.assertEqual(por['svchost']['classe'], 'protegido')
+        self.assertEqual(por['svchost']['acoes'], [], 'Windows nunca ganha ação')
+        self.assertEqual(por['zzdesconhecido']['o_que_e'], 'não conheço este programa')
+        self.assertIsNone(por['chrome']['horas'][0], 'hora sem leitura fica sem ponto, nunca zero')
+        self.assertEqual(d['pressao']['nivel'], 'cheia')
+
+    def test_pressao_alta_mas_folgada_nao_e_alarme(self):
+        agora = datetime(2026, 11, 11, 12, 0)
+        ls = [(agora, {}, 60, 100)] * 30
+        self.assertEqual(k.pressao_ram(ls, 16)['nivel'], 'folgada')
+        self.assertEqual(k.pressao_ram([], 16)['nivel'], 'sem_dado')
+
+    def test_ryzen_master_e_ruido_conhecido_e_desligamento_nao_e_aplicar(self):
+        g = {'provedor': 'Service Control Manager', 'id': 7000, 'n': 12, 'dias': 10, 'arg': 'AMD Ryzen Master Driver', 'ultimo': '2026-11-10T09:00:00'}
+        p = k.explica_grupo(g)
+        self.assertEqual(p['gravidade'], 'baixa')
+        self.assertEqual(p['comando'], '', 'sem comando: não vira proposta')
+        ev = {'saude': {'problemas': [k._prob('kp41', 'erro', 'alta', 'O PC desligou sem avisar', '3 ocorrências', 'x', 'confira', 'medir', 3)]}}
+        s = k.r_saude(ev)[0]
+        self.assertEqual(s['tipo'], 'leitura', 'achado só de leitura nunca ganha "Aplicar"')
+        self.assertEqual((s['certeza'], s['causa']), ('aconteceu', 'a investigar'))

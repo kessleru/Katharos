@@ -23,7 +23,7 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '4.2.0'
+VERSAO = '4.3.0'
 DATA_VERSAO = '11 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
@@ -1080,7 +1080,7 @@ EXPLICA_MODOS = [
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
            'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar',
-           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel'}
+           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel', 'animacoes': 'ligadas'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1104,6 +1104,8 @@ DESCR_CONFIG = {
                      'troca quando você fechar; nunca: não confere'),
     'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
+    'animacoes': ('animações da janela', 'ligadas (padrão): movimentos curtos ao trocar de tela e abrir caixas; desligadas: tudo parado. Com '
+                  '"Mostrar animações no Windows" desligado, ficam paradas de qualquer jeito'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
 
@@ -8279,7 +8281,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'avisos-intervalo': tuple(str(h) for h in range(1, 49)), 'avisos-no-jogo': ('so-grave', 'nunca', 'todos'), 'resumo-diario': ('sim', 'nao'), 'canal': ('estavel', 'previa'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'avisos-intervalo': tuple(str(h) for h in range(1, 49)), 'avisos-no-jogo': ('so-grave', 'nunca', 'todos'), 'resumo-diario': ('sim', 'nao'), 'canal': ('estavel', 'previa'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca'), 'animacoes': ('ligadas', 'desligadas')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
@@ -16675,6 +16677,57 @@ def abre_por_clique(cru):
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "4.3.0",
+  "data": "11 de novembro de 2026",
+  "resumo": "Corrige o que apareceu no primeiro teste da 4.2.0 num PC de verdade e deixa a janela mais fácil de entender: abre na hora, cada botão leva ao lugar certo e o Início nunca sugere o que já está feito.",
+  "itens": [
+   {
+    "titulo": "Abre na hora",
+    "texto": "o que o Katharos conferiu no PC fica guardado e vale até você aplicar ou desfazer, o Windows atualizar ou passar um dia. Quando precisa ler de novo, lê uma área por vez, por trás, sem travar a janela: só a linha muda quando chega."
+   },
+   {
+    "titulo": "Tela de abertura",
+    "texto": "com o cavaleiro do site. Ela prepara tudo antes da janela abrir, inclusive conferir o que o Início vai mostrar."
+   },
+   {
+    "titulo": "O Início não se contradiz",
+    "texto": "o que já foi resolvido depois do raio-x sai da lista e a nota sobe junto. A inicialização mostra quantos programas abrem agora, os mesmos que a tela seguinte mostra."
+   },
+   {
+    "titulo": "Cada botão leva ao lugar certo",
+    "texto": "\"Aplicar esta correção\" mostra só os itens daquela sugestão. Achado que só se investiga (desligamento, tela azul, driver) mostra o passo a passo e nunca abre o Otimizar."
+   },
+   {
+    "titulo": "Tela de detalhe",
+    "texto": "o que é, o que o Katharos viu neste PC, por que importa, como resolver e como desfazer, para qualquer achado."
+   },
+   {
+    "titulo": "O que abre com o Windows",
+    "texto": "uma tela própria, com o ícone de cada programa, o atraso medido no boot e um interruptor. Os que o Katharos desligou ficam embaixo, com Religar."
+   },
+   {
+    "titulo": "Desfazer por item",
+    "texto": "escolha quais itens voltam e o resto continua aplicado. O que foi aplicado antes desta versão só volta com a área inteira, e a tela diz isso."
+   },
+   {
+    "titulo": "Memória",
+    "texto": "quem usa a RAM, com a média e o pico do dia e da semana, e se ela está cheia de verdade ou só alta. Windows, drivers e proteção aparecem sem nenhuma ação; o que o Katharos não conhece diz \"não conheço\"."
+   },
+   {
+    "titulo": "Gráficos",
+    "texto": "passe o mouse para ver o valor e a data, clique numa marca para ver o que foi aplicado, amplie com dois cliques (zoom com a roda, comparar duas medidas). Dia sem leitura fica em branco, e não mais como zero."
+   },
+   {
+    "titulo": "Sem falso alarme",
+    "texto": "as tarefas do próprio Katharos não aparecem mais como suspeitas, e programa com assinatura digital vira \"para conferir\". O driver do Ryzen Master fechado é explicado como comum. No desligamento, o que é certo (aconteceu) fica separado do que é provável (a causa)."
+   },
+   {
+    "titulo": "Visual",
+    "texto": "ícones no menu e nas seções, listas com marcador, menos texto, Jogos dentro do Início e animações curtas que respeitam o \"reduzir animações\" do Windows (dá para desligar nas Configurações)."
+   }
+  ]
+ },
+ {
   "versao": "4.2.0",
   "data": "11 de novembro de 2026",
   "resumo": "Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.",
@@ -16874,33 +16927,6 @@ NOVIDADES = [
    {
     "titulo": "",
     "texto": "Ritmo e avisos mudados no ícone valem na hora e ficam salvos nas preferências do Katharos (as mesmas do config)."
-   }
-  ]
- },
- {
-  "versao": "3.1.1",
-  "data": "10 de novembro de 2026",
-  "resumo": "Temperatura da CPU onde o Windows não mostra, e o painel do ícone com X.",
-  "itens": [
-   {
-    "titulo": "Temperatura da CPU pelos programas de monitoramento",
-    "texto": "o Windows só mostra a temperatura da CPU para quem tem driver no kernel, por isso muitos PCs davam \"sem sensor\". Agora o Katharos lê do MSI Afterburner, do HWiNFO (com \"Shared Memory Support\" ligado), do Core Temp e do AIDA64 quando estão abertos, pela memória compartilhada que eles publicam (a mesma que o overlay do RivaTuner usa durante os jogos). Só leitura, sem instalar driver nenhum: driver de sensor é o que anti-cheat bloqueia e o Defender marca. Vale no ícone, no medir, no raio-x e na leitura de 15 minutos."
-   },
-   {
-    "titulo": "X no painel do ícone",
-    "texto": "fecha o painel; o segundo plano continua. Clicar no ícone com o painel aberto também fecha (antes ele fechava e abria de novo)."
-   },
-   {
-    "titulo": "Sair pelo ícone vale",
-    "texto": "o segundo plano não volta sozinho em 15 minutos; volta no próximo início do Windows ou quando você ligar de novo."
-   },
-   {
-    "titulo": "PC que dormiu com jogo aberto",
-    "texto": "a sessão fecha quando o PC parou, sem contar o tempo dormindo."
-   },
-   {
-    "titulo": "",
-    "texto": "O executável novo é instalado quando o conteúdo muda (antes, só quando o tamanho mudava)."
    }
   ]
  }

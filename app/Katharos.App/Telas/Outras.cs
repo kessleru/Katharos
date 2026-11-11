@@ -205,7 +205,7 @@ public class Desfazer : Tela
 public class Configuracoes : Tela
 {
     // as que importam para quem usa as janelas, na ordem de uso (as de aparência do terminal ficam na CLI)
-    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes", "canal" };
+    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes", "canal", "animacoes" };
     // o que o motor pode avisar e quando (I24)
     static readonly string[] Motor = { "avisos-intervalo", "avisos-no-jogo", "resumo-diario" };
     static readonly Dictionary<string, string[]> OpcoesCurtas = new() { ["avisos-intervalo"] = new[] { "2", "6", "12", "24" } };
@@ -251,7 +251,12 @@ public class Configuracoes : Tela
         {
             string rot = Rotulos.TryGetValue(o, out var r) ? r : o;
             if (k == "avisos-intervalo") rot = o + " h";
-            ops.Children.Add(Botao(rot, o == atual, async () => { await Servico.Le("config_gravar", new { chave = k, valor = o }); await Recarrega(); }));
+            ops.Children.Add(Botao(rot, o == atual, async () =>
+            {
+                await Servico.Le("config_gravar", new { chave = k, valor = o });
+                if (k == "animacoes") Movimento.Ligado = o != "desligadas";   // vale na hora, sem reabrir
+                await Recarrega();
+            }));
         }
         lista.Children.Add(Linha(Maiuscula(c.S("rotulo")), c.S("explica"), null, ops));
     }

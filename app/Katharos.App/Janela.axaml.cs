@@ -34,7 +34,7 @@ public partial class Janela : Window
             if (b.Content is string texto)
                 b.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { Icones.De(icone, 16, Tema.Apagado), new TextBlock { Text = texto, VerticalAlignment = VerticalAlignment.Center } } };
         }
-        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.2.0";
+        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.3.0";
         relogio.Tick += async (_, _) =>
         {
             if (!lendoAgora)
