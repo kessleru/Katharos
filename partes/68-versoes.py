@@ -16,7 +16,7 @@
 #
 # ███████████████████████████████████████████████████████████████████████████
 
-VERSAO_DADOS = 2          # sobe quando o formato do que fica em ~/.katharos muda (e ganha um passo em MIGRACOES)
+VERSAO_DADOS = 3          # sobe quando o formato do que fica em ~/.katharos muda (e ganha um passo em MIGRACOES)
 COPIAS_DE_VERSAO = 5      # quantas cópias de segurança de troca de versão ficam guardadas
 ARQUIVOS_DE_ESTADO = ('estado.json', 'config.json', 'relatorio.json', 'ensaios.json')
 MIGRACOES = []            # [(número, descrição, função(estado, casa))], em ordem
@@ -48,6 +48,12 @@ def _m_sem_perfil(e, casa):
     if isinstance(c, dict) and c.get('explicacao') not in (None, '', 'curta', 'completa'):
         c.pop('explicacao')   # valor que a versão nova não entende volta para o padrão
         grava_json(cfg, c)
+
+
+@migracao(3, 'memória do PC em SQLite (katharos.db): minutos, sessões e mudanças importados dos arquivos de sempre')
+def _m_memoria(e, casa):
+    # os .jsonl continuam (o segundo plano escreve neles); o banco só passa a guardar mais tempo. Sem sqlite, nada muda.
+    memoria_atualiza()
 
 
 def _v(txt):

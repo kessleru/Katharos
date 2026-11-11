@@ -31,7 +31,8 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar',
+           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -46,6 +47,11 @@ DESCR_CONFIG = {
     'tempo-real': ('ritmo do segundo plano', 'de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10'),
     'energia-automatica': ('notebook: plano de energia sozinho na tomada e na bateria', 'nao (padrão) ou sim: o segundo plano troca o plano de '
                            'energia quando você liga ou tira o carregador (escolhe os planos ao ligar; desligar volta o plano de antes)'),
+    'avisos-intervalo': ('horas entre dois avisos do mesmo tipo', '6 (padrão); de 1 a 48. Calor grave avisa sempre'),
+    'avisos-no-jogo': ('avisos durante o jogo', 'so-grave (padrão): só calor grave; nunca; ou todos'),
+    'resumo-diario': ('um resumo por dia no lugar de avisos soltos', 'nao (padrão) ou sim: um aviso por dia com o que o motor achou'),
+    'motor-nunca': ('o que o motor nunca propõe', 'comandos separados por vírgula (ex.: turbo,energia)'),
+    'canal': ('canal de atualização do Katharos com janelas', 'estavel (padrão) ou previa (versões de teste antes de todo mundo)'),
     'atualizacoes': ('atualizações do Katharos com janelas', 'avisar (padrão): baixa a versão nova e pergunta antes de reiniciar; automatico: '
                      'troca quando você fechar; nunca: não confere'),
     'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),

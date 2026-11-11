@@ -451,6 +451,7 @@ def api_aplicar(ctx, p, ev):
         try:
             for nome in ordem:
                 marca_propostas_feitas(nome)
+            publica_evento('aplicou', {'pacotes': [r['pacote'] for r in res if r['feitos']], 'pela': 'janela'})
             exporta_propostas(ctx)
         except Exception as ex:
             LOG.escreve(f'api aplicar: pensar depois falhou: {ex!r}')
@@ -477,6 +478,7 @@ def api_desfazer(ctx, p, ev):
             res.append({'pacote': n, 'titulo': PACOTES[n].titulo, 'ok': bool(tem and cod == 0), 'nada': not tem})
         try:
             marca_propostas_feitas('desfazer')
+            publica_evento('desfez', {'pacotes': [r['pacote'] for r in res if r['ok']], 'pela': 'janela'})
             exporta_propostas(ctx)
         except Exception as ex:
             LOG.escreve(f'api desfazer: pensar depois falhou: {ex!r}')

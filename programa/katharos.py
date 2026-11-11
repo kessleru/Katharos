@@ -1078,7 +1078,8 @@ EXPLICA_MODOS = [
 ]
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
-           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar'}
+           'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar',
+           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1093,6 +1094,11 @@ DESCR_CONFIG = {
     'tempo-real': ('ritmo do segundo plano', 'de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10'),
     'energia-automatica': ('notebook: plano de energia sozinho na tomada e na bateria', 'nao (padrão) ou sim: o segundo plano troca o plano de '
                            'energia quando você liga ou tira o carregador (escolhe os planos ao ligar; desligar volta o plano de antes)'),
+    'avisos-intervalo': ('horas entre dois avisos do mesmo tipo', '6 (padrão); de 1 a 48. Calor grave avisa sempre'),
+    'avisos-no-jogo': ('avisos durante o jogo', 'so-grave (padrão): só calor grave; nunca; ou todos'),
+    'resumo-diario': ('um resumo por dia no lugar de avisos soltos', 'nao (padrão) ou sim: um aviso por dia com o que o motor achou'),
+    'motor-nunca': ('o que o motor nunca propõe', 'comandos separados por vírgula (ex.: turbo,energia)'),
+    'canal': ('canal de atualização do Katharos com janelas', 'estavel (padrão) ou previa (versões de teste antes de todo mundo)'),
     'atualizacoes': ('atualizações do Katharos com janelas', 'avisar (padrão): baixa a versão nova e pergunta antes de reiniciar; automatico: '
                      'troca quando você fechar; nunca: não confere'),
     'fps': ('FPS nos jogos', 'sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao'),
@@ -7773,7 +7779,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'avisos-intervalo': tuple(str(h) for h in range(1, 49)), 'avisos-no-jogo': ('so-grave', 'nunca', 'todos'), 'resumo-diario': ('sim', 'nao'), 'canal': ('estavel', 'previa'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
@@ -10988,6 +10994,7 @@ def config_segundo_plano():
             'energia_auto': config('energia-automatica', 'nao') == 'sim', 'energia_tomada': config('energia-tomada', ''),
             'energia_bateria': config('energia-bateria', ''), 'energia_tomada_nome': config('energia-tomada-nome', ''),
             'energia_bateria_nome': config('energia-bateria-nome', ''),
+            'avisos_intervalo_h': config('avisos-intervalo', '6'), 'avisos_no_jogo': config('avisos-no-jogo', 'so-grave'),
             'aviso_cpu': REGRAS_MOTOR['calor_cpu'], 'aviso_gpu': REGRAS_MOTOR['calor_gpu'],
             'nomes_de_jogo': nomes_de_jogo()}
 
@@ -11258,7 +11265,13 @@ def _le_jsonl(arq, campo, desde):
 
 
 def le_minutos(horas=24, agora=None):
-    return _le_jsonl(CASA / 'minutos.jsonl', 't', (agora or datetime.now()) - timedelta(hours=horas))
+    desde = (agora or datetime.now()) - timedelta(hours=horas)
+    if horas > 14 * 24:   # além do que o minutos.jsonl guarda: a memória do PC tem meses (e se não tiver, fica o arquivo)
+        memoria_atualiza()
+        m = memoria_minutos(desde, agora)
+        if m:
+            return m
+    return _le_jsonl(CASA / 'minutos.jsonl', 't', desde)
 
 
 def le_sessoes(dias=60, agora=None):
@@ -12882,9 +12895,16 @@ def ferramenta_conselheiro(ctx, args):
             num = (f': {br(r["antes"], 0)} → {br(r["depois"], 0)} {r["un"]}' if r['antes'] is not None else '')
             t.item('●', cor_v.get(r['veredito'], 'apagado'), f'{r["titulo"]} ({r["quando"]:%d/%m})', f'previ {r["previsto"]}; {r["veredito"]}{num}')
         t.nota('    ajudou? "katharos conselheiro --resposta ID sim" (ou nao, ou nao-importa)', 4)
-    sug = gera_sugestoes(ev)
+    memoria_atualiza()
+    pz = pensa(ev)
+    sug = pz['propostas']
     registra_vistas(e, sug)
     salva_estado(e)
+    for d in pz['diagnosticos']:
+        x = explica(d)
+        t.titulo(f'{d["titulo"].lower()}: {d["nome"]}')
+        t.chaves([('o que eu vi', x['vi']), ('por que acho isso', x['porque']), ('o que eu faria', x['faria']), ('o que mudaria a conclusão', x['mudaria']),
+                  ('confiança', d['confianca'])], recuo=4)
     if not sug:
         if len(ev['amostras']) < 6:
             t.nota('Poucas medidas ainda para propor algo (preciso de pelo menos 6, em 3 dias ou mais).')
@@ -12914,14 +12934,18 @@ def ferramenta_conselheiro(ctx, args):
 def exporta_propostas(ctx=None):
     """Grava as propostas de agora em ~/.katharos/propostas.json: o ícone do segundo plano mostra as primeiras."""
     try:
+        memoria_atualiza()
         ev = coleta_evidencias(ctx)
-        sug = gera_sugestoes(ev)
+        p = pensa(ev)
+        sug = p['propostas']
         escreve_linha_de_base(ev.get('minutos'), ev.get('agora'))
         res = resultados_previstos({'conselheiro_feitos': ev.get('feitos') or {}}, ev.get('minutos') or [], ev.get('sessoes') or [], ev.get('agora'))
         respondidas = ev.get('respostas') or {}
         pendentes = [dict(r, quando=r['quando'].isoformat()) for r in res if r['veredito'] != 'cedo para dizer' and r['id'] not in respondidas]
-        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]],
-             'resultados': pendentes[:3]}
+        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo', 'explicacao', 'desfazer', 'causa')} for x in sug[:6]],
+             'resultados': pendentes[:3], 'diagnosticos': [{k: x.get(k) for k in ('problema', 'titulo', 'causa', 'nome', 'confianca', 'evidencias', 'descartadas', 'faria', 'mudaria')}
+                                                           for x in p['diagnosticos']],
+             'achados': [{k: x.get(k) for k in ('id', 'tipo', 'titulo', 'vi', 'confianca', 'gravidade', 'contexto', 'fonte')} for x in p['achados']][:20]}
         tmp = CASA / 'propostas.json.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'propostas.json')
@@ -12936,18 +12960,720 @@ def avisa_propostas(e, ctx=None):
     try:
         ev = coleta_evidencias(ctx)
         ev['fundo_ligado'] = True
-        sug = gera_sugestoes(ev)
+        sug = pensa(ev)['propostas']
         registra_vistas(e, sug)
         vistos = e.setdefault('conselheiro_avisadas', {})
         novas = []
         for x in sug:
-            if x['confianca'] == 'alta' and x['tipo'] == 'acao' and not recente_h(vistos.get(x['id']), 24 * 7):
+            if x['confianca'] == 'alta' and x['tipo'] == 'acao' and not recente_h(vistos.get(x['id']), 24 * 7) and pode_avisar(e, 'proposta:' + x['id']):
                 novas.append(f'{x["titulo"]} (katharos {x["comando"]})')
                 vistos[x['id']] = agora_iso()
+                marca_aviso(e, 'proposta:' + x['id'])
+        if config('resumo-diario', 'nao') == 'sim':   # um aviso por dia, com tudo, no lugar de vários soltos
+            if novas and not recente_h(e.get('resumo_diario_em'), 20):
+                e['resumo_diario_em'] = agora_iso()
+                return [f'Resumo do dia: {len(novas)} {"proposta nova" if len(novas) == 1 else "propostas novas"}: ' + '; '.join(novas)]
+            return []
         return novas
     except Exception as ex:
         LOG.escreve(f'conselheiro falhou: {ex!r}')
         return []
+# ─────────────── detectores, causas, planejador, avaliador e explicações (I8 a I11, I13, I15) ───────────────
+#  detectores  → ACHADOS: cada um olha um tipo de dado e diz o que viu, com números, duração, contexto, fonte e confiança
+#  causas      → DIAGNÓSTICO: um mapa em dados (CAUSAS) diz que achados confirmam ou descartam cada causa; a de mais pontos ganha,
+#                e as descartadas aparecem com o motivo
+#  planejador  → a proposta de cada causa (o comando, a previsão, o risco e como desfazer), pesada pelo que já funcionou neste PC
+#  avaliador   → resultado medido de cada coisa aplicada mexe no peso daquele alvo neste PC; o que piorou vira proposta de desfazer
+#  explicações → sempre quatro partes: o que eu vi, por que acho que é isso, o que eu faria, o que mudaria minha conclusão
+# Nada aqui aplica coisa alguma: só propõe. Pouco dado dá "ainda não sei", nunca alarme.
+
+def _achado(id_, tipo, titulo, vi, sintomas, conf, fonte, contexto='', numeros=None, gravidade=2, duracao_min=None):
+    return {'id': id_, 'tipo': tipo, 'titulo': titulo, 'vi': vi, 'sintomas': list(sintomas), 'confianca': conf, 'fonte': fonte,
+            'contexto': contexto, 'numeros': numeros or {}, 'gravidade': gravidade, 'duracao_min': duracao_min}
+
+
+DETECTORES = []
+
+
+def detector(f):
+    DETECTORES.append(f)
+    return f
+
+
+@detector
+def d_limite_sustentado(ev):
+    """Nas sessões de jogo: o que ficou no limite por uma fração relevante do tempo jogado."""
+    r = resumo_sessoes(ev.get('sessoes') or [])
+    if not r or r['horas'] < REGRAS_MOTOR['central_horas_min'] or r['sessoes'] < 2:   # uma sessão só não conclui nada
+        return []
+    dias = len({s['_dt'].date() for s in ev.get('sessoes') or [] if s.get('_dt')})
+    conf = confianca(int(r['horas'] * 60), dias, r['sessoes'])
+    if not conf:
+        return []
+    out = []
+    nomes = {'cpu': ('CPU no limite', 'cpu_limite'), 'gpu': ('placa de vídeo no limite', 'gpu_limite'), 'freio': ('CPU freando', 'freio'),
+             'calor': ('calor acima do seguro', 'calor'), 'ram': ('RAM cheia', 'ram_cheia'), 'vram': ('memória de vídeo cheia', 'vram_cheia'),
+             'disco': ('disco 100 % ocupado', 'disco_cheio')}
+    for chave, (nome, sint) in nomes.items():
+        pct = (r['limites'] or {}).get(chave, 0)
+        if pct >= REGRAS_MOTOR['central_' + chave]:
+            out.append(_achado(f'limite-{chave}', 'limite', f'{nome[0].upper()}{nome[1:]} nos jogos',
+                               f'em {r["sessoes"]} sessões de jogo ({br(r["horas"], 1)} h), {nome} em {br(pct, 0)} % do tempo',
+                               [sint, 'jogo'], conf, 'sessões do segundo plano', 'jogo', {'pct': pct, 'horas': r['horas'], 'sessoes': r['sessoes']},
+                               3 if chave in ('calor', 'freio') else 2, round(r['horas'] * 60 * pct / 100)))
+    if r.get('temp_cpu_max') or r.get('temp_gpu_max'):
+        out.append(_achado('tem-sensor', 'contexto', 'Há leitura de temperatura', 'o segundo plano leu temperatura nas sessões', ['tem_sensor'], conf, 'sessões'))
+    return out
+
+
+@detector
+def d_fps(ev):
+    """FPS medido (PresentMon): travadas e 1 % low muito abaixo da média; travadas sem nenhum limite apontam para driver."""
+    ss = [s for s in ev.get('sessoes') or [] if isinstance(s.get('fps_med'), (int, float)) and (s.get('min') or 0) >= 5]
+    if len(ss) < 2:
+        return []
+    trav = [s.get('travadas_por_min') or 0 for s in ss]
+    med_trav = _mediana_lista(trav)
+    razao = _mediana_lista([s['fps_1low'] / s['fps_med'] for s in ss if s.get('fps_1low') and s['fps_med']])
+    conf = confianca(sum(int(s['min']) for s in ss), len({s['_dt'].date() for s in ss if s.get('_dt')}), len(ss))
+    if not conf:
+        return []
+    out = []
+    if med_trav >= 1 or (razao is not None and razao < 0.5):
+        sem_limite = [s for s in ss if max((s.get('tempo_no_limite') or {}).values() or [0]) < 10]
+        out.append(_achado('fps-travadas', 'fps', 'Travadas nos jogos', f'mediana de {br(med_trav, 1)} travadas por minuto e 1 % low em '
+                           f'{br(100 * (razao or 0), 0)} % do FPS médio, em {len(ss)} sessões', ['travadas'] + (['sem_limite'] if len(sem_limite) * 2 >= len(ss) else []),
+                           conf, 'PresentMon (eventos do Windows)', 'jogo', {'travadas_por_min': med_trav, 'razao_1low': razao, 'sessoes_sem_limite': len(sem_limite)}, 3))
+    return out
+
+
+@detector
+def d_anomalia(ev):
+    """Últimas 24 h fora do normal deste PC (linha de base, mesmo contexto)."""
+    out = []
+    for s in r_fora_do_normal(ev):
+        met = s['metrica']
+        out.append(_achado(f'anomalia-{met}', 'anomalia', s['titulo'], s['porque'][0].lower() + s['porque'][1:].rstrip('.'),
+                           [f'{met}_acima', 'repouso'], s['confianca'], 'minutos do segundo plano', 'sem_jogo', {'metrica': met}))
+    return out
+
+
+@detector
+def d_tendencia(ev):
+    """Piorando há dias: medidas diárias (espaço, boot, RAM, CPU, temperatura) com direção firme."""
+    ach = _achados_tendencia(ev)
+    out = []
+    sint = {'livre_c': 'espaco_caindo', 'boot_s': 'boot_lento', 'ram_usada': 'ram_subindo', 'cpu': 'cpu_acima', 'temperatura': 'calor_repouso',
+            'inicializacao': 'inicializacao_cresceu'}
+    for chave, txt in ach.items():
+        if chave in sint:
+            out.append(_achado(f'tendencia-{chave}', 'tendencia', 'Mudando com o tempo', txt[0] if isinstance(txt, tuple) else str(txt),
+                               [sint[chave]], 'média', 'medidas diárias', 'repouso', {'chave': chave}))
+    return out
+
+
+@detector
+def d_piora_pos_mudanca(ev):
+    """Depois de uma mudança, algo piorou além da oscilação (e não vinha piorando antes)."""
+    out = []
+    for s in r_efeito_dos_pacotes(ev) + r_jogo_antes_depois(ev):
+        out.append(_achado('piora-' + s['id'], 'piora', s['titulo'], s['porque'].rstrip('.'), ['piorou_depois'], s['confianca'],
+                           'medidas antes e depois', '', {'comando': s['comando']}, 3))
+    return out
+
+
+@detector
+def d_eventos_windows(ev):
+    """Tela azul, driver com erro, disco com erro: do motor de saúde (registro de eventos do Windows)."""
+    out = []
+    for x in ((ev.get('saude') or {}).get('problemas') or [])[:8]:
+        sint = ['evento_windows']
+        txt = (x.get('titulo', '') + ' ' + x.get('id', '')).lower()
+        if any(p in txt for p in ('tela azul', 'bugcheck', 'bsod', 'whea')):
+            sint.append('tela_azul')
+        if 'driver' in txt:
+            sint.append('driver_erro')
+        if 'disco' in txt or 'disk' in txt or 'ntfs' in txt:
+            sint.append('disco_erro')
+        out.append(_achado('windows-' + x['id'], 'evento', x['titulo'], str(x.get('evidencia') or ''), sint,
+                           {'alta': 'alta', 'média': 'média'}.get(x.get('gravidade'), 'baixa'), 'eventos do Windows', '', {}, 3 if x.get('gravidade') == 'alta' else 2))
+    return out
+
+
+@detector
+def d_raiox(ev):
+    """O que o raio-x mediu e importa para diagnóstico (DPC alto, paginação em HD, pouca RAM, energia em economia)."""
+    rx = ev.get('raiox') or {}
+    out = []
+    dpc = (rx.get('medidas') or {}).get('dpc')
+    if isinstance(dpc, (int, float)) and dpc >= 5:
+        out.append(_achado('raiox-dpc', 'limite', 'Drivers segurando o processador', f'o raio-x mediu {br(dpc, 1)} % do tempo da CPU em DPC (o normal é abaixo de 2 %)',
+                           ['dpc_alto'], 'média', 'raio-x', '', {'dpc': dpc}, 3))
+    perfil = ev.get('perfil') or {}
+    if (perfil.get('memoria') or {}).get('pagefile_discos') and any(d.get('tipo') == 'HDD' for d in perfil['memoria']['pagefile_discos'] if isinstance(d, dict)):
+        out.append(_achado('raiox-pagefile-hd', 'contexto', 'Paginação num HD', 'o arquivo de paginação está num HD', ['pagefile_hd'], 'alta', 'raio-x'))
+    if any(m.get('bateria') for m in (ev.get('minutos') or [])[-60:]):
+        out.append(_achado('na-bateria', 'contexto', 'Notebook na bateria', 'parte das leituras recentes foi na bateria', ['bateria'], 'alta', 'segundo plano'))
+    return out
+
+
+def detecta(ev):
+    """Roda todos os detectores (um com defeito não derruba os outros). Achados com confiança None (ainda não sei) ficam de fora."""
+    out = []
+    for d in DETECTORES:
+        try:
+            out += [a for a in (d(ev) or []) if a.get('confianca')]
+        except Exception as ex:
+            LOG.escreve(f'detector {d.__name__} falhou: {ex!r}')
+    return out
+
+
+# ───────── mapa de causas (dados: sintoma → causas → o que confirma, o que descarta → ação) ─────────
+# confirma: {sintoma: pontos}; descarta: [sintoma] (se algum aparecer, a causa sai, com o motivo); precisa: sintomas que a causa exige.
+CAUSAS = [
+    {'id': 'calor', 'problema': 'jogos', 'nome': 'calor', 'precisa': ['calor'], 'confirma': {'calor': 3, 'freio': 2, 'calor_repouso': 1},
+     'descarta': [], 'acao': 'energia', 'faria': 'usar o plano de energia que segura o pico e limpar poeira e pasta térmica (o que resolve de verdade)',
+     'previsao': {'chave': 'calor', 'texto': 'menos tempo acima do limite de temperatura'}, 'risco': 'nenhum: o plano volta com o desfazer'},
+    {'id': 'economia', 'problema': 'jogos', 'nome': 'economia de energia', 'precisa': ['freio'], 'confirma': {'freio': 2, 'bateria': 3},
+     'descarta': ['calor'], 'acao': 'energia', 'faria': 'plano de energia de desempenho na tomada (no notebook, ligar a troca automática)',
+     'previsao': {'chave': 'freio', 'texto': 'a CPU deixa de frear com carga'}, 'risco': 'mais consumo de energia'},
+    {'id': 'cpu', 'problema': 'jogos', 'nome': 'a CPU', 'precisa': ['cpu_limite'], 'confirma': {'cpu_limite': 3, 'cpu_acima': 1},
+     'descarta': ['freio', 'calor'], 'acao': 'turbo', 'faria': 'menos coisa rodando junto e a CPU com energia no máximo',
+     'previsao': {'chave': 'cpu', 'texto': 'menos tempo com a CPU no limite'}, 'risco': 'mais consumo de energia'},
+    {'id': 'gpu', 'problema': 'jogos', 'nome': 'a placa de vídeo (já no máximo)', 'precisa': ['gpu_limite'], 'confirma': {'gpu_limite': 2},
+     'descarta': ['cpu_limite', 'calor', 'freio'], 'acao': '', 'faria': 'nada no Windows: baixar resolução ou qualidade no jogo, ou ligar DLSS/FSR',
+     'previsao': None, 'risco': ''},
+    {'id': 'ram', 'problema': 'jogos', 'nome': 'RAM cheia', 'precisa': ['ram_cheia'], 'confirma': {'ram_cheia': 3, 'ram_subindo': 1, 'pagefile_hd': 1},
+     'descarta': [], 'acao': 'memoria', 'faria': 'ver quem ocupa a RAM e tirar da inicialização o que não precisa abrir com o Windows',
+     'previsao': {'chave': 'ram', 'texto': 'menos tempo com a RAM cheia'}, 'risco': 'nenhum: só leitura; você escolhe o que fechar'},
+    {'id': 'vram', 'problema': 'jogos', 'nome': 'memória de vídeo cheia', 'precisa': ['vram_cheia'], 'confirma': {'vram_cheia': 3, 'travadas': 1},
+     'descarta': [], 'acao': '', 'faria': 'baixar a qualidade das texturas no jogo', 'previsao': None, 'risco': ''},
+    {'id': 'disco', 'problema': 'jogos', 'nome': 'o disco', 'precisa': ['disco_cheio'], 'confirma': {'disco_cheio': 3, 'pagefile_hd': 2, 'disco_erro': 2},
+     'descarta': [], 'acao': 'raiox', 'faria': 'conferir no raio-x o tipo de disco, o espaço e quem escreve nele', 'previsao': None, 'risco': 'nenhum: só leitura'},
+    {'id': 'driver', 'problema': 'travadas', 'nome': 'um driver segurando o processador', 'precisa': ['travadas'],
+     'confirma': {'travadas': 1, 'sem_limite': 3, 'dpc_alto': 3, 'driver_erro': 1}, 'descarta': ['ram_cheia', 'vram_cheia', 'disco_cheio', 'calor'],
+     'acao': 'travadas', 'faria': 'rodar o teste de travadas (1 minuto) para dizer qual driver é',
+     'previsao': None, 'risco': 'nenhum: só leitura'},
+    {'id': 'repouso-cpu', 'problema': 'pc', 'nome': 'algo ocupando a CPU fora dos jogos', 'precisa': ['cpu_acima'], 'confirma': {'cpu_acima': 3, 'repouso': 1},
+     'descarta': [], 'acao': 'raiox', 'faria': 'ver no raio-x quem gasta a CPU', 'previsao': None, 'risco': 'nenhum: só leitura'},
+    {'id': 'repouso-ram', 'problema': 'pc', 'nome': 'RAM ocupada fora dos jogos', 'precisa': ['ram_acima'], 'confirma': {'ram_acima': 3, 'ram_subindo': 2},
+     'descarta': [], 'acao': 'memoria', 'faria': 'ver quem ocupa a memória', 'previsao': None, 'risco': 'nenhum: só leitura'},
+    {'id': 'boot', 'problema': 'pc', 'nome': 'programas demais ao ligar', 'precisa': ['boot_lento'], 'confirma': {'boot_lento': 2, 'inicializacao_cresceu': 3},
+     'descarta': [], 'acao': 'inicializacao', 'faria': 'tirar da inicialização o que pesa (o Windows mede quanto cada um atrasa)',
+     'previsao': {'chave': 'boot_s', 'texto': 'boot mais rápido'}, 'risco': 'baixo: o programa continua instalado'},
+    {'id': 'estabilidade', 'problema': 'pc', 'nome': 'instabilidade do Windows', 'precisa': ['tela_azul'], 'confirma': {'tela_azul': 3, 'driver_erro': 2},
+     'descarta': [], 'acao': 'saude', 'faria': 'ver na saúde do Windows o que falhou e quando', 'previsao': None, 'risco': 'nenhum: só leitura'},
+]
+PROBLEMAS = {'jogos': 'O que segura os seus jogos', 'travadas': 'Por que os jogos travam', 'pc': 'O que pesa no PC'}
+_NOME_SINTOMA = {'calor': 'calor acima do seguro', 'freio': 'CPU freando', 'cpu_limite': 'CPU no limite', 'gpu_limite': 'placa de vídeo no limite',
+                 'ram_cheia': 'RAM cheia', 'vram_cheia': 'memória de vídeo cheia', 'disco_cheio': 'disco ocupado', 'bateria': 'na bateria',
+                 'travadas': 'travadas', 'sem_limite': 'travadas sem nenhum limite', 'dpc_alto': 'DPC alto', 'driver_erro': 'erro de driver',
+                 'pagefile_hd': 'paginação num HD', 'tela_azul': 'tela azul', 'cpu_acima': 'CPU acima do normal', 'ram_acima': 'RAM acima do normal',
+                 'boot_lento': 'boot mais lento', 'inicializacao_cresceu': 'mais programas na inicialização', 'ram_subindo': 'RAM subindo',
+                 'calor_repouso': 'temperatura subindo', 'disco_erro': 'erro de disco', 'repouso': 'fora dos jogos'}
+
+
+def diagnostica(achados):
+    """Para cada problema com sintoma: as causas pontuadas pelas evidências; a escolhida e as descartadas com o motivo."""
+    presentes = {}
+    for a in achados:
+        for s in a['sintomas']:
+            presentes.setdefault(s, a)
+    out = []
+    for prob, titulo in PROBLEMAS.items():
+        cands, descartadas = [], []
+        for c in (c for c in CAUSAS if c['problema'] == prob):
+            if not all(p in presentes for p in c['precisa']):
+                continue
+            contra = [s for s in c['descarta'] if s in presentes]
+            pontos = sum(v for s, v in c['confirma'].items() if s in presentes)
+            if contra:
+                descartadas.append({'causa': c['nome'], 'motivo': 'descartada: ' + ', '.join(_NOME_SINTOMA.get(s, s) for s in contra) + ' explica melhor'})
+                continue
+            confs = [presentes[s]['confianca'] for s in c['confirma'] if s in presentes]
+            conf = max(confs, key=lambda x: ORDEM_CONF.get(x, 3)) if confs else 'baixa'   # a evidência mais fraca manda
+            cands.append({'causa': c, 'pontos': pontos, 'confianca': conf,
+                          'evidencias': [presentes[s]['vi'] for s in c['confirma'] if s in presentes]})
+        if not cands:
+            continue
+        cands.sort(key=lambda x: (-x['pontos'], x['causa']['id']))
+        esc = cands[0]
+        for c in cands[1:]:
+            descartadas.append({'causa': c['causa']['nome'], 'motivo': f'menos provável ({c["pontos"]} pontos contra {esc["pontos"]})'})
+        out.append({'problema': prob, 'titulo': titulo, 'causa': esc['causa']['id'], 'nome': esc['causa']['nome'], 'pontos': esc['pontos'],
+                    'confianca': esc['confianca'], 'evidencias': esc['evidencias'], 'descartadas': descartadas, 'acao': esc['causa']['acao'],
+                    'faria': esc['causa']['faria'], 'previsao': esc['causa']['previsao'], 'risco': esc['causa']['risco'],
+                    'mudaria': _o_que_mudaria(esc['causa'], presentes)})
+    return out
+
+
+def _o_que_mudaria(causa, presentes):
+    falta = [s for s in causa['confirma'] if s not in presentes]
+    contra = causa['descarta']
+    partes = []
+    if contra:
+        partes.append('se aparecer ' + ' ou '.join(_NOME_SINTOMA.get(s, s) for s in contra[:2]))
+    if falta:
+        partes.append('se ' + ' e '.join(_NOME_SINTOMA.get(s, s) for s in falta[:2]) + ' também aparecer, a confiança sobe')
+    return '; '.join(partes) or 'mais sessões medidas confirmam ou descartam'
+
+
+def explica(d):
+    """As quatro partes de toda explicação, de um diagnóstico."""
+    return {'vi': '; '.join(d['evidencias'][:3]) + '.', 'porque': f'A causa mais provável é {d["nome"]}'
+            + (('. Descartei: ' + '; '.join(f'{x["causa"]} ({x["motivo"]})' for x in d['descartadas'][:3])) if d['descartadas'] else '') + '.',
+            'faria': d['faria'][0].upper() + d['faria'][1:] + '.', 'mudaria': d['mudaria'][0].upper() + d['mudaria'][1:] + '.'}
+
+
+# ───────── planejador ─────────
+
+def _desfazer_de(comando):
+    nome = (comando or '').split(' ')[0]
+    return f'katharos desfazer {nome}' if nome in PACOTES else ('não muda nada no PC' if nome else '')
+
+
+def planeja(sugestoes, diagnosticos, pesos=None, protegidos=()):
+    """Junta a central (regras) com o diagnóstico: cada proposta ganha a explicação da causa quando bate o comando; causa sem proposta
+    vira proposta. O peso aprendido neste PC multiplica os pontos. Nada específico de jogo (o mapa não tem item por jogo)."""
+    pesos = pesos or {}
+    por_cmd = {x['comando']: x for x in sugestoes if x.get('comando')}
+    out = list(sugestoes)
+    for d in diagnosticos:
+        exp = explica(d)
+        alvo = por_cmd.get(d['acao']) if d['acao'] else None
+        if alvo:
+            alvo['explicacao'] = exp
+            alvo['causa'] = d['causa']
+            continue
+        if d['acao'] in protegidos:
+            continue
+        s = _sug(f'causa-{d["causa"]}', f'{d["titulo"]}: {d["nome"]}', exp['vi'][0].upper() + exp['vi'][1:], d['acao'],
+                 d['confianca'] if d['confianca'] in PESO_CONF else 'baixa', d['faria'], d['risco'], min(5, 2 + d['pontos'] // 2), 0 if 'nenhum' in (d['risco'] or 'nenhum') else 1,
+                 tipo='acao' if d['acao'] else 'info',
+                 previsao=({'fonte': 'sessoes', 'chave': d['previsao']['chave'], 'delta': None, 'un': '', 'texto': d['previsao']['texto']} if d.get('previsao') else None))
+        s['explicacao'] = exp
+        s['causa'] = d['causa']
+        out.append(s)
+        if d['acao']:
+            por_cmd[d['acao']] = s
+    for x in out:
+        x.setdefault('explicacao', {'vi': x['porque'], 'porque': '', 'faria': x.get('impacto') or '', 'mudaria': ''})
+        x['desfazer'] = _desfazer_de(x.get('comando'))
+        p = pesos.get((x.get('comando') or '').split(' ')[0])
+        if p and x['tipo'] == 'acao':
+            x['pontos'] = round(x['pontos'] * p, 2)
+            x['peso_neste_pc'] = p
+    return sorted(out, key=lambda x: (ORDEM_CONF.get(x['confianca'], 3), -x['pontos'], x['id']))
+
+
+# ───────── avaliador ─────────
+FATOR_VEREDITO = {'como previsto': 1.15, 'em parte': 1.0, 'sem diferença': 0.85, 'piorou': 0.6}
+
+
+def avalia(ev):
+    """Cada resultado medido pela primeira vez mexe no peso do alvo neste PC; o que piorou vira proposta de desfazer."""
+    feitos = ev.get('feitos') or {}
+    vistas = ev.get('vistas') or {}
+    props = []
+    for r in resultados_previstos({'conselheiro_feitos': feitos}, ev.get('minutos') or [], ev.get('sessoes') or [], ev['agora']):
+        if r['veredito'] not in FATOR_VEREDITO:
+            continue
+        cmd = ((vistas.get(r['id']) or {}).get('comando') or '').split(' ')[0]
+        if memoria_grava_resultado(r['id'], r['quando'].isoformat(), r['veredito'], {k: r.get(k) for k in ('antes', 'depois', 'un', 'previsto')}) and cmd:
+            memoria_ajusta_peso(cmd, FATOR_VEREDITO[r['veredito']])
+        if r['veredito'] == 'piorou' and cmd in PACOTES and not ((estado().get('pacotes') or {}).get(cmd) or {}).get('revertido'):
+            props.append(_sug(f'desfazer:{cmd}', f'Desfazer {PACOTES[cmd].titulo}: piorou o que eu previ que melhoraria',
+                              f'Previ {r["previsto"]}; medi {br(r["antes"], 0)} → {br(r["depois"], 0)} {r["un"]}.', f'desfazer {cmd}', 'média',
+                              'volta cada valor ao que era antes', 'nenhum', 4, 0))
+    return props
+
+
+# ───────── tudo junto ─────────
+
+def pensa(ev):
+    """O ciclo inteiro: achados → diagnóstico → propostas (central + causas + avaliador), com explicação. Grava os achados na memória."""
+    achados = detecta(ev)
+    diags = diagnostica(achados)
+    try:
+        memoria_grava_achados(achados, ev.get('agora'))
+    except Exception as ex:
+        LOG.escreve(f'achados na memória: {ex!r}')
+    sug = gera_sugestoes(ev)
+    try:
+        sug += [x for x in avalia(ev) if x['id'] not in {s['id'] for s in sug}]
+    except Exception as ex:
+        LOG.escreve(f'avaliador: {ex!r}')
+    nunca = {x.strip().lower() for x in re.split(r'[,;\s]+', str(config('motor-nunca') or '')) if x.strip()}
+    prot = set()
+    props = planeja(sug, diags, memoria_pesos(), prot | nunca)
+    props = [p for p in props if (p.get('comando') or '').split(' ')[0] not in nunca]
+    return {'achados': achados, 'diagnosticos': diags, 'propostas': props}
+
+
+# ───────── orçamento de avisos (I15) ─────────
+
+def pode_avisar(e, tipo, agora=None, grave=False, em_jogo=False):
+    """No máximo um aviso por tipo a cada N horas (config avisos-intervalo); nada durante o jogo salvo o grave (calor)."""
+    agora = agora or datetime.now()
+    if em_jogo and not grave:
+        return False
+    try:
+        horas = float(str(config('avisos-intervalo') or 6).replace(',', '.'))
+    except (TypeError, ValueError):
+        horas = 6.0
+    ult = (e.get('avisos_por_tipo') or {}).get(tipo)
+    return not recente_h(ult, horas)
+
+
+def marca_aviso(e, tipo, agora=None):
+    e.setdefault('avisos_por_tipo', {})[tipo] = (agora or datetime.now()).replace(microsecond=0).isoformat()
+# ─────────────── memória do PC (I7): tudo o que o Katharos aprendeu deste PC, num banco SQLite em ~/.katharos/katharos.db ───────────────
+# Quem escreve o quê (um escritor por tabela):
+#   o segundo plano (Katharos.exe) só acrescenta linhas nos .jsonl de sempre (minutos, sessões, eventos): é a fila em disco;
+#   o motor (este arquivo) importa essas linhas para o banco e é o único que grava nele.
+# Por que um banco: os .jsonl giram (minutos ficam 14 dias); o banco guarda 120 dias de minutos e, depois disso, a média de cada hora,
+# então tendência e linha de base enxergam meses, não só duas semanas. Ler uma janela é uma consulta, não varrer o arquivo todo.
+# Nada aqui é obrigatório: sem sqlite3 (Python sem a biblioteca) ou com o banco ilegível, o motor segue lendo os .jsonl.
+try:
+    import sqlite3
+except ImportError:      # Python montado sem sqlite: a memória longa fica desligada, o resto funciona
+    sqlite3 = None
+
+MEMORIA_ESQUEMA = 1
+MEMORIA_MINUTOS_DIAS = 120          # minutos crus guardados; os mais velhos viram a média da hora
+MEMORIA_EVENTOS_MAX = 5000          # eventos guardados (os mais antigos saem)
+_MEMORIA_TABELAS = '''
+CREATE TABLE IF NOT EXISTS meta (chave TEXT PRIMARY KEY, valor TEXT);
+CREATE TABLE IF NOT EXISTS minutos (t TEXT PRIMARY KEY, jogo TEXT, dados TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS horas (h TEXT PRIMARY KEY, n INTEGER, dados TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sessoes (inicio TEXT PRIMARY KEY, jogo TEXT, min REAL, dados TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS mudancas (quando TEXT, tipo TEXT, alvo TEXT, titulo TEXT, PRIMARY KEY (quando, tipo, alvo));
+CREATE TABLE IF NOT EXISTS achados (id TEXT, dia TEXT, tipo TEXT, confianca TEXT, dados TEXT NOT NULL, PRIMARY KEY (id, dia));
+CREATE TABLE IF NOT EXISTS resultados (id TEXT, quando TEXT, veredito TEXT, dados TEXT NOT NULL, PRIMARY KEY (id, quando));
+CREATE TABLE IF NOT EXISTS pesos (alvo TEXT PRIMARY KEY, peso REAL NOT NULL, n INTEGER NOT NULL, atualizado TEXT);
+CREATE TABLE IF NOT EXISTS eventos (seq INTEGER PRIMARY KEY AUTOINCREMENT, quando TEXT, tipo TEXT, dados TEXT, chave TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS importado (arquivo TEXT PRIMARY KEY, posicao INTEGER, tamanho INTEGER);
+CREATE INDEX IF NOT EXISTS minutos_jogo ON minutos (jogo, t);
+CREATE INDEX IF NOT EXISTS sessoes_jogo ON sessoes (jogo, inicio);
+'''
+
+
+def memoria_arq():
+    return CASA / 'katharos.db'
+
+
+def memoria_abre(arq=None):
+    """Abre (e cria, se preciso) o banco. None se não dá: quem chama segue sem a memória longa."""
+    if sqlite3 is None:
+        return None
+    try:
+        CASA.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(str(arq or memoria_arq()), timeout=10)
+        con.execute('PRAGMA journal_mode=WAL')
+        con.execute('PRAGMA synchronous=NORMAL')
+        con.executescript(_MEMORIA_TABELAS)
+        v = con.execute("SELECT valor FROM meta WHERE chave='esquema'").fetchone()
+        if v is None:
+            con.execute("INSERT INTO meta VALUES ('esquema', ?)", (str(MEMORIA_ESQUEMA),))
+            con.commit()
+        elif int(v[0]) > MEMORIA_ESQUEMA:
+            # gravado por uma versão mais nova: ler pode, mas não escrevemos num formato que não conhecemos
+            con.close()
+            LOG.escreve(f'memória com esquema {v[0]} (esta versão conhece até {MEMORIA_ESQUEMA}): ficou só leitura')
+            return sqlite3.connect(f'file:{arq or memoria_arq()}?mode=ro', uri=True, timeout=10)
+        return con
+    except Exception as ex:   # banco travado, disco cheio, arquivo corrompido: o motor não para por isso
+        LOG.escreve(f'memória: não abriu ({ex!r})')
+        return None
+
+
+def _mem_importa_jsonl(con, nome, tabela, campo):
+    """Lê do ponto onde parou (o arquivo só cresce; se encolheu, girou: lê de novo do começo, a chave primária evita repetir)."""
+    arq = CASA / nome
+    try:
+        tam = arq.stat().st_size
+    except OSError:
+        return 0
+    lin = con.execute('SELECT posicao, tamanho FROM importado WHERE arquivo=?', (nome,)).fetchone()
+    pos = lin[0] if lin and lin[1] is not None and tam >= lin[0] else 0
+    n = 0
+    with open(arq, 'rb') as f:
+        f.seek(pos)
+        bloco = f.read()
+    fim = bloco.rfind(b'\n') + 1      # só linhas completas: a última pode estar sendo escrita agora
+    for bruta in bloco[:fim].splitlines():
+        try:
+            d = json.loads(bruta.decode('utf-8', 'replace'))
+            chave = d[campo]
+            datetime.fromisoformat(chave)
+        except (ValueError, KeyError, TypeError):
+            continue
+        if tabela == 'minutos':
+            r = con.execute('INSERT OR IGNORE INTO minutos VALUES (?,?,?)', (chave, d.get('jogo'), json.dumps(d, ensure_ascii=False)))
+        elif tabela == 'sessoes':
+            r = con.execute('INSERT OR IGNORE INTO sessoes VALUES (?,?,?,?)', (chave, d.get('jogo'), d.get('min'), json.dumps(d, ensure_ascii=False)))
+        else:
+            r = con.execute('INSERT OR IGNORE INTO eventos (quando, tipo, dados, chave) VALUES (?,?,?,?)',
+                            (chave, str(d.get('tipo') or ''), json.dumps(d.get('dados') or {}, ensure_ascii=False), f'{chave}|{d.get("tipo")}|{json.dumps(d.get("dados"), sort_keys=True)}'))
+        n += r.rowcount
+    con.execute('INSERT OR REPLACE INTO importado VALUES (?,?,?)', (nome, pos + fim, tam))
+    return n
+
+
+def _mem_mudancas(con):
+    """Pacotes aplicados e desfeitos (do estado) viram linhas de mudança: é o que as marcas dos gráficos e o avaliador usam."""
+    n = 0
+    for nome, reg in (estado().get('pacotes') or {}).items():
+        if not isinstance(reg, dict) or not reg.get('quando'):
+            continue
+        titulo = PACOTES[nome].titulo if nome in PACOTES else nome
+        n += con.execute('INSERT OR IGNORE INTO mudancas VALUES (?,?,?,?)', (reg['quando'], 'aplicou', nome, titulo)).rowcount
+        if reg.get('revertido') and reg.get('revertido_em'):   # versões antigas não anotavam quando desfez: sem data, fica só o aplicou
+            n += con.execute('INSERT OR IGNORE INTO mudancas VALUES (?,?,?,?)', (reg['revertido_em'], 'desfez', nome, titulo)).rowcount
+    return n
+
+
+def _mem_compacta(con, agora):
+    """Minutos com mais de 120 dias viram a média de cada hora (o que importa para tendência e linha de base longa)."""
+    corte = (agora - timedelta(days=MEMORIA_MINUTOS_DIAS)).isoformat(timespec='seconds')
+    velhos = con.execute('SELECT t, dados FROM minutos WHERE t < ? ORDER BY t', (corte,)).fetchall()
+    if not velhos:
+        return 0
+    por_hora = {}
+    for t, dados in velhos:
+        try:
+            por_hora.setdefault(t[:13], []).append(json.loads(dados))
+        except ValueError:
+            continue
+    for h, ms in por_hora.items():
+        med = {}
+        for k in ('cpu', 'gpu', 'ram', 'disco', 'rede_mbs', 'temp_cpu', 'temp_gpu', 'processos', 'ram_sistema_gb', 'ram_conta_gb', 'katharos_cpu'):
+            v = [m[k] for m in ms if isinstance(m.get(k), (int, float)) and not m.get('sujo')]
+            if v:
+                med[k] = round(sum(v) / len(v), 2)
+        med['jogo_min'] = sum(1 for m in ms if m.get('jogo'))
+        con.execute('INSERT OR REPLACE INTO horas VALUES (?,?,?)', (h, len(ms), json.dumps(med)))
+    con.execute('DELETE FROM minutos WHERE t < ?', (corte,))
+    return len(velhos)
+
+
+def memoria_atualiza(agora=None, con=None):
+    """Traz para o banco o que os arquivos têm de novo. Rápido quando não há nada novo (lê só o pedaço depois da última posição).
+    Devolve {'minutos': n, 'sessoes': n, 'eventos': n, 'mudancas': n} ou None sem banco."""
+    proprio = con is None
+    con = con or memoria_abre()
+    if con is None:
+        return None
+    agora = agora or datetime.now()
+    try:
+        r = {'minutos': _mem_importa_jsonl(con, 'minutos.jsonl', 'minutos', 't'),
+             'sessoes': _mem_importa_jsonl(con, 'sessoes.jsonl', 'sessoes', 'inicio'),
+             'eventos': _mem_importa_jsonl(con, 'eventos.jsonl', 'eventos', 't'),
+             'mudancas': _mem_mudancas(con)}
+        ultima = con.execute("SELECT valor FROM meta WHERE chave='compactou'").fetchone()
+        if not ultima or ultima[0][:10] != agora.date().isoformat():
+            r['compactados'] = _mem_compacta(con, agora)
+            con.execute("DELETE FROM eventos WHERE seq <= (SELECT MAX(seq) FROM eventos) - ?", (MEMORIA_EVENTOS_MAX,))
+            con.execute("INSERT OR REPLACE INTO meta VALUES ('compactou', ?)", (agora.isoformat(timespec='seconds'),))
+        con.commit()
+        return r
+    except Exception as ex:
+        LOG.escreve(f'memória: importação falhou ({ex!r})')
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        return None
+    finally:
+        if proprio:
+            con.close()
+
+
+def _mem_linhas(sql, args=()):
+    con = memoria_abre()
+    if con is None:
+        return None
+    try:
+        return con.execute(sql, args).fetchall()
+    except Exception as ex:
+        LOG.escreve(f'memória: leitura falhou ({ex!r})')
+        return None
+    finally:
+        con.close()
+
+
+def memoria_minutos(desde, ate=None):
+    """Minutos do banco entre duas datas (com '_dt'), ou None sem banco."""
+    ls = _mem_linhas('SELECT dados FROM minutos WHERE t >= ? AND t <= ? ORDER BY t',
+                     (desde.isoformat(timespec='seconds'), (ate or datetime.now()).isoformat(timespec='seconds')))
+    if ls is None:
+        return None
+    out = []
+    for (dados,) in ls:
+        try:
+            d = json.loads(dados)
+            d['_dt'] = datetime.fromisoformat(d['t'])
+            out.append(d)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def memoria_sessoes(desde):
+    ls = _mem_linhas('SELECT dados FROM sessoes WHERE inicio >= ? ORDER BY inicio', (desde.isoformat(timespec='seconds'),))
+    if ls is None:
+        return None
+    out = []
+    for (dados,) in ls:
+        try:
+            d = json.loads(dados)
+            d['_dt'] = datetime.fromisoformat(d['inicio'])
+            out.append(d)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def memoria_eventos(depois_de=0, limite=200):
+    """Eventos da fila (o que o segundo plano e o motor publicaram), depois do número `depois_de`."""
+    ls = _mem_linhas('SELECT seq, quando, tipo, dados FROM eventos WHERE seq > ? ORDER BY seq LIMIT ?', (int(depois_de), int(limite)))
+    out = []
+    for seq, quando, tipo, dados in ls or []:
+        try:
+            out.append({'seq': seq, 'quando': quando, 'tipo': tipo, 'dados': json.loads(dados or '{}')})
+        except ValueError:
+            continue
+    return out
+
+
+def publica_evento(tipo, dados=None, quando=None):
+    """O motor também publica na fila (aplicou, desfez, conclusão nova). Mesmo formato do segundo plano."""
+    try:
+        linha = json.dumps({'t': (quando or datetime.now()).isoformat(timespec='seconds'), 'tipo': tipo, 'dados': dados or {}}, ensure_ascii=False)
+        with open(CASA / 'eventos.jsonl', 'a', encoding='utf-8') as f:
+            f.write(linha + '\n')
+    except OSError as ex:
+        LOG.escreve(f'evento {tipo} não gravado: {ex!r}')
+
+
+def memoria_grava_achados(achados, agora=None):
+    """Um achado por id por dia: dá para ver há quantos dias ele aparece (repetição pesa na confiança)."""
+    con = memoria_abre()
+    if con is None:
+        return
+    dia = (agora or datetime.now()).date().isoformat()
+    try:
+        for a in achados:
+            con.execute('INSERT OR REPLACE INTO achados VALUES (?,?,?,?,?)', (a['id'], dia, a.get('tipo', ''), a.get('confianca') or '', json.dumps(a, ensure_ascii=False, default=str)))
+        con.commit()
+    except Exception as ex:
+        LOG.escreve(f'memória: achados não gravados ({ex!r})')
+    finally:
+        con.close()
+
+
+def memoria_dias_do_achado(id_, dias=30, agora=None):
+    """Em quantos dias diferentes este achado apareceu nos últimos `dias`."""
+    desde = ((agora or datetime.now()) - timedelta(days=dias)).date().isoformat()
+    ls = _mem_linhas('SELECT COUNT(*) FROM achados WHERE id=? AND dia>=?', (id_, desde))
+    return ls[0][0] if ls else 0
+
+
+def memoria_grava_resultado(id_, quando, veredito, dados):
+    con = memoria_abre()
+    if con is None:
+        return False
+    try:
+        novo = con.execute('INSERT OR IGNORE INTO resultados VALUES (?,?,?,?)', (id_, quando, veredito, json.dumps(dados, ensure_ascii=False, default=str))).rowcount
+        con.commit()
+        return bool(novo)
+    finally:
+        con.close()
+
+
+def memoria_pesos():
+    """{alvo: peso} aprendido neste PC (1 = sem informação)."""
+    return {a: p for a, p, _ in (_mem_linhas('SELECT alvo, peso, n FROM pesos') or [])}
+
+
+def memoria_ajusta_peso(alvo, fator, agora=None):
+    """Peso entre 0,3 e 2: cada resultado medido mexe pouco; muitos resultados na mesma direção mexem muito."""
+    con = memoria_abre()
+    if con is None:
+        return None
+    try:
+        lin = con.execute('SELECT peso, n FROM pesos WHERE alvo=?', (alvo,)).fetchone()
+        peso, n = (lin or (1.0, 0))
+        peso = max(0.3, min(2.0, peso * fator))
+        con.execute('INSERT OR REPLACE INTO pesos VALUES (?,?,?,?)', (alvo, round(peso, 3), n + 1, (agora or datetime.now()).isoformat(timespec='seconds')))
+        con.commit()
+        return peso
+    finally:
+        con.close()
+
+
+def memoria_resumo():
+    """O que a memória guarda, para a tela de configurações e o `exportar`."""
+    ls = {}
+    for t in ('minutos', 'horas', 'sessoes', 'mudancas', 'achados', 'resultados', 'pesos', 'eventos'):
+        r = _mem_linhas(f'SELECT COUNT(*) FROM {t}')
+        if r is None:
+            return None
+        ls[t] = r[0][0]
+    p = (_mem_linhas('SELECT MIN(t) FROM minutos') or [[None]])[0][0]
+    h = (_mem_linhas('SELECT MIN(h) FROM horas') or [[None]])[0][0]
+    candidatos = [x for x in (p, h + ':00:00' if h else None) if x]
+    desde = min(candidatos) if candidatos else None
+    try:
+        tam = memoria_arq().stat().st_size
+    except OSError:
+        tam = 0
+    return {'contagens': ls, 'desde': desde, 'bytes': tam}
+
+
+def memoria_exporta(arq):
+    """Tudo o que a memória sabe, em JSON (para guardar antes de apagar, ou levar para outro PC)."""
+    con = memoria_abre()
+    if con is None:
+        return None
+    try:
+        out = {'katharos': VERSAO, 'esquema': MEMORIA_ESQUEMA, 'exportado': agora_iso()}
+        for t in ('minutos', 'horas', 'sessoes', 'mudancas', 'achados', 'resultados', 'pesos', 'eventos'):
+            cur = con.execute(f'SELECT * FROM {t}')
+            cols = [c[0] for c in cur.description]
+            out[t] = [dict(zip(cols, r)) for r in cur.fetchall()]
+        e = estado()
+        out['estado'] = {k: e.get(k) for k in ('conselheiro_respostas', 'conselheiro_feitos', 'conselheiro_dispensadas', 'conselheiro_vistas')}
+        tmp = Path(str(arq) + '.tmp')
+        tmp.write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, arq)
+        return Path(arq)
+    finally:
+        con.close()
+
+
+def memoria_apaga():
+    """Apaga o que o motor aprendeu deste PC, guardando antes uma exportação. Não toca em backups do desfazer, provas nem configurações.
+    Devolve o caminho da exportação (ou None se não havia o que exportar)."""
+    exp = None
+    if memoria_arq().exists():
+        exp = memoria_exporta(CASA / f'memoria-exportada-{datetime.now():%Y-%m-%d-%H%M%S}.json')
+    for nome in ('katharos.db', 'katharos.db-wal', 'katharos.db-shm', 'linha-de-base.json', 'propostas.json'):
+        try:
+            (CASA / nome).unlink()
+        except OSError:
+            pass
+    for nome in ('minutos.jsonl', 'sessoes.jsonl', 'eventos.jsonl'):   # o segundo plano reabre e continua do zero
+        try:
+            with open(CASA / nome, 'w', encoding='utf-8'):
+                pass
+        except OSError:
+            pass
+    e = estado()
+    for k in ('conselheiro_respostas', 'conselheiro_feitos', 'conselheiro_dispensadas', 'conselheiro_vistas', 'conselheiro_avisadas'):
+        e.pop(k, None)
+    salva_estado(e)
+    return exp
 
 # ─────────────── motor de inteligência: o normal deste PC, confiança pelos dados, previsão x resultado, sua resposta ───────────────
 # A central (65-conselheiro) propõe; este módulo dá a ela três coisas que ela não tinha:
@@ -13689,6 +14415,7 @@ def api_aplicar(ctx, p, ev):
         try:
             for nome in ordem:
                 marca_propostas_feitas(nome)
+            publica_evento('aplicou', {'pacotes': [r['pacote'] for r in res if r['feitos']], 'pela': 'janela'})
             exporta_propostas(ctx)
         except Exception as ex:
             LOG.escreve(f'api aplicar: pensar depois falhou: {ex!r}')
@@ -13715,6 +14442,7 @@ def api_desfazer(ctx, p, ev):
             res.append({'pacote': n, 'titulo': PACOTES[n].titulo, 'ok': bool(tem and cod == 0), 'nada': not tem})
         try:
             marca_propostas_feitas('desfazer')
+            publica_evento('desfez', {'pacotes': [r['pacote'] for r in res if r['ok']], 'pela': 'janela'})
             exporta_propostas(ctx)
         except Exception as ex:
             LOG.escreve(f'api desfazer: pensar depois falhou: {ex!r}')
@@ -14578,7 +15306,7 @@ def ferramenta_aviso(ctx, args):
 #
 # ███████████████████████████████████████████████████████████████████████████
 
-VERSAO_DADOS = 2          # sobe quando o formato do que fica em ~/.katharos muda (e ganha um passo em MIGRACOES)
+VERSAO_DADOS = 3          # sobe quando o formato do que fica em ~/.katharos muda (e ganha um passo em MIGRACOES)
 COPIAS_DE_VERSAO = 5      # quantas cópias de segurança de troca de versão ficam guardadas
 ARQUIVOS_DE_ESTADO = ('estado.json', 'config.json', 'relatorio.json', 'ensaios.json')
 MIGRACOES = []            # [(número, descrição, função(estado, casa))], em ordem
@@ -14610,6 +15338,12 @@ def _m_sem_perfil(e, casa):
     if isinstance(c, dict) and c.get('explicacao') not in (None, '', 'curta', 'completa'):
         c.pop('explicacao')   # valor que a versão nova não entende volta para o padrão
         grava_json(cfg, c)
+
+
+@migracao(3, 'memória do PC em SQLite (katharos.db): minutos, sessões e mudanças importados dos arquivos de sempre')
+def _m_memoria(e, casa):
+    # os .jsonl continuam (o segundo plano escreve neles); o banco só passa a guardar mais tempo. Sem sqlite, nada muda.
+    memoria_atualiza()
 
 
 def _v(txt):
@@ -15298,6 +16032,7 @@ def roda_ferramenta(ctx, args, abre=True):
     if args.comando in MUDAM_O_PC and not getattr(args, 'teste', False):
         try:   # o motor pensa logo depois de uma mudança (o ícone mostra as propostas novas), não no próximo relógio
             marca_propostas_feitas(args.comando)
+            publica_evento('desfez' if args.comando == 'desfazer' else 'aplicou', {'comando': args.comando, 'pela': 'terminal'})
             exporta_propostas(ctx)
         except Exception as ex:
             LOG.escreve(f'pensar depois de {args.comando}: {ex!r}')

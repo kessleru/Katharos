@@ -140,6 +140,8 @@ namespace KatharosApp
         public double AvisoCpu = Lim.G("calor_cpu"), AvisoGpu = Lim.G("calor_gpu");
         public bool Notificar = true;
         public bool Fps = true;
+        // orçamento de avisos: no máximo um por tipo a cada N horas; no jogo, só o grave (calor), ou nada, ou tudo
+        public double AvisosIntervaloH = 6; public string AvisosNoJogo = "so-grave";
         // notebook: plano de energia sozinho na tomada e na bateria (só se a pessoa ligou; os planos ela escolheu no Katharos)
         public bool EnergiaAuto; public Guid? EnergiaTomada, EnergiaBateria; public string EnergiaTomadaNome, EnergiaBateriaNome;
         public List<string> NomesJogo = new List<string>();
@@ -161,6 +163,8 @@ namespace KatharosApp
                 c.PausarEmJogo = Txt(d, "em_jogo") == "pausar";
                 c.Notificar = Txt(d, "notificar") != "nao";
                 c.Fps = Txt(d, "fps") != "nao";
+                if (Dbl(d, "avisos_intervalo_h", out v) && v >= 1 && v <= 48) c.AvisosIntervaloH = v;
+                string anj = Txt(d, "avisos_no_jogo"); if (anj == "nunca" || anj == "todos" || anj == "so-grave") c.AvisosNoJogo = anj;
                 c.EnergiaAuto = Txt(d, "energia_auto") == "True" || Txt(d, "energia_auto") == "true";
                 Guid g;
                 if (Guid.TryParse(Txt(d, "energia_tomada") ?? "", out g)) c.EnergiaTomada = g;
@@ -1628,6 +1632,7 @@ namespace KatharosApp
             EnergiaEstado = energiaAlvoNome; EnergiaErro = null; EnergiaConferidaEm = DateTime.Now;
             EnergiaAviso = energiaAlvoNome; EnergiaAvisoErro = false;
             Log.Escreve("energia: " + energiaAlvoNome + " (conferido)");
+            Evento("energia", "{\"plano\":" + new JavaScriptSerializer().Serialize(energiaAlvoNome ?? "") + ",\"ok\":true}");
         }
 
         void Erro(string texto)
@@ -1635,6 +1640,7 @@ namespace KatharosApp
             EnergiaErro = texto; EnergiaEstado = "erro";
             EnergiaAviso = "Energia: " + texto; EnergiaAvisoErro = true;
             Log.Escreve("energia: " + texto);
+            Evento("energia", "{\"erro\":" + new JavaScriptSerializer().Serialize(texto ?? "") + ",\"ok\":false}");
         }
 
         // a segunda leitura, 15 s depois: se algo trocou o plano de volta, avisa com o nome do culpado provável, sem insistir
@@ -1683,6 +1689,7 @@ namespace KatharosApp
                         Sessao = new Sessao { Jogo = nomeTop, Pid = a.TopGpuPid, Inicio = candidatoDesde, Ultimo = agora };
                         semJogoDesde = DateTime.MaxValue;
                         Log.Escreve("jogo aberto: " + nomeTop);
+                        Evento("sessao_comecou", "{\"jogo\":" + new JavaScriptSerializer().Serialize(nomeTop) + "}");
                         if (Cfg.Fps) Fps.Inicia(a.TopGpuPid);
                     }
                 }
@@ -1708,6 +1715,7 @@ namespace KatharosApp
             Log.Escreve("jogo fechado: " + s.Jogo + ", " + Math.Round((s.Ultimo - s.Inicio).TotalMinutes, 1).ToString(K.INV) + " min");
             if ((s.Ultimo - s.Inicio).TotalMinutes < 1 || s.N < 5) return;
             Acrescenta("sessoes.jsonl", new JavaScriptSerializer().Serialize(s.Json()));
+            Evento("sessao_terminou", "{\"jogo\":" + new JavaScriptSerializer().Serialize(s.Jogo) + ",\"min\":" + Math.Round((s.Ultimo - s.Inicio).TotalMinutes, 1).ToString(K.INV) + "}");
             if (SessaoFechou != null) SessaoFechou();   // evento: a central pensa agora, com a sessão nova
         }
 
@@ -1725,6 +1733,12 @@ namespace KatharosApp
         {
             try { Directory.CreateDirectory(K.CASA); File.AppendAllText(K.Arq(nome), linha + "\n", new UTF8Encoding(false)); }
             catch (Exception e) { Log.Escreve(nome + ": " + e.Message); }
+        }
+
+        /// <summary>Fila de eventos em disco (eventos.jsonl): o motor importa na memória do PC e a interface lê de lá. Uma linha por evento.</summary>
+        public static void Evento(string tipo, string dadosJson)
+        {
+            Acrescenta("eventos.jsonl", "{\"t\":\"" + K.Iso(DateTime.Now) + "\",\"tipo\":\"" + tipo + "\",\"dados\":" + (dadosJson ?? "{}") + "}");
         }
 
         static void Rotaciona(string nome, int dias)
@@ -2492,10 +2506,15 @@ namespace KatharosApp
             if (motor.Cfg.Notificar)
                 foreach (var c in concl)
                 {
-                    if (c.Nivel < 1 || (ses != null && c.Id != "calor") || c.Id == "gpu") continue;
+                    if (c.Nivel < 1 || c.Id == "gpu") continue;
+                    bool grave = c.Id == "calor" && c.Nivel >= 2;
+                    if (ses != null && (motor.Cfg.AvisosNoJogo == "nunca" || (motor.Cfg.AvisosNoJogo == "so-grave" && !grave))) continue;
                     DateTime ult;
-                    if (avisado.TryGetValue(c.Id, out ult) && (DateTime.Now - ult).TotalMinutes < 30) continue;
+                    // calor grave: no máximo a cada 30 min; o resto, o intervalo que a pessoa escolheu (6 h por padrão)
+                    double espera = grave ? 30 : motor.Cfg.AvisosIntervaloH * 60;
+                    if (avisado.TryGetValue(c.Id, out ult) && (DateTime.Now - ult).TotalMinutes < espera) continue;
                     avisado[c.Id] = DateTime.Now;
+                    Motor.Evento("aviso", "{\"id\":" + new JavaScriptSerializer().Serialize(c.Id) + ",\"titulo\":" + new JavaScriptSerializer().Serialize(c.Titulo) + "}");
                     ni.ShowBalloonTip(8000, "Katharos: " + c.Titulo, c.Texto, c.Nivel >= 2 ? ToolTipIcon.Warning : ToolTipIcon.Info);
                     break;
                 }

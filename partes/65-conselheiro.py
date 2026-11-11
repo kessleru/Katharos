@@ -442,9 +442,16 @@ def ferramenta_conselheiro(ctx, args):
             num = (f': {br(r["antes"], 0)} → {br(r["depois"], 0)} {r["un"]}' if r['antes'] is not None else '')
             t.item('●', cor_v.get(r['veredito'], 'apagado'), f'{r["titulo"]} ({r["quando"]:%d/%m})', f'previ {r["previsto"]}; {r["veredito"]}{num}')
         t.nota('    ajudou? "katharos conselheiro --resposta ID sim" (ou nao, ou nao-importa)', 4)
-    sug = gera_sugestoes(ev)
+    memoria_atualiza()
+    pz = pensa(ev)
+    sug = pz['propostas']
     registra_vistas(e, sug)
     salva_estado(e)
+    for d in pz['diagnosticos']:
+        x = explica(d)
+        t.titulo(f'{d["titulo"].lower()}: {d["nome"]}')
+        t.chaves([('o que eu vi', x['vi']), ('por que acho isso', x['porque']), ('o que eu faria', x['faria']), ('o que mudaria a conclusão', x['mudaria']),
+                  ('confiança', d['confianca'])], recuo=4)
     if not sug:
         if len(ev['amostras']) < 6:
             t.nota('Poucas medidas ainda para propor algo (preciso de pelo menos 6, em 3 dias ou mais).')
@@ -474,14 +481,18 @@ def ferramenta_conselheiro(ctx, args):
 def exporta_propostas(ctx=None):
     """Grava as propostas de agora em ~/.katharos/propostas.json: o ícone do segundo plano mostra as primeiras."""
     try:
+        memoria_atualiza()
         ev = coleta_evidencias(ctx)
-        sug = gera_sugestoes(ev)
+        p = pensa(ev)
+        sug = p['propostas']
         escreve_linha_de_base(ev.get('minutos'), ev.get('agora'))
         res = resultados_previstos({'conselheiro_feitos': ev.get('feitos') or {}}, ev.get('minutos') or [], ev.get('sessoes') or [], ev.get('agora'))
         respondidas = ev.get('respostas') or {}
         pendentes = [dict(r, quando=r['quando'].isoformat()) for r in res if r['veredito'] != 'cedo para dizer' and r['id'] not in respondidas]
-        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo')} for x in sug[:6]],
-             'resultados': pendentes[:3]}
+        d = {'quando': agora_iso(), 'propostas': [{k: x.get(k) for k in ('id', 'titulo', 'porque', 'comando', 'confianca', 'tipo', 'explicacao', 'desfazer', 'causa')} for x in sug[:6]],
+             'resultados': pendentes[:3], 'diagnosticos': [{k: x.get(k) for k in ('problema', 'titulo', 'causa', 'nome', 'confianca', 'evidencias', 'descartadas', 'faria', 'mudaria')}
+                                                           for x in p['diagnosticos']],
+             'achados': [{k: x.get(k) for k in ('id', 'tipo', 'titulo', 'vi', 'confianca', 'gravidade', 'contexto', 'fonte')} for x in p['achados']][:20]}
         tmp = CASA / 'propostas.json.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'propostas.json')
@@ -496,14 +507,20 @@ def avisa_propostas(e, ctx=None):
     try:
         ev = coleta_evidencias(ctx)
         ev['fundo_ligado'] = True
-        sug = gera_sugestoes(ev)
+        sug = pensa(ev)['propostas']
         registra_vistas(e, sug)
         vistos = e.setdefault('conselheiro_avisadas', {})
         novas = []
         for x in sug:
-            if x['confianca'] == 'alta' and x['tipo'] == 'acao' and not recente_h(vistos.get(x['id']), 24 * 7):
+            if x['confianca'] == 'alta' and x['tipo'] == 'acao' and not recente_h(vistos.get(x['id']), 24 * 7) and pode_avisar(e, 'proposta:' + x['id']):
                 novas.append(f'{x["titulo"]} (katharos {x["comando"]})')
                 vistos[x['id']] = agora_iso()
+                marca_aviso(e, 'proposta:' + x['id'])
+        if config('resumo-diario', 'nao') == 'sim':   # um aviso por dia, com tudo, no lugar de vários soltos
+            if novas and not recente_h(e.get('resumo_diario_em'), 20):
+                e['resumo_diario_em'] = agora_iso()
+                return [f'Resumo do dia: {len(novas)} {"proposta nova" if len(novas) == 1 else "propostas novas"}: ' + '; '.join(novas)]
+            return []
         return novas
     except Exception as ex:
         LOG.escreve(f'conselheiro falhou: {ex!r}')

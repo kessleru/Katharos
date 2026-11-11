@@ -227,6 +227,7 @@ def roda_ferramenta(ctx, args, abre=True):
     if args.comando in MUDAM_O_PC and not getattr(args, 'teste', False):
         try:   # o motor pensa logo depois de uma mudança (o ícone mostra as propostas novas), não no próximo relógio
             marca_propostas_feitas(args.comando)
+            publica_evento('desfez' if args.comando == 'desfazer' else 'aplicou', {'comando': args.comando, 'pela': 'terminal'})
             exporta_propostas(ctx)
         except Exception as ex:
             LOG.escreve(f'pensar depois de {args.comando}: {ex!r}')

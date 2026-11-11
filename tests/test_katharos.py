@@ -3,7 +3,7 @@ Verificam o que não pode quebrar: cada item é completo, nenhum script mexe nas
 citam itens que existem, o menu só cita comandos que existem e o ZIP bate com os hashes publicados."""
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import importlib.util
 import re
 import sys
@@ -3209,3 +3209,159 @@ class TestFpsAntesDepois(unittest.TestCase):
         ev = {'sessoes': self._sessoes('cs2', 5, 4, 80) + self._sessoes('cs2', 11, 4, 55), 'pacotes': [(q, 'visual', 'Visual')]}
         sug = k.r_jogo_antes_depois(ev)
         self.assertEqual([x['comando'] for x in sug], ['desfazer visual'])
+
+
+class TestMotorNovo(TestRobustez):
+    """I7 a I15: memória em SQLite, detectores, causas, planejador, avaliador, eventos e orçamento de avisos."""
+
+    def _sessoes(self, n, limites, dias=4, **kw):
+        base = datetime(2026, 11, 1, 20, 0)
+        out = []
+        for i in range(n):
+            ini = base + timedelta(days=i % dias, hours=i // dias)
+            d = {'jogo': 'jogo-x', 'inicio': ini.isoformat(), 'fim': ini.isoformat(), 'min': 60, 'cpu': 50, 'gpu': 80, 'ram_max': 70,
+                 'tempo_no_limite': dict(limites), 'principal': 'equilibrado', '_dt': ini}
+            d.update(kw)
+            out.append(d)
+        return out
+
+    def _ev(self, **kw):
+        ev = {'sessoes': [], 'minutos': [], 'amostras': [], 'pacotes': [], 'eventos': [], 'raiox': {}, 'saude': {}, 'perfil': {},
+              'agora': datetime(2026, 11, 10, 12, 0), 'feitos': {}, 'vistas': {}, 'respostas': {}, 'dispensadas': {}, 'benchs': [], 'termica': {}}
+        ev.update(kw)
+        return ev
+
+    # ── I7 memória ──
+    def test_memoria_importa_sem_repetir_e_relê_quando_gira(self):
+        import json as _j
+        linhas = [_j.dumps({'t': f'2026-11-10T10:{m:02d}:00', 'cpu': m}) for m in range(10)]
+        (self.tmp / 'minutos.jsonl').write_text('\n'.join(linhas) + '\n{"t": "2026-11-10T10:10:00", "cpu"', encoding='utf-8')   # última linha incompleta
+        r = k.memoria_atualiza(datetime(2026, 11, 10, 12))
+        self.assertEqual(r['minutos'], 10)
+        self.assertEqual(k.memoria_atualiza(datetime(2026, 11, 10, 12))['minutos'], 0)            # nada novo
+        (self.tmp / 'minutos.jsonl').write_text(linhas[-1] + '\n' + _j.dumps({'t': '2026-11-10T11:00:00', 'cpu': 5}) + '\n', encoding='utf-8')   # girou
+        self.assertEqual(k.memoria_atualiza(datetime(2026, 11, 10, 12))['minutos'], 1)
+        m = k.memoria_minutos(datetime(2026, 11, 10), datetime(2026, 11, 11))
+        self.assertEqual(len(m), 11)
+        self.assertEqual(m[0]['_dt'], datetime(2026, 11, 10, 10, 0))
+
+    def test_memoria_compacta_minutos_velhos_em_horas(self):
+        import json as _j
+        (self.tmp / 'minutos.jsonl').write_text('\n'.join(_j.dumps({'t': f'2026-01-01T10:{m:02d}:00', 'cpu': 10 + m % 2}) for m in range(30)) + '\n', encoding='utf-8')
+        r = k.memoria_atualiza(datetime(2026, 11, 10))
+        self.assertEqual(r['compactados'], 30)
+        self.assertEqual(k.memoria_resumo()['contagens']['horas'], 1)
+        self.assertEqual(k.memoria_resumo()['contagens']['minutos'], 0)
+
+    def test_memoria_exporta_e_apaga_guardando_antes(self):
+        import json as _j
+        (self.tmp / 'minutos.jsonl').write_text(_j.dumps({'t': '2026-11-10T10:00:00', 'cpu': 1}) + '\n', encoding='utf-8')
+        k.memoria_atualiza(datetime(2026, 11, 10, 12))
+        k.memoria_ajusta_peso('turbo', 0.5)
+        self.assertEqual(k.memoria_pesos(), {'turbo': 0.5})
+        exp = k.memoria_apaga()
+        d = _j.loads(exp.read_text(encoding='utf-8'))
+        self.assertEqual(len(d['minutos']), 1)
+        self.assertEqual(d['pesos'][0]['alvo'], 'turbo')
+        self.assertFalse((self.tmp / 'katharos.db').exists())
+        self.assertEqual((self.tmp / 'minutos.jsonl').read_text(encoding='utf-8'), '')
+
+    def test_peso_fica_entre_limites(self):
+        for _ in range(20):
+            k.memoria_ajusta_peso('energia', 0.6)
+        self.assertEqual(k.memoria_pesos()['energia'], 0.3)
+
+    def test_eventos_do_segundo_plano_e_do_motor_na_mesma_fila(self):
+        (self.tmp / 'eventos.jsonl').write_text('{"t":"2026-11-10T10:00:00","tipo":"sessao_terminou","dados":{"jogo":"x","min":30}}\n', encoding='utf-8')
+        k.publica_evento('aplicou', {'pacotes': ['energia']})
+        k.memoria_atualiza()
+        ev = k.memoria_eventos()
+        self.assertEqual([e['tipo'] for e in ev], ['sessao_terminou', 'aplicou'])
+        self.assertEqual(k.memoria_eventos(ev[0]['seq'])[0]['dados'], {'pacotes': ['energia']})
+        k.memoria_atualiza()
+        self.assertEqual(len(k.memoria_eventos()), 2)   # importar de novo não repete
+
+    def test_le_minutos_longo_vem_da_memoria(self):
+        import json as _j
+        (self.tmp / 'minutos.jsonl').write_text(_j.dumps({'t': '2026-10-01T10:00:00', 'cpu': 3}) + '\n', encoding='utf-8')
+        self.assertEqual(len(k.le_minutos(24 * 60, datetime(2026, 11, 10))), 1)
+
+    # ── I8 e I9 detectores e causas ──
+    def test_calor_e_freio_dao_calor_e_descartam_economia(self):
+        ev = self._ev(sessoes=self._sessoes(8, {'calor': 30, 'freio': 40}, temp_cpu_max=98))
+        p = k.pensa(ev)
+        d = {x['problema']: x for x in p['diagnosticos']}
+        self.assertEqual(d['jogos']['causa'], 'calor')
+        self.assertTrue(any('economia' in x['causa'] for x in d['jogos']['descartadas']))
+        x = k.explica(d['jogos'])
+        self.assertTrue(all(x[c] for c in ('vi', 'porque', 'faria', 'mudaria')))
+
+    def test_travadas_sem_limite_apontam_driver_e_pedem_o_teste(self):
+        ss = self._sessoes(6, {}, fps_med=120, fps_1low=40, travadas_por_min=3)
+        p = k.pensa(self._ev(sessoes=ss))
+        d = {x['problema']: x for x in p['diagnosticos']}
+        self.assertEqual(d['travadas']['causa'], 'driver')
+        self.assertEqual(d['travadas']['acao'], 'travadas')
+        self.assertTrue(any(x.get('comando') == 'travadas' for x in p['propostas']))
+
+    def test_gpu_no_limite_nao_vira_acao(self):
+        p = k.pensa(self._ev(sessoes=self._sessoes(8, {'gpu': 80})))
+        self.assertFalse([x for x in p['propostas'] if x['tipo'] == 'acao' and x.get('causa') == 'gpu'])
+
+    # ── I14: casos de aviso falso já vistos (nenhum deve virar proposta de ação) ──
+    def test_sem_dado_nao_tem_achado(self):
+        p = k.pensa(self._ev(sessoes=self._sessoes(1, {'cpu': 90})))
+        self.assertEqual(p['achados'], [])
+        self.assertEqual(p['diagnosticos'], [])
+
+    def test_sem_sensor_nao_inventa_calor(self):
+        p = k.pensa(self._ev(sessoes=self._sessoes(8, {'cpu': 5})))
+        self.assertFalse([d for d in p['diagnosticos'] if d['causa'] in ('calor', 'economia')])
+
+    def test_pc_de_empresa_com_muitos_processos_e_cpu_normal_nao_alarma(self):
+        base = datetime(2026, 11, 1)
+        mins = [{'t': (base + timedelta(minutes=i)).isoformat(), '_dt': base + timedelta(minutes=i), 'cpu': 8 + i % 3, 'ram': 60, 'processos': 320}
+                for i in range(0, 60 * 24 * 9, 5)]
+        p = k.pensa(self._ev(minutos=mins, agora=base + timedelta(days=9)))
+        self.assertFalse([a for a in p['achados'] if a['tipo'] == 'anomalia'])
+
+    def test_taxa_de_aviso_falso_zero_nos_casos_sadios(self):
+        sadios = [self._ev(), self._ev(sessoes=self._sessoes(8, {'gpu': 60})), self._ev(sessoes=self._sessoes(8, {'cpu': 5, 'ram': 3}))]
+        falsos = sum(len([x for x in k.pensa(ev)['propostas'] if x['tipo'] == 'acao' and x['confianca'] == 'alta']) for ev in sadios)
+        self.assertEqual(falsos, 0)
+
+    # ── I10 planejador e I11 avaliador ──
+    def test_planejador_respeita_o_que_o_motor_nunca_propoe(self):
+        with mock.patch.object(k, 'config', lambda c, p=None: 'turbo' if c == 'motor-nunca' else p):
+            p = k.pensa(self._ev(sessoes=self._sessoes(8, {'cpu': 60})))
+        self.assertFalse([x for x in p['propostas'] if (x.get('comando') or '').startswith('turbo')])
+
+    def test_peso_aprendido_muda_a_ordem_e_toda_proposta_diz_como_desfazer(self):
+        s = [k._sug('a', 'A', 'x', 'energia', 'alta', pontos_impacto=4), k._sug('b', 'B', 'x', 'memoria', 'alta', pontos_impacto=3)]
+        out = k.planeja(s, [], {'energia': 0.3})
+        self.assertEqual([x['id'] for x in out], ['b', 'a'])
+        self.assertEqual(out[1]['desfazer'], 'katharos desfazer energia')
+
+    # ── I15 orçamento de avisos ──
+    def test_orcamento_de_avisos(self):
+        e = {}
+        agora = datetime(2026, 11, 10, 12)
+        self.assertTrue(k.pode_avisar(e, 'ram', agora))
+        k.marca_aviso(e, 'ram', agora)
+        with mock.patch.object(k, 'datetime', wraps=datetime) as dt:
+            dt.now.return_value = agora + timedelta(hours=1)
+            self.assertFalse(k.pode_avisar(e, 'ram', agora + timedelta(hours=1)))
+        self.assertFalse(k.pode_avisar({}, 'ram', agora, em_jogo=True))
+        self.assertTrue(k.pode_avisar({}, 'calor', agora, grave=True, em_jogo=True))
+
+    def test_exe_respeita_o_orcamento_e_publica_eventos(self):
+        cs = (Path(__file__).resolve().parent.parent / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+        for trecho in ('AvisosIntervaloH', 'AvisosNoJogo', 'Evento("sessao_comecou"', 'Evento("sessao_terminou"', 'Evento("energia"', '"eventos.jsonl"'):
+            self.assertIn(trecho, cs)
+
+    def test_causas_sao_dados(self):
+        for c in k.CAUSAS:
+            self.assertEqual(set(c) - {'id', 'problema', 'nome', 'precisa', 'confirma', 'descarta', 'acao', 'faria', 'previsao', 'risco'}, set())
+            self.assertIn(c['problema'], k.PROBLEMAS)
+            for s in list(c['confirma']) + c['descarta'] + c['precisa']:
+                self.assertIn(s, k._NOME_SINTOMA, s)

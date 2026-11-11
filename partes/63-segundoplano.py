@@ -121,6 +121,7 @@ def config_segundo_plano():
             'energia_auto': config('energia-automatica', 'nao') == 'sim', 'energia_tomada': config('energia-tomada', ''),
             'energia_bateria': config('energia-bateria', ''), 'energia_tomada_nome': config('energia-tomada-nome', ''),
             'energia_bateria_nome': config('energia-bateria-nome', ''),
+            'avisos_intervalo_h': config('avisos-intervalo', '6'), 'avisos_no_jogo': config('avisos-no-jogo', 'so-grave'),
             'aviso_cpu': REGRAS_MOTOR['calor_cpu'], 'aviso_gpu': REGRAS_MOTOR['calor_gpu'],
             'nomes_de_jogo': nomes_de_jogo()}
 
@@ -391,7 +392,13 @@ def _le_jsonl(arq, campo, desde):
 
 
 def le_minutos(horas=24, agora=None):
-    return _le_jsonl(CASA / 'minutos.jsonl', 't', (agora or datetime.now()) - timedelta(hours=horas))
+    desde = (agora or datetime.now()) - timedelta(hours=horas)
+    if horas > 14 * 24:   # além do que o minutos.jsonl guarda: a memória do PC tem meses (e se não tiver, fica o arquivo)
+        memoria_atualiza()
+        m = memoria_minutos(desde, agora)
+        if m:
+            return m
+    return _le_jsonl(CASA / 'minutos.jsonl', 't', desde)
 
 
 def le_sessoes(dias=60, agora=None):

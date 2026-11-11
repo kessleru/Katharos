@@ -9,7 +9,7 @@
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'avisos-intervalo': tuple(str(h) for h in range(1, 49)), 'avisos-no-jogo': ('so-grave', 'nunca', 'todos'), 'resumo-diario': ('sim', 'nao'), 'canal': ('estavel', 'previa'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
