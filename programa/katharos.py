@@ -1639,6 +1639,65 @@ function Set-Energia([string]$Esquema, [string]$Sub, [string]$Config, $Ac, $Dc, 
     $script:MUDOU++
     return $true
 }
+function _KTela {
+    if ('Katharos.KTela' -as [type]) { return }
+    Add-Type -Namespace Katharos -Name KTela -ErrorAction Stop -MemberDefinition '
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct DEVMODE { [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra; public int dmFields; public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput; public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public int dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight; public int dmDisplayFlags; public int dmDisplayFrequency; public int dmICMMethod; public int dmICMIntent; public int dmMediaType; public int dmDitherType; public int dmReserved1; public int dmReserved2; public int dmPanningWidth; public int dmPanningHeight; }
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct DISPLAY_DEVICE { public int cb; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString; public int StateFlags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey; }
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplayDevices(string dev, int i, ref DISPLAY_DEVICE d, int f);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplaySettings(string dev, int modo, ref DEVMODE dm);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int ChangeDisplaySettingsEx(string dev, ref DEVMODE dm, IntPtr h, int flags, IntPtr p);'
+}
+function Get-Monitores {
+    # cada tela ligada: a taxa de agora e a maior que ela aceita na MESMA resolucao e cor (nada de mudar resolucao)
+    _KTela
+    $out = @(); $i = 0
+    $d = New-Object 'Katharos.KTela+DISPLAY_DEVICE'; $d.cb = [System.Runtime.InteropServices.Marshal]::SizeOf($d)
+    while ($i -lt 16 -and [Katharos.KTela]::EnumDisplayDevices($null, $i, [ref]$d, 0)) {
+        if ($d.StateFlags -band 1) {
+            $dm = New-Object 'Katharos.KTela+DEVMODE'; $dm.dmSize = [int16][System.Runtime.InteropServices.Marshal]::SizeOf($dm)
+            if ([Katharos.KTela]::EnumDisplaySettings($d.DeviceName, -1, [ref]$dm)) {
+                $w = $dm.dmPelsWidth; $h = $dm.dmPelsHeight; $b = $dm.dmBitsPerPel; $hz = $dm.dmDisplayFrequency; $max = $hz; $m = 0
+                $x = New-Object 'Katharos.KTela+DEVMODE'; $x.dmSize = $dm.dmSize
+                while ($m -lt 4000 -and [Katharos.KTela]::EnumDisplaySettings($d.DeviceName, $m, [ref]$x)) {
+                    if ($x.dmPelsWidth -eq $w -and $x.dmPelsHeight -eq $h -and $x.dmBitsPerPel -eq $b -and $x.dmDisplayFrequency -gt $max -and $x.dmDisplayFrequency -le 500) { $max = $x.dmDisplayFrequency }
+                    $m++
+                }
+                $out += [pscustomobject]@{ dev = $d.DeviceName; nome = $d.DeviceString; hz = $hz; max = $max; w = $w; h = $h }
+            }
+        }
+        $i++
+    }
+    return $out
+}
+function Set-TaxaMonitor([string]$Dev, [int]$Hz, [string]$Rotulo) {
+    # muda so a taxa (Hz) da tela, na mesma resolucao; testa antes (CDS_TEST) e le de volta depois. O desfazer volta a taxa de antes.
+    _KTela
+    $dm = New-Object 'Katharos.KTela+DEVMODE'; $dm.dmSize = [int16][System.Runtime.InteropServices.Marshal]::SizeOf($dm)
+    if (-not [Katharos.KTela]::EnumDisplaySettings($Dev, -1, [ref]$dm)) { return $false }
+    $antes = $dm.dmDisplayFrequency
+    if ($antes -eq $Hz) { return $false }
+    if ($TESTE) { Plano $Rotulo; return $true }
+    $dm.dmDisplayFrequency = $Hz; $dm.dmFields = 0x400000
+    if ([Katharos.KTela]::ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 2, [IntPtr]::Zero) -ne 0) { Aviso ("{0}: a tela recusou {1} Hz" -f $Rotulo, $Hz); return $false }
+    Guarda-Desfazer ("monitor|" + $Dev) ("Set-TaxaMonitor '{0}' {1} 'taxa de antes'" -f ($Dev -replace "'", "''"), $antes)
+    if ([Katharos.KTela]::ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 1, [IntPtr]::Zero) -ne 0) { Aviso ("{0}: o Windows nao aceitou" -f $Rotulo); return $false }
+    $l = New-Object 'Katharos.KTela+DEVMODE'; $l.dmSize = $dm.dmSize
+    if ([Katharos.KTela]::EnumDisplaySettings($Dev, -1, [ref]$l) -and $l.dmDisplayFrequency -ne $Hz) { Aviso ("{0}: a tela ficou em {1} Hz" -f $Rotulo, $l.dmDisplayFrequency); return $false }
+    $script:MUDOU++
+    return $true
+}
+function Set-EconomiaAdaptadores {
+    # PC de mesa: o Windows para de desligar a placa de rede e o Wi-Fi para economizar (causa de queda e de travada de rede)
+    foreach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Disabled' })) {
+        $pm = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue
+        if (-not $pm -or "$($pm.AllowComputerToTurnOffDevice)" -ne 'Enabled') { continue }
+        if ($TESTE) { Plano ("{0}: sem desligar para economizar" -f $a.Name); continue }
+        Guarda-Desfazer ("adaptador|" + $a.Name) ("Set-NetAdapterPowerManagement -Name '{0}' -AllowComputerToTurnOffDevice Enabled -NoRestart -ErrorAction SilentlyContinue" -f ($a.Name -replace "'", "''"))
+        Set-NetAdapterPowerManagement -Name $a.Name -AllowComputerToTurnOffDevice Disabled -NoRestart -ErrorAction SilentlyContinue
+        $script:MUDOU++
+    }
+}
 function Roda([string]$Exe, [string]$Argumentos = '', [double]$Minutos = 5, [switch]$Visivel) {
     if ($TESTE) { Plano ("rodar {0} {1}" -f (Split-Path $Exe -Leaf), $Argumentos); return 0 }
     $a = @{ FilePath = $Exe; PassThru = $true; ErrorAction = 'Stop' }
@@ -5779,9 +5838,24 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
 def itens_visual(ctx):
     win11 = pf(ctx.perfil, 'so.win11', True)
     d = 'HKCU:\\Control Panel\\Desktop'
+    tela = pf(ctx.perfil, 'tela')
+    tela = tela if isinstance(tela, dict) else {}
+    nb = bool(pf(ctx.perfil, 'pc.notebook'))
+    # hardware fraco (pouca RAM ou só vídeo integrado): os efeitos visuais pesam de verdade, então entram já no modo seguro
+    ram_gb = pf(ctx.perfil, 'ram.total') if isinstance(pf(ctx.perfil, 'ram.total'), (int, float)) else 0
+    videos = [v for v in lista(pf(ctx.perfil, 'video')) if isinstance(v, dict)]
+    fraco = (0 < ram_gb < 7.5) or bool(videos and all(v.get('integrada') for v in videos))
+    hz = tela.get('hz') if isinstance(tela.get('hz'), int) else 0
+    hz_max = tela.get('hz_max') if isinstance(tela.get('hz_max'), int) else 0
     return [
+        Item('monitor-hz', f'monitor na taxa máxima ({hz_max} Hz)' if hz_max else 'monitor na taxa máxima',
+             'O Windows às vezes deixa a tela em 60 Hz mesmo quando ela aceita mais. Usa a maior taxa que a tela informa na resolução de agora '
+             '(a resolução não muda). Se a tela piscar ou apagar, ela volta sozinha em 90 segundos.',
+             'imagem mais fluida e menos atraso em tudo, principalmente em jogos', 'em notebook na bateria, um pouco mais de consumo',
+             2 if nb else 1, 'foreach ($m in Get-Monitores) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
+             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz') if hz and hz_max >= hz + 15 else None,
         Item('efeitos', 'efeitos visuais em desempenho', 'Sem sombras, esmaecimento, deslizamento de menus e caixas, mantendo a '
-             'suavização de fontes e as miniaturas.', 'janelas e menus mais rápidos em PC fraco', 'visual mais seco', 2,
+             'suavização de fontes e as miniaturas.', 'janelas e menus mais rápidos em PC fraco', 'visual mais seco', 1 if fraco else 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', 'VisualFXSetting', 3),
                 R(d, 'UserPreferencesMask', bytes([0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00]), 'Binary'),
                 R(d, 'FontSmoothing', '2', 'String'), R(ADV, 'ListviewAlphaSelect', 0), R(ADV, 'ListviewShadow', 0))),
@@ -5988,6 +6062,9 @@ def itens_energia(ctx):
              conflita=('cpu-100', 'aspm', 'throttling')),
         Item('disco', 'disco nunca desliga na tomada', 'O disco não "dorme" com o PC ligado na tomada.', 'sem espera para o HD acordar',
              'gasto mínimo de energia', 2, "Guarda-Energia; Set-Energia 'SCHEME_CURRENT' 'SUB_DISK' 'DISKIDLE' 0 $null 'disco sempre ligado na tomada' | Out-Null; if (-not $TESTE) { powercfg /setactive SCHEME_CURRENT | Out-Null }"),
+        Item('adaptadores', 'placa de rede sem desligar para economizar', 'Em PC de mesa, o Windows deixa de desligar a placa de rede e o Wi-Fi '
+             'para economizar energia (opção "permitir que o computador desligue este dispositivo").', 'evita queda e travadinha de rede',
+             'gasto mínimo de energia', 2, 'Set-EconomiaAdaptadores') if not nb else None,
         Item('usb', 'sem suspensão seletiva de USB na tomada', 'O Windows para de desligar portas USB para economizar.',
              'evita mouse, teclado e headset desconectando ou com atraso', 'gasto mínimo de energia', 3 if nb else 2,
              f"Set-Energia 'SCHEME_CURRENT' {usb.split()[0]} {usb.split()[1]} 0 $null 'USB sem suspensao na tomada' | Out-Null; if (-not $TESTE) {{ powercfg /setactive SCHEME_CURRENT | Out-Null }}"),
@@ -7794,7 +7871,8 @@ CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'n
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
 PC_MODELO = {'jogos': ['Steam'], 'gpus': ['NVIDIA', 'Intel'], 'so': {'win11': True}, 'pc': {'notebook': True},
-             'tem': {'nvidia': True, 'edge': True, 'chrome': True, 'office': True, 'onedrive': True}}
+             'tem': {'nvidia': True, 'edge': True, 'chrome': True, 'office': True, 'onedrive': True},
+             'tela': {'largura': 1920, 'altura': 1080, 'hz': 60, 'hz_max': 144}}
 
 
 def selecao_do_perfil(ctx, selecao):

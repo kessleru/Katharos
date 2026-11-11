@@ -3479,3 +3479,41 @@ class TestAtualizaTerminal(unittest.TestCase):
     def test_vai_no_zip_da_release(self):
         wf = (Path(__file__).resolve().parent.parent / '.github' / 'workflows' / 'publicar.yml').read_text(encoding='utf-8')
         self.assertIn('programa', wf[wf.index('git archive'):wf.index('git archive') + 200])
+
+
+class TestItensNovos(unittest.TestCase):
+    """2b.13: monitor na taxa máxima, placa de rede sem economia (PC de mesa), efeitos visuais pelo hardware."""
+
+    def _itens(self, pacote, perfil):
+        t = k.Terminal(True, True)
+        ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
+        ctx.perfil = perfil
+        return {i.id: i for i in k.PACOTES[pacote].itens(ctx) if i}
+
+    def test_monitor_so_aparece_abaixo_da_taxa_maxima(self):
+        base = json.loads(json.dumps(k.PC_MODELO))
+        self.assertIn('monitor-hz', self._itens('visual', base))
+        base['tela']['hz'] = 144
+        self.assertNotIn('monitor-hz', self._itens('visual', base))
+        self.assertIn('visual', k.RISCO_ALTO)   # mudança de tela pergunta "manter?" e volta sozinha
+
+    def test_adaptadores_so_em_pc_de_mesa(self):
+        base = json.loads(json.dumps(k.PC_MODELO))
+        self.assertNotIn('adaptadores', self._itens('energia', base))
+        base['pc']['notebook'] = False
+        self.assertIn('adaptadores', self._itens('energia', base))
+
+    def test_efeitos_entram_no_seguro_em_pc_fraco(self):
+        base = json.loads(json.dumps(k.PC_MODELO))
+        base['ram'] = {'total': 4}
+        self.assertEqual(self._itens('visual', base)['efeitos'].nivel, 1)
+        base['ram'] = {'total': 32}
+        self.assertEqual(self._itens('visual', base)['efeitos'].nivel, 2)
+
+    def test_taxa_testa_antes_guarda_o_desfazer_e_le_de_volta(self):
+        ps = k.PS_BASE if hasattr(k, 'PS_BASE') else ''
+        src = (Path(__file__).resolve().parent.parent / 'partes' / '20-nucleo.py').read_text(encoding='utf-8')
+        f = src[src.index('function Set-TaxaMonitor'):src.index('function Set-EconomiaAdaptadores')]
+        self.assertLess(f.index('ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 2'), f.index('Guarda-Desfazer'))
+        self.assertLess(f.index('Guarda-Desfazer'), f.index('ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 1'))
+        self.assertIn('EnumDisplaySettings($Dev, -1, [ref]$l)', f)

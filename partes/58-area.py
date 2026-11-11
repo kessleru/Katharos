@@ -14,7 +14,8 @@ CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'n
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
 PC_MODELO = {'jogos': ['Steam'], 'gpus': ['NVIDIA', 'Intel'], 'so': {'win11': True}, 'pc': {'notebook': True},
-             'tem': {'nvidia': True, 'edge': True, 'chrome': True, 'office': True, 'onedrive': True}}
+             'tem': {'nvidia': True, 'edge': True, 'chrome': True, 'office': True, 'onedrive': True},
+             'tela': {'largura': 1920, 'altura': 1080, 'hz': 60, 'hz_max': 144}}
 
 
 def selecao_do_perfil(ctx, selecao):
