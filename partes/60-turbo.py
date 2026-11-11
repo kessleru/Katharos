@@ -425,7 +425,7 @@ if (-not $__pend) { $__livre += LimpaAntigos "$env:WINDIR\SoftwareDistribution\D
 $__th = @(Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Windows\Explorer" -Filter 'thumbcache_*.db' -Force -ErrorAction SilentlyContinue)
 if (($__th | Measure-Object Length -Sum).Sum -gt 200MB) { foreach ($f in $__th) { $l = $f.Length; Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue; if (-not (Test-Path -LiteralPath $f.FullName)) { $__livre += $l } } }
 foreach ($par in @(@('brave', "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Cache"), @('chrome', "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache"), @('msedge', "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache"))) {
-  if (-not (Get-Process $par[0] -ErrorAction SilentlyContinue) -and (TamanhoPasta $par[1]) -gt 500MB) { $__livre += LimpaAntigos $par[1] 0 }
+  if (-not (Get-Process $par[0] -ErrorAction SilentlyContinue) -and (TamanhoPasta $par[1]) -gt 500MB) { $__livre += LimpaAntigos $par[1] 14 }
 }
 Dado 'livre' $__livre
 
@@ -483,6 +483,15 @@ def recente_h(iso, horas):
         return False
 
 
+def _jogo_aberto_agora():
+    """Só diz que há jogo quando o segundo plano acabou de ler isso (agora.json recente); sem leitura, não segura a manutenção."""
+    try:
+        a = le_agora(max_idade_s=180)
+    except Exception:
+        return False
+    return bool(a and a.get('jogo'))
+
+
 def ferramenta_manutencao(ctx, args):
     """A manutenção em si: roda pela tarefa agendada (ou pelo menu do agendar, para testar)."""
     t = ctx.t
@@ -498,6 +507,9 @@ def ferramenta_manutencao(ctx, args):
         na_tomada, _ = energia_agora()
         if not na_tomada:
             LOG.escreve('manutenção adiada: na bateria')
+            return 0
+        if _jogo_aberto_agora():
+            LOG.escreve('manutenção adiada: há jogo aberto')
             return 0
     inicio = time.time()
     p = perfil_pc(ctx)
@@ -540,7 +552,7 @@ def ferramenta_manutencao(ctx, args):
             mensal = not ult or (datetime.now() - datetime.fromisoformat(ult)).days >= 30
         except ValueError:
             pass
-        if mensal and time.time() - inicio < 35 * 60:
+        if mensal and time.time() - inicio < 35 * 60 and not _jogo_aberto_agora():   # ponto de restauração e DISM pesam no disco: nunca com jogo aberto
             pr.atual = 'mensal: ponto de restauração e limpeza de componentes'
             roda_ps(t, MENSAL_PS, 'mensal', minutos=10, pr=pr, mostra=False)
             cod, _ = roda_exe(['DISM.exe', '/Online', '/Cleanup-Image', '/StartComponentCleanup'], 35, pr)

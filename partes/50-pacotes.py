@@ -114,9 +114,9 @@ if (Test-Path "$env:WINDIR\MEMORY.DMP") { $__l = (Get-Item "$env:WINDIR\MEMORY.D
              'Histórico, senhas, cookies e abas não são tocados.', 'espaço (às vezes vários GB)',
              'os sites carregam um pouco mais devagar na primeira visita', 2, _limpa_ps('navegadores', '\n'.join(nav)), minutos=6),
         Item('shaders', 'cache de shaders da placa de vídeo', 'DirectX, NVIDIA, AMD e Intel guardam shaders compilados. '
-             'Quando ficam grandes ou corrompidos, causam engasgos.', 'espaço; corrige travadinhas de cache corrompido',
-             'cada jogo recompila na primeira vez que abrir (pode engasgar alguns minutos)', 2,
-             _limpa_ps('shaders', r'''foreach ($__p in "$env:LOCALAPPDATA\D3DSCache","$env:LOCALAPPDATA\NVIDIA\DXCache","$env:LOCALAPPDATA\NVIDIA\GLCache","$env:LOCALAPPDATA\AMD\DxCache","$env:LOCALAPPDATA\AMD\DxcCache","$env:LOCALAPPDATA\AMD\GLCache","$env:LOCALAPPDATA\AMD\VkCache","$env:LOCALAPPDATA\Intel\ShaderCache","$env:ProgramData\NVIDIA Corporation\NV_Cache") { $__livre += LimpaAntigos $__p 0 }''')),
+             'Só apaga o que não foi usado há mais de 30 dias (jogos que você parou de abrir); o que está em uso fica, para não recompilar tudo e engasgar.', 'espaço de jogos que você não abre mais',
+             'um jogo antigo recompila na primeira vez que abrir', 2,
+             _limpa_ps('shaders', r'''foreach ($__p in "$env:LOCALAPPDATA\D3DSCache","$env:LOCALAPPDATA\NVIDIA\DXCache","$env:LOCALAPPDATA\NVIDIA\GLCache","$env:LOCALAPPDATA\AMD\DxCache","$env:LOCALAPPDATA\AMD\DxcCache","$env:LOCALAPPDATA\AMD\GLCache","$env:LOCALAPPDATA\AMD\VkCache","$env:LOCALAPPDATA\Intel\ShaderCache","$env:ProgramData\NVIDIA Corporation\NV_Cache") { $__livre += LimpaAntigos $__p 30 }''')),
         Item('instaladores', 'instaladores guardados por programas', 'Cópias de instaladores antigos que alguns programas guardam '
              '(Downloaded Installations, mais de 30 dias). O Alienware Command Center guarda ~1 GB por versão aqui.',
              'espaço', 'reparar esses programas pode pedir o instalador de novo', 2,
