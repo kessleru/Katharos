@@ -260,6 +260,7 @@
     background: color-mix(in oklab, var(--fundo) 80%, transparent); border: 1px solid var(--linha-forte); border-radius: 3px; padding: 8px 10px; cursor: pointer; }
   .tela .tocar:hover { border-color: var(--ambar); color: var(--ambar); }
   .js .tela .tocar { display: inline-block; }
+  @media (hover: hover) { .js .tela .tocar { opacity: 0; transition: opacity .15s; } .js .tela:hover .tocar, .js .tela .tocar:focus-visible { opacity: 1; } }
   .legenda { font: 400 13px/1.5 var(--sans); color: var(--apagado); padding-top: 14px; }
 
   /* veja funcionando: o vídeo grande, saindo um pouco das guias como a janela antiga */
@@ -271,7 +272,7 @@
 
   /* como funciona: três etapas, cada uma com o texto e o vídeo do que acontece */
   .etapas .quadro { display: grid; }
-  .etapa { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; }
+  .etapa { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); align-items: center; }
   .etapa + .etapa { border-top: 1px solid var(--linha); }
   .etapa-txt { padding: 40px var(--pad); display: grid; gap: 12px; align-content: center; }
   .etapa-txt .n { font: 800 30px/1 var(--mono); color: var(--ambar); letter-spacing: -.04em; }
@@ -281,9 +282,11 @@
   .etapa-txt ul { list-style: none; display: grid; gap: 6px; margin-top: 4px; }
   .etapa-txt li { font: 400 14px/1.45 var(--sans); color: var(--texto); padding-left: 16px; position: relative; }
   .etapa-txt li::before { content: ''; position: absolute; left: 0; top: .72em; width: 7px; height: 1px; background: var(--ambar); }
-  .etapa-vid { padding: 28px var(--pad) 28px 0; }
+  /* o vídeo é maior que a coluna: passa da guia para fora (um para a direita, o seguinte para a esquerda) */
+  .etapa > .etapa-vid { --vaza: clamp(0px, calc((100vw - var(--largura)) / 2 - 20px), 120px); position: relative; z-index: 3; margin: 0 calc(-1 * var(--vaza)) 0 0; padding: 28px 0; }
+  .etapa:nth-child(even) { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
   .etapa:nth-child(even) .etapa-txt { order: 2; }
-  .etapa:nth-child(even) .etapa-vid { padding: 28px 0 28px var(--pad); }
+  .etapa:nth-child(even) > .etapa-vid { margin: 0 0 0 calc(-1 * var(--vaza)); padding: 28px 0; }
 
   /* ao vivo e jogos: o vídeo e, ao lado, o que ele mede, em linhas (não em cartões) */
   .vivo-bloco { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
@@ -327,10 +330,11 @@
   .nunca-bloco .provas { border: 1px solid var(--linha-forte); border-top: 0; border-radius: 0 0 10px 10px; background: var(--painel); position: relative; z-index: 32; box-shadow: 0 0 0 8px var(--fundo); }
 
   @media (max-width: 1000px) {
-    .etapa, .vivo-bloco, .central { grid-template-columns: 1fr; }
+    .etapa, .etapa:nth-child(even), .vivo-bloco, .central { grid-template-columns: 1fr; }
     .etapa:nth-child(even) .etapa-txt { order: 0; }
     .etapa-txt { padding-bottom: 8px; }
-    .etapa-vid, .etapa:nth-child(even) .etapa-vid, .vivo-bloco .etapa-vid { padding: 0 var(--pad) 28px; }
+    .etapa > .etapa-vid, .etapa:nth-child(even) > .etapa-vid { margin: 0; padding: 0 var(--pad) 28px; }
+    .vivo-bloco .etapa-vid { padding: 0 var(--pad) 28px; }
     .fatos { border-left: 0; border-top: 1px solid var(--linha); }
     .central .etapa-txt { border-right: 0; }
     .central figure { padding: 0 var(--pad) 28px; }
