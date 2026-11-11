@@ -15,7 +15,6 @@ static class Program
         // primeiro de tudo: o Velopack trata a instalação, a desinstalação e a troca de versão (e sai, quando é com ele)
         Velopack.VelopackApp.Build()
             .OnBeforeUpdateFastCallback(_ => SegundoPlano.PedeParaSair(reabrir: true))
-            .OnAfterUpdateFastCallback(_ => SegundoPlano.ReligaDepoisDaTroca())
             .OnBeforeUninstallFastCallback(_ => { SegundoPlano.PedeParaSair(reabrir: false); SegundoPlano.TiraDoInicio(); })
             .Run();
         // ensaio do CI (5.2): atualiza esta instalação a partir de uma pasta de releases, do mesmo jeito que pelo GitHub
@@ -125,7 +124,8 @@ public static class SegundoPlano
         catch { return null; }
     }
 
-    /// <summary>Logo depois da troca de versão (o Velopack chama a versão nova): religa o segundo plano já na pasta nova, sem abrir janela.</summary>
+    /// <summary>Logo depois da troca de versão, na versão nova aberta com --depois-da-troca (não no gancho rápido do Velopack: o que ele abre
+    /// é encerrado junto com ele): religa o segundo plano já na pasta nova, sem abrir janela.</summary>
     public static void ReligaDepoisDaTroca()
     {
         var m = Arq("reabrir-segundo-plano.txt");
