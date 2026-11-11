@@ -102,7 +102,15 @@ public class Inicio : Tela
                                  Janela.Atual?.MostraCaixa(Janela.Caixa("Daqui a pouco", T("O Katharos está mudando algo no PC agora. A versão nova entra assim que terminar.", "sub"), Botao("Fechar", true, () => Janela.Atual!.FechaCaixa())), true);
                          }).Com(b => Avalonia.Controls.Grid.SetColumn(b, 1)) },
         }) : null;
-        Monta(cab, versao, passo, numeros, lista, ultima);
+        // achou um erro ou tem uma ideia: o relatório e o feedback a um clique, sempre à vista
+        var enviar = S(new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 20),
+            Children = { new StackPanel { Spacing = 3, Children = { T("Achou um erro ou tem uma ideia?", null, Tema.Osso, 15).Com(t => t.FontWeight = Avalonia.Media.FontWeight.SemiBold),
+                                                                     T("Mande um relatório, a sua opinião ou os dois. Você vê tudo antes de sair.", "rotulo") } },
+                         Botao("Enviar relatório", false, () => Abre("enviar")).Com(b => Grid.SetColumn(b, 1)) },
+        });
+        Monta(cab, versao, passo, numeros, lista, ultima, enviar);
     }
 
     Control PrimeirosPassos(bool notebook)

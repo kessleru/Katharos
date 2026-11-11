@@ -1,0 +1,15 @@
+# Cloudflare Worker que recebe os relatórios e o feedback do Katharos (ver LEIA.md)
+name = "katharos-relatorios"
+main = "src/index.js"
+compatibility_date = "2025-11-01"
+
+[vars]
+REPO = "kessleru/katharos-relatorios"
+
+# poucos envios por minuto de cada IP (opcional: sem esta ligação o Worker funciona igual, só sem o limite)
+[[ratelimits]]
+name = "LIMITE"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
+# o token do GitHub NÃO fica aqui: npx wrangler secret put GITHUB_TOKEN

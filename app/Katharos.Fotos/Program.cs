@@ -47,7 +47,7 @@ j.Show();
 var espera = new Dictionary<string, string> {
     ["inicio"] = "Próximo passo", ["raiox"] = "O que o acompanhamento viu", ["otimizar:servicos"] = "recomendado", ["aovivo"] = "Placa de vídeo",
     ["jogos"] = "Por jogo", ["sugestoes"] = "Diagnóstico", ["historico"] = "Fora do normal", ["desfazer"] = "Aplicado neste PC",
-    ["config"] = "Memória do PC", ["aviso"] = "Li o aviso" };
+    ["config"] = "Memória do PC", ["aviso"] = "Li o aviso", ["enviar"] = "1. O que mandar" };
 int falhas = 0;
 foreach (var tela in espera.Keys)
 {

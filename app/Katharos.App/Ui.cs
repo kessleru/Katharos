@@ -132,6 +132,12 @@ public static class Ui
                 "interno" => ("Erro interno do Katharos", "Algo inesperado aconteceu no motor. Tente de novo; se repetir, copie os detalhes abaixo e mande junto com os registros."),
                 "nao_ligou" or "sem_exe" => ("O acompanhamento não abriu", m.Message),
                 "so_windows" => ("Só no Windows", m.Message),
+                "sem_texto" => ("Falta o texto", m.Message),
+                "sem_secoes" => ("Nada marcado", m.Message),
+                "sem_internet" => ("Sem conexão", m.Message),
+                "envio_fora" => ("O envio ainda não está no ar", "O servidor que recebe os relatórios ainda não foi ligado pelo criador do Katharos."),
+                "envio_limite" => ("Muitos envios seguidos", m.Message),
+                "envio_recusado" => ("O servidor não aceitou", m.Message + " Tente de novo mais tarde; se repetir, mande só o feedback contando isso."),
                 _ => ("Não deu certo", m.Message),
             };
         return e switch
@@ -158,11 +164,7 @@ public static class Ui
         string codigo = e is ErroDoMotor m ? m.Codigo : e.GetType().Name;
         string versao = typeof(Ui).Assembly.GetName().Version?.ToString(3) ?? "";
         string tecnico = $"Katharos {versao} · {Environment.OSVersion.VersionString} · erro {refe} · {codigo}: {e.Message}";
-        var copiar = Botao("Copiar detalhes", false, async () =>
-        {
-            var cb = TopLevel.GetTopLevel(Janela.Atual)?.Clipboard;
-            if (cb != null) await cb.SetTextAsync(tecnico);
-        });
+        var copiar = Botao("Copiar detalhes", false, async () => await Copia(tecnico));
         var abrir = Botao("Abrir os registros", false, () =>
         {
             try
@@ -173,9 +175,19 @@ public static class Ui
             }
             catch (Exception x) { Registro.Escreve("abrir os registros: " + x.Message); }
         });
+        var botoes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { copiar, abrir } };
+        // erro de envio não oferece "enviar relatório" (seria o mesmo caminho que acabou de falhar)
+        if (!(e is ErroDoMotor { Codigo: "sem_internet" or "envio_fora" or "envio_limite" or "envio_recusado" or "sem_texto" or "sem_secoes" }))
+            botoes.Children.Add(Botao("Enviar relatório", false, () => { var j = Janela.Atual; j?.FechaCaixa(); j?.Mostra("enviar:" + refe); }));
         return new StackPanel { Spacing = 8, Children = {
-            T($"Referência {refe} · {codigo}", "rotulo", tamanho: 12.5, quebra: true).Com(t => t.FontFamily = Tema.Mono),
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { copiar, abrir } } } };
+            T($"Referência {refe} · {codigo}", "rotulo", tamanho: 12.5, quebra: true).Com(t => t.FontFamily = Tema.Mono), botoes } };
+    }
+
+    /// <summary>Copia um texto para a área de transferência (o código de um envio, os detalhes de um erro).</summary>
+    public static async Task Copia(string texto)
+    {
+        var cb = TopLevel.GetTopLevel(Janela.Atual)?.Clipboard;
+        if (cb != null) await cb.SetTextAsync(texto);
     }
 
     public static Border Etiqueta(string texto, IBrush cor) =>

@@ -45,14 +45,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Katharos: abre o otimizador e acompanha o PC em segundo plano")]
 [assembly: AssemblyCompany("Katharos, código aberto (github.com/kessleru/Katharos)")]
 [assembly: AssemblyCopyright("Licença MIT")]
-[assembly: AssemblyVersion("4.1.0.0")]
-[assembly: AssemblyFileVersion("4.1.0.0")]
+[assembly: AssemblyVersion("4.2.0.0")]
+[assembly: AssemblyFileVersion("4.2.0.0")]
 
 namespace KatharosApp
 {
     static class K
     {
-        public const string VERSAO = "4.1.0";
+        public const string VERSAO = "4.2.0";
         public const string MUTEX = "Local\\KatharosSegundoPlano";
         public const string EV_SAIR = "Local\\KatharosSegundoPlanoSair";
         public const string EV_MOSTRAR = "Local\\KatharosSegundoPlanoMostrar";

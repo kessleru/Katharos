@@ -141,6 +141,23 @@ public static class DadosDeExemplo
                                 {"id": "servicos", "titulo": "Serviços que este PC não usa", "quando": "2026-10-28T19:00", "previsto": "menos RAM em uso", "veredito": "sem diferença", "cor": "cinza", "antes": 6.6, "depois": 6.5, "un": "GB"}]}
             """),
         "sessoes" => Sessoes(),
+        "envio_secoes" => JsonNode.Parse("""
+            {"secoes": [{"id": "sistema", "titulo": "O PC e o Windows", "explica": "modelo, processador, placa de vídeo, memória, disco, versão e idioma do Windows"},
+                        {"id": "erros", "titulo": "Erros do Katharos", "explica": "erros e avisos do motor, da janela e do acompanhamento nos últimos 30 dias"},
+                        {"id": "historico", "titulo": "O que foi aplicado", "explica": "cada pacote aplicado ou desfeito, com quando e quais itens"},
+                        {"id": "eficiencia", "titulo": "O que cada otimização rendeu", "explica": "o que cada item mudou medido antes e depois, e as suas respostas"},
+                        {"id": "saude", "titulo": "Saúde do PC", "explica": "nota e achados do raio-x, drivers que travam e o quanto o Katharos pesa"},
+                        {"id": "jogos", "titulo": "Jogos", "explica": "sessões de jogo com FPS médio, 1% mais lento e o que limitou"}],
+             "feedback_tipos": ["problema", "ideia", "elogio", "outro"],
+             "envios": [{"codigo": "KTH-3MZ8QA", "tipo": "ambos", "quando": "2026-11-09T20:14:00", "versao": "4.0.2"}]}
+            """),
+        "envio_montar" => JsonNode.Parse("""
+            {"pacote": {"esquema": 1, "tipo": "ambos", "katharos": "4.2.0", "enviado": "2026-11-11T15:30:00", "id_pc": "0123456789abcdef",
+                        "feedback": {"tipo": "problema", "texto": "O acompanhamento demora para ligar.", "nota": 4, "contato": null}},
+             "resumo": [{"titulo": "Feedback", "texto": "problema, 35 letras, nota 4 de 5"}, {"titulo": "Erros do Katharos", "texto": "2 avisos ou erros ao aplicar, 6 linhas de erro dos registros"},
+                        {"titulo": "O que cada otimização rendeu", "texto": "41 itens medidos, 3 rodadas antes e depois, 2 respostas suas"}],
+             "bytes": 48213, "json": "{\n \"esquema\": 1,\n \"tipo\": \"ambos\"\n}"}
+            """),
         "novidades" => JsonNode.Parse("""
             {"versao": "4.0.2", "mostrar": true, "versoes": [{"versao": "4.0.2", "data": "11 de novembro de 2026",
               "resumo": "Correção da interface: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.",

@@ -18,7 +18,16 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
-## 4.1.0 · 11 de novembro de 2026
+## 4.2.0 · 11 de novembro de 2026
+
+Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.
+
+- **Tela Enviar relatório**: no menu, no Início e em toda caixa de erro. Você escolhe mandar o relatório, o feedback (problema, ideia, elogio ou outro, com nota de 1 a 5 e um contato opcional para resposta) ou os dois.
+- **Relatório completo**: erros do Katharos (motor, janela e acompanhamento), o que foi aplicado e desfeito, o que voltou sozinho, o que cada otimização rendeu medido antes e depois, as suas respostas de "ajudou", a saúde do PC, o peso do próprio Katharos e as sessões de jogo. Cada parte pode ser desmarcada.
+- **Nada pessoal sai**: nome de usuário, nome do PC, pastas pessoais, e-mail, IP, MAC, chave de produto e identificadores do Windows viram marcadores antes de sair, e partes como portas abertas e arquivos nunca entram. Antes de mandar, você vê o resumo e o texto exato.
+- **Só sai quando você clica**: nada é enviado sozinho. Sem internet, o envio fica guardado no PC e você manda depois pela mesma tela. Cada envio recebe um código (KTH-...) que fica na tela e serve para pedir para apagar.
+
+
 
 A janela agora mostra o que está fazendo, fica mais fluida e conta o que mudou depois de cada atualização.
 

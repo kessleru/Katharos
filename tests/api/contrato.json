@@ -27,6 +27,15 @@
   "dispensar": {
    "muda": false
   },
+  "envio_montar": {
+   "muda": false
+  },
+  "envio_registrar": {
+   "muda": false
+  },
+  "envio_secoes": {
+   "muda": false
+  },
   "historico": {
    "muda": false
   },

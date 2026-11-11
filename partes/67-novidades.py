@@ -1,10 +1,26 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
-  "versao": "4.1.0",
+  "versao": "4.2.0",
   "data": "11 de novembro de 2026",
-  "resumo": "A janela agora mostra o que está fazendo, fica mais fluida e conta o que mudou depois de cada atualização.",
+  "resumo": "Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.",
   "itens": [
+   {
+    "titulo": "Tela Enviar relatório",
+    "texto": "no menu, no Início e em toda caixa de erro. Você escolhe mandar o relatório, o feedback (problema, ideia, elogio ou outro, com nota de 1 a 5 e um contato opcional para resposta) ou os dois."
+   },
+   {
+    "titulo": "Relatório completo",
+    "texto": "erros do Katharos (motor, janela e acompanhamento), o que foi aplicado e desfeito, o que voltou sozinho, o que cada otimização rendeu medido antes e depois, as suas respostas de \"ajudou\", a saúde do PC, o peso do próprio Katharos e as sessões de jogo. Cada parte pode ser desmarcada."
+   },
+   {
+    "titulo": "Nada pessoal sai",
+    "texto": "nome de usuário, nome do PC, pastas pessoais, e-mail, IP, MAC, chave de produto e identificadores do Windows viram marcadores antes de sair, e partes como portas abertas e arquivos nunca entram. Antes de mandar, você vê o resumo e o texto exato."
+   },
+   {
+    "titulo": "Só sai quando você clica",
+    "texto": "nada é enviado sozinho. Sem internet, o envio fica guardado no PC e você manda depois pela mesma tela. Cada envio recebe um código (KTH-...) que fica na tela e serve para pedir para apagar."
+   },
    {
     "titulo": "Sempre dá para ver que está fazendo",
     "texto": "todo botão que conversa com o motor mostra \"…\" e fica desligado enquanto trabalha (um segundo clique não roda de novo), e a barra lateral acende em âmbar com o que está acontecendo. Ligar o acompanhamento mostra cada passo (\"abrindo\", \"esperando a primeira leitura\") e, num PC lento, diz que já está rodando em vez de parecer travado. Aplicar e desfazer mostram onde aparece o pedido de permissão do Windows, e toda espera longa mostra há quantos segundos está trabalhando."

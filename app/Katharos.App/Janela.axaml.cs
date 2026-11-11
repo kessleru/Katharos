@@ -26,7 +26,7 @@ public partial class Janela : Window
         AvaloniaXamlLoader.Load(this);
         Atual = this;
         foreach (var b in Botoes()) b.Click += Navega;
-        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.1.0";
+        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.2.0";
         relogio.Tick += async (_, _) =>
         {
             if (!lendoAgora)
@@ -79,6 +79,7 @@ public partial class Janela : Window
             "desfazer" => new Desfazer(),
             "config" => new Configuracoes(),
             "aviso" => new Aviso(arg),
+            "enviar" => new Enviar(arg),
             _ => new Inicio(),
         };
         c.Pede += Mostra;

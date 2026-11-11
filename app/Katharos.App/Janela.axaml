@@ -43,6 +43,7 @@
             <Button Classes="nav" Content="Central" Tag="sugestoes" />
             <Button Classes="nav" Content="Histórico" Tag="historico" />
             <Button Classes="nav" Content="Desfazer" Tag="desfazer" />
+            <Button Classes="nav" Content="Enviar relatório" Tag="enviar" />
           </StackPanel>
         </DockPanel>
       </Border>
