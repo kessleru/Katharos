@@ -19,6 +19,8 @@ static class Program
             .OnBeforeUninstallFastCallback(_ => { SegundoPlano.PedeParaSair(reabrir: false); SegundoPlano.TiraDoInicio(); })
             .Run();
         // ensaio do CI (5.2): atualiza esta instalação a partir de uma pasta de releases, do mesmo jeito que pelo GitHub
+        // logo depois de uma troca de versão sem janela (automática ao fechar, ou o ensaio): só religa o segundo plano e sai
+        if (args.Contains("--depois-da-troca")) { SegundoPlano.ReligaDepoisDaTroca(); return; }
         int ta = Array.IndexOf(args, "--teste-atualizacao");
         if (ta >= 0 && ta + 1 < args.Length) { Environment.Exit(TesteAtualizacao(args[ta + 1])); return; }
         // ensaio do CI (S5): abre o motor de administrador como a janela abre (cópia protegida conferida) e pede a versão
@@ -59,7 +61,7 @@ static class Program
             g.DownloadUpdates(info);
             SegundoPlano.PedeParaSair(reabrir: true);
             Registro.Escreve("ensaio de atualização: aplicando " + info.TargetFullRelease.Version);
-            g.ApplyUpdatesAndExit(info.TargetFullRelease);
+            g.ApplyUpdatesAndRestart(info.TargetFullRelease, new[] { "--depois-da-troca" });
             return 0;
         }
         catch (Exception e) { Registro.Escreve("ensaio de atualização: " + e); return 1; }
@@ -128,11 +130,13 @@ public static class SegundoPlano
     {
         var m = Arq("reabrir-segundo-plano.txt");
         var exe = Path.Combine(AppContext.BaseDirectory, "motor", "Katharos.exe");
+        Registro.Escreve($"depois da troca: reabrir={File.Exists(m)}, segundo plano em {exe} ({File.Exists(exe)})");
         if (!File.Exists(m) || !File.Exists(exe)) return;
         try
         {
             File.Delete(m);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, "--segundo-plano") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe)! });
+            Registro.Escreve("depois da troca: segundo plano religado");
         }
         catch (Exception e) { Registro.Escreve("religar o segundo plano: " + e.Message); }
     }

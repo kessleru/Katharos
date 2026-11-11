@@ -51,7 +51,8 @@ public static class Atualizacao
             Registro.Escreve("atualização baixada: " + VersaoPronta);
             Mudou?.Invoke();
             // automático: troca ao fechar a janela (o segundo plano sai antes e a janela o religa na próxima abertura)
-            if (modo == "automatico") { AoFechar = true; g.WaitExitThenApplyUpdates(info.TargetFullRelease, silent: true, restart: false); }
+            // a versão nova abre só para religar o segundo plano (--depois-da-troca), sem janela
+            if (modo == "automatico") { AoFechar = true; g.WaitExitThenApplyUpdates(info.TargetFullRelease, silent: true, restart: true, new[] { "--depois-da-troca" }); }
         }
         catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
     }

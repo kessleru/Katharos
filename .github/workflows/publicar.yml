@@ -300,7 +300,12 @@ jobs:
           # o segundo plano voltou, já da pasta nova
           $volta = $false
           for ($i = 0; $i -lt 60; $i++) { if (((Get-Date) - (Get-Item "$k\agora.json").LastWriteTime).TotalSeconds -lt 5 -and (Get-Process Katharos -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$casa\motor*" })) { $volta = $true; break }; Start-Sleep 1 }
-          if (-not $volta) { Write-Host '::error::o segundo plano não voltou depois da troca de versão'; exit 1 }
+          if (-not $volta) {
+            Get-Content "$k\interface.log" -ErrorAction SilentlyContinue | Select-Object -Last 15
+            Get-Content "$k\segundo-plano.log" -ErrorAction SilentlyContinue | Select-Object -Last 15
+            Get-Process Katharos -ErrorAction SilentlyContinue | Format-Table Id, Path | Out-String | Write-Host
+            Write-Host '::error::o segundo plano não voltou depois da troca de versão'; exit 1
+          }
           Write-Host 'segundo plano religado depois da troca'
           # desinstala: some a pasta do programa, ficam os dados (backups do desfazer) em ~/.katharos
           $u = Join-Path $env:LOCALAPPDATA 'Katharos\Update.exe'
