@@ -156,13 +156,31 @@ public sealed class MotorElevado : Conversa
         string nome = "katharos-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
         string senha = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
         string sid = WindowsIdentity.GetCurrent().User!.Value;
-        var psi = new ProcessStartInfo(onde.python) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
-        psi.Arguments = $"-X utf8 \"{onde.motor}\" api --pipe {nome} --dono {sid} --senha {senha}";
-        try { Process.Start(psi); }
+        // instalado: o motor de administrador roda de uma cópia em %ProgramData%\Katharos (só administrador grava lá), conferida pelo
+        // manifesto de SHA-256 cujo hash foi gravado neste aplicativo no build. Assim, um programa comum do mesmo usuário não consegue
+        // trocar o Python ou o katharos.py que vai rodar como administrador. Fora da instalação (código, testes), roda direto.
+        var protegido = CopiaProtegida.Comando(onde.python, onde.motor, nome, sid, senha);
+        var psi = protegido ?? new ProcessStartInfo(onde.python) { Arguments = $"-X utf8 \"{onde.motor}\" api --pipe {nome} --dono {sid} --senha {senha}" };
+        psi.UseShellExecute = true; psi.Verb = "runas"; psi.WindowStyle = ProcessWindowStyle.Hidden;
+        Process? lancador;
+        try { lancador = Process.Start(psi); }
         catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223)
         { throw new ErroDoMotor("recusado", "Sem a permissão de administrador, o Katharos não muda nada. Nada foi alterado."); }
         var m = new MotorElevado { pipe = new NamedPipeClientStream(".", nome, PipeDirection.InOut, PipeOptions.Asynchronous) };
-        await m.pipe.ConnectAsync(TimeSpan.FromSeconds(60), ct);
+        var liga = m.pipe.ConnectAsync(TimeSpan.FromSeconds(90), ct);
+        if (protegido != null && lancador != null)
+        {   // o lançador (PowerShell) confere e copia; se algo não confere, ele sai com erro antes de abrir o motor
+            var saiu = lancador.WaitForExitAsync(ct);
+            if (await Task.WhenAny(liga, saiu) == saiu && !liga.IsCompleted)
+            {
+                int cod = -1; try { cod = lancador.ExitCode; } catch { }
+                if (cod != 0)
+                    throw new ErroDoMotor("motor_alterado", cod is 11 or 12
+                        ? "Os arquivos do Katharos não conferem com os desta instalação (alguém mexeu neles). Nada foi alterado. Reinstale o Katharos pelo site."
+                        : $"O motor de administrador não abriu (código {cod}). Nada foi alterado.");
+            }
+        }
+        await liga;
         var w = new StreamWriter(m.pipe, new UTF8Encoding(false)) { AutoFlush = false, NewLine = "\n" };
         await w.WriteLineAsync(JsonSerializer.Serialize(new { senha })); await w.FlushAsync(ct);
         await m.Liga(new StreamReader(m.pipe, Encoding.UTF8), w, ct);
@@ -173,6 +191,71 @@ public sealed class MotorElevado : Conversa
     {
         await base.DisposeAsync();
         pipe?.Dispose();
+    }
+}
+
+/// <summary>
+/// A cópia protegida do motor para rodar como administrador: o PowerShell do Windows (pelo caminho completo), já elevado, confere o
+/// manifesto (hash gravado no aplicativo), copia python\ e motor\ para %ProgramData%\Katharos\VERSÃO com permissão só de administrador,
+/// confere de novo a cópia, e só então abre o motor dali. Uma versão por vez; a anterior sai.
+/// </summary>
+public static class CopiaProtegida
+{
+    public static string? HashEsperado() => typeof(CopiaProtegida).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+        .OfType<System.Reflection.AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "ManifestoSha256")?.Value;
+
+    public static ProcessStartInfo? Comando(string python, string motor, string pipe, string sid, string senha)
+    {
+        string? h = HashEsperado();
+        string app = AppContext.BaseDirectory.TrimEnd('\\', '/');
+        if (!OperatingSystem.IsWindows() || string.IsNullOrEmpty(h) || !File.Exists(Path.Combine(app, "motor", "manifesto.json"))) return null;
+        string ver = typeof(CopiaProtegida).Assembly.GetName().Version?.ToString() ?? "0";
+        string Q(string s) => "'" + s.Replace("'", "''") + "'";
+        string script = $$"""
+            $ErrorActionPreference = 'Stop'
+            $src = {{Q(app)}}; $ver = {{Q(ver)}}; $esperado = {{Q(h)}}
+            $base = Join-Path $env:ProgramData 'Katharos'; $dst = Join-Path $base $ver
+            $man = Join-Path $src 'motor\manifesto.json'
+            if ((Get-FileHash -LiteralPath $man -Algorithm SHA256).Hash.ToLower() -ne $esperado) { exit 11 }
+            $m = Get-Content -LiteralPath $man -Raw | ConvertFrom-Json
+            function Confere($raiz) {
+                foreach ($p in $m.arquivos.PSObject.Properties) {
+                    $f = Join-Path $raiz ($p.Name -replace '/', '\')
+                    if (-not (Test-Path -LiteralPath $f)) { return $false }
+                    if ((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower() -ne $p.Value) { return $false }
+                }
+                return $true
+            }
+            if (-not ((Test-Path -LiteralPath $dst) -and (Confere $dst))) {
+                if (-not (Test-Path -LiteralPath $base)) { New-Item -ItemType Directory -Path $base | Out-Null }
+                $acl = New-Object System.Security.AccessControl.DirectorySecurity
+                $acl.SetAccessRuleProtection($true, $false)
+                foreach ($r in @(@('S-1-5-32-544', 'FullControl'), @('S-1-5-18', 'FullControl'), @('S-1-5-32-545', 'ReadAndExecute'))) {
+                    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier $r[0]), $r[1], 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+                }
+                $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544'))
+                Set-Acl -LiteralPath $base -AclObject $acl
+                $tmp = $dst + '.novo'
+                if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+                New-Item -ItemType Directory -Path $tmp | Out-Null
+                foreach ($p in $m.arquivos.PSObject.Properties) {
+                    $rel = $p.Name -replace '/', '\'
+                    $para = Join-Path $tmp $rel
+                    New-Item -ItemType Directory -Force -Path (Split-Path $para) | Out-Null
+                    Copy-Item -LiteralPath (Join-Path $src $rel) -Destination $para -Force
+                }
+                if (-not (Confere $tmp)) { Remove-Item -LiteralPath $tmp -Recurse -Force; exit 12 }
+                if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
+                Rename-Item -LiteralPath $tmp -NewName (Split-Path $dst -Leaf)
+                Get-ChildItem -LiteralPath $base -Directory | Where-Object { $_.Name -ne $ver } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $py = Join-Path $dst 'python\python.exe'; $kpy = Join-Path $dst 'motor\programa\katharos.py'
+            Start-Process -FilePath $py -WindowStyle Hidden -ArgumentList @('-X', 'utf8', ('"' + $kpy + '"'), 'api', '--pipe', {{Q(pipe)}}, '--dono', {{Q(sid)}}, '--senha', {{Q(senha)}})
+            exit 0
+            """;
+        string ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        string b64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+        return new ProcessStartInfo(ps) { Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + b64 };
     }
 }
 

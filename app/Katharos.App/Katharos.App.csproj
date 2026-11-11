@@ -17,6 +17,10 @@
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
+  <!-- o SHA-256 do manifesto do motor (python\ e motor\), gravado no build: o motor de administrador só roda o que confere com ele -->
+  <ItemGroup Condition="'$(ManifestoSha256)' != ''">
+    <AssemblyMetadata Include="ManifestoSha256" Value="$(ManifestoSha256)" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.23" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.23" />

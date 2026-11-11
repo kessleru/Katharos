@@ -21,6 +21,8 @@ static class Program
         // ensaio do CI (5.2): atualiza esta instalação a partir de uma pasta de releases, do mesmo jeito que pelo GitHub
         int ta = Array.IndexOf(args, "--teste-atualizacao");
         if (ta >= 0 && ta + 1 < args.Length) { Environment.Exit(TesteAtualizacao(args[ta + 1])); return; }
+        // ensaio do CI (S5): abre o motor de administrador como a janela abre (cópia protegida conferida) e pede a versão
+        if (args.Contains("--teste-motor-elevado")) { Environment.Exit(TesteMotorElevado().GetAwaiter().GetResult()); return; }
         int i = Array.IndexOf(args, "--tela");
         if (i >= 0 && i + 1 < args.Length) TelaInicial = args[i + 1];
         // uma janela só: abrir de novo (pelo ícone, pelo menu Iniciar) traz a que já está aberta, na tela pedida
@@ -32,6 +34,18 @@ static class Program
         }
         MontaApp().StartWithClassicDesktopLifetime(args);
         GC.KeepAlive(unica);
+    }
+
+    static async Task<int> TesteMotorElevado()
+    {
+        try
+        {
+            await using var m = await MotorElevado.Abre();
+            var v = await m.Pede("versao");
+            Registro.Escreve("ensaio do motor elevado: " + v?.ToJsonString() + " (cópia protegida: " + (CopiaProtegida.HashEsperado() != null) + ")");
+            return v?["versao"] != null ? 0 : 4;
+        }
+        catch (Exception e) { Registro.Escreve("ensaio do motor elevado: " + e); return e is ErroDoMotor { Codigo: "motor_alterado" } ? 11 : 1; }
     }
 
     static int TesteAtualizacao(string pasta)

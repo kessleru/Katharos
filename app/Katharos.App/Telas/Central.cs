@@ -98,7 +98,9 @@ public class Sugestoes : Tela
     {
         string id = r.S("id"), cor = r.S("cor"), ver = r.S("veredito");
         var c = cor == "verde" ? Tema.Verde : cor == "vermelho" ? Tema.Vermelho : Tema.Apagado;
-        string num = r.D("antes") is double a && r.D("depois") is double b ? $": {Num(a)} → {Num(b)} {r.S("un")}" : "";
+        // números pequenos com fração (GB de RAM) ficam com uma casa: "6,6 → 6,5", não "7 → 6"
+        static string N(double v) => Num(v, Math.Abs(v) < 100 && Math.Abs(v - Math.Round(v)) > 0.001 ? 1 : 0);
+        string num = r.D("antes") is double a && r.D("depois") is double b ? $": {N(a)} → {N(b)} {r.S("un")}" : "";
         string texto = r.S("texto") != "" ? r.S("texto") : $"Previ {r.S("previsto")}; {ver}{num}.";
         string q = r?["qualidade"].S("texto") ?? "";
         if (q != "" && r?["qualidade"].S("nivel") != "") texto += " " + char.ToUpper(q[0]) + q[1..] + ".";

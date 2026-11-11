@@ -165,6 +165,7 @@ jobs:
       PY_SHA256: '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
       PM_VERSAO: v2.6.0
       VPK_VERSAO: '1.2.161'
+      SIGNPATH_ON: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -176,8 +177,6 @@ jobs:
         run: |
           $V = (Select-String -Path programa\katharos.py -Pattern "^VERSAO = '([^']+)'").Matches[0].Groups[1].Value
           "V=$V" >> $env:GITHUB_ENV
-          dotnet publish app/Katharos.App/Katharos.App.csproj -c Release -r win-x64 --self-contained -o pub -p:Version=$V
-          if ($LASTEXITCODE) { exit 1 }
           New-Item -ItemType Directory -Force pub\motor\programa | Out-Null
           Copy-Item programa\katharos.py, programa\katharos.ps1 pub\motor\programa\
           Copy-Item KATHAROS.bat, SHA256SUMS.txt, LICENSE pub\motor\
@@ -196,6 +195,18 @@ jobs:
           $r = & pub\python\python.exe pub\motor\programa\katharos.py api versao
           Write-Host $r
           if ($r -notmatch '"ok": true') { Write-Host '::error::o Python embutido não rodou o motor'; exit 1 }
+          # manifesto do motor: o SHA-256 de cada arquivo de python\ e motor\; o hash dele vai gravado no aplicativo (o motor de administrador
+          # só roda de uma cópia em %ProgramData% que confere com ele)
+          $arq = [ordered]@{}
+          Get-ChildItem pub\python, pub\motor -Recurse -File | Sort-Object FullName | ForEach-Object {
+            $rel = $_.FullName.Substring((Resolve-Path pub).Path.Length + 1) -replace '\\', '/'
+            $arq[$rel] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+          }
+          [IO.File]::WriteAllText((Join-Path (Resolve-Path pub).Path 'motor\manifesto.json'), (@{ versao = $V; arquivos = $arq } | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
+          $h = (Get-FileHash pub\motor\manifesto.json -Algorithm SHA256).Hash.ToLower()
+          Write-Host "manifesto: $($arq.Count) arquivos, SHA-256 $h"
+          dotnet publish app/Katharos.App/Katharos.App.csproj -c Release -r win-x64 --self-contained -o pub -p:Version=$V -p:ManifestoSha256=$h
+          if ($LASTEXITCODE) { exit 1 }
           Get-ChildItem pub -Recurse -File | Measure-Object -Property Length -Sum | ForEach-Object { Write-Host ("pasta do aplicativo: {0:N1} MB" -f ($_.Sum / 1MB)) }
       - name: empacota (Velopack)
         shell: pwsh
@@ -208,6 +219,24 @@ jobs:
             --icon app\Katharos.App\Assets\katharos.ico -o releases
           if ($LASTEXITCODE) { exit 1 }
           Get-ChildItem releases | Format-Table Name, @{n='MB'; e={'{0:N1}' -f ($_.Length / 1MB)}}
+      # 5.4: assinatura pela SignPath Foundation. Liga sozinha quando o segredo SIGNPATH_API_TOKEN existir (pedido em planos/assinatura-signpath.md);
+      # sem ele, estes passos não rodam e nada muda.
+      - name: separa o instalador para assinar (SignPath)
+        if: env.SIGNPATH_ON == 'true'
+        id: semassinar
+        uses: actions/upload-artifact@v4
+        with: { name: para-assinar, path: releases/*Setup.exe }
+      - name: assina (SignPath)
+        if: env.SIGNPATH_ON == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY }}
+          github-artifact-id: ${{ steps.semassinar.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: releases
       - name: instala de verdade, em silêncio, e confere
         shell: pwsh
         timeout-minutes: 6
@@ -222,7 +251,25 @@ jobs:
           $r = & (Join-Path $casa 'python\python.exe') (Join-Path $casa 'motor\programa\katharos.py') api versao
           Write-Host $r
           if ($r -notmatch '"ok": true') { Write-Host '::error::o motor instalado não respondeu'; exit 1 }
-          Write-Host 'instalado e conferido'
+          # o motor de administrador, como a janela abre: cópia protegida em %ProgramData%, conferida, e o pipe com senha
+          $pe = Start-Process (Join-Path $casa 'Katharos.exe') -ArgumentList '--teste-motor-elevado' -PassThru
+          $pe | Wait-Process -Timeout 180
+          Get-Content "$env:USERPROFILE\.katharos\interface.log" -ErrorAction SilentlyContinue | Select-Object -Last 4
+          if ($pe.ExitCode) { Write-Host "::error::o motor de administrador não abriu pela cópia protegida ($($pe.ExitCode))"; exit 1 }
+          $pd = Get-ChildItem "$env:ProgramData\Katharos" -Directory | Select-Object -First 1
+          if (-not $pd -or -not (Test-Path (Join-Path $pd.FullName 'python\python.exe'))) { Write-Host '::error::sem a cópia em ProgramData'; exit 1 }
+          $acl = Get-Acl "$env:ProgramData\Katharos"
+          $acl.Access | Format-Table IdentityReference, FileSystemRights | Out-String | Write-Host
+          if ($acl.Access | Where-Object { $_.IdentityReference -match 'Users|Usu' -and "$($_.FileSystemRights)" -match 'Write|Modify|FullControl' }) { Write-Host '::error::usuários comuns podem gravar na cópia'; exit 1 }
+          # alguém troca o katharos.py na pasta do usuário: o motor de administrador não pode abrir
+          Add-Content (Join-Path $casa 'motor\programa\katharos.py') '# alterado'
+          Remove-Item "$env:ProgramData\Katharos" -Recurse -Force
+          $pe = Start-Process (Join-Path $casa 'Katharos.exe') -ArgumentList '--teste-motor-elevado' -PassThru
+          $pe | Wait-Process -Timeout 180
+          if ($pe.ExitCode -ne 11) { Write-Host "::error::abriu (ou falhou de outro jeito: $($pe.ExitCode)) com o katharos.py alterado"; exit 1 }
+          Write-Host 'arquivo alterado: o motor de administrador recusou abrir'
+          # devolve o arquivo original (para o ensaio de atualização abaixo)
+          Copy-Item pub\motor\programa\katharos.py (Join-Path $casa 'motor\programa\katharos.py') -Force
       - name: atualiza de verdade para uma versão nova e desinstala (com o segundo plano rodando)
         shell: pwsh
         timeout-minutes: 10
