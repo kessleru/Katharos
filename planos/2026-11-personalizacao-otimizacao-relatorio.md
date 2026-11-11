@@ -14,9 +14,8 @@ Marque `[x]` ao concluir e anote no **Registro** (fim) a data, a versão e o com
 | 1 | 4.1.0 | proteção jurídica e bugs |
 | 2 | 4.1.0 | relatório completo com envio |
 | 3 | 4.2.0 | personalização nativa com galeria |
-| 4 | 4.3.0 | personalizações próprias do Katharos e estilos prontos |
-| 5 | 4.4.0 | otimizações novas e perfis automáticos |
-| 6 | 4.5.0 | interface |
+| 4 | 4.3.0 | otimizações novas e perfis automáticos |
+| 5 | 4.4.0 | interface |
 
 ---
 
@@ -47,7 +46,7 @@ no instalador e no relatório (J1 a J8). Isso é transparência, não parecer ju
 
 ---
 
-## 2. Personalização (fases 3 e 4)
+## 2. Personalização (fase 3)
 
 Todas as chaves são confirmadas na fase 0 (Windows 10 22H2, 11 24H2, 11 25H2). Valor bloqueado pelo UCPD vira atalho para a tela do Windows.
 
@@ -59,18 +58,6 @@ Todas as chaves são confirmadas na fase 0 (Windows 10 22H2, 11 24H2, 11 25H2). 
 - Cores: cor de destaque nas bordas, no Iniciar e na barra; ícones da área de trabalho; Alt+Tab sem abas do Edge; Snap.
 - Bloqueio e sons: sem dicas na tela de bloqueio, tela de entrada sem desfoque, esquema "Sem sons".
 - Atalhos para Configurações: papel de parede, não perturbe com horário, ponteiro, tecla Copilot, temas da Loja.
-
-**Próprias do Katharos (fase 4)**, feitas por ele, sem programa de terceiro:
-- **Tema claro e escuro por horário:** tarefa agendada que troca o tema nas horas que a pessoa escolher.
-- **Atalhos sem a seta** nos ícones e sem o texto "- Atalho" nos novos.
-- **Menu do botão direito mais curto:** esconder itens de programas (só os que o Katharos lista e mostra antes), com volta.
-- **Papel de parede por horário:** troca entre duas imagens que a pessoa escolhe (manhã e noite).
-- **Pasta de capturas de tela** e de downloads em outro lugar, escolhida pela pessoa, com volta.
-- **Ícones da área de trabalho:** mostrar ou esconder todos com um atalho de teclado criado pelo Katharos.
-- **Relógio** com segundos e data completa, e primeiro dia da semana.
-- **Sons:** esquema do sistema "Sem sons" e opção de silenciar só o som de inicialização.
-
-**Estilos prontos (fase 4):** Windows 10 de volta, Limpo, Escuro e foco, Foco em vários monitores; um clique, prévia do conjunto e volta em grupo.
 
 ## 3. Sem programas de terceiros
 
@@ -116,28 +103,24 @@ Bugs:
 - [ ] **3.4** Página **Personalizar** no site com a mesma galeria.
 - [ ] **3.5** Testes de cada opção em cada Windows do CI; foto refeita quando o Windows mudar.
 
-### Fase 4: personalizações próprias e estilos (4.3.0)
-- [ ] **4.1** Estilos prontos com prévia do conjunto e volta em grupo.
-- [ ] **4.2** Personalizações próprias da seção 2 (tema por horário, atalhos sem seta, menu mais curto, papel de parede por horário, pastas, relógio, sons), cada uma lida de volta e com Desfazer, e testada no Windows do CI.
+### Fase 4: otimizações novas (4.3.0)
+- [ ] **4.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
+- [ ] **4.2** Placa de vídeo por jogo em notebook com duas placas (preferência "alto desempenho" de Configurações > Tela > Gráficos), com desfazer.
+- [ ] **4.3** Limite de banda da Otimização de Entrega e horário ativo do Windows Update (políticas oficiais).
+- [ ] **4.4** Segundo plano por app, com o custo medido de cada um.
+- [ ] **4.5** Inicialização atrasada em vez de removida, medida no boot seguinte.
+- [ ] **4.6** Modo de energia do Windows 11 (melhor desempenho e melhor eficiência), lido de volta.
+- [ ] **4.7** Disco pequeno: compactação do Windows só em SSD pequeno e quase cheio, com o ganho estimado antes.
+- [ ] **4.8** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
 
-### Fase 5: otimizações novas (4.4.0)
-- [ ] **5.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
-- [ ] **5.2** Placa de vídeo por jogo em notebook com duas placas (preferência "alto desempenho" de Configurações > Tela > Gráficos), com desfazer.
-- [ ] **5.3** Limite de banda da Otimização de Entrega e horário ativo do Windows Update (políticas oficiais).
-- [ ] **5.4** Segundo plano por app, com o custo medido de cada um.
-- [ ] **5.5** Inicialização atrasada em vez de removida, medida no boot seguinte.
-- [ ] **5.6** Modo de energia do Windows 11 (melhor desempenho e melhor eficiência), lido de volta.
-- [ ] **5.7** Disco pequeno: compactação do Windows só em SSD pequeno e quase cheio, com o ganho estimado antes.
-- [ ] **5.8** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
-
-### Fase 6: interface (4.5.0)
-- [ ] **6.1** Busca em tudo (Ctrl+K), com prévia.
-- [ ] **6.2** Prévia também no Otimizar, usando a mesma galeria.
-- [ ] **6.3** Modo simples e avançado.
-- [ ] **6.4** Acessibilidade: teclado, leitor de tela, alto contraste, tamanho de texto.
-- [ ] **6.5** Histórico com o "antes e depois" de cada valor.
-- [ ] **6.6** Novidades da versão na primeira abertura depois de atualizar.
-- [ ] **6.7** Inglês no aplicativo, no site e na galeria.
+### Fase 5: interface (4.4.0)
+- [ ] **5.1** Busca em tudo (Ctrl+K), com prévia.
+- [ ] **5.2** Prévia também no Otimizar, usando a mesma galeria.
+- [ ] **5.3** Modo simples e avançado.
+- [ ] **5.4** Acessibilidade: teclado, leitor de tela, alto contraste, tamanho de texto.
+- [ ] **5.5** Histórico com o "antes e depois" de cada valor.
+- [ ] **5.6** Novidades da versão na primeira abertura depois de atualizar.
+- [ ] **5.7** Inglês no aplicativo, no site e na galeria.
 
 ---
 
@@ -176,3 +159,4 @@ Bugs:
 - 11 nov 2026 (08:53): a seção de antivírus saiu da fase 1, só por agora; guardada em [adiado-antivirus.md](adiado-antivirus.md).
 - 11 nov 2026 (08:54): o Katharos cria as próprias personalizações; saiu o PowerToys.
 - 11 nov 2026 (08:55): saiu exportar e importar estilo.
+- 11 nov 2026 (08:56): saíram as personalizações próprias do Katharos e os estilos prontos; fases 5 e 6 viraram 4 e 5.
