@@ -1485,7 +1485,7 @@ namespace KatharosApp
         DateTime proxCfg = DateTime.Now.AddSeconds(30), proxRotacao = DateTime.Now.AddMinutes(5);
         // custo do próprio segundo plano: tempo de cada passo, CPU e RAM do Katharos.exe
         readonly Stopwatch relogio = new Stopwatch();
-        public double PassoMedioMs, PassoMaiorMs; int nPassos;
+        public double PassoMedioMs, PassoMaiorMs; int nPassos; volatile int esperaMs = 1000;
         public double EuCpuPct, EuRamMb; TimeSpan euCpuAntes; DateTime euAntes = DateTime.MinValue, proxEu = DateTime.MinValue;
         bool avisouLento; DateTime proxPausa = DateTime.MinValue;
         // energia: o último lado visto (tomada ou bateria) e se o "manter desempenho" estava valendo; o aviso vai para o ícone
@@ -1519,7 +1519,8 @@ namespace KatharosApp
                 int falta = Cfg.IntervaloMs - (int)ms;
                 int minimo = nPassos > 10 ? (int)Math.Min(30000, PassoMedioMs * 9) : 0;
                 if (minimo > falta && !avisouLento) { avisouLento = true; Log.Escreve("leitura custando " + Math.Round(PassoMedioMs, 0) + " ms: ritmo espaçado para não pesar"); }
-                Thread.Sleep(Math.Max(100, Math.Max(falta, minimo)));
+                esperaMs = Math.Max(100, Math.Max(falta, minimo));
+                Thread.Sleep(esperaMs);
             }
             try { FechaSessao(); FechaMinuto(); } catch { }
         }
@@ -1765,6 +1766,8 @@ namespace KatharosApp
         {
             var d = new Dictionary<string, object>();
             d["versao"] = K.VERSAO; d["quando"] = K.Iso(a.Quando); d["intervalo_s"] = Cfg.IntervaloMs / 1000.0;
+            // o tempo real entre duas leituras (o freio espaça até 30 s num PC lento): quem lê o arquivo só diz "desligado" depois de bem mais que isso
+            d["espera_s"] = Math.Round(esperaMs / 1000.0, 1);
             d["cpu"] = K.R(a.Cpu, 1); d["nucleo_max"] = K.R(a.NucleoMax, 1); d["cpu_desempenho"] = K.R(a.CpuDesempenho, 0); d["cpu_ghz"] = K.R(a.CpuGhz, 2);
             d["gpu"] = K.R(a.Gpu, 1); d["vram_gb"] = K.R(a.VramGb, 2); d["vram_total_gb"] = K.R(a.VramTotalGb, 1);
             d["ram_pct"] = K.R(a.RamPct, 1); d["ram_gb"] = K.R(a.RamGb, 2); d["ram_total_gb"] = K.R(a.RamTotalGb, 1);

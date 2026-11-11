@@ -748,7 +748,7 @@ def api_segundo_plano(ctx, p, ev):
         raise ErroApi('sem_exe', 'O Katharos.exe não está junto do programa: reinstale o Katharos.')
     if p.get('ligar') is True:
         ok = instala_segundo_plano(ctx, mostrar=False)
-        for _ in range(20):
+        for _ in range(80):   # até 20 s: num PC lento, ou com o antivírus verificando o Katharos.exe na primeira vez, ele demora a abrir
             if sp_rodando():
                 break
             time.sleep(0.25)

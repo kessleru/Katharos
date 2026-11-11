@@ -51,9 +51,15 @@ public static class Servico
         try
         {
             var arq = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "agora.json");
-            if (!File.Exists(arq) || (DateTime.Now - File.GetLastWriteTime(arq)).TotalSeconds > 20) return null;
-            using var f = new FileStream(arq, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            return JsonNode.Parse(f);
+            if (!File.Exists(arq)) return null;
+            double idade = (DateTime.Now - File.GetLastWriteTime(arq)).TotalSeconds;
+            if (idade > 600) return null;
+            JsonNode? a;
+            using (var f = new FileStream(arq, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) a = JsonNode.Parse(f);
+            // num PC lento o segundo plano espaça as leituras (até 30 s): o limite acompanha o ritmo que ele mesmo informa; senão a
+            // janela dizia "desligado" com o acompanhamento rodando, e "ligar" parecia não fazer nada
+            double limite = Math.Max(20, 3 * (a.D("espera_s") ?? 0) + 5);
+            return idade > limite ? null : a;
         }
         catch { return null; }
     }

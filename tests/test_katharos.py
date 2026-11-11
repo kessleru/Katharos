@@ -2737,7 +2737,9 @@ class TestSegundoPlanoLeve(unittest.TestCase):
     def test_freio_de_seguranca(self):
         # a leitura nunca ocupa mais de 1/10 do tempo: se ficar cara, o ritmo se espaça sozinho
         self.assertIn('PassoMedioMs * 9', self.CS)
-        self.assertIn('Thread.Sleep(Math.Max(100, Math.Max(falta, minimo)))', self.CS)
+        self.assertIn('esperaMs = Math.Max(100, Math.Max(falta, minimo));', self.CS)
+        self.assertIn('Thread.Sleep(esperaMs);', self.CS)
+        self.assertIn('d["espera_s"]', self.CS)   # o ritmo real vai no agora.json: a janela só diz "desligado" depois de três ritmos
         self.assertIn('Thread.CurrentThread.Priority = ThreadPriority.BelowNormal', self.CS)
 
     def test_nada_pesado_logo_ao_ligar(self):
@@ -3235,6 +3237,31 @@ class TestBancada(unittest.TestCase):
         self.assertEqual(sis['fechaveis'], ['chrome 9%'], 'processo do Windows nunca aparece como "feche"')
         with mock.patch.object(k, 'le_agora', return_value=None):
             self.assertEqual(k.condicoes_de_bancada()['qualidade'], 'desconhecida')
+
+    def test_le_agora_acompanha_o_ritmo_do_segundo_plano_lento(self):
+        """Num PC lento o segundo plano espaça as leituras (até 30 s): uma leitura de 40 s atrás ainda é "rodando" se ele avisou o ritmo,
+        e é "desligado" se ele não avisou ou se passou de três ritmos."""
+        import tempfile
+        from datetime import datetime, timedelta
+        velha = k.CASA
+        with tempfile.TemporaryDirectory() as d:
+            k.CASA = Path(d)
+            try:
+                def grava(segundos_atras, espera=None):
+                    x = {'quando': (datetime.now() - timedelta(seconds=segundos_atras)).isoformat(timespec='seconds'), 'cpu': 1}
+                    if espera is not None:
+                        x['espera_s'] = espera
+                    (k.CASA / 'agora.json').write_text(json.dumps(x), encoding='utf-8')
+                grava(40, espera=30)
+                self.assertIsNotNone(k.le_agora(), 'espaçado em 30 s: 40 s atrás ainda é leitura de agora')
+                grava(40)
+                self.assertIsNone(k.le_agora(), 'sem o aviso de ritmo vale o limite de sempre')
+                grava(120, espera=30)
+                self.assertIsNone(k.le_agora(), 'passou de três ritmos: parou de verdade')
+                grava(5, espera='lixo')
+                self.assertIsNotNone(k.le_agora(), 'ritmo ilegível não derruba a leitura')
+            finally:
+                k.CASA = velha
 
     def test_bancada_nunca_fecha_processo(self):
         import inspect

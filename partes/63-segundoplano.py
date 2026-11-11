@@ -367,7 +367,11 @@ def le_agora(max_idade_s=15):
         q = datetime.fromisoformat(d.get('quando'))
     except (TypeError, ValueError):
         return None
-    if (datetime.now() - q).total_seconds() > max_idade_s:
+    try:   # num PC lento o segundo plano espaça as leituras (até 30 s): o limite acompanha o ritmo que ele mesmo informa
+        limite = max(max_idade_s, 3 * float(d.get('espera_s') or 0) + 5)
+    except (TypeError, ValueError):
+        limite = max_idade_s
+    if (datetime.now() - q).total_seconds() > limite:
         return None
     d['_dt'] = q
     return d
