@@ -75,4 +75,14 @@ foreach (var tela in espera.Keys)
     Console.WriteLine(arq);
     j.FechaCaixa();
 }
+// a caixa de erro: título claro, o que fazer, a referência e os botões de ajuda
+{
+    Ui.MostraErro(new ErroDoMotor("caiu", "o motor fechou"));
+    for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
+    var textos = j.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text ?? "").ToList();
+    if (!textos.Contains("O motor do Katharos fechou") || !textos.Any(t => t.StartsWith("Referência "))) { Console.Error.WriteLine("erro: a caixa de erro não abriu como deveria"); falhas++; }
+    using var foto = j.CaptureRenderedFrame();
+    foto!.Save(Path.Combine(pasta, "erro.png"));
+    j.FechaCaixa();
+}
 if (falhas > 0) { Console.Error.WriteLine($"{falhas} tela(s) com problema"); Environment.Exit(1); }

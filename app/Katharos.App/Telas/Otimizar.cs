@@ -130,7 +130,13 @@ public class Otimizar : Tela
                 Child = new StackPanel { Spacing = 6, Children = { topo, T(explica, null, null, 14, true) } },
             };
             var b = new Button { Content = cartao, Padding = new Thickness(0), Margin = new Thickness(0, 0, 12, 0), Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-            b.Click += async (_, _) => { if (modo == m) return; modo = m; await CarregaItens(false); Desenha(cab); };
+            b.Click += async (_, _) =>
+            {
+                if (modo == m) return;
+                var antes = modo;
+                try { modo = m; await CarregaItens(false); Desenha(cab); }
+                catch (Exception e) { modo = antes; MostraErro(e, "Não deu para trocar de modo", "O modo continua o de antes."); }
+            };
             modos.Children.Add(b);
         }
         var passo1 = S(new StackPanel { Children = { Subtitulo("1. Escolha o modo"), modos } });
@@ -269,7 +275,7 @@ public class Otimizar : Tela
         catch (ErroDoMotor e) when (e.Codigo == "precisa_aceite") { j.FechaCaixa(); Abre("aviso:otimizar"); }
         catch (Exception e)
         {
-            j.MostraCaixa(Janela.Caixa("Não deu certo", T(e.Message + " Nada foi marcado como feito; o que chegou a mudar volta pelo Desfazer.", "sub"), Botao("Fechar", false, j.FechaCaixa)), true);
+            MostraErro(e, depois: "Nada foi marcado como feito. O que chegou a mudar antes do erro volta pela tela Desfazer.");
         }
         finally { Trabalho.Termina(); }
     }
@@ -333,7 +339,7 @@ public class Otimizar : Tela
             bool ok = r.A("pacotes").All(x => x.B("ok"));
             j.MostraCaixa(Janela.Caixa(ok ? "Desfeito" : "Desfeito em parte", T(ok ? "Voltou ao que era antes." : "Algo não voltou: abra o Desfazer para ver.", "sub"), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
         }
-        catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para desfazer", T(e.Message + " Tente pela tela Desfazer.", "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+        catch (Exception e) { MostraErro(e, "Não deu para desfazer", "As mudanças continuam aplicadas. Tente de novo pela tela Desfazer."); }
         finally { Trabalho.Termina(); }
     }
 

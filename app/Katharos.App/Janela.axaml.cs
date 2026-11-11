@@ -110,7 +110,7 @@ public partial class Janela : Window
         catch (Exception e) { Registro.Escreve("novidades: " + e.Message); if (!soSePrecisa) MostraErro(e); return; }
         if (d == null || (soSePrecisa && !d.B("mostrar"))) return;
         if (soSePrecisa && this.FindControl<Border>("Veu")!.IsVisible) return;   // já há uma caixa aberta (confirmação, erro): não cobre
-        var corpo = new StackPanel { Spacing = 18, MaxWidth = 620 };
+        var corpo = new StackPanel { Spacing = 18, MaxWidth = 620, HorizontalAlignment = HorizontalAlignment.Left };
         foreach (var v in d.A("versoes"))
         {
             var p = new StackPanel { Spacing = 8 };

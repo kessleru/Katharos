@@ -102,13 +102,80 @@ public static class Ui
         return b;
     }
 
-    public static void MostraErro(Exception e)
+    /// <summary>A caixa de erro: o que houve em palavras simples, o que fazer, e os detalhes para pedir ajuda. <paramref name="depois"/>
+    /// diz o que aconteceu com o PC (ex.: "o que chegou a mudar volta pelo Desfazer"); sem ele, vale "nada além disso mudou".</summary>
+    public static void MostraErro(Exception e, string? titulo = null, string? depois = null)
     {
-        Registro.Escreve("erro na tela: " + e);
+        string refe = Referencia(e, "caixa");
         var j = Janela.Atual;
         if (j == null) return;
-        string texto = e is ErroDoMotor m ? m.Message : "Algo deu errado: " + e.Message;
-        j.MostraCaixa(Janela.Caixa("Não deu certo", T(texto + " Nada além disso mudou.", "sub", quebra: true), Botao("Fechar", true, j.FechaCaixa)), true);
+        var (t, texto) = Explica(e);
+        var corpo = new StackPanel { Spacing = 10, MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        corpo.Children.Add(T(texto, "sub", quebra: true));
+        corpo.Children.Add(T(depois ?? "Nada além disso mudou no PC.", "rotulo", quebra: true));
+        corpo.Children.Add(Detalhes(e, refe));
+        j.MostraCaixa(Janela.Caixa(titulo ?? t, corpo, new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0),
+            Children = { Botao("Fechar", true, j.FechaCaixa) } }), true);
+    }
+
+    /// <summary>O erro em palavras de quem usa: um título curto e o que fazer. O texto técnico fica nos detalhes.</summary>
+    public static (string titulo, string texto) Explica(Exception e)
+    {
+        if (e is ErroDoMotor m)
+            return m.Codigo switch
+            {
+                "caiu" or "sem_resposta" => ("O motor do Katharos fechou", "Ele parou no meio do pedido. Tente de novo: ele abre sozinho. Se repetir, copie os detalhes abaixo e mande junto com os registros."),
+                "demorou" => ("Demorou demais", m.Message),
+                "recusado" => ("Sem permissão de administrador", m.Message),
+                "sem_motor" => ("Instalação incompleta", m.Message),
+                "motor_alterado" => ("Arquivos do Katharos alterados", m.Message),
+                "interno" => ("Erro interno do Katharos", "Algo inesperado aconteceu no motor. Tente de novo; se repetir, copie os detalhes abaixo e mande junto com os registros."),
+                "nao_ligou" or "sem_exe" => ("O acompanhamento não abriu", m.Message),
+                "so_windows" => ("Só no Windows", m.Message),
+                _ => ("Não deu certo", m.Message),
+            };
+        return e switch
+        {
+            UnauthorizedAccessException => ("Sem permissão para um arquivo", "O Windows não deixou ler ou gravar um arquivo do Katharos. Feche programas que possam estar usando a pasta .katharos (antivírus, sincronização de nuvem) e tente de novo."),
+            IOException => ("Arquivo em uso", "Um arquivo do Katharos estava em uso por outro programa, ou o disco demorou a responder. Tente de novo em alguns segundos."),
+            TimeoutException => ("Demorou demais", "Uma etapa passou do tempo. Tente de novo; num PC ocupado pode levar mais."),
+            System.Text.Json.JsonException => ("Resposta ilegível", "O motor respondeu algo que a janela não entendeu. Tente de novo; se repetir, mande os registros."),
+            _ => ("Não deu certo", "Algo inesperado aconteceu na janela. Tente de novo; se repetir, copie os detalhes abaixo e mande junto com os registros."),
+        };
+    }
+
+    /// <summary>Grava o erro inteiro no registro com um número curto, que aparece na tela: com ele, o registro certo é achado na hora.</summary>
+    public static string Referencia(Exception e, string onde)
+    {
+        string refe = DateTime.Now.ToString("HHmmss") + "-" + (Math.Abs(e.GetHashCode()) % 1000).ToString("000");
+        Registro.Escreve($"erro {refe} ({onde}): {(e is ErroDoMotor m ? m.Codigo + ": " : "")}{e}");
+        return refe;
+    }
+
+    /// <summary>A linha de detalhes: o texto técnico curto, "Copiar detalhes" (versão, número, erro) e "Abrir os registros".</summary>
+    public static Control Detalhes(Exception e, string refe)
+    {
+        string codigo = e is ErroDoMotor m ? m.Codigo : e.GetType().Name;
+        string versao = typeof(Ui).Assembly.GetName().Version?.ToString(3) ?? "";
+        string tecnico = $"Katharos {versao} · {Environment.OSVersion.VersionString} · erro {refe} · {codigo}: {e.Message}";
+        var copiar = Botao("Copiar detalhes", false, async () =>
+        {
+            var cb = TopLevel.GetTopLevel(Janela.Atual)?.Clipboard;
+            if (cb != null) await cb.SetTextAsync(tecnico);
+        });
+        var abrir = Botao("Abrir os registros", false, () =>
+        {
+            try
+            {
+                var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos");
+                Directory.CreateDirectory(d);
+                if (OperatingSystem.IsWindows()) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "\"" + d + "\"") { UseShellExecute = true });
+            }
+            catch (Exception x) { Registro.Escreve("abrir os registros: " + x.Message); }
+        });
+        return new StackPanel { Spacing = 8, Children = {
+            T($"Referência {refe} · {codigo}", "rotulo", tamanho: 12.5, quebra: true).Com(t => t.FontFamily = Tema.Mono),
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { copiar, abrir } } } };
     }
 
     public static Border Etiqueta(string texto, IBrush cor) =>
@@ -169,11 +236,14 @@ public static class Ui
         return (p, passo, barra);
     }
 
+    /// <summary>O erro no lugar da tela: o que houve, o que fazer, "Tentar de novo" e os detalhes para pedir ajuda.</summary>
     public static Secao Erro(Exception e, Action? tentar = null)
     {
-        string texto = e is ErroDoMotor m ? m.Message : "Algo deu errado: " + e.Message;
-        return Vazio("Não deu certo", texto + (e is ErroDoMotor { Codigo: "sem_motor" } ? "" : " O detalhe ficou em ~/.katharos/interface.log."),
-                     tentar != null ? Botao("Tentar de novo", false, tentar) : null);
+        string refe = Referencia(e, "tela");
+        var (titulo, texto) = Explica(e);
+        var s = Vazio(titulo, texto, tentar != null ? Botao("Tentar de novo", true, tentar) : null);
+        if (s.Child is StackPanel p) p.Children.Add(Detalhes(e, refe).Com(d => d.Margin = new Thickness(0, 14, 0, 0)));
+        return s;
     }
 
     // ───── leitura dos dados da API (JsonNode) sem estourar: o que faltar vira o padrão ─────
@@ -233,7 +303,7 @@ public abstract class Tela : UserControl
         try { await Carrega(); }
         catch (Exception e)
         {
-            Registro.Escreve($"{GetType().Name}: {e}");
+            Registro.Escreve($"{GetType().Name}: não carregou (o erro inteiro vem na linha seguinte)");
             Monta(Corpo.Children.FirstOrDefault() is Secao s && s.Child is Grid ? Corpo.Children[0] : null, Ui.Erro(e, async () => await Recarrega()));
         }
     }

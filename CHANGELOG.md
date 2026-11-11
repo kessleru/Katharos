@@ -26,6 +26,7 @@ A janela agora mostra o que está fazendo, fica mais fluida e conta o que mudou 
 - **Ao vivo mais leve**: a tela não se refaz mais a cada leitura, só os números mudam, e a leitura do arquivo saiu da linha da janela (um disco lento não trava a tela).
 - **Início abre na hora**: mostra a última leitura e troca quando a nova chega, sem "carregando" a cada visita.
 - **Otimizar não pula**: a conferência do que já está feito atualiza os itens no lugar, sem refazer a tela (antes a rolagem pulava).
+- **Erros que dizem o que fazer**: cada erro aparece com um título claro ("O motor do Katharos fechou", "Sem permissão para um arquivo", "Arquivo em uso"), o que fazer em seguida, o que aconteceu com o PC, um número de referência e os botões "Copiar detalhes" e "Abrir os registros". O número também fica no registro, ao lado do erro inteiro. Trocar de modo no Otimizar com erro volta ao modo de antes, e um erro que fecharia o aplicativo fica registrado.
 - **Novidades ao abrir**: na primeira abertura depois de atualizar, uma caixa mostra o que mudou desde a última versão que você viu, com o mesmo texto deste histórico. Aparece uma vez só por versão e nunca na primeira instalação. Para rever depois, vá em Configurações > Novidades.
 - **Esc fecha as caixas**: as caixas de aviso e de resultado também fecham com a tecla Esc.
 

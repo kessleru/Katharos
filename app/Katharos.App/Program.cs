@@ -33,7 +33,10 @@ static class Program
             SegundoPlano.PedeTela(TelaInicial);
             return;
         }
-        MontaApp().StartWithClassicDesktopLifetime(args);
+        // erro que derruba o aplicativo (raro: as telas já tratam os seus) fica no registro, para saber o que houve
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Registro.Escreve("o aplicativo fechou por um erro: " + e.ExceptionObject);
+        try { MontaApp().StartWithClassicDesktopLifetime(args); }
+        catch (Exception e) { Registro.Escreve("o aplicativo fechou por um erro: " + e); throw; }
         GC.KeepAlive(unica);
     }
 

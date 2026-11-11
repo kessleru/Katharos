@@ -133,7 +133,7 @@ public class Desfazer : Tela
                 T(falhas.Count == 0 ? "Voltou ao que era antes." : "Não voltou: " + string.Join(", ", falhas) + ". O detalhe está no relatório do Katharos.", "sub"),
                 Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
         }
-        catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para desfazer", T(e.Message, "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+        catch (Exception e) { MostraErro(e, "Não deu para desfazer", "As mudanças continuam aplicadas. Tente de novo; se repetir, um ponto de restauração do Windows também volta o PC."); }
         finally { Trabalho.Termina(); }
     }
 }
@@ -197,7 +197,7 @@ public class Configuracoes : Tela
     {
         var j = Janela.Atual!;
         try { var r = await Servico.Le("memoria_exportar"); j.MostraCaixa(Janela.Caixa("Exportado", T("Salvo em " + r.S("arquivo"), "sub"), Botao("Fechar", true, j.FechaCaixa)), true); }
-        catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para exportar", T(e.Message, "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+        catch (Exception e) { MostraErro(e, "Não deu para exportar"); }
     }
 
     async Task Apaga()
@@ -209,7 +209,7 @@ public class Configuracoes : Tela
             var r = await Servico.Le("memoria_apagar", new { confirmo = true });
             j.MostraCaixa(Janela.Caixa("Memória apagada", T(r.S("exportado") == "" ? "Não havia nada guardado." : "A exportação ficou em " + r.S("exportado"), "sub"), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
         }
-        catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para apagar", T(e.Message, "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+        catch (Exception e) { MostraErro(e, "Não deu para apagar", "A memória continua como estava."); }
     }
 }
 
