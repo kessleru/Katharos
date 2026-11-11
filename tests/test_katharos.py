@@ -2882,6 +2882,36 @@ class TestApi(_CasaTemporaria):
         self.assertEqual(r[4], {'id': 4, 'ok': True, 'dados': None})
         self.assertEqual(len(r), 5)   # depois de "sair" nada é respondido
 
+    def test_motor_avisa_pronto_antes_do_preparo_lento(self):
+        """Um preparo lento ou travado (conversão de dados, segundo plano) não pode deixar a interface carregando sem nenhum sinal:
+        o "pronto" sai primeiro, e os pedidos esperam o preparo só por um tempo limitado."""
+        import io, threading, time
+        ordem = []
+
+        class Canal(io.StringIO):
+            def write(self, x):
+                ordem.append(('saida', x[:20]))
+                return super().write(x)
+
+        def lento(*a, **kw):
+            ordem.append(('preparo', ''))
+            time.sleep(0.4)
+            return None
+        velho = (k.confere_versao, k.migra_segundo_plano)
+        k.confere_versao = lento
+        k.migra_segundo_plano = lambda ctx: None
+        try:
+            saida = Canal()
+            k.roda_api([], entrada=io.StringIO(json.dumps({'id': 1, 'metodo': 'versao'}) + '\n'), saida=saida)
+        finally:
+            k.confere_versao, k.migra_segundo_plano = velho
+        primeiro = [x for x in ordem if x[0] == 'saida'][0]
+        self.assertIn('pronto', primeiro[1])
+        self.assertLess(ordem.index(primeiro), ordem.index(('preparo', '')) + 3)   # o aviso não espera os 0,4 s do preparo
+        linhas = [json.loads(l) for l in saida.getvalue().splitlines()]
+        self.assertTrue(linhas[0]['pronto'])
+        self.assertTrue([x for x in linhas if x.get('id') == 1][0]['ok'])
+
     def test_saida_da_tela_nunca_vai_para_o_canal(self):
         # tudo o que as funções escrevem vai para o erro padrão: cada linha do canal é JSON
         r = self.conversa({'id': 1, 'metodo': 'itens', 'params': {'modo': 'seguro'}}, {'id': 2, 'metodo': 'inicio'})

@@ -18,6 +18,13 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.0.2 · 11 de novembro de 2026
+
+Correção da interface, vista num notebook Acer: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.
+
+- **Ligar o acompanhamento**: a tela Ao vivo se refazia a cada segundo, o que derrubava o clique no botão e trocava o "Ligando" pelo aviso de desligado. Agora ela só se refaz quando o estado muda, ignora o segundo clique e espera até 20 s pela primeira leitura (PC mais lento). Se não ligar, a mensagem de erro fica na tela, com "tentar de novo".
+- **Carregando para sempre**: o motor agora avisa que está pronto antes de converter dados e conferir o segundo plano; antes, um desses passos lento ou travado deixava toda tela em "carregando" sem nenhum sinal. A janela também desiste de esperar um motor mudo (60 s para abrir, 2 min sem resposta; 10 min no raio-x), fecha ele e mostra "tentar de novo".
+
 ## 4.0.1 · 11 de novembro de 2026
 
 Correções da revisão depois da 4.0.0. Nenhum item novo.

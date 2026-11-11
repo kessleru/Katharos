@@ -97,21 +97,33 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
         args = _defaults(monta_parser().parse_args([]))
         args.sim, args.sem_cor, args.ascii = True, True, True
         ctx = Ctx(args, t)
-        # versão nova pela atualização da interface: converte os dados e atualiza o segundo plano, como a CLI faz ao abrir
-        for f in (lambda: confere_versao(t, silencioso=True), lambda: migra_segundo_plano(ctx)):
+        # versão nova pela atualização da interface: converte os dados e atualiza o segundo plano, como a CLI faz ao abrir. Isso roda
+        # DEPOIS de avisar que o motor está pronto (antes, um passo lento ou travado deixava a interface carregando para sempre sem
+        # nenhuma mensagem), e o primeiro pedido espera até 20 s por ele para ler os dados já convertidos
+        preparo_pronto = threading.Event()
+
+        def preparo():
             try:
-                f()
-            except Exception as e:
-                LOG.escreve(f'api: preparo falhou: {e!r}')
+                for f in (lambda: confere_versao(t, silencioso=True), lambda: migra_segundo_plano(ctx)):
+                    try:
+                        f()
+                    except Exception as e:
+                        LOG.escreve(f'api: preparo falhou: {e!r}')
+            finally:
+                preparo_pronto.set()
         canal = CanalApi(canal_real)
         if argv:
             try:
                 params = json.loads(argv[1]) if len(argv) > 1 else {}
             except ValueError:
                 params = None
+            preparo()
             responde_api(ctx, canal, {'id': 1, 'metodo': argv[0], 'params': params})
             return 0
         canal.manda({'pronto': True, 'api': API_VERSAO, 'versao': VERSAO})
+        threading.Thread(target=preparo, daemon=True).start()
+        if not preparo_pronto.wait(20):
+            LOG.escreve('api: o preparo passou de 20 s; atendendo os pedidos mesmo assim')
         for linha in (entrada or sys.stdin):
             linha = linha.strip()
             if not linha:

@@ -28,10 +28,25 @@ public abstract class Conversa : IAsyncDisposable
     public string Versao { get; private set; } = "";
     public event Action<string>? Caiu;
 
+    /// <summary>Quanto tempo sem nenhuma mensagem do motor (resposta ou progresso) até a interface desistir de esperar. Zero = espera sempre.</summary>
+    protected virtual TimeSpan SilencioDe(string metodo) => TimeSpan.Zero;
+    /// <summary>Quanto o motor pode levar para dizer que está pronto.</summary>
+    protected virtual TimeSpan Abertura => TimeSpan.FromSeconds(60);
+    /// <summary>Fecha à força um motor que parou de responder, para o próximo pedido abrir um novo.</summary>
+    protected virtual void Derruba() { }
+    readonly ConcurrentDictionary<int, long> ultimaMensagem = new();
+
     protected async Task Liga(TextReader entrada, TextWriter saida, CancellationToken ct)
     {
         this.saida = saida;
-        var primeira = await entrada.ReadLineAsync(ct) ?? throw new ErroDoMotor("sem_resposta", "o motor fechou antes de responder");
+        string? primeira;
+        try { primeira = await entrada.ReadLineAsync(ct).AsTask().WaitAsync(Abertura, ct); }
+        catch (TimeoutException)
+        {
+            Derruba();
+            throw new ErroDoMotor("demorou", "O motor do Katharos não ficou pronto em " + (int)Abertura.TotalSeconds + " segundos. Pode ser o antivírus verificando o programa na primeira vez: espere um pouco e tente de novo.");
+        }
+        if (primeira == null) throw new ErroDoMotor("sem_resposta", "o motor fechou antes de responder");
         var p = JsonNode.Parse(primeira);
         if (p?["pronto"]?.GetValue<bool>() != true)
             throw new ErroDoMotor(p?["erro"]?["codigo"]?.ToString() ?? "sem_resposta", p?["erro"]?["texto"]?.ToString() ?? "o motor não ficou pronto");
@@ -50,6 +65,7 @@ public abstract class Conversa : IAsyncDisposable
                 JsonNode? m;
                 try { m = JsonNode.Parse(l); } catch (JsonException) { continue; }
                 if (m?["id"] is not JsonValue v || !v.TryGetValue(out int id) || !esperando.TryGetValue(id, out var quem)) continue;
+                ultimaMensagem[id] = Environment.TickCount64;
                 if (m["evento"] is JsonNode ev) { quem.evento?.Invoke(ev.ToString(), m["dados"]); continue; }
                 esperando.TryRemove(id, out _);
                 if (m["ok"]?.GetValue<bool>() == true) quem.fim.TrySetResult(m["dados"]);
@@ -69,10 +85,30 @@ public abstract class Conversa : IAsyncDisposable
         var tcs = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
         esperando[id] = (tcs, evento);
         var linha = JsonSerializer.Serialize(new { id, metodo, @params = parametros ?? new { } });
+        ultimaMensagem[id] = Environment.TickCount64;
         await escrita.WaitAsync();
         try { await saida!.WriteLineAsync(linha); await saida.FlushAsync(); }
+        catch { esperando.TryRemove(id, out _); ultimaMensagem.TryRemove(id, out _); throw; }
         finally { escrita.Release(); }
-        return await tcs.Task;
+        try
+        {
+            var silencio = SilencioDe(metodo);
+            if (silencio == TimeSpan.Zero) return await tcs.Task;
+            // sem mensagem nenhuma do motor pelo tempo do silêncio (nem o progresso que ele manda enquanto trabalha): desiste e
+            // derruba o motor, para a tela mostrar "tentar de novo" em vez de carregar para sempre
+            while (true)
+            {
+                var fim = await Task.WhenAny(tcs.Task, Task.Delay(1000));
+                if (fim == tcs.Task) return await tcs.Task;
+                if (Environment.TickCount64 - ultimaMensagem.GetValueOrDefault(id) > silencio.TotalMilliseconds)
+                {
+                    esperando.TryRemove(id, out _);
+                    Derruba();
+                    throw new ErroDoMotor("demorou", $"O Katharos não recebeu resposta do motor em {(int)silencio.TotalSeconds} segundos ({metodo}). Tente de novo; se repetir, veja ~/.katharos/interface.log.");
+                }
+            }
+        }
+        finally { ultimaMensagem.TryRemove(id, out _); }
     }
 
     public virtual async ValueTask DisposeAsync()
@@ -116,6 +152,9 @@ public static class OndeEsta
 public sealed class MotorComum : Conversa
 {
     Process? proc;
+    // o raio-x manda progresso a cada etapa, mas uma etapa lenta pode passar de 2 minutos sem mensagem: ele espera mais
+    protected override TimeSpan SilencioDe(string metodo) => TimeSpan.FromSeconds(metodo == "raiox" ? 600 : 120);
+    protected override void Derruba() { try { proc?.Kill(true); } catch { } }
 
     public static async Task<MotorComum> Abre(CancellationToken ct = default)
     {
@@ -129,7 +168,8 @@ public sealed class MotorComum : Conversa
         m.proc.ErrorDataReceived += (_, e) => { if (e.Data != null) Registro.Escreve("motor: " + e.Data); };
         m.proc.BeginErrorReadLine();
         var entrada = new StreamWriter(m.proc.StandardInput.BaseStream, new UTF8Encoding(false)) { AutoFlush = false };
-        await m.Liga(m.proc.StandardOutput, entrada, ct);
+        try { await m.Liga(m.proc.StandardOutput, entrada, ct); }
+        catch { m.Derruba(); throw; }   // não deixa um Python sem resposta aberto para trás
         return m;
     }
 

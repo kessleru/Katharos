@@ -27,6 +27,10 @@ public class AoVivo : Tela
     StackPanel? jogo, conclusoes;
     TextBlock? ritmo;
     bool montado;
+    // o que a tela mostra quando não há leitura: o aviso de desligado, o "ligando" ou o erro. O relógio de 1 s não pode refazer
+    // nada disso (refazer o botão a cada segundo derruba o clique, e trocar o "ligando" pelo aviso faz a tela piscar)
+    enum Estado { Leitura, Desligado, Ligando, Erro }
+    Estado estado = Estado.Leitura;
 
     public AoVivo()
     {
@@ -50,6 +54,7 @@ public class AoVivo : Tela
     protected override async Task Carrega()
     {
         montado = false;
+        estado = Estado.Leitura;
         Atualiza();
         relogio.Start();
         // o normal deste PC (linha de base do motor): a faixa clara atrás de cada gráfico
@@ -68,14 +73,18 @@ public class AoVivo : Tela
     void Atualiza()
     {
         var a = Servico.Agora();
+        if (estado is Estado.Ligando or Estado.Erro) return;
         if (a == null)
         {
             montado = false;
+            if (estado == Estado.Desligado) return;
+            estado = Estado.Desligado;
             Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."),
                   Vazio("O acompanhamento está desligado", "Ligado, ele lê o PC a cada segundo, em prioridade baixa (usa uns 50 MB de RAM e menos de 1 % da CPU), grava as sessões de jogo com o FPS e avisa quando algo fica no limite. Não abre nem lê o processo do jogo.",
                         Botao("Ligar o acompanhamento", true, async () => await Liga())));
             return;
         }
+        estado = Estado.Leitura;
         if (!montado) MontaTela();
         ritmo!.Text = $"lendo a cada {Num(a.D("intervalo_s"))} s · o Katharos usa {Num(a["segundo_plano"].D("cpu_pct"), 1)} % da CPU";
         foreach (var c in cels)
@@ -144,14 +153,23 @@ public class AoVivo : Tela
 
     async Task Liga()
     {
+        if (estado == Estado.Ligando) return;   // dois cliques seguidos não abrem duas ligações
+        estado = Estado.Ligando;
         try
         {
             Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."), Carregando("Ligando o acompanhamento").secao);
             await Servico.Le("segundo_plano", new { ligar = true });
-            for (int i = 0; i < 20 && Servico.Agora() == null; i++) await Task.Delay(500);
+            // o segundo plano leva alguns segundos para gravar a primeira leitura (num PC mais lento, mais): espera até 20 s
+            for (int i = 0; i < 40 && Servico.Agora() == null; i++) await Task.Delay(500);
             if (Servico.Agora() == null) throw new ErroDoMotor("nao_ligou", "O acompanhamento não começou a ler. Veja ~/.katharos/segundo-plano.log.");
+            estado = Estado.Leitura;
             Atualiza();
         }
-        catch (Exception e) { Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora."), Erro(e, async () => await Liga())); }
+        catch (Exception e)
+        {
+            Registro.Escreve("ligar o acompanhamento: " + e);
+            estado = Estado.Erro;   // a mensagem fica na tela até a pessoa tentar de novo
+            Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora."), Erro(e, async () => { estado = Estado.Leitura; await Liga(); }));
+        }
     }
 }
