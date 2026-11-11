@@ -30,7 +30,6 @@ abre a tela **Personalizar**, vê a prévia, marca o que quer, e tudo volta pelo
 2. **PowerToys** (Microsoft, código aberto): instalado pelo winget só se a pessoa pedir.
 3. **Windhawk com receita:** só mods que entram apenas no shell (explorer, Iniciar, notificações). Nenhum mod de todos os processos (`*`)
    nem do `dwm.exe`.
-4. **Outros programas:** o Katharos não instala; mostra só um cartão com o que fazem, o preço, o risco e o link oficial.
 
 Fora de qualquer caminho: trocar arquivo do sistema, patch de tema, fonte do sistema, DPI e escala.
 
@@ -75,17 +74,10 @@ Explorador e notificações. Cantos, bordas e janelas translúcidas ficam fora (
 
 **Estilos prontos (fase 4):** Windows 10 de volta, Limpo, Escuro e foco, Vários monitores; um clique, prévia do conjunto e volta em grupo.
 
-## 3. Programas de terceiros
+## 3. Programas auxiliares
 
-| programa | o que faz | o Katharos |
-|---|---|---|
-| PowerToys, Windhawk | ver seção 2 | instala pelo winget só a pedido (Windhawk conforme P3) |
-| StartAllBack | Windows 10 de volta, **pago (cerca de US$ 5)** | cartão com preço e aviso: o 24H2 já barrou atualização com ele instalado |
-| ExplorerPatcher | o mesmo, **gratuito** | cartão com o mesmo aviso |
-| Open-Shell, TranslucentTB, Auto Dark Mode, EarTrumpet, Everything, Bulk Crap Uninstaller | menu clássico, barra transparente, tema por horário, volume por app, busca, desinstalar em lote | cartão com link |
-| O&O ShutUp10++, WinUtil, Sophia Script | ajustes em massa | não integra: duplica o que o Katharos faz e confunde o Desfazer |
-
-O Katharos nunca empacota programa de terceiro.
+Só dois programas entram: **PowerToys** e **Windhawk** (com os mods da seção 2). Ambos são gratuitos e de código aberto. O Katharos instala
+pelo winget só a pedido, com fonte oficial, e nunca empacota programa de terceiro. Nenhum outro programa é integrado nem indicado.
 
 ---
 
@@ -144,8 +136,7 @@ Bugs:
 - [ ] **4.1** Estilos prontos com prévia do conjunto e volta em grupo.
 - [ ] **4.2** PowerToys: detectar, instalar a pedido, ligar módulos e explicar.
 - [ ] **4.3** Windhawk (P3, se o dono aprovar): detectar, instalar a pedido, exclusão de jogos e anti-cheats, receitas de shell, desfazer.
-- [ ] **4.4** Cartões dos outros programas (seção 3) com preço, risco e link oficial.
-- [ ] **4.5** Exportar e importar o seu estilo (JSON), com lista antes de aplicar.
+- [ ] **4.4** Exportar e importar o seu estilo (JSON), com lista antes de aplicar.
 
 ### Fase 5: otimizações novas (4.4.0)
 - [ ] **5.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
@@ -198,7 +189,6 @@ Bugs:
 ## 8. Fontes
 [Catálogo de mods do Windhawk](https://mods.windhawk.net/catalog.json), [repositório dos mods](https://github.com/ramensoftware/windhawk-mods),
 [injeção e exclusões](https://github.com/ramensoftware/windhawk/wiki/Injection-targets-and-critical-system-processes),
-[24H2 barrando StartAllBack e ExplorerPatcher](https://pureinfotech.com/windows-11-24h2-blocks-customization-apps),
 [limites do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits),
 [issue por URL](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue#creating-an-issue-from-a-url-query).
 
@@ -206,4 +196,5 @@ Bugs:
 
 ## Registro
 - 11 nov 2026: plano escrito (pedidos das 08:22 e 08:26).
-- 11 nov 2026 (08:46 e 08:47): enxugado a pedido do dono: só o que dá para fazer hoje; preço do StartAllBack no cartão.
+- 11 nov 2026 (08:46 e 08:47): enxugado a pedido do dono: só o que dá para fazer hoje.
+- 11 nov 2026 (08:49): saíram todos os programas além de PowerToys e Windhawk (StartAllBack, ExplorerPatcher e os demais).
