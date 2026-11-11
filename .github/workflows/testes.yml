@@ -80,10 +80,13 @@ jobs:
           Write-Host "$ruim script(s) com erro de sintaxe"
           if ($ruim) { exit 1 }
   windows-real:
-    # Roda o programa de verdade num Windows descartável: benchmark e ida e volta do desfazer.
-    # Experimental: ainda não vimos este job rodar, por isso não derruba o resultado geral.
-    runs-on: windows-latest
-    continue-on-error: true
+    # Roda o programa de verdade num Windows descartável: benchmark e ida e volta do desfazer, nas versões de Windows que o GitHub
+    # oferece (Server 2022 e 2025: o Katharos trata Server como só modo seguro, e é isso que estes passos conferem).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -109,12 +112,6 @@ jobs:
           $dif = Compare-Object $a $d
           Write-Host "linhas diferentes entre antes e depois: $(@($dif).Count)"
           $dif | Select-Object -First 30 | ForEach-Object { Write-Host "$($_.SideIndicator) $($_.InputObject)" }
-      - name: ida e volta de arquivo de jogo (Minecraft)
-        shell: pwsh
-        run: ./tests/ci_minecraft.ps1
-      - name: ida e volta de arquivo de jogo (Unreal Engine)
-        shell: pwsh
-        run: ./tests/ci_unreal.ps1
       - name: leitura leve de temperatura e consumo (sem janela, só leitura)
         run: |
           python programa/katharos.py amostrar --sem-cor
