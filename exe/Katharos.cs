@@ -2500,6 +2500,7 @@ namespace KatharosApp
         }
 
         DateTime proxSair = DateTime.MinValue;
+        readonly DateTime inicio = DateTime.Now;
 
         void Atualiza()
         {
@@ -2508,7 +2509,13 @@ namespace KatharosApp
             {
                 proxSair = DateTime.Now.AddSeconds(3);
                 string pedido = K.Arq("segundo-plano-sair.txt");
-                if (File.Exists(pedido)) { try { File.Delete(pedido); } catch { } Log.Escreve("saindo a pedido da janela (troca de versão)"); Sai(false); return; }
+                if (File.Exists(pedido))
+                {
+                    // pedido antigo (de antes deste segundo plano abrir) não vale: só apaga
+                    bool novo = File.GetLastWriteTime(pedido) >= inicio.AddSeconds(-1);
+                    try { File.Delete(pedido); } catch { }
+                    if (novo) { Log.Escreve("saindo a pedido da janela (troca de versão)"); Sai(false); return; }
+                }
             }
             Amostra a; Sessao ses; List<Conclusao> concl;
             lock (motor.Trava) { a = motor.Ultima; ses = motor.Sessao; concl = new List<Conclusao>(motor.Conclusoes); }

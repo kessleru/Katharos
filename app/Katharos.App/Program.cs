@@ -88,7 +88,8 @@ public static class SegundoPlano
             Directory.CreateDirectory(Casa);
             if (reabrir) File.WriteAllText(Arq("reabrir-segundo-plano.txt"), DateTime.Now.ToString("s"));
             File.WriteAllText(Arq("segundo-plano-sair.txt"), DateTime.Now.ToString("s"));
-            for (int i = 0; i < 40 && Rodando(); i++) Thread.Sleep(250);
+            for (int i = 0; i < 40 && File.Exists(Arq("segundo-plano-sair.txt")); i++) Thread.Sleep(250);   // ele apaga o pedido ao sair
+            try { File.Delete(Arq("segundo-plano-sair.txt")); } catch { }   // ninguém atendeu: não fica pedido velho para o próximo
         }
         catch (Exception e) { Registro.Escreve("segundo plano: pedir para sair: " + e.Message); }
     }
