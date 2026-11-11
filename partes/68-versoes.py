@@ -293,8 +293,40 @@ def mostra_troca_de_versao(t, resumo, e):
     t.escreve()
 
 
+def eh_instalacao_com_janelas():
+    """O motor que veio com o Katharos com janelas (app\\motor\\programa\\katharos.py, com app\\python ao lado): quem troca de versão é o instalador."""
+    raiz = Path(__file__).resolve().parent.parent.parent
+    return (raiz / 'python' / 'python.exe').exists() and (raiz / 'Katharos.exe').exists()
+
+
+def atualiza_terminal(t, voltar=False):
+    """4.5: a versão de terminal se atualiza pelo PowerShell (o Python não acessa a rede): baixa, confere o SHA-256 pela lista da
+    release, guarda a versão de agora e troca. --voltar devolve a guardada."""
+    if not WINDOWS:
+        t.erro('Só funciona no Windows.')
+        return 1
+    if eh_instalacao_com_janelas():
+        t.nota('Este é o Katharos com janelas: ele se atualiza sozinho (Configurações > atualizações).')
+        return 0
+    script = Path(__file__).resolve().parent / 'atualiza.ps1'
+    if not script.exists():
+        t.erro('Falta o atualiza.ps1 ao lado do katharos.py. Baixe a versão nova em github.com/kessleru/Katharos/releases.')
+        return 1
+    ps = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    cmd = [ps, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(script), '-Pasta', str(Path(__file__).resolve().parent.parent), '-Atual', VERSAO]
+    if voltar:
+        cmd.append('-Voltar')
+    t.nota('Voltando para a versão anterior...' if voltar else 'Procurando a versão nova (o PowerShell baixa e confere o SHA-256 antes de trocar)...')
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=600)
+    for l in (r.stdout or '').strip().splitlines():
+        (t.ok if r.returncode == 0 else t.nota if r.returncode in (2, 3) else t.erro)(l)
+    return 0 if r.returncode in (0, 3) else 1
+
+
 def ferramenta_versoes(ctx, args):
     t = ctx.t
+    if getattr(args, 'atualizar', False) or getattr(args, 'voltar', False):
+        return atualiza_terminal(t, voltar=getattr(args, 'voltar', False))
     t.aba('as versões do Katharos que já rodaram neste PC e o que está guardado')
     e = estado()
     t.chaves([('esta versão', f'{VERSAO} ({DATA_VERSAO})'), ('formato dos dados', f'{e.get("versao_dados", VERSAO_DADOS)} (esta versão usa o {VERSAO_DADOS})'),

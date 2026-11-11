@@ -3457,3 +3457,25 @@ class TestApiMotor(_CasaTemporaria):
     def test_perguntar_sem_dado_diz_que_nao_sabe(self):
         r = self.um('perguntar', {'texto': 'por que meu jogo trava?'})['dados']
         self.assertTrue(r['resposta'].startswith('Ainda não sei'))
+
+
+class TestAtualizaTerminal(unittest.TestCase):
+    """4.5: a versão de terminal se atualiza pelo PowerShell, conferindo o SHA-256 antes de trocar e guardando a anterior."""
+    PS = (Path(__file__).resolve().parent.parent / 'programa' / 'atualiza.ps1').read_text(encoding='utf-8')
+
+    def test_confere_hash_antes_de_trocar_e_guarda_a_anterior(self):
+        i_hash, i_troca = self.PS.index("Get-FileHash (Join-Path $tmp 'Katharos.zip')"), self.PS.index('Copia $novaPasta $Pasta')
+        self.assertLess(i_hash, i_troca)
+        self.assertLess(self.PS.index('Copia $Pasta $copia'), i_troca)
+        self.assertIn("throw \"o SHA-256 do Katharos.zip nao confere", self.PS)
+        self.assertIn('SegundoPlanoSai', self.PS)
+
+    def test_python_nao_acessa_a_rede_e_chama_o_powershell_pelo_caminho_completo(self):
+        f = (Path(__file__).resolve().parent.parent / 'partes' / '68-versoes.py').read_text(encoding='utf-8')
+        trecho = f[f.index('def atualiza_terminal'):f.index('def ferramenta_versoes')]
+        self.assertNotIn('urllib', trecho)
+        self.assertIn("'System32', 'WindowsPowerShell'", trecho)
+
+    def test_vai_no_zip_da_release(self):
+        wf = (Path(__file__).resolve().parent.parent / '.github' / 'workflows' / 'publicar.yml').read_text(encoding='utf-8')
+        self.assertIn('programa', wf[wf.index('git archive'):wf.index('git archive') + 200])
