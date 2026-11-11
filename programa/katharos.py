@@ -13320,6 +13320,12 @@ def roda_api(argv, entrada=None, saida=None):
         args = _defaults(monta_parser().parse_args([]))
         args.sim, args.sem_cor, args.ascii = True, True, True
         ctx = Ctx(args, t)
+        # versão nova pela atualização da interface: converte os dados e atualiza o segundo plano, como a CLI faz ao abrir
+        for f in (lambda: confere_versao(t, silencioso=True), lambda: migra_segundo_plano(ctx)):
+            try:
+                f()
+            except Exception as e:
+                LOG.escreve(f'api: preparo falhou: {e!r}')
         canal = CanalApi(canal_real)
         if argv:
             try:
@@ -13373,6 +13379,14 @@ def api_aceitar_aviso(ctx, p, ev):
         raise ErroApi('pedido_invalido', 'o aceite precisa de {"li": true}')
     marca_estado('aviso_aceito', {'versao': VERSAO_AVISO, 'quando': agora_iso(), 'onde': 'interface'})
     return {'aceito': aviso_aceito()}
+
+
+def avisa_janelas(ctx):
+    """Uma vez só, no menu do terminal: existe o Katharos com janelas, e os dados são os mesmos (~/.katharos)."""
+    if estado().get('avisou_janelas'):
+        return
+    marca_estado('avisou_janelas', agora_iso())
+    ctx.t.nota('  Novo: o Katharos com janelas (instalador em kessleru.github.io/Katharos). Usa os mesmos dados e o mesmo desfazer daqui.')
 
 
 def _raiox_guardado():
@@ -15501,6 +15515,7 @@ def menu(ctx, parser, args, tela=None):
     aviso = ''
     grupo = None   # (título, explicação, [(comando, descrição)]) quando um grupo está aberto
     primeira_vez(ctx)
+    avisa_janelas(ctx)
     while True:
         usados = estado().get('usado', {})
         t.limpa()

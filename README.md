@@ -2,9 +2,14 @@
 
 *καθαρός*, em grego: limpo, purificado.
 
-**Deixa qualquer Windows mais leve, num arquivo só.** Diagnóstico com nota, limpeza, programas e apps de fábrica, inicialização, serviços, privacidade, IA do Windows, visual, jogos, energia, disco, reparo, atualizações, rede, manutenção automática e reversão de tudo.
+**Deixa qualquer Windows mais leve, mostra cada mudança antes e desfaz quando você quiser.** Diagnóstico com nota, limpeza, programas e apps de fábrica, inicialização, serviços, privacidade, IA do Windows, visual, jogos, energia, disco, reparo, atualizações, rede, manutenção automática e reversão de tudo.
 
-Mesmo visual e mesma ideia do [Ferramentas](https://github.com/kessleru/Ferramentas): Python 3.8+, **zero dependências**, terminal kterm 2.0.0 embutido. Por baixo, só ferramentas nativas do Windows: PowerShell, DISM, sfc, chkdsk, defrag, powercfg, winget.
+Dois jeitos de usar, com o mesmo motor e os mesmos dados (`~/.katharos`):
+
+- **Com janelas** (recomendado): [Katharos-win-Setup.exe](https://github.com/kessleru/Katharos/releases/latest/download/Katharos-win-Setup.exe). Instala sem pedir nada antes (o .NET e o Python vão dentro) e se atualiza sozinho.
+- **No terminal**: [Katharos.zip](https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip). Python 3.8+, **zero dependências**, terminal kterm 2.0.0 embutido.
+
+Por baixo, só ferramentas nativas do Windows: PowerShell, DISM, sfc, chkdsk, defrag, powercfg, winget.
 
 Site: **[kessleru.github.io/Katharos](https://kessleru.github.io/Katharos)**
 
@@ -21,7 +26,13 @@ O Katharos muda configurações do Windows. Leia isto antes de rodar (o programa
 
 O programa é distribuído sob a licença MIT (arquivo `LICENSE`), que também diz que ele é entregue "como está", sem garantia de nenhum tipo.
 
-## Rodando
+## Com janelas
+
+O instalador põe o Katharos no menu Iniciar. As telas, na ordem do uso: **Início** (como está o PC e o próximo passo), **Raio-x**, **Otimizar** (modo, item por item, aplicar), **Ao vivo**, **Jogos**, **Sugestões**, **Histórico**, **Desfazer** e **Configurações**. Ler o PC roda como você; para mudar, o Windows pede administrador uma vez por sessão. Depois de aplicar, cada ajuste é lido de volta no Windows. Atualização: em Configurações (avisar, automático ou nunca); nunca troca de versão no meio de uma mudança.
+
+O código está em `app/` (C#, Avalonia, .NET 10). A interface fala com o motor por `katharos api` (JSON, uma linha por mensagem; o contrato está em `tests/api/contrato.json`).
+
+## No terminal
 
 [Baixe o Katharos.zip da última versão](https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip) e extraia. Ele traz o **`Katharos.exe`**, que é onde você clica, e a pasta `programa`, que ele usa (o `KATHAROS.bat` continua lá e faz o mesmo). Na primeira vez, o Katharos oferece criar uma pasta **Katharos** na área de trabalho, com ícone. Deixe a pasta baixada onde está: é nela que ficam os relatórios (`relatorios/`).
 
@@ -183,10 +194,12 @@ programa\katharos.py
   PARTE 3         os pacotes (limpar … interface, rede, ajustes)
   PARTE 4         turbo, manutenção, restaurar, desfazer, estado, grandes, memória
   PARTE 5         menu e linha de comando
+app\                       o Katharos com janelas (C#, Avalonia) e o gravador das fotos e dos vídeos do site
 Katharos.exe               abre o Katharos e roda o segundo plano (código em exe\Katharos.cs)
 KATHAROS.bat               o mesmo que o Katharos.exe sem argumentos: chama o programa\katharos.ps1
 programa\katharos.ps1      acha o Python, escolhe o terminal e abre como administrador
-docs/             o site (GitHub Pages)
+docs/             o site (GitHub Pages), gerado por arte/gera_site.py; vídeos por scripts/videos.sh
+partes/           as fontes do katharos.py (scripts/monta.sh junta, gera o site e roda os testes)
 tests/            testes automáticos (rodam também no GitHub Actions)
 CHANGELOG.md      o que mudou em cada versão
 CONTRIBUTING.md   como ajudar

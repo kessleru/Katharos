@@ -459,6 +459,7 @@ def menu(ctx, parser, args, tela=None):
     aviso = ''
     grupo = None   # (título, explicação, [(comando, descrição)]) quando um grupo está aberto
     primeira_vez(ctx)
+    avisa_janelas(ctx)
     while True:
         usados = estado().get('usado', {})
         t.limpa()
