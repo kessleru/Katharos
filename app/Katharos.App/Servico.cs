@@ -15,26 +15,30 @@ public static class Servico
     public static Func<JsonNode?>? AgoraSimulado;
     static MotorComum? comum;
     static MotorElevado? elevado;
-    static readonly SemaphoreSlim abrindo = new(1, 1);
+    // uma trava para cada motor: enquanto o Windows espera a resposta do pedido de permissão do motor de administrador (até 90 s),
+    // as telas continuam lendo pelo motor comum em vez de ficarem "carregando" na mesma fila
+    static readonly SemaphoreSlim abrindoComum = new(1, 1), abrindoElevado = new(1, 1);
 
     public static async Task<JsonNode?> Le(string metodo, object? p = null, Action<string, JsonNode?>? evento = null)
     {
         if (Exemplo) return Simulador != null ? await Simulador(metodo, p, evento) : DadosDeExemplo.Para(metodo);
-        await abrindo.WaitAsync();
-        try { if (comum == null) { var c = await MotorComum.Abre(); c.Caiu += _ => { if (comum == c) comum = null; }; comum = c; } }
-        finally { abrindo.Release(); }
-        return await comum.Pede(metodo, p, evento);
+        await abrindoComum.WaitAsync();
+        MotorComum m;
+        try { if (comum == null) { var c = await MotorComum.Abre(); c.Caiu += _ => { if (comum == c) comum = null; }; comum = c; } m = comum; }
+        finally { abrindoComum.Release(); }
+        return await m.Pede(metodo, p, evento);
     }
 
     /// <summary>Muda o PC: abre o motor elevado na primeira vez (o Windows pergunta se pode).</summary>
     public static async Task<JsonNode?> Muda(string metodo, object? p = null, Action<string, JsonNode?>? evento = null)
     {
         if (Exemplo) return Simulador != null ? await Simulador(metodo, p, evento) : DadosDeExemplo.Para(metodo);
-        await abrindo.WaitAsync();
-        try { if (elevado == null) { var e = await MotorElevado.Abre(); e.Caiu += _ => { if (elevado == e) elevado = null; }; elevado = e; } }
-        finally { abrindo.Release(); }
+        await abrindoElevado.WaitAsync();
+        MotorElevado m;
+        try { if (elevado == null) { var e = await MotorElevado.Abre(); e.Caiu += _ => { if (elevado == e) elevado = null; }; elevado = e; } m = elevado; }
+        finally { abrindoElevado.Release(); }
         Interlocked.Increment(ref Atualizacao.EmUso);   // nada de trocar de versão no meio de uma mudança (contador: podem ser duas)
-        try { return await elevado!.Pede(metodo, p, evento); }
+        try { return await m.Pede(metodo, p, evento); }
         finally { Interlocked.Decrement(ref Atualizacao.EmUso); }
     }
 

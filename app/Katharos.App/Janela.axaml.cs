@@ -22,7 +22,7 @@ public partial class Janela : Window
         AvaloniaXamlLoader.Load(this);
         Atual = this;
         foreach (var b in Botoes()) b.Click += Navega;
-        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}" : "4.0";
+        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.0.2";
         relogio.Tick += (_, _) =>
         {
             AtualizaEstado();
