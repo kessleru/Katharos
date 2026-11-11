@@ -64,7 +64,8 @@ public class Filmagem
     public void Quadro()
     {
         for (int i = 0; i < 2; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); }
-        var f = j.CaptureRenderedFrame();
+        // o quadro é liberado na hora: deixado para o coletor de lixo, ele era solto numa linha paralela ao desenho e derrubava o processo
+        using var f = j.CaptureRenderedFrame();
         f!.Save(System.IO.Path.Combine(pasta, $"q{n++:00000}.png"));
     }
 
@@ -152,6 +153,16 @@ public static class Roteiros
         Servico.Simulador = async (m, p, ev) =>
         {
             if (m is "aplicar" or "raiox" or "desfazer") { eventos = ev; fim = new TaskCompletionSource<JsonNode?>(); return await fim.Task; }
+            if (m == "itens")
+            {   // o modo muda o que vem marcado, como no motor (nível 1 a 3; 0 = só se a pessoa marcar)
+                string modo = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(p))?["modo"]?.ToString() ?? "equilibrado";
+                int nv = modo == "seguro" ? 1 : modo == "extremo" ? 3 : 2;
+                var d = DadosDeExemplo.Para("itens")!.DeepClone();
+                foreach (var a in d["areas"]!.AsArray())
+                    foreach (var i in a!["itens"]!.AsArray())
+                    { int n = i!["nivel"]!.GetValue<int>(); i["marcado"] = n >= 1 && n <= nv; }
+                return d;
+            }
             return DadosDeExemplo.Para(m);
         };
     }
@@ -176,7 +187,7 @@ public static class Roteiros
             // o progresso e o resultado com os números exatos do que estava marcado (as mesmas áreas e contas da tela)
             var areas = DadosDeExemplo.Para("itens")!["areas"]!.AsArray()
                 .Select(a => (titulo: a!["titulo"]!.ToString(), nome: a["nome"]!.ToString(),
-                              n: a["itens"]!.AsArray().Count(i => i!["marcado"]!.GetValue<bool>() && i["ja"]?.ToString() != "true" && i["id"]!.ToString() != "spotify")))
+                              n: a["itens"]!.AsArray().Count(i => i!["nivel"]!.GetValue<int>() is >= 1 and <= 2 && i["ja"]?.ToString() != "true" && i["id"]!.ToString() != "spotify")))
                 .Where(a => a.n > 0).ToList();
             Evento("etapa", """{"texto": "criando o ponto de restauração"}"""); f.Espera(.8);
             for (int k = 0; k < areas.Count; k++)
@@ -193,13 +204,17 @@ public static class Roteiros
             }.ToJsonString());
             f.Espera(.8); f.Anima(1, null, 1.2, new Point(640, 260)); f.Espera(1.6);
         },
-        ["teste3"] = (j, f) => { j.Mostra("otimizar:inicializacao"); f.Espera(.5); f.Clica(f.Acha("Tirar o Spotify da inicialização")); f.Espera(.5); },
-        ["teste4"] = (j, f) => { j.Mostra("inicio"); f.Espera(.5); f.Clica(f.Acha("Ver o que fazer")); f.Espera(.5); f.Clica(f.Acha("Resolver", 1)); f.Espera(.5); f.Clica(f.Acha("Tirar o Spotify da inicialização")); f.Espera(.5); },
-        ["teste5"] = (j, f) => { j.Mostra("raiox"); f.Espera(.5); f.Clica(f.Acha("Resolver", 1)); f.Espera(.5); f.Clica(f.Acha("Tirar o Spotify da inicialização")); f.Espera(.5); },
-        ["teste6"] = (j, f) => { j.Mostra("raiox"); f.Espera(.5); f.Clica(f.Acha("Resolver", 1)); f.Espera(1.5); },
-        ["teste7"] = (j, f) => { j.Mostra("raiox"); f.Espera(.5); j.Mostra("otimizar:inicializacao"); f.Espera(.5); f.Clica(f.Acha("Tirar o Spotify da inicialização")); f.Espera(.5); },
-        ["teste1"] = (j, f) => { j.Mostra("otimizar:inicializacao"); f.Espera(.5); var c = f.Acha("Tirar o Spotify da inicialização"); ((CheckBox)c).IsChecked = false; f.Espera(.5); },
-        ["teste2"] = (j, f) => { j.Mostra("otimizar:inicializacao"); f.Espera(.5); f.Anima(.5, null, 1.3, new Point(700, 560)); var c = f.Acha("Tirar o Spotify da inicialização"); ((CheckBox)c).IsChecked = false; f.Espera(.5); },
+        // escolher: o modo muda o que vem marcado; cada item diz o que ganha e o que perde, e dá para tirar
+        ["otimizar"] = (j, f) =>
+        {
+            j.Mostra("otimizar"); f.Espera(.8);
+            f.Clica(f.Acha("Extremo")); f.Espera(.9);
+            f.Clica(f.Acha("Equilibrado")); f.Espera(.6);
+            f.Clica(f.Acha("Serviços")); f.Espera(.4);
+            f.Anima(1, null, 1.35, new Point(660, 600)); f.Espera(.5);
+            f.Clica(f.Acha("Impressão")); f.Espera(.9);
+            f.Anima(1, null, 1, new Point(640, 410)); f.Espera(1.4);
+        },
         // o raio-x rodando: as etapas e a nota
         ["raiox"] = (j, f) =>
         {

@@ -251,7 +251,7 @@ public class Otimizar : Tela
     async Task MostraResultado(JsonNode? r)
     {
         var j = Janela.Atual!;
-        var corpo = new StackPanel { Spacing = 10 };
+        var corpo = new StackPanel { Spacing = 6 };
         int feitos = 0, problemas = 0;
         foreach (var p in r.A("pacotes"))
         {
@@ -261,14 +261,18 @@ public class Otimizar : Tela
             var nao = p.A("nao_ficou").Select(x => x.ToString()).ToList();
             problemas += erros.Count + nao.Count;
             var bloco = new StackPanel { Spacing = 3 };
-            bloco.Children.Add(T($"{Primeira(p.S("titulo"))}: {f} {(f == 1 ? "mudança feita" : "mudanças feitas")}", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold));
+            // uma linha por área: o nome e, alinhado à direita, quantas mudaram (fácil de bater o olho numa lista longa)
+            bloco.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = {
+                T(Primeira(p.S("titulo")), null, Tema.Osso, 15),
+                T(f == 0 ? "nada mudou" : $"{f} {(f == 1 ? "mudança" : "mudanças")}", null, f == 0 ? Tema.Apagado : Tema.Verde, 14).Com(t => { t.FontFamily = Tema.Mono; Grid.SetColumn(t, 1); }) } });
             foreach (var x in erros.Take(4)) bloco.Children.Add(T("erro: " + x, null, Tema.Vermelho, 13, true));
             foreach (var x in nao.Take(4)) bloco.Children.Add(T("não ficou (conferido no Windows): " + x, null, Tema.Ambar, 13, true));
             foreach (var x in avisos.Take(3)) bloco.Children.Add(T("aviso: " + x, "rotulo", tamanho: 13, quebra: true));
             if (p.D("liberado") is double lib && lib > 0) bloco.Children.Add(T($"liberou {Num(lib / 1073741824.0, 1)} GB", null, Tema.Verde, 13));
             corpo.Children.Add(bloco);
         }
-        string titulo = problemas == 0 ? $"Pronto: {feitos} {(feitos == 1 ? "mudança feita" : "mudanças feitas")} e conferidas" : $"Feito, com {problemas} {(problemas == 1 ? "ponto" : "pontos")} para olhar";
+        string titulo = problemas == 0 ? $"Pronto: {feitos} {(feitos == 1 ? "mudança feita e conferida" : "mudanças feitas e conferidas")}" : $"Feito, com {problemas} {(problemas == 1 ? "ponto" : "pontos")} para olhar";
+        corpo.Children.Insert(0, T(problemas == 0 ? "Cada ajuste foi lido de volta no Windows depois de aplicado." : "O resto ficou como pedido; os pontos abaixo dizem o que não ficou e por quê.", "rotulo", quebra: true).Com(t => t.Margin = new Thickness(0, 0, 0, 8)));
         var manter = r.A("perguntar_manter").Select(x => x.ToString()).ToList();
         if (manter.Count > 0) { await PerguntaManter(manter, titulo, corpo); return; }
         j.MostraCaixa(Janela.Caixa(titulo, corpo, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0),

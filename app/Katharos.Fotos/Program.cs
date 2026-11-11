@@ -46,7 +46,7 @@ foreach (var tela in new[] { "inicio", "raiox", "otimizar:servicos", "aovivo", "
 {
     j.Mostra(tela);
     for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
-    var foto = j.CaptureRenderedFrame();
+    using var foto = j.CaptureRenderedFrame();
     var arq = Path.Combine(pasta, tela.Split(':')[0] + ".png");
     foto!.Save(arq);
     Console.WriteLine(arq);
