@@ -1,3 +1,4 @@
+using Avalonia.VisualTree;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -42,12 +43,22 @@ Directory.CreateDirectory(pasta);
 AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
 var j = new Janela { Width = w, Height = h };
 j.Show();
-foreach (var tela in new[] { "inicio", "raiox", "otimizar:servicos", "aovivo", "jogos", "sugestoes", "historico", "desfazer", "config", "aviso" })
+// 2.12: cada tela, além da foto, é conferida: abriu sem a tela de erro e mostra o texto que a tarefa dela pede
+var espera = new Dictionary<string, string> {
+    ["inicio"] = "Próximo passo", ["raiox"] = "O que o acompanhamento viu", ["otimizar:servicos"] = "recomendado", ["aovivo"] = "Placa de vídeo",
+    ["jogos"] = "Por jogo", ["sugestoes"] = "Diagnóstico", ["historico"] = "Fora do normal", ["desfazer"] = "Aplicado neste PC",
+    ["config"] = "Memória do PC", ["aviso"] = "Li o aviso" };
+int falhas = 0;
+foreach (var tela in espera.Keys)
 {
     j.Mostra(tela);
     for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
+    var textos = j.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text ?? string.Concat(t.Inlines?.OfType<Avalonia.Controls.Documents.Run>().Select(r => r.Text) ?? Array.Empty<string>())).ToList();
+    if (textos.Any(t => t == "Não deu certo")) { Console.Error.WriteLine($"{tela}: abriu a tela de erro"); falhas++; }
+    else if (!textos.Any(t => t.Contains(espera[tela]))) { Console.Error.WriteLine($"{tela}: não mostrou \"{espera[tela]}\""); falhas++; }
     using var foto = j.CaptureRenderedFrame();
     var arq = Path.Combine(pasta, tela.Split(':')[0] + ".png");
     foto!.Save(arq);
     Console.WriteLine(arq);
 }
+if (falhas > 0) { Console.Error.WriteLine($"{falhas} tela(s) com problema"); Environment.Exit(1); }

@@ -145,7 +145,14 @@ public class Otimizar : Tela
         a.Conta = T("", null, Tema.Ambar, 13).Com(t => { t.FontFamily = Tema.Mono; t.VerticalAlignment = VerticalAlignment.Center; });
         var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("24,*,Auto") };
         topo.Children.Add(a.Seta);
-        topo.Children.Add(new StackPanel { Spacing = 2, Children = { T(Primeira(a.J.S("titulo")), null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold), T(a.J.S("resumo"), "rotulo") } }.Com(s => Grid.SetColumn(s, 1)));
+        var textoArea = new StackPanel { Spacing = 2, Children = { T(Primeira(a.J.S("titulo")), null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold), T(a.J.S("resumo"), "rotulo") } };
+        // I22: o motor recomenda esta área para este PC, com o número que justifica (o modo continua decidindo o resto)
+        if (a.J?["recomendado"] is JsonNode rec)
+        {
+            textoArea.Children.Insert(1, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 2, 0, 2),
+                Children = { Etiqueta("recomendado", Tema.Ambar), T(Primeira(rec.S("motivo")), null, Tema.Ambar, 13, true).Com(t => { t.VerticalAlignment = VerticalAlignment.Center; t.MaxWidth = 640; }) } });
+        }
+        topo.Children.Add(textoArea.Com(s => Grid.SetColumn(s, 1)));
         topo.Children.Add(a.Conta.Com(t => Grid.SetColumn(t, 2)));
         var cab = new Button { Content = topo, Background = Brushes.Transparent, CornerRadius = new CornerRadius(0), Padding = new Thickness(32, 15), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         a.Lista = new StackPanel { IsVisible = a.Aberta, Margin = new Thickness(0, 0, 0, 10) };

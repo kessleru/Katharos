@@ -141,6 +141,9 @@ public static class Ui
     public static bool B(this JsonNode? n, string chave) => n?[chave] is JsonValue v && v.TryGetValue(out bool b) && b;
     public static IEnumerable<JsonNode> A(this JsonNode? n, string chave) => (n?[chave] as JsonArray)?.Where(x => x != null).Select(x => x!) ?? Enumerable.Empty<JsonNode>();
 
+    /// <summary>O "como desfazer" do motor vem no jeito do terminal; nas janelas, é a tela Desfazer.</summary>
+    public static string ComoDesfazer(string s) => s.StartsWith("katharos desfazer") ? "a um clique, na tela Desfazer" : s;
+
     public static string Num(double? v, int casas = 0) => v.HasValue ? v.Value.ToString("N" + casas, Br) : "-";
 
     public static string Quando(string iso)

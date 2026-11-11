@@ -43,6 +43,34 @@ public class Jogos : Tela
             comp = S(p);
         }
 
+        // I20: por jogo: o que segura o FPS, a evolução de FPS e travadas e a recomendação para aquele uso
+        Control? porJogo = null;
+        var pj = d.A("por_jogo").ToList();
+        if (pj.Count > 0)
+        {
+            var p = new StackPanel { Children = { Subtitulo("Por jogo", "Cada jogo que o Katharos viu, com o que segura o FPS nele.") } };
+            foreach (var j in pj.Take(8))
+            {
+                var segura = j.A("segura").Select(x => $"{x.S("nome")} em {Num(x.D("pct"))} % do tempo").ToList();
+                var ev = j.A("evolucao").Where(x => x.D("fps_1low") != null).ToList();
+                string fps = ev.Count >= 2 ? $"1% mais lento: {Num(ev[0].D("fps_1low"))} → {Num(ev[^1].D("fps_1low"))} FPS em {ev.Count} sessões" : "";
+                var rec = j["recomendacao"];
+                var txt = new List<string> { segura.Count > 0 ? "Segura: " + string.Join("; ", segura) + "." : "Nada ficou no limite por tempo que importe." };
+                if (fps != "") txt.Add(fps + ".");
+                if (rec != null) txt.Add($"O que eu faria: {rec.S("faria")}.");
+                var vals = ev.Select(x => x.D("fps_1low") ?? 0).ToArray();
+                var bloco = new StackPanel { Spacing = 4, Children = { T($"{j.S("jogo")} · {Num(j.D("horas"), 1)} h em {Num(j.D("sessoes"))} sessões", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold),
+                                                                       T(string.Join(" ", txt), "rotulo", tamanho: 13.5, quebra: true) } };
+                if (vals.Length >= 3)
+                {
+                    double piso = vals.Min() * 0.8;   // a variação entre sessões importa mais que a distância do zero
+                    bloco.Children.Add(new Controles.Grafico { Height = 44, Margin = new Thickness(0, 6, 0, 0), Valores = vals.Select(v => v - piso).ToArray(), Maximo = Math.Max(1, (vals.Max() - piso) * 1.15) });
+                }
+                p.Children.Add(new Border { Padding = new Thickness(32, 16), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Child = bloco });
+            }
+            porJogo = S(p);
+        }
+
         var lista = new StackPanel { Children = { Subtitulo("Sessões") } };
         foreach (var s in ss.Take(30))
         {
@@ -50,7 +78,7 @@ public class Jogos : Tela
             lista.Children.Add(Linha($"{s.S("jogo")} · {Num(s.D("min"))} min{fps}", $"{Quando(s.S("inicio"))} · limite: {Limite(s.S("principal"))}" +
                                      (s.D("temp_cpu_max") is double tc ? $" · CPU até {Num(tc)} °C" : "")));
         }
-        Monta(cab, numeros, comp, S(lista));
+        Monta(cab, numeros, porJogo, comp, S(lista));
     }
 
     static string Limite(string p) => p switch
@@ -58,50 +86,6 @@ public class Jogos : Tela
         "gpu" => "placa de vídeo", "cpu" => "CPU", "freio" => "CPU freando", "ram" => "memória RAM", "vram" => "memória da placa", "disco" => "disco",
         "calor" => "calor", "" => "-", _ => "nada no limite",
     };
-}
-
-/// <summary>Sugestões: o que a central de inteligência propõe, com o número que justifica, e o que ela previu e aconteceu.</summary>
-public class Sugestoes : Tela
-{
-    protected override async Task Carrega()
-    {
-        var cab = Cabecalho("Sugestões", "O que a central propõe com base no que o seu PC mediu. Nada muda sem você.");
-        Monta(cab, Carregando("Pensando").secao);
-        var d = await Servico.Le("sugestoes");
-        var res = d.A("resultados").ToList();
-        var props = d.A("propostas").ToList();
-        if (props.Count == 0 && res.Count == 0)
-        {
-            Monta(cab, Vazio("Nenhuma sugestão agora", "A central precisa de alguns dias de medida (com o acompanhamento ligado) para propor algo com confiança. Ela não sugere nada sem número.",
-                             Botao("Ver o acompanhamento", false, () => Abre("aovivo"))));
-            return;
-        }
-        Control? resultados = null;
-        if (res.Count > 0)
-        {
-            var p = new StackPanel { Children = { Subtitulo("O que eu previ e o que aconteceu", "Sua resposta ensina a central: o que não ajudou pesa menos da próxima vez.") } };
-            foreach (var r in res)
-            {
-                string id = r.S("id");
-                var bt = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-                bt.Children.Add(Botao("Ajudou", false, async () => { await Servico.Le("responder", new { id, resposta = "sim" }); await Recarrega(); }));
-                bt.Children.Add(Botao("Não ajudou", false, async () => { await Servico.Le("responder", new { id, resposta = "nao" }); await Recarrega(); }));
-                p.Children.Add(Linha(r.S("titulo"), r.S("texto") is var tx && tx != "" ? tx : r.S("veredito"), null, bt));
-            }
-            resultados = S(p);
-        }
-        var lista = new StackPanel { Children = { Subtitulo("Propostas") } };
-        foreach (var x in props)
-        {
-            string conf = x.S("confianca"), id = x.S("id"), cmd = x.S("comando");
-            var cor = conf == "alta" ? Tema.Verde : conf == "media" ? Tema.Ambar : Tema.Apagado;
-            var bt = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            bt.Children.Add(Botao("Não me importa", false, async () => { await Servico.Le("responder", new { id, resposta = "nao-importa" }); await Recarrega(); }));
-            if (cmd != "") bt.Children.Add(Botao("Ver", true, () => Abre(cmd.StartsWith("desfazer") ? "desfazer" : cmd == "segundo-plano" ? "aovivo" : cmd == "raiox" ? "raiox" : "otimizar:" + cmd)));
-            lista.Children.Add(Linha(x.S("titulo"), x.S("porque"), Etiqueta("confiança " + (conf == "media" ? "média" : conf), cor), bt));
-        }
-        Monta(cab, resultados, S(lista));
-    }
 }
 
 /// <summary>Desfazer: cada mudança aplicada, com quando e quantos itens, e a volta a um clique (com confirmação).</summary>
@@ -155,7 +139,11 @@ public class Desfazer : Tela
 public class Configuracoes : Tela
 {
     // as que importam para quem usa as janelas, na ordem de uso (as de aparência do terminal ficam na CLI)
-    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes" };
+    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes", "canal" };
+    // o que o motor pode avisar e quando (I24)
+    static readonly string[] Motor = { "avisos-intervalo", "avisos-no-jogo", "resumo-diario" };
+    static readonly Dictionary<string, string[]> OpcoesCurtas = new() { ["avisos-intervalo"] = new[] { "2", "6", "12", "24" } };
+    static readonly Dictionary<string, string> Rotulos = new() { ["so-grave"] = "só o grave", ["estavel"] = "estável", ["previa"] = "prévia", ["automatico"] = "automático", ["nao"] = "não" };
 
     protected override async Task Carrega()
     {
@@ -163,20 +151,60 @@ public class Configuracoes : Tela
         Monta(cab, Carregando("Lendo").secao);
         var d = await Servico.Le("config_ler");
         var lista = new StackPanel { Children = { Subtitulo("Preferências") } };
-        foreach (var k in Mostrar)
+        foreach (var k in Mostrar) Preferencia(d, k, lista);
+        var motor = new StackPanel { Children = { Subtitulo("O motor de inteligência", "O que ele pode avisar e com que frequência.") } };
+        foreach (var k in Motor) Preferencia(d, k, motor);
+        // o que ele nunca propõe: comandos separados por vírgula
+        var nunca = new TextBox { Text = d?["motor-nunca"].S("valor") ?? "", Watermark = "ex.: turbo, energia", MinWidth = 220 };
+        var salvar = Botao("Salvar", false, async () => { await Servico.Le("config_gravar", new { chave = "motor-nunca", valor = (nunca.Text ?? "").Trim() }); await Recarrega(); });
+        motor.Children.Add(Linha("O que ele nunca propõe", "Os comandos que a central não deve sugerir neste PC.", null, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { nunca, salvar } }));
+
+        // a memória do PC: o que ele aprendeu, exportar e apagar (com exportação antes)
+        var mem = await Servico.Le("memoria");
+        var cont = mem?["contagens"];
+        string resumo = mem.S("desde") == "" ? "Ainda vazia: começa a encher com o acompanhamento ligado."
+            : $"Desde {Quando(mem.S("desde"))}: {Num(cont.D("minutos"))} minutos medidos, {Num(cont.D("sessoes"))} sessões de jogo, {Num(cont.D("resultados"))} resultados medidos ({Num((mem.D("bytes") ?? 0) / 1048576, 1)} MB).";
+        var acoes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        acoes.Children.Add(Botao("Exportar", false, async () => await Exporta()));
+        acoes.Children.Add(Botao("Apagar", false, async () => await Apaga()));
+        var memoria = S(new StackPanel { Children = { Subtitulo("Memória do PC", "Tudo o que o Katharos aprendeu deste PC fica neste computador, em ~/.katharos. Nada vai para a internet."),
+                                                      Linha("O que ele guarda", resumo, null, acoes) } });
+        Monta(cab, S(lista), S(motor), memoria);
+    }
+
+    void Preferencia(JsonNode? d, string k, StackPanel lista)
+    {
+        var c = d?[k];
+        if (c == null) return;
+        string atual = c.S("valor");
+        var ops = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var opcoes = OpcoesCurtas.TryGetValue(k, out var curtas) ? curtas : c.A("opcoes").Select(x => x.ToString()).ToArray();
+        foreach (var o in opcoes)
         {
-            var c = d?[k];
-            if (c == null) continue;
-            string atual = c.S("valor");
-            var ops = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            foreach (var o in c.A("opcoes").Select(x => x.ToString()))
-            {
-                var b = Botao(o, o == atual, async () => { await Servico.Le("config_gravar", new { chave = k, valor = o }); await Recarrega(); });
-                ops.Children.Add(b);
-            }
-            lista.Children.Add(Linha(char.ToUpper(c.S("rotulo")[0]) + c.S("rotulo")[1..], c.S("explica"), null, ops));
+            string rot = Rotulos.TryGetValue(o, out var r) ? r : o;
+            if (k == "avisos-intervalo") rot = o + " h";
+            ops.Children.Add(Botao(rot, o == atual, async () => { await Servico.Le("config_gravar", new { chave = k, valor = o }); await Recarrega(); }));
         }
-        Monta(cab, S(lista));
+        lista.Children.Add(Linha(char.ToUpper(c.S("rotulo")[0]) + c.S("rotulo")[1..], c.S("explica"), null, ops));
+    }
+
+    async Task Exporta()
+    {
+        var j = Janela.Atual!;
+        try { var r = await Servico.Le("memoria_exportar"); j.MostraCaixa(Janela.Caixa("Exportado", T("Salvo em " + r.S("arquivo"), "sub"), Botao("Fechar", true, j.FechaCaixa)), true); }
+        catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para exportar", T(e.Message, "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+    }
+
+    async Task Apaga()
+    {
+        var j = Janela.Atual!;
+        if (!await j.Confirma("Apagar a memória do PC?", T("O motor esquece o que aprendeu deste PC (medidas, sessões, resultados e suas respostas). Antes, eu guardo uma exportação em ~/.katharos. Backups do desfazer e configurações não são tocados.", "sub"), "Apagar")) return;
+        try
+        {
+            var r = await Servico.Le("memoria_apagar", new { confirmo = true });
+            j.MostraCaixa(Janela.Caixa("Memória apagada", T(r.S("exportado") == "" ? "Não havia nada guardado." : "A exportação ficou em " + r.S("exportado"), "sub"), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
+        }
+        catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para apagar", T(e.Message, "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
     }
 }
 

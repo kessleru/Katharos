@@ -40,7 +40,7 @@
             <Button Classes="nav" Content="Otimizar" Tag="otimizar" />
             <Button Classes="nav" Content="Ao vivo" Tag="aovivo" />
             <Button Classes="nav" Content="Jogos" Tag="jogos" />
-            <Button Classes="nav" Content="Sugestões" Tag="sugestoes" />
+            <Button Classes="nav" Content="Central" Tag="sugestoes" />
             <Button Classes="nav" Content="Histórico" Tag="historico" />
             <Button Classes="nav" Content="Desfazer" Tag="desfazer" />
           </StackPanel>

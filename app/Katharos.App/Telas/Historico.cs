@@ -49,7 +49,8 @@ public class Historico : Tela
             double max = Math.Max(1, vals.Max() * 1.15);
             DateTime ini = dias.First(), fim = dias.Last();
             double total = Math.Max(1, (fim - ini).TotalDays);
-            var g = new Grafico { Height = 70, Margin = new Thickness(0, 10, 0, 0), Valores = vals, Maximo = max,
+            var fx = s?["faixa"];
+            var g = new Grafico { Height = 70, Margin = new Thickness(0, 10, 0, 0), Valores = vals, Maximo = max, FaixaMin = fx.D("p10") ?? double.NaN, FaixaMax = fx.D("p90") ?? double.NaN,
                                   Marcas = marcas.Where(m => m >= ini && m <= fim.AddDays(1)).Select(m => (m - ini).TotalDays / total).ToArray() };
             string un = s.S("unidade");
             string rot = s.S("rotulo");
@@ -62,7 +63,23 @@ public class Historico : Tela
             } };
             grade.Children.Add(new Border { Padding = new Thickness(32, 22, 32, 20), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 1, 1), Child = corpo });
         }
-        var legenda = T("A linha âmbar tracejada marca o dia de cada mudança aplicada.", "rotulo", tamanho: 13).Com(t => t.Margin = new Thickness(32, 14));
+        var legenda = T("A linha âmbar tracejada marca o dia de cada mudança aplicada; a faixa clara é o normal deste PC.", "rotulo", tamanho: 13).Com(t => t.Margin = new Thickness(32, 14));
+
+        // o que o motor achou fora do normal: clicar abre a explicação
+        Control? anomalias = null;
+        var an = d.A("anomalias").ToList();
+        if (an.Count > 0)
+        {
+            var p = new StackPanel { Children = { Subtitulo("Fora do normal", "O que o motor viu diferente do normal deste PC. Clique para ver o porquê.") } };
+            foreach (var x in an)
+            {
+                string vezes = (x.D("dias") ?? 1) > 1 ? $" · apareceu em {Num(x.D("dias"))} dias" : "";
+                var exp = new Expander { Header = T($"{x.S("titulo")} ({Quando(x.S("dia") + "T12:00")}{vezes})", null, Tema.Osso, 15), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                                         Content = T(char.ToUpper(x.S("vi")[0]) + x.S("vi")[1..] + ". Confiança " + x.S("confianca") + ".", "rotulo", quebra: true), Margin = new Thickness(32, 8) };
+                p.Children.Add(exp);
+            }
+            anomalias = S(p);
+        }
 
         // o efeito de cada mudança, medida por medida
         Control? efeitos = null;
@@ -83,6 +100,6 @@ public class Historico : Tela
             }
             efeitos = S(p);
         }
-        Monta(cab, tend, S(new StackPanel { Children = { grade, legenda } }), efeitos);
+        Monta(cab, tend, S(new StackPanel { Children = { grade, legenda } }), anomalias, efeitos);
     }
 }

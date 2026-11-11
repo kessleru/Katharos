@@ -51,9 +51,26 @@ public class Raiox : Tela
             var (g, cor) = Gravidade((int)(a.D("impacto") ?? 0));
             string texto = a.S("evidencia") + (string.IsNullOrWhiteSpace(a.S("faz")) ? "" : "\n" + a.S("faz"));
             string cmd = a.S("comando");
-            lista.Children.Add(Linha(a.S("titulo"), texto, Etiqueta(g, cor), cmd == "" ? null : Botao("Resolver", false, () => Abre(cmd == "segundo-plano" ? "aovivo" : "otimizar:" + cmd))));
+            lista.Children.Add(Linha(a.S("titulo"), texto, Etiqueta(g, cor), cmd == "" ? null : Botao("Resolver", false, () => Abre(Sugestoes.TelaDo(cmd)))));
         }
         p.Children.Add(S(lista));
+        // I21: o que o motor viu com o tempo (sessões de jogo, o normal deste PC, eventos do Windows); sem dado, diz que ainda não sabe
+        var mot = rx?["motor"];
+        var ma = mot.A("achados").ToList();
+        if (ma.Count > 0 || mot.B("ainda_nao_sei"))
+        {
+            var m = new StackPanel { Children = { Subtitulo("O que o acompanhamento viu com o tempo", ma.Count > 0 ? "Medido nos jogos e no dia a dia, não só agora." : null) } };
+            if (ma.Count == 0)
+                m.Children.Add(Linha("Ainda não sei", "Com o acompanhamento ligado e algumas sessões de jogo, aqui aparece o que segura este PC com o tempo (calor, CPU freando, RAM cheia, travadas).",
+                                     null, Botao("Ligar o acompanhamento", false, () => Abre("aovivo"))));
+            foreach (var x in ma)
+            {
+                string conf = x.S("confianca");
+                m.Children.Add(Linha(x.S("titulo"), Primeira(x.S("vi")) + ". Fonte: " + x.S("fonte") + ".", Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado),
+                                     Botao("Por quê", false, () => Abre("sugestoes"))));
+            }
+            p.Children.Add(S(m));
+        }
         return p;
     }
 

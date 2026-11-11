@@ -16,6 +16,11 @@ public class Grafico : Control
     /// <summary>Marcas verticais (0 a 1 na largura): quando cada mudança entrou.</summary>
     public static readonly StyledProperty<IReadOnlyList<double>?> MarcasProperty = AvaloniaProperty.Register<Grafico, IReadOnlyList<double>?>(nameof(Marcas));
     public IReadOnlyList<double>? Marcas { get => GetValue(MarcasProperty); set => SetValue(MarcasProperty, value); }
+    /// <summary>A faixa do normal deste PC (p10 a p90 da linha de base), desenhada atrás da linha. NaN = sem faixa.</summary>
+    public static readonly StyledProperty<double> FaixaMinProperty = AvaloniaProperty.Register<Grafico, double>(nameof(FaixaMin), double.NaN);
+    public static readonly StyledProperty<double> FaixaMaxProperty = AvaloniaProperty.Register<Grafico, double>(nameof(FaixaMax), double.NaN);
+    public double FaixaMin { get => GetValue(FaixaMinProperty); set => SetValue(FaixaMinProperty, value); }
+    public double FaixaMax { get => GetValue(FaixaMaxProperty); set => SetValue(FaixaMaxProperty, value); }
     public static readonly StyledProperty<IBrush> CorProperty = AvaloniaProperty.Register<Grafico, IBrush>(nameof(Cor), Tema.Ambar);
 
     public IReadOnlyList<double>? Valores { get => GetValue(ValoresProperty); set => SetValue(ValoresProperty, value); }
@@ -23,7 +28,7 @@ public class Grafico : Control
     public double Limite { get => GetValue(LimiteProperty); set => SetValue(LimiteProperty, value); }
     public IBrush Cor { get => GetValue(CorProperty); set => SetValue(CorProperty, value); }
 
-    static Grafico() { AffectsRender<Grafico>(ValoresProperty, MaximoProperty, LimiteProperty, CorProperty, MarcasProperty); }
+    static Grafico() { AffectsRender<Grafico>(ValoresProperty, MaximoProperty, LimiteProperty, CorProperty, MarcasProperty, FaixaMinProperty, FaixaMaxProperty); }
 
     public override void Render(DrawingContext c)
     {
@@ -31,6 +36,11 @@ public class Grafico : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (v == null || v.Count < 2 || w < 4 || h < 4) return;
         Point P(int i) => new(i * (w - 1) / (v.Count - 1), h - 1 - Math.Clamp(v[i] / Maximo, 0, 1) * (h - 2));
+        if (!double.IsNaN(FaixaMin) && !double.IsNaN(FaixaMax) && FaixaMax > FaixaMin)
+        {
+            double y1 = h - 1 - Math.Clamp(FaixaMax / Maximo, 0, 1) * (h - 2), y2 = h - 1 - Math.Clamp(FaixaMin / Maximo, 0, 1) * (h - 2);
+            c.FillRectangle(new SolidColorBrush(Color.FromArgb(22, 0xEC, 0xE6, 0xD8)), new Rect(0, y1, w, Math.Max(1, y2 - y1)));
+        }
         var linha = new StreamGeometry();
         using (var g = linha.Open())
         {

@@ -282,6 +282,9 @@ def api_raiox_guardado(ctx, p, ev):
     d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in (rx.get('achados') or [])
                         if PESO_NOTA.get(a.get('impacto'), 0)), key=lambda x: -x['pontos'])[:3]
     d['pc'] = _pc_curto(pc)
+    pz = le_json(CASA / 'propostas.json', {}) or {}
+    d['motor'] = {'achados': [a for a in pz.get('achados') or [] if a.get('tipo') != 'contexto'][:8],
+                  'ainda_nao_sei': not pz.get('achados') and not (CASA / 'sessoes.jsonl').exists()}
     return d
 
 
@@ -305,6 +308,7 @@ def api_itens(ctx, p, ev):
         else:   # fora do Windows (testes e site): o PC modelo, com tudo
             ctx.perfil = json.loads(json.dumps(PC_MODELO))
     pedidas = p.get('areas') or [n for n in ORDEM_TURBO if n in PACOTES] + [n for n in PACOTES if n not in ORDEM_TURBO]
+    recomendadas = areas_recomendadas()
     out = []
     for i, nome in enumerate(pedidas):
         if nome not in PACOTES:
@@ -320,9 +324,25 @@ def api_itens(ctx, p, ev):
             ev('etapa', {'texto': f'conferindo {pac.titulo}', 'n': i + 1, 'de': len(pedidas)})
             confere_itens(ctx, its, nome)
         out.append({'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
+                    'recomendado': recomendadas.get(nome),
                     'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
                     'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]})
     return {'modo': modo, 'modos': list(MODOS), 'areas': out}
+
+
+def areas_recomendadas():
+    """I22: as áreas que o motor recomenda para este PC, com o motivo (o número que justifica). O turbo vira as áreas dele."""
+    d = le_json(CASA / 'propostas.json', {}) or {}
+    out = {}
+    for x in d.get('propostas') or []:
+        if x.get('tipo') != 'acao' or x.get('confianca') not in ('alta', 'média'):
+            continue
+        cmd = (x.get('comando') or '').split(' ')[0]
+        alvos = [n for n in ORDEM_TURBO if n in PACOTES][:6] if cmd == 'turbo' else ([cmd] if cmd in PACOTES else [])
+        motivo = ((x.get('explicacao') or {}).get('vi') or x.get('porque') or '').rstrip('.')
+        for n in alvos:
+            out.setdefault(n, {'motivo': motivo, 'titulo': x.get('titulo'), 'confianca': x.get('confianca')})
+    return out
 
 
 @metodo_api('aplicado')
@@ -735,11 +755,32 @@ def api_historico(ctx, p, ev):
         for d, v in s:
             por_dia.setdefault(d.date(), []).append(v)
         pontos = [{'dia': dia.isoformat(), 'v': round(sorted(vs)[len(vs) // 2], casas)} for dia, vs in sorted(por_dia.items())]
-        series.append({'chave': chave, 'rotulo': rot, 'melhor': melhor, 'unidade': un, 'casas': casas, 'pontos': pontos})
+        # a faixa do normal (p10 a p90 dos dias antes da última semana): só com 10 dias ou mais de medida
+        velhos = [x['v'] for x in pontos[:-7]]
+        faixa = {'p10': round(_percentil(velhos, 10), casas), 'p90': round(_percentil(velhos, 90), casas)} if len(velhos) >= 10 else None
+        series.append({'chave': chave, 'rotulo': rot, 'melhor': melhor, 'unidade': un, 'casas': casas, 'pontos': pontos, 'faixa': faixa})
     efeitos = []
     for titulo, quando, cel in tabela_efeito(am, pacotes):
         efeitos.append({'titulo': titulo, 'quando': quando.isoformat(timespec='minutes'),
                         'medidas': [{'rotulo': r, 'veredito': v, 'antes': round(a, c) if isinstance(a, (int, float)) else a,
                                      'depois': round(b, c) if isinstance(b, (int, float)) else b, 'casas': c, 'unidade': u} for r, v, a, b, c, u in cel]})
     return {'series': series, 'marcas': [{'quando': q.isoformat(timespec='minutes'), 'titulo': t} for q, _, t in pacotes if q >= corte],
-            'efeitos': efeitos, 'tendencia': [t for _, t in analisa_tendencia(am)], 'amostras': len(am)}
+            'efeitos': efeitos, 'tendencia': [t for _, t in analisa_tendencia(am)], 'amostras': len(am), 'anomalias': anomalias_da_memoria(dias)}
+
+
+def anomalias_da_memoria(dias=60):
+    """I23: o que o motor achou fora do normal ou mudando, por dia (da memória do PC), com a explicação para mostrar ao clicar."""
+    desde = (datetime.now() - timedelta(days=dias)).date().isoformat()
+    ls = _mem_linhas("SELECT dia, dados FROM achados WHERE dia >= ? AND tipo IN ('anomalia', 'tendencia', 'piora') ORDER BY dia DESC", (desde,)) or []
+    out, vistos = [], set()
+    for dia, dados in ls:
+        try:
+            a = json.loads(dados)
+        except ValueError:
+            continue
+        if a.get('id') in vistos:   # o mesmo achado repete por dias: fica a vez mais recente, com quantos dias apareceu
+            continue
+        vistos.add(a.get('id'))
+        out.append({'dia': dia, 'id': a.get('id'), 'titulo': a.get('titulo'), 'vi': a.get('vi'), 'tipo': a.get('tipo'), 'confianca': a.get('confianca'),
+                    'dias': sum(1 for d2, x in ls if json.loads(x).get('id') == a.get('id'))})
+    return out[:20]

@@ -31,6 +31,21 @@ public class Inicio : Tela
                           Botao("Ver o que fazer", true, () => Abre("raiox")), Botao("Fazer o raio-x de novo", false, () => Abre("raiox")));
         }
 
+        // I16: quando o motor já concluiu algo, a frase principal e a ação que mais rende vêm dele (com a previsão e como desfazer)
+        var motor = d?["motor"];
+        var acao = motor?["acao"];
+        if (acao != null && motor.S("frase") != "")
+        {
+            string cmd = acao.S("comando");
+            var txt = new List<string> { Primeira(acao.S("porque")) };
+            if (acao.S("previsao") != "") txt.Add("O que eu faria: " + acao.S("previsao"));
+            if (acao.S("desfazer") != "") txt.Add("Para voltar: " + ComoDesfazer(acao.S("desfazer")) + ".");
+            passo = Proximo(motor.S("frase"), string.Join(" ", txt),
+                            Botao(acao.S("area") != "" ? "Aplicar" : "Ver", true, () => Abre(Sugestoes.TelaDo(cmd))), Botao("Por que isso?", false, () => Abre("sugestoes")));
+        }
+        // 2.13: primeira abertura guiada, em três passos (o raio-x só lê; mudar vem depois e sempre item por item)
+        if (d.B("primeira_vez")) passo = PrimeirosPassos(d?["pc"].B("notebook") == true);
+
         double? nota = rx.D("nota");
         var t = d?["temperatura"];
         double? tc = t.D("cpu");
@@ -78,10 +93,35 @@ public class Inicio : Tela
         Monta(cab, versao, passo, numeros, lista, ultima);
     }
 
+    Control PrimeirosPassos(bool notebook)
+    {
+        var p = new StackPanel { Margin = new Avalonia.Thickness(32, 26, 32, 22), Spacing = 4 };
+        p.Children.Add(T("Primeiros passos", "rotulo"));
+        p.Children.Add(T("Três passos, nesta ordem. Nada muda no PC sem você ver antes.", "forte", tamanho: 21));
+        var passos = new (string titulo, string texto, string botao, string tela)[]
+        {
+            ("Faça o raio-x", "Leva de 1 a 3 minutos e só lê. Ele dá a nota do PC e diz o que vale a pena fazer.", "Fazer o raio-x", "raiox:rodar"),
+            ("Otimize no modo seguro", "Você vê cada item com o que ganha e o que perde, marca o que quiser e aplica. Tudo volta com Desfazer.", "Abrir Otimizar", "otimizar"),
+            ("Ligue o acompanhamento (opcional)", "Um ícone perto do relógio mede o PC e os jogos, leve, e avisa quando algo pesa."
+                + (notebook ? " Num notebook ele também pode trocar o plano de energia na tomada e na bateria, se você quiser." : ""), "Ver Ao vivo", "aovivo"),
+        };
+        for (int i = 0; i < passos.Length; i++)
+        {
+            var (ti, tx, bo, te) = passos[i];
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("44,*,Auto"), Margin = new Avalonia.Thickness(0, 14, 0, 0) };
+            g.Children.Add(T((i + 1).ToString(), "numero", tamanho: 26));
+            var meio = new StackPanel { Spacing = 2, Children = { T(ti, null, Tema.Osso, 16).Com(t => t.FontWeight = Avalonia.Media.FontWeight.SemiBold), T(tx, "rotulo", quebra: true).Com(t => t.MaxWidth = 620) } };
+            Grid.SetColumn(meio, 1); g.Children.Add(meio);
+            var b = Botao(bo, i == 0, () => Abre(te)); b.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(b, 2); g.Children.Add(b);
+            p.Children.Add(g);
+        }
+        return S(p);
+    }
+
     static Control Proximo(string titulo, string texto, params Button[] botoes)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 28) };
-        g.Children.Add(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21), T(texto, "sub").Com(x => x.MaxWidth = 560) } });
+        g.Children.Add(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21), T(texto, "sub").Com(x => { x.MaxWidth = 600; x.HorizontalAlignment = HorizontalAlignment.Left; }) } });
         var b = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
         foreach (var x in botoes.Reverse()) b.Children.Add(x);
         Grid.SetColumn(b, 1); g.Children.Add(b);

@@ -1,1 +1,226 @@
-{"modo": {"valor": "equilibrado", "rotulo": "modo padrão", "explica": "seguro, equilibrado ou extremo: o que vem marcado em cada tela", "opcoes": ["seguro", "equilibrado", "extremo"]}, "explicacao": {"valor": "curta", "rotulo": "explicações", "explica": "curta (uma linha por item; \"? número\" explica) ou completa (o que faz, ganho e custo de todos)", "opcoes": ["completa", "curta"]}, "cores": {"valor": "automático", "rotulo": "cores", "explica": "automático ou sem cor", "opcoes": ["automático", "sem cor"]}, "simbolos": {"valor": "automático", "rotulo": "símbolos", "explica": "automático ou simples (para terminal que mostra quadradinhos)", "opcoes": ["automático", "simples"]}, "grandes-mb": {"valor": "500", "rotulo": "arquivo grande", "explica": "a partir de quantos MB o \"grandes\" mostra um arquivo", "opcoes": []}, "navegador": {"valor": "nenhum", "rotulo": "navegador leve", "explica": "brave ou nenhum: se o turbo instala o Brave enxuto", "opcoes": ["brave", "nenhum"]}, "confirmar": {"valor": "risco", "rotulo": "\"manter alterações?\"", "explica": "risco (padrão): depois de mudar serviços, jogos, energia, disco ou visual, pergunta se está tudo bem e desfaz sozinho se você não responder; sempre; ou nunca", "opcoes": ["risco", "sempre", "nunca"]}, "protegidos": {"valor": "", "rotulo": "itens que nunca mexo", "explica": "ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em \"v N\" na tela de escolha", "opcoes": []}, "coleta-em-jogo": {"valor": "segura", "rotulo": "acompanhamento com jogo aberto", "explica": "segura (padrão): continua lendo tudo, como o Gerenciador de Tarefas (sem abrir o processo do jogo); ou pausar: não lê nada enquanto houver jogo aberto", "opcoes": ["segura", "pausar"]}, "abrir-relatorio": {"valor": "perguntar", "rotulo": "abrir o relatório", "explica": "perguntar (padrão: uma tecla no fim do raio-x, da segurança e do turbo), sempre (abre a pasta sozinho) ou nunca", "opcoes": ["perguntar", "sempre", "nunca"]}, "tempo-real": {"valor": "1", "rotulo": "ritmo do segundo plano", "explica": "de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10", "opcoes": ["1", "2", "5", "10"]}, "avisos": {"valor": "sim", "rotulo": "avisos do segundo plano", "explica": "sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao", "opcoes": ["sim", "nao"]}, "fps": {"valor": "sim", "rotulo": "FPS nos jogos", "explica": "sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao", "opcoes": ["sim", "nao"]}, "energia-automatica": {"valor": "nao", "rotulo": "notebook: plano de energia sozinho na tomada e na bateria", "explica": "nao (padrão) ou sim: o segundo plano troca o plano de energia quando você liga ou tira o carregador (escolhe os planos ao ligar; desligar volta o plano de antes)", "opcoes": ["sim", "nao"]}, "atualizacoes": {"valor": "avisar", "rotulo": "atualizações do Katharos com janelas", "explica": "avisar (padrão): baixa a versão nova e pergunta antes de reiniciar; automatico: troca quando você fechar; nunca: não confere", "opcoes": ["avisar", "automatico", "nunca"]}}
+{
+ "modo": {
+  "valor": "equilibrado",
+  "rotulo": "modo padrão",
+  "explica": "seguro, equilibrado ou extremo: o que vem marcado em cada tela",
+  "opcoes": [
+   "seguro",
+   "equilibrado",
+   "extremo"
+  ]
+ },
+ "explicacao": {
+  "valor": "curta",
+  "rotulo": "explicações",
+  "explica": "curta (uma linha por item; \"? número\" explica) ou completa (o que faz, ganho e custo de todos)",
+  "opcoes": [
+   "completa",
+   "curta"
+  ]
+ },
+ "cores": {
+  "valor": "automático",
+  "rotulo": "cores",
+  "explica": "automático ou sem cor",
+  "opcoes": [
+   "automático",
+   "sem cor"
+  ]
+ },
+ "simbolos": {
+  "valor": "automático",
+  "rotulo": "símbolos",
+  "explica": "automático ou simples (para terminal que mostra quadradinhos)",
+  "opcoes": [
+   "automático",
+   "simples"
+  ]
+ },
+ "grandes-mb": {
+  "valor": "500",
+  "rotulo": "arquivo grande",
+  "explica": "a partir de quantos MB o \"grandes\" mostra um arquivo",
+  "opcoes": []
+ },
+ "navegador": {
+  "valor": "nenhum",
+  "rotulo": "navegador leve",
+  "explica": "brave ou nenhum: se o turbo instala o Brave enxuto",
+  "opcoes": [
+   "brave",
+   "nenhum"
+  ]
+ },
+ "confirmar": {
+  "valor": "risco",
+  "rotulo": "\"manter alterações?\"",
+  "explica": "risco (padrão): depois de mudar serviços, jogos, energia, disco ou visual, pergunta se está tudo bem e desfaz sozinho se você não responder; sempre; ou nunca",
+  "opcoes": [
+   "risco",
+   "sempre",
+   "nunca"
+  ]
+ },
+ "protegidos": {
+  "valor": "",
+  "rotulo": "itens que nunca mexo",
+  "explica": "ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em \"v N\" na tela de escolha",
+  "opcoes": []
+ },
+ "coleta-em-jogo": {
+  "valor": "segura",
+  "rotulo": "acompanhamento com jogo aberto",
+  "explica": "segura (padrão): continua lendo tudo, como o Gerenciador de Tarefas (sem abrir o processo do jogo); ou pausar: não lê nada enquanto houver jogo aberto",
+  "opcoes": [
+   "segura",
+   "pausar"
+  ]
+ },
+ "abrir-relatorio": {
+  "valor": "perguntar",
+  "rotulo": "abrir o relatório",
+  "explica": "perguntar (padrão: uma tecla no fim do raio-x, da segurança e do turbo), sempre (abre a pasta sozinho) ou nunca",
+  "opcoes": [
+   "perguntar",
+   "sempre",
+   "nunca"
+  ]
+ },
+ "tempo-real": {
+  "valor": "1",
+  "rotulo": "ritmo do segundo plano",
+  "explica": "de quantos em quantos segundos o Katharos.exe lê o PC: 1 (padrão), 2, 5 ou 10",
+  "opcoes": [
+   "1",
+   "2",
+   "5",
+   "10"
+  ]
+ },
+ "avisos": {
+  "valor": "sim",
+  "rotulo": "avisos do segundo plano",
+  "explica": "sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao",
+  "opcoes": [
+   "sim",
+   "nao"
+  ]
+ },
+ "fps": {
+  "valor": "sim",
+  "rotulo": "FPS nos jogos",
+  "explica": "sim (padrão): mede FPS, 1% low e travadas durante os jogos, pelo PresentMon (precisa liberar uma vez: segundo-plano, opção f); ou nao",
+  "opcoes": [
+   "sim",
+   "nao"
+  ]
+ },
+ "energia-automatica": {
+  "valor": "nao",
+  "rotulo": "notebook: plano de energia sozinho na tomada e na bateria",
+  "explica": "nao (padrão) ou sim: o segundo plano troca o plano de energia quando você liga ou tira o carregador (escolhe os planos ao ligar; desligar volta o plano de antes)",
+  "opcoes": [
+   "sim",
+   "nao"
+  ]
+ },
+ "atualizacoes": {
+  "valor": "avisar",
+  "rotulo": "atualizações do Katharos com janelas",
+  "explica": "avisar (padrão): baixa a versão nova e pergunta antes de reiniciar; automatico: troca quando você fechar; nunca: não confere",
+  "opcoes": [
+   "avisar",
+   "automatico",
+   "nunca"
+  ]
+ },
+ "canal": {
+  "valor": "estavel",
+  "rotulo": "canal de atualização do Katharos com janelas",
+  "explica": "estavel (padrão) ou previa (versões de teste antes de todo mundo)",
+  "opcoes": [
+   "estavel",
+   "previa"
+  ]
+ },
+ "avisos-intervalo": {
+  "valor": "6",
+  "rotulo": "horas entre dois avisos do mesmo tipo",
+  "explica": "6 (padrão); de 1 a 48. Calor grave avisa sempre",
+  "opcoes": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "10",
+   "11",
+   "12",
+   "13",
+   "14",
+   "15",
+   "16",
+   "17",
+   "18",
+   "19",
+   "20",
+   "21",
+   "22",
+   "23",
+   "24",
+   "25",
+   "26",
+   "27",
+   "28",
+   "29",
+   "30",
+   "31",
+   "32",
+   "33",
+   "34",
+   "35",
+   "36",
+   "37",
+   "38",
+   "39",
+   "40",
+   "41",
+   "42",
+   "43",
+   "44",
+   "45",
+   "46",
+   "47",
+   "48"
+  ]
+ },
+ "avisos-no-jogo": {
+  "valor": "so-grave",
+  "rotulo": "avisos durante o jogo",
+  "explica": "so-grave (padrão): só calor grave; nunca; ou todos",
+  "opcoes": [
+   "so-grave",
+   "nunca",
+   "todos"
+  ]
+ },
+ "resumo-diario": {
+  "valor": "nao",
+  "rotulo": "um resumo por dia no lugar de avisos soltos",
+  "explica": "nao (padrão) ou sim: um aviso por dia com o que o motor achou",
+  "opcoes": [
+   "sim",
+   "nao"
+  ]
+ },
+ "motor-nunca": {
+  "valor": "",
+  "rotulo": "o que o motor nunca propõe",
+  "explica": "comandos separados por vírgula (ex.: turbo,energia)",
+  "opcoes": []
+ }
+}

@@ -16,7 +16,7 @@ namespace Katharos.App.Telas;
 /// </summary>
 public class AoVivo : Tela
 {
-    record Cel(string Rotulo, Func<JsonNode, double?> Valor, string Unidade, int Casas, Func<JsonNode, (string, IBrush)> Contexto, double Max, double Limite)
+    record Cel(string Rotulo, Func<JsonNode, double?> Valor, string Unidade, int Casas, Func<JsonNode, (string, IBrush)> Contexto, double Max, double Limite, string Base = "")
     {
         public List<double> Hist = new();
         public TextBlock? Numero, Texto; public Grafico? G;
@@ -33,24 +33,36 @@ public class AoVivo : Tela
         cels = new()
         {
             new("Placa de vídeo", a => a.D("gpu"), "%", 0, a => a.D("gpu") >= 95 ? ("no limite: é ela que segura o FPS", Tema.Ambar) : ("sobra", Tema.Verde), 100, 95),
-            new("CPU", a => a.D("cpu"), "%", 0, a => ($"núcleo mais usado em {Num(a.D("nucleo_max"))} %", a.D("nucleo_max") >= 95 ? Tema.Ambar : Tema.Verde), 100, double.NaN),
-            new("Memória RAM", a => a.D("ram_pct"), "%", 0, a => ($"{Num(a.D("ram_gb"), 1)} de {Num(a.D("ram_total_gb"))} GB", a.D("ram_pct") >= 90 ? Tema.Vermelho : Tema.Verde), 100, 90),
+            new("CPU", a => a.D("cpu"), "%", 0, a => ($"núcleo mais usado em {Num(a.D("nucleo_max"))} %", a.D("nucleo_max") >= 95 ? Tema.Ambar : Tema.Verde), 100, double.NaN, "cpu"),
+            new("Memória RAM", a => a.D("ram_pct"), "%", 0, a => ($"{Num(a.D("ram_gb"), 1)} de {Num(a.D("ram_total_gb"))} GB", a.D("ram_pct") >= 90 ? Tema.Vermelho : Tema.Verde), 100, 90, "ram"),
             new("Temperatura", a => a.D("temp_cpu") ?? a.D("temp_gpu"), "°C", 0, a => a.D("temp_cpu") == null && a.D("temp_gpu") == null
                 ? ("sem leitura: abra o MSI Afterburner ou o HWiNFO", Tema.Apagado)
-                : ($"CPU {Num(a.D("temp_cpu"))} · placa de vídeo {Num(a.D("temp_gpu"))}", (a.D("temp_cpu") ?? 0) >= 90 || (a.D("temp_gpu") ?? 0) >= 85 ? Tema.Vermelho : Tema.Verde), 100, 90),
+                : ($"CPU {Num(a.D("temp_cpu"))} · placa de vídeo {Num(a.D("temp_gpu"))}", (a.D("temp_cpu") ?? 0) >= 90 || (a.D("temp_gpu") ?? 0) >= 85 ? Tema.Vermelho : Tema.Verde), 100, 90, "temp_cpu"),
             new("Memória da placa", a => a.D("vram_gb"), "GB", 1, a => a.D("vram_total_gb") is double t ? ($"de {Num(t)} GB" + (a.D("vram_gb") / t >= .95 ? ": quase cheia" : ""), a.D("vram_gb") / t >= .95 ? Tema.Ambar : Tema.Verde) : ("", Tema.Apagado), 16, double.NaN),
-            new("Disco", a => a.D("disco"), "%", 0, a => ($"lendo {Num(a.D("disco_le_mbs"), 1)} MB/s", a.D("disco") >= 95 ? Tema.Ambar : Tema.Verde), 100, 95),
+            new("Disco", a => a.D("disco"), "%", 0, a => ($"lendo {Num(a.D("disco_le_mbs"), 1)} MB/s", a.D("disco") >= 95 ? Tema.Ambar : Tema.Verde), 100, 95, "disco"),
         };
         relogio.Tick += (_, _) => Atualiza();
         DetachedFromVisualTree += (_, _) => relogio.Stop();
     }
 
-    protected override Task Carrega()
+    JsonNode? normal;
+
+    protected override async Task Carrega()
     {
         montado = false;
         Atualiza();
         relogio.Start();
-        return Task.CompletedTask;
+        // o normal deste PC (linha de base do motor): a faixa clara atrás de cada gráfico
+        try { normal = (await Servico.Le("linha_de_base"))?["metricas"]; } catch (Exception e) { Registro.Escreve("linha de base: " + e.Message); }
+    }
+
+    void Faixa(Cel c, bool emJogo)
+    {
+        if (c.G == null) return;
+        var b = c.Base == "" ? null : normal?[c.Base]?[emJogo ? "jogo" : "sem_jogo"];
+        c.G.FaixaMin = b.D("p10") ?? double.NaN;
+        c.G.FaixaMax = b.D("p90") ?? double.NaN;
+        ToolTip.SetTip(c.G, b == null ? null : $"O normal deste PC {(emJogo ? "em jogo" : "fora de jogo")}: entre {Num(b.D("p10"))} e {Num(b.D("p90"))} {c.Unidade} ({Num(b.D("dias"))} dias medidos).");
     }
 
     void Atualiza()
@@ -95,6 +107,7 @@ public class AoVivo : Tela
                 g.Children.Add(T(est == "sem permissão" ? "FPS: libere em Configurações > FPS nos jogos" : "FPS: " + est, "rotulo").Com(t => { Grid.SetColumn(t, 1); Grid.SetColumnSpan(t, 3); t.Margin = new Thickness(28, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
             jogo.Children.Add(g);
         }
+        foreach (var c in cels) Faixa(c, a["jogo"] != null);
         conclusoes!.Children.Clear();
         var cs = a.A("conclusoes").ToList();
         if (cs.Count > 0)
@@ -103,7 +116,9 @@ public class AoVivo : Tela
             foreach (var c in cs)
             {
                 int n = (int)(c.D("nivel") ?? 0);
-                conclusoes.Children.Add(Linha(c.S("titulo"), c.S("texto"), Etiqueta(n >= 2 ? "grave" : n == 1 ? "atenção" : "normal", n >= 2 ? Tema.Vermelho : n == 1 ? Tema.Ambar : Tema.Apagado)));
+                var l = Linha(c.S("titulo"), c.S("texto"), Etiqueta(n >= 2 ? "grave" : n == 1 ? "atenção" : "normal", n >= 2 ? Tema.Vermelho : n == 1 ? Tema.Ambar : Tema.Apagado));
+                ToolTip.SetTip(l, "Por quê: " + c.S("texto") + " É a mesma regra do ícone do Katharos, lida agora.");
+                conclusoes.Children.Add(l);
             }
         }
         conclusoes.IsVisible = cs.Count > 0;
