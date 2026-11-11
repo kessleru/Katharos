@@ -289,8 +289,9 @@
   .etapa:nth-child(even) > .etapa-vid { margin: 0 0 0 calc(-1 * var(--vaza)); padding: 28px 0; }
 
   /* ao vivo e jogos: o vídeo e, ao lado, o que ele mede, em linhas (não em cartões) */
-  .vivo-bloco { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-  .vivo-bloco .etapa-vid { padding: 28px var(--pad) 28px 0; }
+  .vivo-bloco { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
+  /* o vídeo ao vivo passa da guia para a esquerda e o da central, logo abaixo, para a direita */
+  .vivo-bloco .etapa-vid { --vaza: clamp(0px, calc((100vw - var(--largura)) / 2 - 20px), 120px); position: relative; z-index: 3; margin-left: calc(-1 * var(--vaza)); padding: 28px var(--pad) 28px 0; }
   .fatos { border-left: 1px solid var(--linha); display: grid; align-content: stretch; }
   .fatos > div { padding: 22px var(--pad); display: grid; gap: 4px; align-content: center; }
   .fatos > div + div { border-top: 1px solid var(--linha); }
@@ -298,9 +299,9 @@
   .fatos span { font: 400 14.5px/1.5 var(--sans); color: #a9a49b; }
 
   /* central de inteligência: a frase e a foto da tela de sugestões */
-  .central { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; }
+  .central { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); align-items: center; }
   .central .etapa-txt { border-right: 1px solid var(--linha); align-self: stretch; }
-  .central figure { padding: 28px 0 28px var(--pad); margin: 0; }
+  .central > figure { --vaza: clamp(0px, calc((100vw - var(--largura)) / 2 - 20px), 120px); position: relative; z-index: 3; padding: 28px 0 28px var(--pad); margin: 0 calc(-1 * var(--vaza)) 0 0; }
 
   /* baixar: duas escolhas lado a lado, a recomendada em âmbar; os detalhes de cada uma em linhas */
   .baixar .quadro { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -334,10 +335,10 @@
     .etapa:nth-child(even) .etapa-txt { order: 0; }
     .etapa-txt { padding-bottom: 8px; }
     .etapa > .etapa-vid, .etapa:nth-child(even) > .etapa-vid { margin: 0; padding: 0 var(--pad) 28px; }
-    .vivo-bloco .etapa-vid { padding: 0 var(--pad) 28px; }
+    .vivo-bloco .etapa-vid { margin-left: 0; padding: 0 var(--pad) 28px; }
     .fatos { border-left: 0; border-top: 1px solid var(--linha); }
     .central .etapa-txt { border-right: 0; }
-    .central figure { padding: 0 var(--pad) 28px; }
+    .central > figure { margin: 0; padding: 0 var(--pad) 28px; }
     .baixar .quadro { grid-template-columns: 1fr; }
     .escolha + .escolha { border-left: 0; border-top: 1px solid var(--linha); }
     .provas { grid-template-columns: 1fr; margin: 0; }
