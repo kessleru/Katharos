@@ -8,6 +8,15 @@ namespace Katharos.App.Telas;
 /// <summary>Início: como o PC está e o próximo passo. Abre na hora, só com o que já está guardado (nada roda).</summary>
 public class Inicio : Tela
 {
+    // uma área conferida por trás pode resolver um achado: o Início relê (só redesenha se mudou)
+    public Inicio()
+    {
+        void Conferida(string _, JsonNode __) { if (!relendo) { relendo = true; Avalonia.Threading.DispatcherTimer.RunOnce(async () => { relendo = false; await Recarrega(); }, TimeSpan.FromMilliseconds(400)); } }
+        AttachedToVisualTree += (_, _) => Conferencia.AreaPronta += Conferida;
+        DetachedFromVisualTree += (_, _) => Conferencia.AreaPronta -= Conferida;
+    }
+    bool relendo;
+
     protected override async Task Carrega()
     {
         var cab = Cabecalho("Início", "Como está o seu PC e o que fazer agora.");

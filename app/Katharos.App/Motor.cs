@@ -35,6 +35,9 @@ public abstract class Conversa : IAsyncDisposable
     /// <summary>Fecha à força um motor que parou de responder, para o próximo pedido abrir um novo.</summary>
     protected virtual void Derruba() { }
     readonly ConcurrentDictionary<int, long> ultimaMensagem = new();
+    // o motor atende um pedido por vez: quem está na fila não recebe nada enquanto o da frente trabalha. Qualquer mensagem do motor
+    // prova que ele está vivo; sem isso, uma leitura na fila atrás de uma conferência longa derrubava o motor à toa
+    long ultimaQualquer = Environment.TickCount64;
 
     protected async Task Liga(TextReader entrada, TextWriter saida, CancellationToken ct)
     {
@@ -65,7 +68,7 @@ public abstract class Conversa : IAsyncDisposable
                 JsonNode? m;
                 try { m = JsonNode.Parse(l); } catch (JsonException) { continue; }
                 if (m?["id"] is not JsonValue v || !v.TryGetValue(out int id) || !esperando.TryGetValue(id, out var quem)) continue;
-                ultimaMensagem[id] = Environment.TickCount64;
+                ultimaMensagem[id] = ultimaQualquer = Environment.TickCount64;
                 if (m["evento"] is JsonNode ev) { quem.evento?.Invoke(ev.ToString(), m["dados"]); continue; }
                 esperando.TryRemove(id, out _);
                 if (m["ok"]?.GetValue<bool>() == true) quem.fim.TrySetResult(m["dados"]);
@@ -100,7 +103,7 @@ public abstract class Conversa : IAsyncDisposable
             {
                 var fim = await Task.WhenAny(tcs.Task, Task.Delay(1000));
                 if (fim == tcs.Task) return await tcs.Task;
-                if (Environment.TickCount64 - ultimaMensagem.GetValueOrDefault(id) > silencio.TotalMilliseconds)
+                if (Environment.TickCount64 - Math.Max(ultimaMensagem.GetValueOrDefault(id), Interlocked.Read(ref ultimaQualquer)) > silencio.TotalMilliseconds)
                 {
                     esperando.TryRemove(id, out _);
                     Derruba();
