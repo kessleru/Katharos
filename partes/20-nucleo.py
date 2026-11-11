@@ -360,6 +360,17 @@ def _decodifica(b):
     return b.decode('latin-1', errors='replace')
 
 
+def env_ps():
+    """O ambiente para o Windows PowerShell 5.1: sem os caminhos de módulo do PowerShell 7 (herdados quando o Katharos foi aberto
+    de dentro do pwsh), que o 5.1 não carrega e fariam comandos como Get-FileHash e Set-Acl "não existirem"."""
+    env = dict(os.environ)
+    mp = env.get('PSModulePath')
+    if mp:
+        env['PSModulePath'] = os.pathsep.join(x for x in mp.split(os.pathsep)
+                                              if 'WindowsPowerShell' in x or not re.search(r'[\\/]PowerShell[\\/]', x, re.I))
+    return env
+
+
 def mata_arvore(pid):
     if WINDOWS:
         subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -809,7 +820,7 @@ class _Filho:
             # sem console (pythonw, tarefa agendada): sem esta marca o PowerShell abriria uma janela, que poderia tirar um jogo da tela cheia
             sem_janela = 0x08000000 if WINDOWS and not ctypes.windll.kernel32.GetConsoleWindow() else 0
             self.p = subprocess.Popen([ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(arq)],
-                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=sem_janela)
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=sem_janela, env=env_ps())
             self.pid = self.p.pid
             threading.Thread(target=self._le_pipe, daemon=True).start()
             return
@@ -820,7 +831,7 @@ class _Filho:
         cria = ("$si = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }; "
                 "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = " + psq(linha) +
                 "; ProcessStartupInformation = $si }; [Console]::Out.Write([string]$r.ProcessId + '|' + [string]$r.ReturnValue)")
-        r = subprocess.run([ps, '-NoProfile', '-NonInteractive', '-Command', cria], capture_output=True, text=True, timeout=90)
+        r = subprocess.run([ps, '-NoProfile', '-NonInteractive', '-Command', cria], capture_output=True, text=True, timeout=90, env=env_ps())
         pid, _, rv = r.stdout.strip().partition('|')
         if not pid.isdigit() or rv.strip() != '0':
             raise OSError(f'WMI não criou o processo (retorno {rv or r.stderr.strip()[:80]})')

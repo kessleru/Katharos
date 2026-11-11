@@ -221,6 +221,9 @@ public static class CopiaProtegida
         string Q(string s) => "'" + s.Replace("'", "''") + "'";
         string script = $$"""
             $ErrorActionPreference = 'Stop'
+            # aberto a partir do PowerShell 7 (ou de um programa que herdou o ambiente dele), o caminho de módulos aponta para os do 7,
+            # que o Windows PowerShell não carrega: volta ao do Windows antes de usar qualquer comando de módulo
+            $env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
             trap { try { ($_ | Out-String) | Set-Content -LiteralPath (Join-Path $env:USERPROFILE '.katharos\motor-elevado-erro.txt') -Encoding UTF8 } catch { }; exit 13 }
             $src = {{Q(app)}}; $ver = {{Q(ver)}}; $esperado = {{Q(h)}}
             $base = Join-Path $env:ProgramData 'Katharos'; $dst = Join-Path $base $ver

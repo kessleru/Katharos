@@ -254,7 +254,7 @@ jobs:
           # o motor de administrador, como a janela abre: cópia protegida em %ProgramData%, conferida, e o pipe com senha
           $pe = Start-Process (Join-Path $casa 'Katharos.exe') -ArgumentList '--teste-motor-elevado' -PassThru
           $pe | Wait-Process -Timeout 180
-          Get-Content "$env:USERPROFILE\.katharos\interface.log" -ErrorAction SilentlyContinue | Select-Object -Last 4
+          Get-Content "$env:USERPROFILE\.katharos\interface.log" -ErrorAction SilentlyContinue | Select-Object -Last 25
           if ($pe.ExitCode) { Write-Host "::error::o motor de administrador não abriu pela cópia protegida ($($pe.ExitCode))"; exit 1 }
           $pd = Get-ChildItem "$env:ProgramData\Katharos" -Directory | Select-Object -First 1
           if (-not $pd -or -not (Test-Path (Join-Path $pd.FullName 'python\python.exe'))) { Write-Host '::error::sem a cópia em ProgramData'; exit 1 }
