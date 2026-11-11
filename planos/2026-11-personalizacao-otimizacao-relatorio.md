@@ -22,8 +22,17 @@ Marque `[x]` ao concluir e anote no **Registro** (fim) a data, a versão e o com
 
 ## 1. Decisões
 
-**P1. Personalização fica fora dos três modos.** Seguro, equilibrado e extremo continuam sendo otimização. Personalização é gosto: a pessoa
-abre a tela **Personalizar**, vê a prévia, marca o que quer, e tudo volta pelo Desfazer.
+**P1. Dois tipos de personalização.**
+- **Otimização** (entra nos modos): só o que alivia o PC de verdade, com o motivo escrito em cada item ("por que otimiza"), nível e Desfazer, como os itens de hoje.
+- **Estética** (fora dos modos): é gosto, nunca entra sozinha por modo nenhum. A pessoa abre a tela **Personalizar**, vê a prévia, marca o que quer, e tudo volta pelo Desfazer.
+
+**P1b. Os dois tipos conversam.**
+- **Uma chave, um dono:** cada chave do registro ou serviço pertence a um único item, de otimização ou de estética; o CI falha se dois itens gravarem o mesmo valor.
+- **Dependência visível:** quando uma opção estética depende de uma otimização (ou o contrário), o cartão avisa. Ex.: "Widgets desligados" (otimização) esconde o botão de Widgets da barra; a opção estética "mostrar Widgets" fica cinza com o motivo "desligado pela otimização" e um botão para voltar a ligar.
+- **Sugestão cruzada:** o cartão estético que também alivia o PC mostra "isto também deixa o PC mais leve" e leva ao item de otimização; o item de otimização com efeito visível mostra a prévia e leva à tela Personalizar.
+- **Uma lista só:** a tela Personalizar e o Otimizar leem o mesmo estado, então o que foi aplicado num aparece marcado no outro.
+- **Um Desfazer e um Histórico:** os dois tipos entram no mesmo ponto de restauração, no mesmo Desfazer e na mesma linha do tempo, com a etiqueta "otimização" ou "estética".
+- **Modos respeitam a escolha:** um modo de otimização nunca desfaz uma escolha estética da pessoa, e vice-versa.
 
 **P2. Caminho de cada opção, nesta ordem:**
 1. **Nativo do Windows** (registro, política oficial ou atalho para Configurações): padrão; sobrevive a atualizações e é lido de volta.
@@ -50,16 +59,28 @@ no instalador e no relatório (J1 a J8). Isso é transparência, não parecer ju
 
 Todas as chaves são confirmadas na fase 0 (Windows 10 22H2, 11 24H2, 11 25H2). Valor bloqueado pelo UCPD vira atalho para a tela do Windows.
 
-**Nativo (fase 3)**
-- Barra: ícones à esquerda ou centro, busca (escondida, ícone, caixa), esconder Visão de Tarefas, Widgets e Copilot, nunca agrupar com
-  rótulos, esconder sozinha.
-- Iniciar: mais fixados ou recomendados, esconder Recomendados, pastas ao lado do botão de energia.
-- Explorador: tirar Galeria, Início e OneDrive da lateral; extensões, ocultos, modo compacto e abrir em Este Computador (já existem).
-- Cores: cor de destaque nas bordas, no Iniciar e na barra; ícones da área de trabalho; Alt+Tab sem abas do Edge; Snap.
-- Bloqueio e sons: sem dicas na tela de bloqueio, tela de entrada sem desfoque, esquema "Sem sons".
-- Atalhos para Configurações: papel de parede, não perturbe com horário, ponteiro, tecla Copilot, temas da Loja.
+### 2A. Otimização (entra nos modos, fase 3)
+Cada item mostra "por que otimiza" e "o que perde". Níveis são os da regra de hoje (1 seguro, 2 equilibrado, 3 extremo); a confirmação final é na fase 0.
+| item | por que otimiza | nível |
+|---|---|---|
+| Widgets desligados | o Windows deixa de manter o painel de widgets e o processo do Edge dele rodando; menos memória e rede em segundo plano | 2 |
+| Copilot e busca na barra desligados | tira processos e consultas na internet a cada letra digitada | 2 |
+| Dicas e anúncios da tela de bloqueio desligados | para o Windows de baixar conteúdo de anúncio em segundo plano | 1 |
+| Recomendados e recentes do Iniciar desligados | o Iniciar deixa de indexar e listar arquivos recentes; abre mais rápido | 2 |
+| Tela de entrada sem desfoque | tira o efeito de vidro (GPU) na tela de login; entra mais rápido em PC fraco | 2 |
+| Segundo plano por app (fase 5) | desliga só os apps da Loja que gastam, com o custo medido de cada um | 2 |
+| Perfis automáticos (fase 5) | plano "melhor desempenho" só com jogo aberto; volta ao fechar | opcional |
 
-**PowerToys (fase 4):** Light Switch (tema por horário), FancyZones, Always on Top, Keyboard Manager, Command Palette, PowerRename, Image Resizer, Peek.
+### 2B. Estética (fora dos modos, fase 3 e 4)
+**Nativo, fase 3**
+- Barra: ícones à esquerda ou no centro, busca (escondida, ícone, caixa), esconder Visão de Tarefas, nunca agrupar com rótulos, esconder sozinha.
+- Iniciar: mais fixados ou mais recomendados, pastas ao lado do botão de energia.
+- Explorador: tirar Galeria, Início e OneDrive da lateral; abrir em Este Computador, modo compacto (já existem).
+- Cores e janelas: cor de destaque nas bordas, no Iniciar e na barra; ícones da área de trabalho; Alt+Tab sem abas do Edge; Snap.
+- Sons: esquema "Sem sons".
+- Atalhos para as Configurações: papel de parede, não perturbe com horário, ponteiro, tecla Copilot, temas da Loja.
+
+**PowerToys, fase 4:** Light Switch (tema por horário), FancyZones, Always on Top, Keyboard Manager, Command Palette, PowerRename, Image Resizer, Peek.
 
 ## 3. Programa auxiliar
 
@@ -93,18 +114,19 @@ Proteção jurídica:
 - [ ] **2.4** Worker de recebimento (P4): em `servidor/relatorio-worker`, com testes e deploy pelo CI.
 
 ### Fase 3: personalização nativa com galeria (4.2.0)
-- [ ] **3.1** Pacote `personalizar` no motor, fora dos modos, com as opções nativas da seção 2; cada uma lida de volta e com desfazer.
+- [ ] **3.1** Pacote `personalizar` no motor, fora dos modos, com as opções das seções 2A e 2B; cada uma lida de volta e com desfazer.
 - [ ] **3.2** Tela **Personalizar**: categorias, prévia, "o que muda", "funciona neste Windows?", aplicar e desfazer.
 - [ ] **3.3** Galeria (P3): repositório, manifesto, geração no CI, cache, modo sem internet.
 - [ ] **3.4** Página **Personalizar** no site com a mesma galeria.
-- [ ] **3.5** Testes de cada opção em cada Windows do CI; foto refeita quando o Windows mudar.
+- [ ] **3.5** Conversa entre os tipos (P1b): registro de dono por chave, avisos de dependência, sugestão cruzada, estado único e Desfazer único, com teste de que um modo não desfaz escolha estética.
+- [ ] **3.6** Testes de cada opção em cada Windows do CI; foto refeita quando o Windows mudar.
 
 ### Fase 4: PowerToys (4.3.0)
 - [ ] **4.1** PowerToys: detectar, instalar a pedido, ligar módulos e explicar.
 
 ### Fase 5: otimizações novas (4.4.0)
-- [ ] **5.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
-- [ ] **5.2** Segundo plano por app, com o custo medido de cada um.
+- [ ] **5.1** (2A) Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
+- [ ] **5.2** (2A) Segundo plano por app, com o custo medido de cada um.
 - [ ] **5.3** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
 
 ### Fase 6: interface (4.5.0)
@@ -117,7 +139,7 @@ Proteção jurídica:
 
 ## 5. Critérios de pronto
 - Cada opção de personalização: funciona nos Windows do CI, lê de volta, desfaz e tem prévia.
-- Nenhuma personalização entra por modo; nenhuma injeta em processo.
+- Só os itens da 2A entram por modo, cada um com "por que otimiza"; a estética (2B) nunca entra; nenhuma injeta em processo.
 - O instalador não cresce por causa da galeria (menos de 100 KB).
 - O relatório "envenenado" não deixa sair dado pessoal; nenhum envio sem prévia e consentimento.
 - Aviso de "sem fins lucrativos e sem afiliação" no site, no aplicativo, no README e no instalador.
@@ -150,3 +172,5 @@ Proteção jurídica:
 - 11 nov 2026 (08:53): a seção de antivírus saiu da fase 1, só por agora; guardada em [adiado-antivirus.md](adiado-antivirus.md).
 - 11 nov 2026 (08:57): a pedido do dono, voltou ao estado de antes das personalizações próprias: PowerToys de volta, kits do winget de volta; seguem fora estilos prontos, exportar e importar, Windhawk, outros programas, antivírus (adiado) e relatório pelo GitHub.
 - 11 nov 2026 (09:02): saíram o bloco de bugs da fase 1, o envio automático e o resumo semanal, a placa de vídeo por jogo, o limite de banda, a inicialização atrasada, o modo de energia, a compactação de disco, o modo simples, a acessibilidade e o inglês. O relatório só sai quando a pessoa clica no botão, que fica bem visível.
+- 11 nov 2026 (09:08): personalização dividida em dois tipos: otimização (nos modos, com o porquê) e estética (fora dos modos).
+- 11 nov 2026 (09:09): os dois tipos de personalização conversam (P1b).
