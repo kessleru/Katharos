@@ -3,11 +3,14 @@
 Pedido de 11 nov 2026 (08:22 e 08:26): grandes melhorias de otimização, **muito mais personalização do Windows** com exemplo em imagem e
 vídeo de cada opção (hospedado fora do programa, sem pesar a instalação), ideias tiradas do Windhawk e de outros programas, melhorias de
 interface, de segurança e correção de bugs, **um relatório mais completo com envio direto para o dono** (inclusive problemas do próprio
-Katharos) e mais ideias. Personalizações **bem funcionais e sem problemas**. E deixar claro, em todo lugar, que o projeto **não tem fins
+Katharos). Personalizações **bem funcionais e sem problemas**. E deixar claro, em todo lugar, que o projeto **não tem fins
 lucrativos**, para evitar problema jurídico.
 
 Este arquivo é o plano e o registro: cada tarefa tem um código; quando ficar pronta, marque `[x]` e anote no **Registro** (fim do arquivo)
 a data, a versão e o commit. A pesquisa que embasa o plano está em [cofre/2026-11-11-pesquisa-personalizacao.md](cofre/2026-11-11-pesquisa-personalizacao.md).
+
+**Escopo (pedido das 08:46):** o plano tem só o que dá para fazer hoje, com o Windows e as ferramentas que existem agora. Ideias
+futuras, recursos que dependem de versão ainda não lançada do Windows e extras sem fase ficaram de fora.
 
 **Estado:** planejado. Nada começou. As decisões marcadas **(dono decide)** esperam resposta antes da fase em que entram.
 
@@ -85,8 +88,7 @@ O relatório tem dados do PC. Issue pública no GitHub expõe esses dados para q
 
 ### P6. Projeto sem fins lucrativos, dito em todo lugar
 O Katharos é pessoal, gratuito e de código aberto (licença MIT), sem venda, anúncio, rastreamento ou doação. Isso aparece no site, no
-aplicativo, no README, no instalador e no relatório (ver fase 1, J1 a J8). Isto é organização e transparência, não parecer jurídico: se um
-dia houver doação, patrocínio ou venda, vale consultar um advogado antes.
+aplicativo, no README, no instalador e no relatório (ver fase 1, J1 a J8). Isto é organização e transparência, não parecer jurídico.
 
 ---
 
@@ -106,7 +108,7 @@ Valores que o driver UCPD da Microsoft bloqueia (o Katharos já reconhece essa p
 | segundos no relógio | nativo | já existe |
 | "Finalizar tarefa" no botão direito | nativo | já existe |
 | esconder sozinha | nativo | |
-| barra no topo, na lateral ou menor | nativo no 26H2 (Configurações > Personalização > Barra de tarefas, [Windows Central](https://www.windowscentral.com/microsoft/windows-11/windows-11-2026-update-26h2-changes-for-start-menu-taskbar-and-search)); antes disso, Windhawk (`taskbar-on-top`, `taskbar-vertical`, `taskbar-icon-size`) | o Katharos usa o nativo quando o Windows tiver |
+| barra no topo, na lateral ou menor | Windhawk (`taskbar-on-top`, `taskbar-vertical`, `taskbar-icon-size`) | só se a pessoa tiver o Windhawk (fase 4) |
 | esconder só quando há janela maximizada | Windhawk `taskbar-auto-hide-when-maximized` | |
 | volume rolando o mouse na barra (geral e por app) | Windhawk `taskbar-volume-control`, `taskbar-volume-control-per-app` | |
 | relógio com data longa, rede e CPU | Windhawk `taskbar-clock-customization` | |
@@ -118,7 +120,7 @@ Valores que o driver UCPD da Microsoft bloqueia (o Katharos já reconhece essa p
 | opção | caminho | nota |
 |---|---|---|
 | mais fixados ou mais recomendados | nativo (`Start_Layout`) | já existe |
-| esconder "Recomendados/Recentes", tamanhos prontos, mostrar só seções escolhidas | nativo no 25H2/26H2 (Configurações > Personalização > Iniciar) | atalho direto para a tela quando não houver chave segura |
+| esconder "Recomendados/Recentes", tamanhos prontos | nativo (Configurações > Personalização > Iniciar, 25H2) | atalho direto para a tela quando não houver chave segura |
 | pastas ao lado do botão de energia (Downloads, Configurações, Explorador…) | nativo (política `AllowPinnedFolder*`) | |
 | botões de desligar, reiniciar e suspender com um clique | Windhawk `win11-power-buttons` | |
 | abrir já em "Todos os apps" | Windhawk `start-menu-all-apps` | |
@@ -185,7 +187,6 @@ Um clique aplica um conjunto, com prévia do conjunto inteiro e volta em grupo:
 - **Escuro e foco:** modo escuro, cor de destaque nas bordas, não perturbe com horário, Alt+Tab sem abas do Edge.
 - **Vários monitores:** Alt+Tab e Win+D por monitor, notificações no monitor principal, FancyZones.
 - **Parecido com o Mac (Windhawk):** animação de dock na barra, barra centralizada e mais baixa.
-Estilos feitos pela comunidade entram depois, por pull request num arquivo JSON da galeria (revisado pelo dono).
 
 ---
 
@@ -251,7 +252,7 @@ Proteção jurídica (P6):
 - [ ] **J7** **Política de privacidade** (LGPD) no site e no aplicativo, antes do envio de relatório existir: o que vai, para quê, onde
   fica (repositório privado), por quanto tempo (90 dias, depois apagado), como pedir para apagar (pelo código `KTH-...`), e que nada
   é vendido nem compartilhado.
-- [ ] **J8** Doação, patrocínio ou venda: **não entram**. Se um dia entrarem, revisar esta seção com um advogado antes.
+- [ ] **J8** Doação, patrocínio e venda: **não entram** no projeto.
 
 Bugs e pendências:
 - [ ] **1.9** Pendências da 4.0: 2.13 (primeira abertura com 3 pessoas leigas), 2c.1 e 2c.2 (teste jogando no kesslerupc).
@@ -323,21 +324,10 @@ Bugs e pendências:
 - [ ] **6.5** Linha do tempo do Histórico com o "antes e depois" de cada valor e o que foi medido depois.
 - [ ] **6.6** Novidades da versão dentro do aplicativo, na primeira abertura depois de atualizar.
 - [ ] **6.7** Inglês (aplicativo, site e galeria), com o português continuando o principal.
-- [ ] **6.8** Extensão do Katharos para o Command Palette do PowerToys ("Katharos: modo jogo", "Katharos: relatório").
 
 ---
 
-## 5. Mais ideias (para depois, sem fase ainda)
-- **Ajudar outra pessoa:** gerar um relatório e uma lista de passos para arrumar o PC de um parente à distância, sem acesso remoto.
-- **Comparar com PCs parecidos:** com o relatório enviado (anônimo e só com consentimento), mostrar se o boot e o FPS deste PC estão na
-  média de outros com o mesmo hardware.
-- **Lembrete de faxina:** um aviso por mês com o que a manutenção fez e o que vale a pena olhar.
-- **Pacote de estilos da comunidade:** galeria de estilos enviados por pull request, com prévia gerada pelo CI.
-- **Widget pequeno:** uma janela mínima com CPU, placa de vídeo, temperatura e FPS, sempre visível se a pessoa quiser.
-
----
-
-## 6. Critérios de pronto
+## 5. Critérios de pronto
 - Cada opção de personalização: funciona nos Windows do CI, lê de volta, desfaz e tem prévia na galeria.
 - Nenhuma personalização entra por modo; nenhuma receita usa mod que entra em todos os processos ou no `dwm.exe`.
 - O instalador não cresce por causa da galeria (diferença menor que 100 KB).
@@ -345,7 +335,7 @@ Bugs e pendências:
 - Aviso de "sem fins lucrativos e sem afiliação" no site, no aplicativo, no README e no instalador.
 - VirusTotal sem alerta de mais de um motor em cada release.
 
-## 7. Riscos
+## 6. Riscos
 | risco | o que fazer |
 |---|---|
 | Atualização do Windows muda uma chave de personalização | o job 0.1 roda toda semana; opção que parar vira "não funciona neste Windows" até ser corrigida |
@@ -355,7 +345,7 @@ Bugs e pendências:
 | Abuso do endpoint de relatório | Turnstile, limite por IP e por tamanho, nada guardado no Worker, token com acesso só ao repositório privado |
 | Antivírus marcar de novo | fase 1 (1.1 a 1.6) e assinatura |
 
-## 8. Regras que continuam valendo
+## 7. Regras que continuam valendo
 - Mostrar cada mudança antes, desfazer tudo, ponto de restauração, ler de volta antes de dizer "feito".
 - Nada que abra, leia ou injete em processo de jogo; nada de driver; o Katharos nunca encerra processo sozinho.
 - Nada mexe na qualidade de áudio ou imagem no nível da placa de vídeo (sem artefato); personalização visual só quando a pessoa escolhe.
@@ -363,15 +353,14 @@ Bugs e pendências:
 - Hero do site intocado, sem animação pesada, linhas horizontais e "+" mantidos.
 - Commits sem linha de coautoria. Versões pela regra do CHANGELOG. Cada release conferida (tag, hashes, download).
 
-## 9. Fontes
+## 8. Fontes
 - Windhawk: [catálogo oficial de mods](https://mods.windhawk.net/catalog.json) (898 mods, número de usuários de cada um),
   [repositório dos mods](https://github.com/ramensoftware/windhawk-mods),
   [processos em que entra e exclusões](https://github.com/ramensoftware/windhawk/wiki/Injection-targets-and-critical-system-processes),
   [Windows Central: 7 mods](https://www.windowscentral.com/microsoft/windows-11/7-best-windhawk-mods-to-transform-your-desktop-on-windows-11),
   [TechPP: mods úteis](https://techpp.com/2025/11/17/best-windhawk-mods-windows/),
   [discussão sobre VAC no Steam](https://steamcommunity.com/discussions/forum/9/601891467285283647/?l=swedish)
-- Windows: [mudanças de 2026 no Iniciar, na barra e na busca](https://www.windowscentral.com/microsoft/windows-11/windows-11-2026-update-26h2-changes-for-start-menu-taskbar-and-search),
-  [24H2 barrando StartAllBack e ExplorerPatcher](https://pureinfotech.com/windows-11-24h2-blocks-customization-apps)
+- Windows: [24H2 barrando StartAllBack e ExplorerPatcher](https://pureinfotech.com/windows-11-24h2-blocks-customization-apps)
 - PowerToys: [novidades da 0.98](https://www.windowscentral.com/software-apps/my-favorite-free-windows-11-app-just-got-another-great-update-whats-new-in-powertoys-v0-98)
 - WinUtil: [o que faz em 2026](https://christitus.com/winutil-in-2026/)
 - GitHub: [limites do Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits),
@@ -381,3 +370,4 @@ Bugs e pendências:
 
 ## Registro
 - 11 nov 2026: plano escrito a partir do pedido das 08:22 e 08:26.
+- 11 nov 2026 (08:46): plano enxugado a pedido do dono: saiu a seção de ideias futuras, o recurso do Windows 26H2 e a extensão do Command Palette.

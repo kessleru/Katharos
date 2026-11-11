@@ -88,7 +88,7 @@ Base do plano [Personalização, otimização e relatório](../2026-11-personali
 - O Windows 11 24H2 chegou a barrar a atualização em PCs com StartAllBack e ExplorerPatcher, e a impedir instalar o ExplorerPatcher; o
   Start11, assinado, não foi barrado ([Pureinfotech](https://pureinfotech.com/windows-11-24h2-blocks-customization-apps)). Por isso o
   Katharos não instala esses programas.
-- O 26H2 (fim de 2026) traz barra de tarefas em qualquer lado da tela, barra menor, tamanhos prontos do Iniciar e seções que se escondem
+- O 26H2 ainda não saiu: o plano não conta com ele (barra em qualquer lado só pelo Windhawk, se a pessoa tiver).
   ([Windows Central](https://www.windowscentral.com/microsoft/windows-11/windows-11-2026-update-26h2-changes-for-start-menu-taskbar-and-search)).
   Quando o Windows tiver o nativo, o Katharos usa o nativo e deixa o mod de lado.
 - PowerToys 0.98: Command Palette com Dock, Light Switch (tema por horário), Keyboard Manager novo
