@@ -145,6 +145,7 @@ public class Filmagem
 public static class Roteiros
 {
     static TaskCompletionSource<JsonNode?>? fim;
+    static bool SemMotor;
     static Action<string, JsonNode?>? eventos;
 
     /// <summary>No lugar do motor: "aplicar" e "raiox" esperam o roteiro mandar o progresso e o fim; o resto vem dos dados de exemplo.</summary>
@@ -153,6 +154,12 @@ public static class Roteiros
         Servico.Simulador = async (m, p, ev) =>
         {
             if (m is "aplicar" or "raiox" or "desfazer") { eventos = ev; fim = new TaskCompletionSource<JsonNode?>(); return await fim.Task; }
+            if (m == "inicio" && SemMotor)
+            {   // o tour mostra o caminho do raio-x; a frase do motor tem o vídeo dela (central)
+                var d = DadosDeExemplo.Para("inicio")!.DeepClone();
+                d.AsObject().Remove("motor");
+                return d;
+            }
             if (m == "itens")
             {   // o modo muda o que vem marcado, como no motor (nível 1 a 3; 0 = só se a pessoa marcar)
                 string modo = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(p))?["modo"]?.ToString() ?? "equilibrado";
@@ -175,6 +182,7 @@ public static class Roteiros
         // o caminho inteiro: do Início ao resultado, passando pelo raio-x e por um item desmarcado
         ["tour"] = (j, f) =>
         {
+            SemMotor = true;
             j.Mostra("inicio"); f.Espera(1.2);
             f.Clica(f.Acha("Ver o que fazer")); f.Espera(.9);
             f.Anima(.9, null, 1.35, new Point(760, 430)); f.Espera(.8);
@@ -246,6 +254,20 @@ public static class Roteiros
                 if (s == 2) f.Anima(1, null, 1.3, new Point(760, 220)); else if (s == 5) f.Anima(1, null, 1, new Point(640, 410)); else f.Espera(1);
             }
             Servico.AgoraSimulado = null;
+        },
+        // a central: a frase do motor no Início, o porquê (o que viu, por que acha isso, o que faria) e a proposta com como desfazer
+        ["central"] = (j, f) =>
+        {
+            SemMotor = false;
+            j.Mostra("inicio"); f.Espera(1);
+            f.Anima(.9, null, 1.3, new Point(560, 215)); f.Espera(1.4);
+            f.Anima(.6, null, 1, new Point(640, 410));
+            f.Clica(f.Acha("Por que isso?")); f.Espera(.9);
+            f.Anima(1, null, 1.3, new Point(700, 330)); f.Espera(2.2);
+            f.Anima(.8, null, 1, new Point(640, 410)); f.Espera(.4);
+            f.Rola(j.Raiz.GetVisualDescendants().OfType<ScrollViewer>().First(sv => sv.Extent.Height > sv.Viewport.Height + 10), 420, .9); f.Espera(1.6);
+            f.Anima(.8, null, 1.25, new Point(760, 520)); f.Espera(1.4);
+            f.Anima(.6, null, 1, new Point(640, 410)); f.Espera(.4);
         },
         // desfazer: a volta a um clique, com confirmação
         ["desfazer"] = (j, f) =>

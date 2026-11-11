@@ -8,7 +8,7 @@ SAIDA="$RAIZ/docs/video"
 mkdir -p "$SAIDA"
 dotnet run --project "$RAIZ/app/Katharos.Fotos" -c Release -- --video "$QUADROS" "$@"
 # quadro do pôster de cada vídeo (o que resume o vídeo parado)
-declare -A POSTER=([tour]=0 [otimizar]=300 [raiox]=240 [aovivo]=150 [desfazer]=170)
+declare -A POSTER=([tour]=0 [otimizar]=300 [raiox]=240 [aovivo]=150 [desfazer]=170 [central]=150)
 for d in "$QUADROS"/*/; do
   n=$(basename "$d")
   ffmpeg -y -loglevel error -framerate 30 -i "$d/q%05d.png" -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$SAIDA/$n.mp4"

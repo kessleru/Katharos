@@ -153,6 +153,7 @@ ROTULO_VIDEO = {
     'otimizar': 'Escolhendo o modo e tirando um item da lista antes de aplicar',
     'desfazer': 'Desfazendo uma mudança com um clique e a confirmação',
     'aovivo': 'O acompanhamento ao vivo durante um jogo: FPS, o que limita e os números do PC',
+    'central': 'A central: a frase do motor no Início e o diagnóstico com o que viu, por que acha isso e o que faria',
 }
 
 

@@ -222,8 +222,47 @@ jobs:
           $r = & (Join-Path $casa 'python\python.exe') (Join-Path $casa 'motor\programa\katharos.py') api versao
           Write-Host $r
           if ($r -notmatch '"ok": true') { Write-Host '::error::o motor instalado não respondeu'; exit 1 }
-          Get-Process Katharos -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$casa*" } | Stop-Process -Force -ErrorAction SilentlyContinue
           Write-Host 'instalado e conferido'
+      - name: atualiza de verdade para uma versão nova e desinstala (com o segundo plano rodando)
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $casa = Join-Path $env:LOCALAPPDATA 'Katharos\current'
+          $k = Join-Path $env:USERPROFILE '.katharos'
+          # o segundo plano instalado, rodando: a troca de versão tem que fechar e religar ele sozinha
+          Start-Process (Join-Path $casa 'motor\Katharos.exe') -ArgumentList '--segundo-plano'
+          for ($i = 0; $i -lt 60 -and -not (Test-Path "$k\agora.json"); $i++) { Start-Sleep 1 }
+          if (-not (Test-Path "$k\agora.json")) { Write-Host '::error::o segundo plano instalado não começou a ler'; exit 1 }
+          # uma versão "nova" (os mesmos arquivos, número maior) numa pasta local
+          $p = $env:V.Split('.'); $V2 = "{0}.{1}.{2}-ensaio" -f $p[0], $p[1], ([int]($p[2] -replace '\D.*$', '') + 1)
+          vpk pack --packId Katharos --packVersion $V2 --packDir pub --mainExe Katharos.exe --packTitle Katharos --packAuthors kessleru -o rel2
+          if ($LASTEXITCODE) { exit 1 }
+          $antes = (Get-Item (Join-Path $casa 'Katharos.exe')).LastWriteTime
+          $pr = Start-Process (Join-Path $casa 'Katharos.exe') -ArgumentList '--teste-atualizacao', (Resolve-Path rel2).Path -PassThru
+          $pr | Wait-Process -Timeout 120
+          Write-Host "código do ensaio: $($pr.ExitCode)"
+          $ok = $false
+          for ($i = 0; $i -lt 90; $i++) {
+            $sq = Get-ChildItem $casa -Filter 'sq.version' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($sq -and (Get-Content $sq.FullName -Raw) -match [regex]::Escape($V2)) { $ok = $true; break }
+            Start-Sleep 1
+          }
+          Get-Content "$k\interface.log" -ErrorAction SilentlyContinue | Select-Object -Last 10
+          if (-not $ok) { Write-Host "::error::não trocou para $V2"; Get-ChildItem $casa | Format-Table Name; exit 1 }
+          Write-Host "atualizado para $V2"
+          # o segundo plano voltou, já da pasta nova
+          $volta = $false
+          for ($i = 0; $i -lt 60; $i++) { if (((Get-Date) - (Get-Item "$k\agora.json").LastWriteTime).TotalSeconds -lt 5 -and (Get-Process Katharos -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$casa\motor*" })) { $volta = $true; break }; Start-Sleep 1 }
+          if (-not $volta) { Write-Host '::error::o segundo plano não voltou depois da troca de versão'; exit 1 }
+          Write-Host 'segundo plano religado depois da troca'
+          # desinstala: some a pasta do programa, ficam os dados (backups do desfazer) em ~/.katharos
+          $u = Join-Path $env:LOCALAPPDATA 'Katharos\Update.exe'
+          Start-Process $u -ArgumentList '--uninstall', '--silent' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path $casa); $i++) { Start-Sleep 1 }
+          if (Test-Path $casa) { Write-Host '::error::a desinstalação deixou a pasta do programa'; exit 1 }
+          if (-not (Test-Path "$k\estado.json") -and -not (Test-Path "$k\agora.json")) { Write-Host '::error::a desinstalação apagou os dados'; exit 1 }
+          if (Get-Process Katharos -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$casa*" }) { Write-Host '::error::sobrou processo do Katharos'; exit 1 }
+          Write-Host 'desinstalado: programa removido, dados guardados'
       - uses: actions/upload-artifact@v4
         with: { name: instalador, path: releases }
   publicar:

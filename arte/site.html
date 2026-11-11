@@ -525,6 +525,7 @@
         <div><b>FPS de verdade</b><span>Média, 1% mais lento e travadas, pelos eventos do próprio Windows (PresentMon, da Intel).</span></div>
         <div><b>O que segura o jogo</b><span>Placa de vídeo, CPU, memória ou calor, em uma frase e com o número.</span></div>
         <div><b>Antes e depois</b><span>Compara as partidas do mesmo jogo antes e depois de cada mudança. Se piorou, propõe desfazer.</span></div>
+        <div><b>Qual driver trava</b><span>Um teste de um minuto diz qual driver segura o processador (rede, áudio, vídeo) e o que fazer, como o LatencyMon.</span></div>
         <div><b>Sem tocar no jogo</b><span>Não abre, não lê e não injeta nada no jogo: seguro com anti-cheat. Usa menos de 1 % da CPU.</span></div>
       </div>
     </div>
@@ -534,9 +535,11 @@
     <div class="quadro central">
       <div class="etapa-txt">
         <h3 id="central-t">Uma central que aprende com o seu PC</h3>
-        <p>Com alguns dias de medida, ela sabe o que é normal <strong>neste</strong> PC, propõe só o que tem número por trás e diz se a mudança ajudou. Você responde, e ela pesa isso da próxima vez.</p>
+        <p>Com alguns dias de medida, ela sabe o que é normal <strong>neste</strong> PC e diz a causa mais provável do que pesa: o que viu, por que acha isso, o que faria e o que mudaria a conclusão. Propõe só o que tem número por trás, mede se ajudou e aprende com a sua resposta. Pouco dado é "ainda não sei", nunca alarme.</p>
       </div>
-      <figure><div class="tela"><img src="tela-sugestoes.webp" alt="Tela de sugestões do Katharos: o que a central previu e aconteceu, e propostas com o número que as justifica" width="1280" height="820" loading="lazy"></div></figure>
+      <figure class="etapa-vid">
+{{VIDEO_central}}
+      </figure>
     </div>
   </section>
 
@@ -767,5 +770,6 @@
     reduz.addEventListener('change', liga);
   })();
 </script>
+<script>(function(){var m={usar:'como',painel:'jogos',dash:'jogos',janela:'funcionando',modos:'tudo',limites:'seguro',contribuir:'perguntas'};var h=location.hash.slice(1);if(m[h])location.replace('#'+m[h]);})();</script>
 </body>
 </html>

@@ -18,6 +18,9 @@ static class Program
             .OnAfterUpdateFastCallback(_ => SegundoPlano.ReligaDepoisDaTroca())
             .OnBeforeUninstallFastCallback(_ => { SegundoPlano.PedeParaSair(reabrir: false); SegundoPlano.TiraDoInicio(); })
             .Run();
+        // ensaio do CI (5.2): atualiza esta instalação a partir de uma pasta de releases, do mesmo jeito que pelo GitHub
+        int ta = Array.IndexOf(args, "--teste-atualizacao");
+        if (ta >= 0 && ta + 1 < args.Length) { Environment.Exit(TesteAtualizacao(args[ta + 1])); return; }
         int i = Array.IndexOf(args, "--tela");
         if (i >= 0 && i + 1 < args.Length) TelaInicial = args[i + 1];
         // uma janela só: abrir de novo (pelo ícone, pelo menu Iniciar) traz a que já está aberta, na tela pedida
@@ -29,6 +32,23 @@ static class Program
         }
         MontaApp().StartWithClassicDesktopLifetime(args);
         GC.KeepAlive(unica);
+    }
+
+    static int TesteAtualizacao(string pasta)
+    {
+        try
+        {
+            var g = new Velopack.UpdateManager(pasta);
+            if (!g.IsInstalled) { Registro.Escreve("ensaio de atualização: não está instalado"); return 3; }
+            var info = g.CheckForUpdates();
+            if (info == null) { Registro.Escreve("ensaio de atualização: nada novo em " + pasta); return 2; }
+            g.DownloadUpdates(info);
+            SegundoPlano.PedeParaSair(reabrir: true);
+            Registro.Escreve("ensaio de atualização: aplicando " + info.TargetFullRelease.Version);
+            g.ApplyUpdatesAndExit(info.TargetFullRelease);
+            return 0;
+        }
+        catch (Exception e) { Registro.Escreve("ensaio de atualização: " + e); return 1; }
     }
 
     public static AppBuilder MontaApp() => AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
