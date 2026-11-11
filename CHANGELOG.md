@@ -18,6 +18,18 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.0.1 · 11 de novembro de 2026
+
+Correções da revisão depois da 4.0.0. Nenhum item novo.
+
+- **Limpeza segura com links**: a limpeza nunca entra em junção nem em link simbólico. Antes, um link dentro de uma pasta limpa (como a de temporários) podia levar a limpeza a apagar arquivos antigos de fora dela.
+- **Manutenção em segundo plano espera o jogo**: com um jogo aberto ela adia, e o ponto de restauração mensal e a limpeza de componentes (DISM), que pesam no disco, só rodam com o PC livre.
+- **Limpezas que não atrapalham o uso**: o cache de shaders só apaga o que não é usado há mais de 30 dias (apagar tudo fazia cada jogo recompilar e engasgar); o cache dos navegadores na manutenção só apaga o que tem mais de 14 dias.
+- **Aviso claro no HAGS**: o agendamento de GPU por hardware só liga se o Windows já mostra suporte nessa placa e driver, e o texto do que se perde diz que o ganho é pequeno e que placa antiga ou com pouca memória de vídeo pode engasgar.
+- **Arquivo de estado do tipo errado**: um arquivo de estado ou configuração com JSON válido mas de outro tipo (lista, nulo, número) derrubava sete métodos do motor; agora é tratado como ilegível, guarda a cópia e recomeça com o padrão.
+- **Windows PowerShell 5.1 sem módulos do PowerShell 7**: no Windows as variáveis de ambiente vêm em maiúsculas e a limpeza do `PSModulePath` nunca era aplicada; agora é.
+- **Pergunte ao Katharos**: "vírus" voltou a achar o comando que confere se o programa é o original, e pergunta enorme é cortada em 500 caracteres.
+
 ## 4.0.0 · 11 de novembro de 2026
 
 O Katharos ganha janelas e um instalador que se atualiza sozinho. O terminal continua, com o mesmo motor e os mesmos dados.
