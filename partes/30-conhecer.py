@@ -863,6 +863,15 @@ def analisa(p, m, d):
                         f'{br(dpc, 1)}% da CPU em interrupções e DPC com o PC parado (o normal é abaixo de 2%).',
                         'É a causa mais comum de áudio picotando e de engasgos em jogos mesmo com FPS alto. Quase sempre é driver de rede, '
                         'de áudio ou de vídeo desatualizado, ou um dispositivo USB com defeito: "travadas" mede 1 minuto e diz qual driver é.', 'travadas'))
+    # 2b.8: o que ficou no limite durante os jogos (sessões do segundo plano, com o tempo medido) também é achado do raio-x
+    try:
+        pz = le_json(CASA / 'propostas.json', {}) or {}
+    except Exception:
+        pz = {}
+    for x in (pz.get('achados') or [])[:12]:
+        if isinstance(x, dict) and str(x.get('id', '')).startswith('limite-') and x.get('confianca') in ('alta', 'média'):
+            A.append(Achado(3 if (x.get('gravidade') or 2) >= 3 else 2, ['jogos', 'tudo'], str(x.get('titulo')),
+                            f'Medido pelo segundo plano: {x.get("vi")}.', 'A central diz a causa mais provável e o que fazer ("conselheiro").', 'conselheiro'))
     # o teste de travadas (feito nos últimos 7 dias) diz o culpado com nome: vira achado com o que fazer
     try:
         tv = travadas_recente()

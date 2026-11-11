@@ -3200,6 +3200,15 @@ def analisa(p, m, d):
                         f'{br(dpc, 1)}% da CPU em interrupções e DPC com o PC parado (o normal é abaixo de 2%).',
                         'É a causa mais comum de áudio picotando e de engasgos em jogos mesmo com FPS alto. Quase sempre é driver de rede, '
                         'de áudio ou de vídeo desatualizado, ou um dispositivo USB com defeito: "travadas" mede 1 minuto e diz qual driver é.', 'travadas'))
+    # 2b.8: o que ficou no limite durante os jogos (sessões do segundo plano, com o tempo medido) também é achado do raio-x
+    try:
+        pz = le_json(CASA / 'propostas.json', {}) or {}
+    except Exception:
+        pz = {}
+    for x in (pz.get('achados') or [])[:12]:
+        if isinstance(x, dict) and str(x.get('id', '')).startswith('limite-') and x.get('confianca') in ('alta', 'média'):
+            A.append(Achado(3 if (x.get('gravidade') or 2) >= 3 else 2, ['jogos', 'tudo'], str(x.get('titulo')),
+                            f'Medido pelo segundo plano: {x.get("vi")}.', 'A central diz a causa mais provável e o que fazer ("conselheiro").', 'conselheiro'))
     # o teste de travadas (feito nos últimos 7 dias) diz o culpado com nome: vira achado com o que fazer
     try:
         tv = travadas_recente()
@@ -8979,9 +8988,16 @@ def ferramenta_turbo(ctx, args):
     modo = escolhe_modo(t, args)
     t.escreve()
     itens = []
+    try:   # 2b.11: o que o raio-x e o segundo plano provaram que pesa vem marcado primeiro, com o motivo
+        recomendadas = areas_recomendadas()
+    except Exception as ex:
+        LOG.escreve(f'turbo: recomendadas: {ex!r}')
+        recomendadas = {}
     for nome in ORDEM_TURBO:
         pac = PACOTES[nome]
         n, nota = nivel_etapa_turbo(nome, p)
+        if nome in recomendadas and n:
+            n, nota = 1, 'recomendado: ' + recomendadas[nome]['motivo'] + (f'; {nota}' if nota else '')
         itens.append(Item(nome, pac.titulo, pac.explica, pac.resumo, '', n, nota=nota))
     itens.append(Item('agendar', 'manutenção semanal automática', 'Tarefa leve que roda com o PC ocioso e na tomada: limpa, '
                       'reaplica o que atualizações desfazem e avisa de problemas de disco.', 'o PC continua leve', 'nenhum', 1))

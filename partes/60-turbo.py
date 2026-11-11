@@ -185,9 +185,16 @@ def ferramenta_turbo(ctx, args):
     modo = escolhe_modo(t, args)
     t.escreve()
     itens = []
+    try:   # 2b.11: o que o raio-x e o segundo plano provaram que pesa vem marcado primeiro, com o motivo
+        recomendadas = areas_recomendadas()
+    except Exception as ex:
+        LOG.escreve(f'turbo: recomendadas: {ex!r}')
+        recomendadas = {}
     for nome in ORDEM_TURBO:
         pac = PACOTES[nome]
         n, nota = nivel_etapa_turbo(nome, p)
+        if nome in recomendadas and n:
+            n, nota = 1, 'recomendado: ' + recomendadas[nome]['motivo'] + (f'; {nota}' if nota else '')
         itens.append(Item(nome, pac.titulo, pac.explica, pac.resumo, '', n, nota=nota))
     itens.append(Item('agendar', 'manutenção semanal automática', 'Tarefa leve que roda com o PC ocioso e na tomada: limpa, '
                       'reaplica o que atualizações desfazem e avisa de problemas de disco.', 'o PC continua leve', 'nenhum', 1))
