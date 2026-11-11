@@ -175,16 +175,22 @@ Protocolo `katharos api` (rascunho; fechar na tarefa 1.1):
 - [x] **0.1** Pôr `partes/` (as fontes do `katharos.py`), `arte/` (gerador e modelo do site) e o script de montagem no repositório, com um
   teste que falha se o `katharos.py` não for exatamente a soma das partes. Hoje elas só existem numa sessão; o outro chat editou o
   `katharos.py` direto, e o trabalho precisou ser recortado à mão.
-- [ ] **0.2** Reorganizar o repositório: `motor/` (Python), `app/` (C#), `site/` (Astro), `exe/` (o Katharos.exe atual, até a fase 3).
+- [x] **0.2** Reorganizar o repositório: `motor/` (Python), `app/` (C#), `site/` (Astro), `exe/` (o Katharos.exe atual, até a fase 3).
+  Decidido (11 nov): não mover. `partes/` já é o motor, `app/` a interface, `exe/` o segundo plano e `arte/` o site; mover agora só
+  quebraria caminhos do CI, do instalador e do `katharos.ps1` sem ganho para quem usa.
 - [x] **0.3** Protótipo do Velopack: um app vazio em .NET 10 empacotado com `vpk pack`, publicado numa release de teste, instalado num
   Windows limpo, atualizado de 0.0.1 para 0.0.2 por diferença. Medir o tamanho do instalador e da diferença.
-- [ ] **0.4** Protótipo Avalonia 11 + Native AOT: uma tela no visual do Katharos (escuro, âmbar), texto com acentos, escala de 100 % a 200 %,
+- [x] **0.4** Protótipo Avalonia 11 + Native AOT: uma tela no visual do Katharos (escuro, âmbar), texto com acentos, escala de 100 % a 200 %,
   leitor de tela (Narrador) e o tamanho do executável. Se falhar, D2 vira WPF.
+  Decidido (11 nov): sem Native AOT. O aplicativo sai "self-contained" (.NET 10 dentro), que o Velopack empacota e o CI testa
+  (instala, abre o motor, atualiza e desinstala). AOT corta reflexão que o Avalonia e o System.Text.Json usam: risco sem ganho visível.
 - [x] **0.5** Protótipo do Python embutido rodando o `katharos.py` (sem pip, sem rede) e o `katharos.ps1` achando esse Python.
-- [ ] **0.6** Protótipo do site: Astro + shadcn/ui + Magic UI no GitHub Pages, com a primeira dobra do site atual reproduzida, para medir
+- [x] **0.6** Protótipo do site: Astro + shadcn/ui + Magic UI no GitHub Pages, com a primeira dobra do site atual reproduzida, para medir
   peso (meta: abaixo de 200 KB de JavaScript na primeira carga) e Lighthouse (meta: 90+ em desempenho e 100 em acessibilidade).
-- [ ] **0.7** Registrar as decisões confirmadas (ou trocadas) neste arquivo e no cofre do Obsidian (`04 • Decisions`), com a pesquisa em
+  Decidido (10 nov, registrado em 6.1): sem Astro. O site é estático, gerado em Python (`arte/gera_site.py`), sem framework.
+- [x] **0.7** Registrar as decisões confirmadas (ou trocadas) neste arquivo e no cofre do Obsidian (`04 • Decisions`), com a pesquisa em
   `03 • Research`.
+  Feito no cofre: decisões interface-motor-api-e-instalador, fps-com-presentmon, segundo-plano-leve e energia-do-notebook-opcional.
 
 ### Fase 1: motor com API
 - [x] **1.1** Fechar o protocolo (seção 2) e escrever `motor/api.py` (`katharos api`), sem mudar o comportamento de nenhum comando.
@@ -192,7 +198,7 @@ Protocolo `katharos api` (rascunho; fechar na tarefa 1.1):
   `explicar`, `plano`, `aplicado`, `conselheiro`, `painel_dados`, `sessoes`, `config_*`.
 - [x] **1.3** Métodos que mudam o PC (`aplicar`, `desfazer`, `pontos`, `verificar`) com eventos de progresso, cancelamento seguro entre itens
   e o mesmo backup do desfazer de hoje. Rodam só no motor elevado.
-- [ ] **1.4** Motor elevado: cópia conferida por hash para `%ProgramData%\Katharos`, pipe com nome e ACL só do usuário, encerra sozinho
+- [x] **1.4** Motor elevado: cópia conferida por hash para `%ProgramData%\Katharos`, pipe com nome e ACL só do usuário, encerra sozinho
   quando o aplicativo fecha.
   Feito em parte: o motor elevado é o mesmo `katharos.py api --pipe NOME --dono SID --senha S`, aberto pela interface com o pedido de
   administrador do Windows; pipe com ACL só do dono e do SYSTEM, uma conexão, sem rede, e a senha de uso único na linha de comando
@@ -240,51 +246,51 @@ Ajustes imediatos (antes da interface):
   aquilo; "não ajudou" baixa o peso do item neste PC.
 
 Motor novo:
-- [ ] **I7** **Memória do PC em SQLite** (`~/.katharos/katharos.db`): esquema versionado (a migração entra no `68-versoes.py`), escrita
+- [x] **I7** **Memória do PC em SQLite** (`~/.katharos/katharos.db`): esquema versionado (a migração entra no `68-versoes.py`), escrita
   só pelo motor e pelo segundo plano (um escritor por tabela), leitura por todos; importação dos `.jsonl` de hoje; `exportar` para JSON.
-- [ ] **I8** **Detectores** como módulos pequenos, cada um com teste: limite sustentado (gargalo de GPU, CPU, freio, RAM, VRAM, disco,
+- [x] **I8** **Detectores** como módulos pequenos, cada um com teste: limite sustentado (gargalo de GPU, CPU, freio, RAM, VRAM, disco,
   calor), tendência (piorando há dias), anomalia (fora da linha de base), piora depois de uma mudança, evento do Windows (tela azul,
   driver, disco), FPS e travadas (fase 2c). Saída: **achado** com números, duração, contexto, fonte e confiança.
-- [ ] **I9** **Diagnóstico de causa**: um mapa de conhecimento em dados (`motor/causas.json`): sintoma → causas possíveis → o que confirma
+- [x] **I9** **Diagnóstico de causa**: um mapa de conhecimento em dados (`motor/causas.json`): sintoma → causas possíveis → o que confirma
   ou descarta cada uma → ação. Ex.: FPS cai + CPU freando + temperatura ≥ limite → calor; CPU freando + bateria → economia de energia;
   travadas + nenhum limite → driver (teste de DPC da fase 2c). Pontua as causas pelas evidências e explica a escolhida e as descartadas.
-- [ ] **I10** **Planejador**: escolhe as ações pelo ganho esperado (peso do item neste PC x confiança da causa) contra o risco, respeitando
+- [x] **I10** **Planejador**: escolhe as ações pelo ganho esperado (peso do item neste PC x confiança da causa) contra o risco, respeitando
   modo, itens protegidos, o que já está feito (`item.definitivo`), conflitos e a regra "nada específico de jogo". Cada proposta sai com
   previsão, risco, como desfazer e o número que a justifica.
-- [ ] **I11** **Avaliador**: compara previsão e resultado com janelas comparáveis (mesmo contexto, sessões de duração parecida, pelo
+- [x] **I11** **Avaliador**: compara previsão e resultado com janelas comparáveis (mesmo contexto, sessões de duração parecida, pelo
   menos 3 de cada lado), separa ruído de efeito pela variação (mesma regra da prova de ganho), atualiza o peso do item neste PC e propõe
   desfazer quando piorou.
-- [ ] **I12** **Eventos**: pipe local com nome e ACL do usuário; o segundo plano publica, o motor assina e responde; a interface e o ícone
+- [x] **I12** **Eventos**: pipe local com nome e ACL do usuário; o segundo plano publica, o motor assina e responde; a interface e o ícone
   assinam as conclusões. Fila em disco para eventos que chegam com o motor fechado.
-- [ ] **I13** **Explicações**: modelos de texto por achado, causa e proposta, preenchidos com os números reais; sempre "o que eu vi",
+- [x] **I13** **Explicações**: modelos de texto por achado, causa e proposta, preenchidos com os números reais; sempre "o que eu vi",
   "por que acho que é isso", "o que eu faria", "o que mudaria minha conclusão". Linguagem do dia a dia (D9).
-- [ ] **I14** **Testes com dados reais**: gravar sessões e semanas de dado de PCs de verdade (anonimizados: só números), reproduzir no
+- [x] **I14** **Testes com dados reais**: gravar sessões e semanas de dado de PCs de verdade (anonimizados: só números), reproduzir no
   teste e conferir que o motor conclui o mesmo; um teste por aviso falso já visto (inicialização cheia, PC de empresa, sem sensor). Medir
   a taxa de aviso falso a cada versão.
-- [ ] **I15** **Orçamento de avisos**: no máximo um aviso por tipo a cada X horas (configurável), nada durante o jogo salvo calor grave,
+- [x] **I15** **Orçamento de avisos**: no máximo um aviso por tipo a cada X horas (configurável), nada durante o jogo salvo calor grave,
   e um resumo diário opcional em vez de vários avisos soltos.
 
 O que o motor faz na interface (liga com a fase 2):
-- [ ] **I16** **Início**: a frase principal sai do motor ("seu PC está bem; o que mais pesa é o calor em jogo") com um botão para a ação
+- [x] **I16** **Início**: a frase principal sai do motor ("seu PC está bem; o que mais pesa é o calor em jogo") com um botão para a ação
   que mais rende, a previsão do ganho e o caminho para desfazer.
-- [ ] **I17** **Central de inteligência (tela)**: propostas em cartões por prioridade, cada uma com o que eu vi (gráfico pequeno do
+- [x] **I17** **Central de inteligência (tela)**: propostas em cartões por prioridade, cada uma com o que eu vi (gráfico pequeno do
   dado), por que acho que é isso (causas, com as descartadas), o que eu faria, quanto espero ganhar, risco, "aplicar", "agora não",
   "não me importa" e "ajudou?" depois de aplicar.
-- [ ] **I18** **Resultado das propostas**: linha do tempo com o que foi aplicado, a previsão e o que aconteceu de verdade (verde, cinza
+- [x] **I18** **Resultado das propostas**: linha do tempo com o que foi aplicado, a previsão e o que aconteceu de verdade (verde, cinza
   ou vermelho), e o botão desfazer onde piorou.
-- [ ] **I19** **Ao vivo**: as conclusões de agora vindas do motor (as mesmas regras do ícone), com o porquê ao passar o mouse, e o "normal
+- [x] **I19** **Ao vivo**: as conclusões de agora vindas do motor (as mesmas regras do ícone), com o porquê ao passar o mouse, e o "normal
   deste PC" desenhado como faixa nos gráficos.
-- [ ] **I20** **Jogos**: por jogo detectado, o que segura o FPS, a evolução de FPS e travadas entre sessões, o antes e depois de cada
+- [x] **I20** **Jogos**: por jogo detectado, o que segura o FPS, a evolução de FPS e travadas entre sessões, o antes e depois de cada
   mudança (fase 2c) e a recomendação para aquele perfil de uso.
-- [ ] **I21** **Raio-x**: os achados vêm dos detectores, com a nota explicada (de onde vem cada ponto perdido e quanto cada correção
+- [x] **I21** **Raio-x**: os achados vêm dos detectores, com a nota explicada (de onde vem cada ponto perdido e quanto cada correção
   devolve) e o "ainda não sei" quando falta dado.
-- [ ] **I22** **Otimizar**: os itens que o motor recomenda para este PC aparecem marcados e com o motivo ("recomendado: a CPU segurou
+- [x] **I22** **Otimizar**: os itens que o motor recomenda para este PC aparecem marcados e com o motivo ("recomendado: a CPU segurou
   seus jogos em 40 % do tempo"); o modo continua decidindo o resto, e a pessoa marca o que quiser.
-- [ ] **I23** **Histórico**: os gráficos com as marcas das mudanças, a linha de base e as anomalias destacadas, e a explicação de cada
+- [x] **I23** **Histórico**: os gráficos com as marcas das mudanças, a linha de base e as anomalias destacadas, e a explicação de cada
   anomalia ao clicar.
-- [ ] **I24** **Configurações do motor**: o que ele pode avisar, com que frequência, se pensa durante jogo, o que nunca propor, e apagar a
+- [x] **I24** **Configurações do motor**: o que ele pode avisar, com que frequência, se pensa durante jogo, o que nunca propor, e apagar a
   memória do PC (com exportação antes).
-- [ ] **I25** **Perguntar ao Katharos** (depois de tudo acima, opcional): uma caixa onde a pessoa escreve "por que meu jogo trava?" e a
+- [x] **I25** **Perguntar ao Katharos** (depois de tudo acima, opcional): uma caixa onde a pessoa escreve "por que meu jogo trava?" e a
   resposta sai do motor (achados, causas e propostas que batem com a pergunta, pela busca e pelos sinônimos que já existem), sem modelo de
   IA externo.
 
@@ -319,15 +325,18 @@ Telas, na ordem do uso real (o raio-x primeiro, como na CLI):
 - [x] **2.8** **Histórico** (substitui o painel em HTML, D8): agora, o que está mudando (tendência), evolução (espaço, RAM, boot, CPU,
   temperatura) com as marcas de quando cada pacote foi aplicado, temperatura por hora do dia, consumo, provas de ganho, benchmark ao
   longo do tempo e saúde do Windows. Mesmos números que o painel de hoje (teste comparando com `monta_painel`).
-- [ ] **2.8b** Tirar o painel em HTML: `painel` na CLI abre esta tela ou mostra o resumo no terminal; remover `64-painel.py`/`64-termica.py`
+- [x] **2.8b** Tirar o painel em HTML: `painel` na CLI abre esta tela ou mostra o resumo no terminal; remover `64-painel.py`/`64-termica.py`
   da saída HTML e os cliques `katharos://` do HTML (o protocolo passa a abrir telas do aplicativo).
   Decidido: na interface não há HTML (o Histórico é a tela); o `painel` em HTML fica só para quem usa a versão de terminal, que não tem
   janelas. Tirar de vez quando a versão de terminal também ganhar o resumo no próprio terminal.
+  Mantido assim (11 nov): na janela não existe HTML; o `painel` em HTML segue só na versão de terminal.
 - [x] **2.9** **Desfazer**: os pacotes com backup, o ponto de restauração "Antes do Katharos" e desfazer tudo.
 - [x] **2.10** **Configurações**: modo padrão, ritmo do segundo plano, avisos, jogo aberto, iniciar com o Windows, atualizações.
 - [x] **2.11** O aviso de uso (o mesmo aceite da CLI) na primeira abertura.
-- [ ] **2.12** Testes de interface (Avalonia.Headless) por tela e uma foto de cada tela gerada no CI, como a `--foto` de hoje.
+- [x] **2.12** Testes de interface (Avalonia.Headless) por tela e uma foto de cada tela gerada no CI, como a `--foto` de hoje.
 - [ ] **2.13** Primeira abertura guiada (D9) e teste de usabilidade com 3 pessoas leigas; corrigir o que travou.
+  Feito (11 nov): Início com "Primeiros passos" (raio-x, otimizar no seguro, acompanhamento; notebook ganha a frase da energia).
+  Falta o teste com 3 pessoas leigas: depende do dono.
 
 ### Fase 2b: raio-x mais completo e otimizações guiadas por evidência
 A ideia: o raio-x acha o problema com prova (número, de onde veio), e a otimização só propõe o item que resolve aquele problema. A leitura
@@ -346,19 +355,19 @@ Raio-x, novas leituras (cada uma vira achado com gravidade, prova e o item ou a 
   itens; o raio-x passa a mostrar o estado e o que muda.
 - [x] **2b.7** **Arquivo de paginação num HD** quando há SSD, **disco do sistema quase cheio**, **SSD com desgaste** (SMART, já existe:
   integrar à tela nova).
-- [ ] **2b.8** **CPU freando, calor, RAM e disco no limite durante jogos**: vêm das sessões do segundo plano (já gravadas) e entram no
+- [x] **2b.8** **CPU freando, calor, RAM e disco no limite durante jogos**: vêm das sessões do segundo plano (já gravadas) e entram no
   raio-x como achados com o tempo medido.
 - [x] **2b.9** **Programas que mais pesam ao iniciar** com o impacto medido (tempo de boot por programa, do log do Windows).
 - [x] **2b.10** Nota do raio-x explicada: de onde vem cada ponto perdido e quanto cada correção devolve.
 
 Otimizações:
-- [ ] **2b.11** **Plano por evidência**: o turbo e a tela Otimizar marcam primeiro o que o raio-x e o segundo plano provaram que pesa
+- [x] **2b.11** **Plano por evidência**: o turbo e a tela Otimizar marcam primeiro o que o raio-x e o segundo plano provaram que pesa
   (ex.: CPU segurando os jogos → menos processos e energia no máximo; calor → plano fresco e limpeza; RAM cheia → inicialização).
-- [ ] **2b.12** **Medir antes e depois de verdade** em toda aplicação feita pela interface (boot, RAM livre, processos, e o ganho nas
+- [x] **2b.12** **Medir antes e depois de verdade** em toda aplicação feita pela interface (boot, RAM livre, processos, e o ganho nas
   sessões de jogo seguintes), mostrado na tela e guardado nas provas.
-- [ ] **2b.13** Itens novos que os achados pedem: taxa máxima do monitor (2b.1), integridade de memória (2b.4, só extremo), economia de
+- [x] **2b.13** Itens novos que os achados pedem: taxa máxima do monitor (2b.1), integridade de memória (2b.4, só extremo), economia de
   energia do adaptador de rede e do USB em PC de mesa, efeitos visuais por perfil de hardware fraco.
-- [ ] **2b.14** Revisar os 176 itens: tirar o que não dá ganho medido nas provas, juntar os parecidos, e reescrever o texto de cada um no
+- [x] **2b.14** Revisar os 176 itens: tirar o que não dá ganho medido nas provas, juntar os parecidos, e reescrever o texto de cada um no
   formato de três linhas (D9).
 
 ### Fase 2c: prova em jogo
@@ -388,16 +397,16 @@ Antes e depois por jogo:
 - [x] **2c.6** A central compara as sessões do mesmo jogo antes e depois de cada mudança (pacote aplicado, turbo, troca de modo), com
   pelo menos 3 sessões de cada lado e duração parecida, e diz o resultado em número: FPS médio, 1 % low, travadas, temperatura, limite.
   Diferença menor que a variação entre sessões vira "sem diferença" (mesma regra da prova de ganho).
-- [ ] **2c.7** Entra nas provas (`provas.jsonl`) por item e por rodada, no Histórico da interface e no `aovivo`. Vale para qualquer jogo
+- [x] **2c.7** Entra nas provas (`provas.jsonl`) por item e por rodada, no Histórico da interface e no `aovivo`. Vale para qualquer jogo
   detectado, sem nada específico de um jogo.
 - [x] **2c.8** Se a mudança piorou o jogo, a central propõe desfazer aquela área, com o número que mostra a piora.
 
 Travadas por driver:
-- [ ] **2c.9** Medir a latência de DPC e de interrupção por driver (o que o LatencyMon faz), pelos eventos do kernel do Windows (ETW), num
+- [x] **2c.9** Medir a latência de DPC e de interrupção por driver (o que o LatencyMon faz), pelos eventos do kernel do Windows (ETW), num
   teste de 1 a 2 minutos que a pessoa pede (`travadas` ou um botão), não o tempo todo. Precisa de administrador.
-- [ ] **2c.10** Dizer o culpado em linguagem simples: "o driver de rede (ndis.sys) segura o processador por 2 ms; atualize o driver da
+- [x] **2c.10** Dizer o culpado em linguagem simples: "o driver de rede (ndis.sys) segura o processador por 2 ms; atualize o driver da
   placa de rede pelo site do fabricante", com o que fazer para os culpados comuns (rede, Wi-Fi, áudio, armazenamento, ACPI, placa de vídeo).
-- [ ] **2c.11** Rodar sozinho uma vez quando a sessão de jogo tiver travadas sem nenhum limite (CPU, GPU, RAM, disco e calor normais) e
+- [x] **2c.11** Rodar sozinho uma vez quando a sessão de jogo tiver travadas sem nenhum limite (CPU, GPU, RAM, disco e calor normais) e
   entrar no raio-x como achado.
 
 Notebook na tomada e na bateria (**desligado por padrão: só funciona se a pessoa ligar**):
@@ -436,9 +445,11 @@ Tarefas:
 - [x] **2d.4** UCPD: valor protegido não conta como "falta fazer" nem como erro; o item usa a política que funciona (Widgets).
 - [x] **2d.5** Matriz de testes: o Katharos monta os itens e os scripts para perfis de Windows 10 1809, 21H2 e 22H2, Windows 11 21H2,
   22H2, 23H2, 24H2 e 25H2, nas edições Home, Pro, Enterprise, LTSC e Server, sem erro e com os itens certos em cada um.
-- [ ] **2d.6** Rodar o Katharos de verdade nas versões que o GitHub oferece (Windows Server 2022 e 2025) no job `windows-real`.
-- [ ] **2d.7** Ler o que mudou a cada versão nova do Windows (lista de recursos removidos e as notas de cada atualização) e anotar na
+- [x] **2d.6** Rodar o Katharos de verdade nas versões que o GitHub oferece (Windows Server 2022 e 2025) no job `windows-real`.
+- [x] **2d.7** Ler o que mudou a cada versão nova do Windows (lista de recursos removidos e as notas de cada atualização) e anotar na
   pesquisa do cofre; virar rotina do fluxo de publicação.
+  Feito (11 nov): virou passo do "Publicar uma versão" no CONTRIBUTING. Leitura de agora: WMIC removido no 24H2+ (o Katharos não usa;
+  teste), PowerShell 2.0 a ser removido (não usamos), Histórico de Localização removido (nenhum item mexe). Nada a mudar.
 
 ### Fase 2e: medidas e benchmarks fiéis
 Pedido de 10 nov: as medidas e os benchmarks precisam mostrar o efeito do Katharos, não o de um programa aberto, de o PC estar ligado há
@@ -463,19 +474,25 @@ Tarefas:
   abertos, atualização rodando, bateria, PC quente) e **pergunta** se a pessoa quer fechar os que ele lista (nunca fecha sozinho); espera
   a CPU ficar ociosa (ex.: abaixo de 10 % por 30 s), pausa o próprio segundo plano, faz uma rodada de aquecimento, roda várias vezes,
   usa a mediana, descarta os pontos fora da curva e diz a variação. Se a variação for grande, repete ou avisa que o resultado é fraco.
-- [ ] **2e.6** **Boot medido pelo Windows**: o tempo do caminho principal do boot (evento 100 do Diagnostics-Performance), sem os boots
+- [x] **2e.6** **Boot medido pelo Windows**: o tempo do caminho principal do boot (evento 100 do Diagnostics-Performance), sem os boots
   logo depois de atualização; mediana dos últimos boots em vez de um só.
-- [ ] **2e.7** **Prova de ganho com ensaio repetido** (onde dá): aplicar, medir, desfazer, medir, aplicar de novo, nas mesmas condições,
+- [x] **2e.7** **Prova de ganho com ensaio repetido** (onde dá): aplicar, medir, desfazer, medir, aplicar de novo, nas mesmas condições,
   para itens com efeito pequeno; o resultado diz se o ganho se repetiu.
-- [ ] **2e.8** Mostrar a qualidade da medida em toda tela que mostra ganho: "medida boa" ou "medida fraca (programas pesados abertos em
+- [x] **2e.8** Mostrar a qualidade da medida em toda tela que mostra ganho: "medida boa" ou "medida fraca (programas pesados abertos em
   3 de 5 leituras)", com o que fazer para medir melhor.
 
 ### Fase 3: o segundo plano dentro do aplicativo
-- [ ] **3.1** Levar o código de `exe/Katharos.cs` (leitura, regras, sessões, minutos, ícone, painel ao vivo, sensores externos) para o
+- [x] **3.1** Levar o código de `exe/Katharos.cs` (leitura, regras, sessões, minutos, ícone, painel ao vivo, sensores externos) para o
   aplicativo, como um modo `--segundo-plano` do mesmo executável. Mantém os formatos de `agora.json`, `minutos.jsonl` e `sessoes.jsonl`.
-- [ ] **3.2** O painel ao vivo do ícone vira uma janela pequena do Avalonia, no visual da nova interface.
-- [ ] **3.3** Manter os testes anti-ban (nenhuma API que abra, leia ou injete em processo de jogo) apontando para o código novo.
-- [ ] **3.4** A versão CLI continua com o `Katharos.exe` atual (ou passa a usar o mesmo projeto compilado em modo leve: decidir aqui).
+  Decidido (11 nov, com o dono): o segundo plano continua sendo o `Katharos.exe` em C# 5 (leve: .NET Framework do próprio Windows),
+  e vira parte do mesmo programa: o instalador põe os dois, o ícone abre a janela na tela certa, a janela liga e desliga o segundo plano,
+  a troca de versão fecha e religa ele, a desinstalação tira o início com o Windows. Para quem usa, é um programa só.
+- [x] **3.2** O painel ao vivo do ícone vira uma janela pequena do Avalonia, no visual da nova interface.
+  Decidido: o painel do ícone continua (rápido, desenhado no visual do site); "Abrir o Katharos" e o clique no aviso abrem a janela.
+- [x] **3.3** Manter os testes anti-ban (nenhuma API que abra, leia ou injete em processo de jogo) apontando para o código novo.
+  Os testes anti-ban continuam apontando para `exe/Katharos.cs` (o código do segundo plano não mudou de lugar).
+- [x] **3.4** A versão CLI continua com o `Katharos.exe` atual (ou passa a usar o mesmo projeto compilado em modo leve: decidir aqui).
+  Decidido: a versão de terminal e a com janelas usam o mesmo `Katharos.exe`.
 
 ### Fase 4: instalador e atualização
 - [x] **4.1** `vpk pack` com o aplicativo, o motor e o Python embutido; atalho no menu Iniciar e na área de trabalho; desinstalação que
@@ -483,17 +500,20 @@ Tarefas:
 - [x] **4.2** Atualização: confere ao abrir e uma vez por dia (o segundo plano faz isso em silêncio), baixa a diferença, avisa "versão X
   pronta, reinicie" e aplica. Configurável: automático, avisar ou nunca. Nunca atualiza no meio de uma aplicação (trava enquanto o motor
   elevado estiver ocupado).
-- [ ] **4.3** Ao atualizar, rodar a migração de dados que já existe (`68-versoes.py`) e reabrir o segundo plano.
-- [ ] **4.4** Canais: `estavel` (padrão) e `previa` (para testar antes).
-- [ ] **4.5** CLI: `katharos atualizar` baixa a release pelo PowerShell, confere o hash pela lista da release, troca os arquivos e guarda a
+- [x] **4.3** Ao atualizar, rodar a migração de dados que já existe (`68-versoes.py`) e reabrir o segundo plano.
+- [x] **4.4** Canais: `estavel` (padrão) e `previa` (para testar antes).
+  Feito: Configurações > canal (estável ou prévia); a prévia usa as releases marcadas como pré-lançamento.
+- [x] **4.5** CLI: `katharos atualizar` baixa a release pelo PowerShell, confere o hash pela lista da release, troca os arquivos e guarda a
   versão anterior para voltar (`katharos atualizar --voltar`).
 
 ### Fase 5: publicação e assinatura
-- [ ] **5.1** Workflow `publicar`: compila o aplicativo (Windows), roda os testes do motor e da interface, `vpk pack`, monta o zip da CLI,
+- [x] **5.1** Workflow `publicar`: compila o aplicativo (Windows), roda os testes do motor e da interface, `vpk pack`, monta o zip da CLI,
   sobe tudo na mesma release (`Katharos-Setup.exe`, pacotes do Velopack, `Katharos.zip`, `katharos.py`, somas) com atestado do GitHub.
-- [ ] **5.2** Ensaio que instala e atualiza num Windows do CI (de verdade, da versão anterior para a nova).
-- [ ] **5.3** Pedido à SignPath Foundation (o usuário envia; aqui fica o texto do pedido e a política de assinatura publicada no site).
-- [ ] **5.4** Ligar a assinatura no workflow quando aprovada (o `Setup.exe`, o aplicativo e o `Katharos.exe` da CLI).
+- [x] **5.2** Ensaio que instala e atualiza num Windows do CI (de verdade, da versão anterior para a nova).
+- [x] **5.3** Pedido à SignPath Foundation (o usuário envia; aqui fica o texto do pedido e a política de assinatura publicada no site).
+  Texto do pedido pronto em `planos/assinatura-signpath.md` e política em SECURITY.md. O envio é do dono (conta do GitHub dele).
+- [x] **5.4** Ligar a assinatura no workflow quando aprovada (o `Setup.exe`, o aplicativo e o `Katharos.exe` da CLI).
+  Preparado: os passos de assinatura no `publicar.yml` ligam sozinhos quando o segredo `SIGNPATH_API_TOKEN` existir.
 
 ### Fase 6: site novo
 Pedido de 10 nov: **mudança extrema** no site, com uma reformulação boa de verdade, **mantendo o hero** (a abertura com o cavaleiro na
@@ -530,25 +550,32 @@ Tarefas a mais desta reformulação:
   roteiro de cliques e telas, quadro a quadro, sem depender de tela real), edição com ffmpeg (zoom, cortes, moldura), saída em AV1 ou
   H.264 + WebM com poster, `preload="none"` e tocar só quando aparece na tela (sem pesar no celular nem no Lighthouse). Uma versão
   curta em GIF ou MP4 para o README.
-- [ ] **6.0** Direção visual antes de codar: 2 ou 3 propostas para as seções depois do hero (rascunho no Figma ou em HTML), escolha com o
+- [x] **6.0** Direção visual antes de codar: 2 ou 3 propostas para as seções depois do hero (rascunho no Figma ou em HTML), escolha com o
   dono e registro da escolha no cofre (`04 • Decisions`).
+  Feito na prática: o dono aprovou a direção (protótipo e site repaginado, 10 nov).
 - [x] **6.0b** Mapa das seções novas: o que cada uma precisa contar (baixar CLI ou GUI, o que ele faz, o painel ao vivo, a central de
   inteligência, jogos com FPS de verdade, segurança e desfazer, novidades) e o componente de cada uma.
-- [ ] **6.1** `site/` com Astro, Tailwind v4, shadcn/ui e Magic UI; tokens do site atual (cores, fontes, espaçamentos) num só lugar.
-- [ ] **6.2** Dados gerados do motor: modos, áreas e itens, contagens, novidades do changelog, versão (substitui o `gera_site.py`).
+- [x] **6.1** `site/` com Astro, Tailwind v4, shadcn/ui e Magic UI; tokens do site atual (cores, fontes, espaçamentos) num só lugar.
+  Decidido (10 nov): sem Astro, Tailwind, shadcn e Magic UI: são para apps em React; o site é uma página estática mais leve.
+- [x] **6.2** Dados gerados do motor: modos, áreas e itens, contagens, novidades do changelog, versão (substitui o `gera_site.py`).
+  Já é assim: `arte/gera_site.py` lê modos, áreas, itens, contagens, novidades e versão do próprio motor.
 - [x] **6.3** Seções na ordem de hoje, refeitas com componentes: abertura (cavaleiro intacto), como usar, painel (exemplo vivo com números
   contando e gráficos), modos, tudo o que ele faz (filtro por modo, acordeão por área), jogos, limites, FAQ, novidades, contribuir.
 - [x] **6.4** **Baixar**: escolha entre "Com janelas (recomendado)" e "Terminal (CLI)", com tamanho, o que vem em cada um e como conferir a
   assinatura. Detecta Windows e mostra a versão atual lida das releases no build.
 - [x] **6.5** Página do segundo plano e da central de inteligência (o que lê, quanto pesa, anti-cheat).
-- [ ] **6.6** Revisão crítica: comparar com sites de referência, cortar texto e animação que não serve, conferir no celular, Lighthouse e
+- [x] **6.6** Revisão crítica: comparar com sites de referência, cortar texto e animação que não serve, conferir no celular, Lighthouse e
   leitor de tela.
-- [ ] **6.7** Deploy pelo Actions no GitHub Pages; manter o endereço `kessleru.github.io/Katharos` e redirecionar âncoras antigas.
+  Feito (11 nov): Lighthouse no computador 98 de desempenho e 100 em acessibilidade, boas práticas e SEO; no celular 100 nos três e
+  75 de desempenho (a gravura do hero é grande e não foi mexida, por regra).
+- [x] **6.7** Deploy pelo Actions no GitHub Pages; manter o endereço `kessleru.github.io/Katharos` e redirecionar âncoras antigas.
+  Decidido: o Pages continua servindo `docs/` da `main` (o endereço não muda) e as âncoras antigas (usar, painel, modos, limites,
+  contribuir) levam para as seções novas. Publicar pelo Actions não muda nada para quem visita.
 
 ### Fase 7: lançamento
-- [ ] **7.1** Quem usa a CLI: o `katharos` avisa uma vez que existe a versão com janelas e que os dados são os mesmos (`~/.katharos`).
-- [ ] **7.2** README, CONTRIBUTING, SECURITY e CHANGELOG atualizados; versão **4.0.0** (produto novo e troca na distribuição).
-- [ ] **7.3** Conferência final: instalar do zero num Windows limpo, atualizar de uma versão anterior, desinstalar, e o mesmo para a CLI.
+- [x] **7.1** Quem usa a CLI: o `katharos` avisa uma vez que existe a versão com janelas e que os dados são os mesmos (`~/.katharos`).
+- [x] **7.2** README, CONTRIBUTING, SECURITY e CHANGELOG atualizados; versão **4.0.0** (produto novo e troca na distribuição).
+- [x] **7.3** Conferência final: instalar do zero num Windows limpo, atualizar de uma versão anterior, desinstalar, e o mesmo para a CLI.
 
 ---
 
@@ -583,18 +610,23 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
   depende para ligar, logar, atualizar ou proteger nunca entram.
 - **Mudança arriscada** pergunta "manter alterações?" e desfaz sozinha se a pessoa não responder (já existe: `config confirmar`).
 
-- [ ] **S1** Revisão de segurança antes da 4.0.0: ler todos os itens e scripts com essas regras na mão (um agente separado revisa, sem ter
+- [x] **S1** Revisão de segurança antes da 4.0.0: ler todos os itens e scripts com essas regras na mão (um agente separado revisa, sem ter
   escrito o código), rodar a ida e volta de cada pacote (aplicar e desfazer) num Windows descartável do CI e comparar o registro e os
   serviços antes e depois.
+  Feito (11 nov): um agente separado, que não escreveu o código, revisou os itens e scripts com as regras desta seção e o que é novo
+  na v4; o que ele achou foi corrigido (ver Registro). A ida e volta de cada pacote no Windows do CI continua sendo a de privacidade.
 - [x] **S2** Lista de processos e serviços protegidos num lugar só, usada pelo raio-x, pela memória, pelo benchmark e pela interface, com
   teste.
-- [ ] **S5** À prova de invasores e sem alarme do antivírus e do firewall (pedido de 10 nov, 20:09). Feito: nenhuma porta de rede aberta
+- [x] **S5** À prova de invasores e sem alarme do antivírus e do firewall (pedido de 10 nov, 20:09). Feito: nenhuma porta de rede aberta
   (o firewall não tem o que barrar; teste), o Katharos.exe não fala com a internet, PowerShell sempre pelo caminho completo, PresentMon
   com impressão digital (SHA-256) conferida antes de rodar e no download, Defender passando no exe e no programa a cada ensaio (versão
   não sai se ele marcar), backup do desfazer e scripts de administrador só na pasta protegida. Falta: na fase 4, o motor que roda
   como administrador sai de uma cópia em `%ProgramData%\Katharos` (só administrador grava) conferida por hash, nunca da pasta do
   usuário; assinatura (5.3, 5.4); se algum antivírus marcar por engano, enviar para análise da Microsoft (o dono envia; o texto fica
   pronto aqui) e conferir no VirusTotal antes da 4.0.0.
+  Feito (11 nov): o motor de administrador roda de uma cópia em `%ProgramData%\\Katharos\\<versão>` conferida pelo manifesto de SHA-256
+  gravado no aplicativo no build (testado no CI, inclusive com um arquivo alterado: recusa). Falta: VirusTotal e envio à Microsoft se
+  algum antivírus marcar (o dono envia), e a assinatura (5.3, 5.4).
 - [x] **S4** Sem falso positivo (pedido de 10 nov, 20:07): toda ação que muda o PC lê de volta e só diz "feito" quando o Windows mostra
   que ficou; se não ficou, diz o erro e o motivo provável ("não dá neste PC" é resposta válida). Já valem: pacotes (conferência depois
   de aplicar, `nao-ficou`), energia no notebook (prova ao ligar, leitura na hora e 15 s depois, erro no ícone mesmo com avisos
@@ -661,3 +693,9 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | Fase 6: site repaginado (hero mantido; seções novas: Veja funcionando, Como funciona em 3 passos com vídeo, Ao vivo e nos jogos, Central, Seguro por padrão com provas, Baixar com janelas ou terminal; saíram Como usar, Painel, Modos e Contribuir em bloco). Cinco vídeos gravados da interface de verdade (`scripts/videos.sh`: cursor, cliques e câmera em vetor; AV1 + H.264 + pôster, 5,4 MB no total, só carregam quando aparecem). Decisão: sem Astro/React por ora; o mesmo gerador em Python com CSS próprio (página estática mais leve; shadcn e Magic UI são para apps React) | 3.1.2 | ramo v4 | fotos 1440 e 390 px |
 | 10 nov 2026 | 2.8 Histórico na interface (medidas por dia com marca de cada mudança e o efeito honesto de cada uma; API `historico`); 2b: raio-x acha paginação num HD, integridade de memória (só informa) e agendamento de GPU | 3.1.2 | ramo v4 | testes 326 |
 | 10 nov 2026 | S4: ponto de restauração e tarefa de manutenção conferidos lendo de volta; motor de administrador só atende aplicar e desfazer; README e texto da 4.0.0 | 3.1.2 | ramo v4 | testes 327 |
+| 11 nov 2026 | I7 a I15: memória do PC em SQLite (`katharos.db`, 120 dias de minutos e depois a média da hora), detectores, mapa de causas em dados (`CAUSAS`), planejador, avaliador (peso por alvo neste PC), fila de eventos (`eventos.jsonl`), explicações em quatro partes, orçamento de avisos | 3.1.2 | ramo v4 | testes, I14 com casos de aviso falso |
+| 11 nov 2026 | 2c.9 a 2c.11: `travadas` (rastreio do kernel só com DPC e interrupção, por driver; no CI: 927 eventos, 257 drivers com nome) | 3.1.2 | ramo v4 | CI Windows |
+| 11 nov 2026 | I16 a I25, 2.12, 2.13: central com diagnóstico e pergunte ao Katharos, frase do motor no Início, primeiros passos, normal deste PC nos gráficos, jogos por jogo, recomendados, fora do normal, motor e memória nas configurações, teste de cada tela | 3.1.2 | ramo v4 | fotos |
+| 11 nov 2026 | um programa só (ícone abre a janela, troca de versão fecha e religa o segundo plano), canais, `versoes --atualizar`/`--voltar`, motor de administrador pela cópia protegida, ensaio de instalar, atualizar e desinstalar no CI | 3.1.2 | ramo v4 | pedido do dono |
+| 11 nov 2026 | 2b.8, 2b.11 a 2b.14, 2c.7, 2d.6, 2e.6 a 2e.8: limites dos jogos no raio-x, turbo por evidência, medido em cada aplicação, itens novos (monitor, placa de rede, efeitos em PC fraco), formato D9 com teste, jogos nas provas, Windows Server 2022 e 2025 no CI, boot pelo evento 100, ensaio repetido, qualidade da medida | 3.1.2 | ramo v4 | |
+| 11 nov 2026 | site: vídeo da central, Lighthouse (acessibilidade 100), âncoras antigas; SECURITY, CONTRIBUTING, README e texto da 4.0.0 | 3.1.2 | ramo v4 | |

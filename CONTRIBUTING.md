@@ -61,6 +61,8 @@ O número tem três partes, MAIOR.MENOR.CORREÇÃO, e as regras de quando cada u
 
 Os testes do GitHub (`testes`) só rodam quando você manda (Actions > testes > Run workflow), para não gastar minutos a cada commit: use em mudanças grandes e antes de publicar. Localmente, `python -m unittest discover -s tests` roda em segundos.
 
+Antes de cada versão, leia o que mudou no Windows desde a anterior ([recursos obsoletos e removidos](https://learn.microsoft.com/windows/whats-new/deprecated-features) e as notas da atualização do mês) e confira se algum item ou leitura do Katharos depende do que saiu (exemplo: o WMIC saiu do Windows 11 24H2 em diante; o Katharos não usa, e um teste garante).
+
 O fluxo confere versão, changelog e hashes, roda os testes, monta o `Katharos.zip`, assina os arquivos (atestado de procedência do GitHub) e cria a release com o texto do changelog. Se a versão já foi publicada, ele para.
 
 ## Crédito
