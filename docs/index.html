@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Katharos · otimizador de Windows</title>
-<meta name="description" content="Otimiza o Windows, mostra cada mudança antes e desfaz quando você quiser. Grátis e de código aberto, sem garantia. Leia o aviso antes de usar.">
+<meta name="description" content="Otimiza o Windows, mostra cada mudança antes e desfaz quando você quiser. Com janelas ou no terminal, mede o FPS de verdade nos jogos e confere cada ajuste. Grátis e de código aberto, sem garantia.">
 <meta property="og:title" content="Katharos · otimizador de Windows">
 <meta property="og:description" content="Otimiza o Windows, mostra cada mudança antes e desfaz quando você quiser.">
 <meta property="og:image" content="https://kessleru.github.io/Katharos/og.jpg">
@@ -136,45 +136,6 @@
   .cab a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
   .cab a:hover { text-decoration-color: var(--ambar); }
 
-  /* ── a janela do programa ── */
-  .janela-bloco { padding: 8px 0 48px; }
-  .janela { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: #09090a; overflow: hidden;
-    box-shadow: 0 50px 120px -50px #000, 0 0 0 8px var(--fundo); position: relative; z-index: 32; }
-  .abas { display: flex; align-items: center; padding: 10px 14px; background: #141416; border-bottom: 1px solid var(--linha); font-size: 12px; color: var(--apagado); gap: 10px; }
-  .abas .pontos { display: flex; gap: 7px; } .abas .pontos i { width: 10px; height: 10px; border-radius: 50%; background: var(--linha-forte); }
-  .abas b { color: var(--osso); font-weight: 500; margin-left: 8px; }
-  .repetir { margin-left: auto; font: 500 12px/1 var(--mono); color: var(--apagado); background: none; border: 1px solid var(--linha); border-radius: 3px; padding: 6px 10px; cursor: pointer; display: none; }
-  .js .repetir { display: inline-block; }
-  .repetir:hover { color: var(--osso); border-color: var(--linha-forte); }
-  .paineis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .painel { position: relative; padding: 24px 28px 28px; font-size: 13px; line-height: 1.75; color: #bdb8ae; white-space: pre; overflow: hidden; }
-  .painel + .painel { border-left: 1px solid var(--linha); }
-  .t-o { color: var(--osso); font-weight: 700; } .t-a { color: var(--ambar); } .t-m { color: #5f5d58; } .t-s { color: #8e8a82; }
-  .t-g { color: var(--verde); } .t-r { color: var(--vermelho); }
-  .nota-g { font: 800 34px/1 var(--mono); color: var(--ambar); letter-spacing: -.04em; display: inline-block; min-width: 2ch; }
-  .cursor { display: inline-block; width: .6em; height: 1.15em; vertical-align: -3px; background: var(--ambar); animation: pisca 1.1s steps(2) infinite; }
-  .ln { transition: opacity .18s; }
-  .ln.oculta { opacity: 0; }
-  .ln.sel { background: color-mix(in oklab, var(--ambar) 14%, transparent); box-shadow: -28px 0 0 color-mix(in oklab, var(--ambar) 14%, transparent), 400px 0 0 color-mix(in oklab, var(--ambar) 14%, transparent); }
-  .lendo { position: absolute; left: 28px; right: 28px; top: 74px; font-size: 13px; color: var(--apagado); display: none; }
-  .lendo.on { display: block; }
-  .lendo .trilho { margin-top: 10px; height: 4px; background: var(--linha); border-radius: 2px; overflow: hidden; }
-  .lendo .trilho i { display: block; height: 100%; width: 0; background: var(--ambar); }
-  .lendo .passo { color: var(--texto); }
-
-  /* ── perfis ── */
-  .perfis .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .perfis .celulas > :nth-child(3n+1) { border-left: 0; }
-  .perfis .celulas > :nth-child(n+4) { border-top: 1px solid var(--linha); }
-  .perfil { padding: 28px var(--pad) 30px; display: flex; flex-direction: column; gap: 12px; }
-  .perfil .itens { margin-top: auto; }
-  .perfil header code { display: block; font-size: 12px; color: var(--ambar); margin-top: 2px; }
-  .perfil header { display: flex; gap: 14px; align-items: center; }
-    .perfil h3 { font: 700 16px/1.25 var(--mono); color: var(--osso); display: flex; align-items: center; gap: 8px; }
-  .perfil .para { font: 400 14px/1.45 var(--sans); color: var(--apagado); }
-  .perfil .perde { font: 400 14px/1.45 var(--sans); color: #a9a49b; }
-  .perfil .perde b { font-weight: 500; color: var(--texto); }
-
   /* versão */
   .versao { font: 500 11px var(--mono); color: var(--apagado); border: 1px solid var(--linha-forte); border-radius: 2px; padding: 2px 5px; margin-left: 6px; vertical-align: middle; }
   .dados a { color: inherit; text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
@@ -184,29 +145,6 @@
   .nv2 { color: var(--ambar); border-color: #5d4727; }
   .nv3 { color: var(--vermelho); border-color: #5e2f33; }
   .nv0 { color: var(--apagado); border-color: var(--linha-forte); }
-  .modo-itens { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--apagado); }
-  .modo-itens > span:first-child { margin-right: 2px; }
-  .itens { border: 1px solid var(--linha); border-radius: 4px; }
-  .itens summary { cursor: pointer; list-style: none; padding: 10px 12px; font: 500 13px var(--mono); color: var(--osso); display: flex; justify-content: space-between; align-items: center; }
-  .itens summary::-webkit-details-marker { display: none; }
-  .itens summary::after { content: '+'; color: var(--ambar); font-size: 16px; transition: transform .2s; }
-  .itens[open] summary::after { transform: rotate(45deg); }
-  .itens summary:hover { background: #151517; }
-  .perfil .itens { border: 0; border-top: 1px dashed var(--linha-forte); border-radius: 0; }
-  .perfil .itens summary { padding: 12px 0 0; color: var(--texto); font-weight: 400; }
-  .perfil .itens summary:hover { background: none; color: var(--osso); }
-  .perfil .lista-it { border-top: 0; padding: 0 0 4px; }
-  .lista-it { max-height: 320px; overflow: auto; padding: 4px 12px 12px; border-top: 1px solid var(--linha); scrollbar-width: thin; }
-  .itens[open] .lista-it { animation: abre .28s ease-out; }
-  @keyframes abre { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-  .lista-it h4 { font: 700 12px var(--mono); color: var(--osso); margin: 14px 0 6px; display: flex; gap: 8px; align-items: baseline; }
-  .lista-it h4 i { font-style: normal; font-weight: 400; color: var(--apagado); }
-  .lista-it ul { list-style: none; display: grid; gap: 8px; }
-  .lista-it li { display: flex; gap: 8px; align-items: flex-start; }
-  .lista-it li .nv { margin-top: 2px; min-width: 7.6ch; text-align: center; }
-  .lista-it li b { display: block; font: 500 13px/1.35 var(--sans); color: var(--texto); }
-  .lista-it li small { display: block; font: 400 12px/1.4 var(--sans); color: var(--apagado); margin-top: 2px; }
-
   /* ── limites: cada item é riscado na hora que a seção aparece ── */
   .nunca-bloco { padding: 40px 0; }
   .nunca { margin: 0 calc(-1 * var(--fora)); border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--painel); display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); overflow: hidden; position: relative; z-index: 32; box-shadow: 0 0 0 8px var(--fundo); }
@@ -269,84 +207,6 @@
   .ver-lista:hover { color: var(--osso); }
   @media (max-width: 760px) { .area ul { grid-template-columns: 1fr; } .area li { grid-template-columns: 1fr; gap: 2px; } }
 
-  /* ── painel: as mesmas células com fios do resto da página, sem cartões soltos ── */
-  .telas-painel .quadro { padding: 0; }
-  .dash > div { display: grid; }
-  .dash > div + div { border-top: 1px solid var(--linha); }
-  .dash > div > * { min-width: 0; padding: 24px var(--pad) 26px; }
-  .dash > div > * + * { border-left: 1px solid var(--linha); }
-  .dash-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .dash-graf { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-  .dash-baixo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi { display: grid; gap: 4px; }
-  .kpi > span { font: 400 12px/1.4 var(--mono); color: var(--apagado); display: flex; align-items: center; gap: 6px; }
-  .kpi b { font: 800 34px/1.05 var(--mono); color: var(--osso); letter-spacing: -.04em; }
-  .kpi b small { font: 400 13px var(--mono); color: var(--apagado); letter-spacing: 0; margin-left: 4px; }
-  .kpi em { font: 500 12px/1.4 var(--mono); font-style: normal; }
-  .kpi .mau { color: var(--vermelho); } .kpi .bom { color: var(--verde); }
-  .gc { margin: 0; display: grid; gap: 14px; align-content: start; }
-  .gc header { display: flex; justify-content: space-between; gap: 12px; font: 400 12px/1.4 var(--mono); color: var(--apagado); }
-  .gc header b { font-weight: 700; color: var(--osso); }
-  .gc svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .gc .eixo { font: 400 10px var(--mono); fill: var(--apagado); }
-  .gc .grade { stroke: var(--linha); stroke-width: 1; }
-  .gc .linha { fill: none; stroke: var(--ambar); stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
-  .gc .area { fill: url(#g-area); opacity: 0; }
-  .gc .marco { stroke: var(--ambar); stroke-width: 1; stroke-dasharray: 2 3; }
-  .gc .ponto { fill: var(--ambar); opacity: 0; }
-  .gc .rot { font: 500 11px var(--mono); fill: var(--vermelho); opacity: 0; }
-  .gc .grade { stroke-dasharray: 2 4; }
-  .gc .eixo.hoje { fill: var(--texto); }
-  .gc .depois, .gc .marco { opacity: 0; }
-  .gc .ponto.r { fill: var(--vermelho); }
-  .gc .rot-v { font: 700 12px var(--mono); fill: var(--osso); opacity: 0; }
-  .gc .mira { opacity: 0; transition: opacity .15s; pointer-events: none; } .gc .mira.on { opacity: 1; }
-  .gc .mira-l { stroke: var(--linha-forte); stroke-width: 1; } .gc .mira-p { fill: var(--osso); }
-  .gc .mira-t { font: 500 11px var(--mono); fill: var(--osso); }
-  .gc svg#g-disco { cursor: crosshair; touch-action: pan-y; }
-  .vis .gc .depois { opacity: 1; transition: opacity .4s .5s; }
-  .vis .gc .rot-v { opacity: 1; transition: opacity .3s .7s; }
-
-  .vis .gc .linha { stroke-dashoffset: 0; transition: stroke-dashoffset .8s cubic-bezier(.5,0,.2,1); }
-  .vis .gc .area { opacity: 1; transition: opacity .4s .5s; }
-  .vis .gc .ponto, .vis .gc .marco { opacity: 1; transition: opacity .3s .7s; }
-  .calor { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; }
-  .calor i { aspect-ratio: 1; border-radius: 1px; background: #17171a; opacity: 0; }
-  .calor i[data-l="1"] { background: #221d16; } .calor i[data-l="2"] { background: #3f321f; } .calor i[data-l="3"] { background: #7a5a2f; } .calor i[data-l="4"] { background: var(--ambar); }
-  .vis .calor i { opacity: 1; transition: opacity .4s .2s; }
-  .horas { display: flex; justify-content: space-between; font: 400 10px var(--mono); color: var(--apagado); }
-  .prop { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
-  .prop .nv { grid-row: 1 / span 2; }
-  .prop b { font: 700 14px/1.3 var(--mono); color: var(--osso); }
-  .prop code { grid-column: 2; font-size: 12px; color: var(--apagado); }
-  .prop .btn { grid-column: 3; grid-row: 1 / span 2; font: 700 13px/1 var(--mono); background: var(--ambar); color: #16110a; border-radius: 3px; padding: 10px 14px; font-style: normal; }
-  .js .prop > * { opacity: 0; }
-  .vis .prop > * { opacity: 1; transition: opacity .3s calc(var(--i) * 100ms + 300ms); }
-  @keyframes tecla2 { 0%, 100% { translate: 0 0; } 40% { translate: 0 2px; background: #ecb876; } }
-  .vivo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--verde); animation: pisca 1.6s ease-in-out infinite; }
-  .tp-nota { border-top: 1px solid var(--linha); padding: 14px var(--pad); font: 400 12px/1.6 var(--mono); color: var(--apagado); }
-  .tp-nota code { color: var(--osso); }
-  @media (max-width: 900px) {
-    .dash > div > * { padding: 14px 16px 16px; }
-    .kpi b { font-size: 24px; }
-    .kpi .mes { display: none; }
-    .dash-graf, .dash-baixo { grid-template-columns: 1fr; }
-    .gc .eixo { display: none; }
-    .dash-graf > * + *, .dash-baixo > * + * { border-left: 0; border-top: 1px solid var(--linha); }
-  }
-
-  /* ── passos ── */
-  .passos .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; counter-reset: p; }
-  .passos li { counter-increment: p; padding: 30px var(--pad) 36px; transition: background-color .2s; }
-  .passos li:hover { background: #101012; }
-  .passos li::before { content: counter(p); display: block; font: 800 30px/1 var(--mono); color: var(--ambar); margin-bottom: 12px; }
-  .passos h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; }
-  .passos p { font: 400 15px/1.5 var(--sans); color: #a9a49b; }
-  .passos kbd { display: inline-block; font: 700 13px/1 var(--mono); color: var(--osso); background: var(--painel); border: 1px solid var(--linha-forte); padding: 4px 7px; border-radius: 4px; box-shadow: 0 2px 0 var(--linha-forte); vertical-align: 1px; }
-  .passos.vis kbd { animation: tecla 2.8s 1s infinite; }
-  /* a tecla desce sem mudar de tamanho: nada em volta se mexe */
-  @keyframes tecla { 0%, 80%, 100% { translate: 0 0; box-shadow: 0 2px 0 var(--linha-forte); background: var(--painel); } 86% { translate: 0 2px; box-shadow: 0 0 0 var(--linha-forte); background: color-mix(in oklab, var(--ambar) 30%, var(--painel)); } }
-
   .faq details { border-top: 1px solid var(--linha); }
   .faq details:first-child { border-top: 0; }
   .faq summary { cursor: pointer; list-style: none; padding: 16px var(--pad); display: flex; justify-content: space-between; align-items: center; gap: 16px; font: 700 15px/1.3 var(--mono); color: var(--osso); }
@@ -370,18 +230,6 @@
   .nov-todas { border-top: 1px solid var(--linha); padding: 14px var(--pad); font: 500 13px var(--mono); }
   .nov-todas a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
   .nov-todas a:hover { text-decoration-color: var(--ambar); }
-  .contribui .celulas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .contribui .celulas > a { padding: 28px var(--pad) 32px; display: block; text-decoration: none; transition: background-color .2s; }
-  .contribui .celulas > a:hover { background: #101012; }
-  .contribui .celulas > a:hover h3 { color: var(--ambar); }
-  .contribui .ic { width: 22px; height: 22px; color: var(--apagado); margin-bottom: 18px; display: block; transition: color .2s; }
-  .contribui .celulas > a:hover .ic { color: var(--ambar); }
-  .contribui h3 { font: 700 15px/1.3 var(--mono); color: var(--osso); margin-bottom: 6px; transition: color .2s; }
-  .contribui p { font: 400 15px/1.5 var(--sans); color: #a9a49b; max-width: 46ch; }
-  .contribui code { font: 500 13px var(--mono); color: var(--osso); }
-  .contribui a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
-  .contribui a:hover { text-decoration-color: var(--ambar); }
-
   .rodape .celulas { grid-template-columns: minmax(0, 1fr) auto; }
   .rodape .celulas > * { padding: 20px; font-size: 12px; color: var(--apagado); }
   .rodape a { color: var(--texto); } .rodape a:hover { color: var(--osso); }
@@ -397,49 +245,99 @@
   .divisor .fio { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--linha-forte)); }
   .divisor .fio:last-child { background: linear-gradient(270deg, transparent, var(--linha-forte)); }
   .divisor.florao img { width: min(88%, 620px); opacity: .85; }
-  /* cartão de perfil próprio: um espaço vazio a preencher */
-  .perfil.montar { grid-column: 1 / -1; display: flex; flex-direction: row; align-items: center; gap: 20px; border-top: 1px solid var(--linha); background: repeating-linear-gradient(135deg, #131315 0 1px, transparent 1px 9px); }
-  .perfis .celulas > .perfil.montar { border-left: 0; }
-  .vazio-slot { flex: none; width: 56px; height: 56px; display: grid; place-items: center; border: 1px dashed var(--linha-forte); border-radius: 50%; font: 300 30px/1 var(--mono); color: var(--ambar); }
-  .perfil.montar > div { flex: 1; }
-  .perfil.montar p { font: 400 14px/1.45 var(--sans); color: #a9a49b; margin-top: 4px; max-width: 64ch; }
-  .perfil.montar > code { font-size: 12px; color: var(--ambar); white-space: nowrap; }
-  /* emblema de cada perfil, gravado */
-  .perfil .emb { width: 56px; height: 56px; flex: none; opacity: .92; }
   /* horizonte gótico no fim da página */
   .horizonte { position: relative; height: clamp(90px, 14vw, 190px); background: url(horizonte.webp) 50% 100% / min(1500px, 100%) auto no-repeat; opacity: .4; margin: 0 var(--borda); -webkit-mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent); mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent); }
 
   .horizonte::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, var(--fundo) 0%, transparent 55%); }
 
-  /* ── jogos: abertura com a gravura e uma placa por categoria ── */
-  .jogos-home { overflow: hidden; }
-  .jh-arte { position: absolute; inset: 0 0 auto 0; height: 420px; }
-  .jh-arte img { width: 100%; height: 100%; object-fit: cover; object-position: 64% 50%; opacity: .9; }
-  .jh-arte::after { content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, var(--fundo) 0%, rgba(12,12,13,0) 26%), linear-gradient(90deg, var(--fundo) 0%, rgba(12,12,13,.9) 26%, rgba(12,12,13,.3) 62%, rgba(12,12,13,0) 85%), linear-gradient(0deg, var(--fundo) 0%, rgba(12,12,13,0) 38%); }
-  .jh-texto { position: relative; z-index: 2; padding: clamp(48px, 6vw, 84px) var(--pad) clamp(40px, 5vw, 64px); max-width: 560px; display: grid; gap: 16px; justify-items: start; }
-  .jh-texto h2 { font: 800 clamp(34px, 4vw, 52px)/1 var(--mono); color: var(--osso); letter-spacing: -.05em; }
-  .jh-texto h2 span { color: var(--ambar); }
-  .jh-texto p { font: 400 16px/1.55 var(--sans); max-width: 44ch; text-wrap: pretty; }
-  .focos { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--linha); background: var(--fundo); }
-  .focos > div { padding: 28px var(--pad) 32px; }
-  .focos > div + div { border-left: 1px solid var(--linha); }
-  .focos h3 { font: 700 16px/1.3 var(--mono); color: var(--osso); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-  .focos p { font: 400 15px/1.55 var(--sans); color: #a9a49b; max-width: 52ch; }
-  .jh-cmd { font: 500 13px var(--mono); color: var(--ambar); }
-  @media (max-width: 760px) { .focos { grid-template-columns: 1fr; } .focos > div + div { border-left: 0; border-top: 1px solid var(--linha); } }
-  .placas { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--linha); background: var(--fundo); }
-  .placa { position: relative; min-height: 210px; display: flex; align-items: flex-end; overflow: hidden; background: var(--fundo); border-left: 1px solid var(--linha); }
-  .placa:nth-child(3n+1) { border-left: 0; }
-  .placa:nth-child(n+4) { border-top: 1px solid var(--linha); }
-  .placa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .62; transition: opacity .35s, transform 1.2s ease-out; }
-  .placa::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(12,12,13,.96) 0%, rgba(12,12,13,.55) 42%, transparent 78%); }
-  .placa:hover img, .placa:focus-visible img { opacity: .95; transform: scale(1.04); }
-  .placa-txt { position: relative; z-index: 2; padding: 18px var(--pad) 20px; display: grid; gap: 3px; }
-  .placa-txt b { font: 700 16px/1.25 var(--mono); color: var(--osso); letter-spacing: -.02em; }
-  .placa-txt small { font: 500 11px var(--mono); color: var(--ambar); }
-  .placa-txt em { font: 400 13px/1.4 var(--sans); font-style: normal; color: #b5b0a6; }
-  .placa-etq { position: absolute; z-index: 2; top: 14px; right: 14px; font: 500 10px/1 var(--mono); font-style: normal; color: var(--fundo); background: var(--ambar); padding: 4px 6px; border-radius: 2px; }
+
+  /* ── vídeos do programa: a tela de verdade, numa moldura que é a mesma linha forte do site ── */
+  .tela { position: relative; margin: 0; background: #09090a; border: 1px solid var(--linha-forte); border-radius: 6px; overflow: hidden;
+    box-shadow: 0 40px 100px -50px #000, 0 0 0 8px var(--fundo); aspect-ratio: 16 / 10; }
+  .tela video, .tela img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .tela .tocar { position: absolute; inset: auto 14px 14px auto; z-index: 2; display: none; font: 500 12px/1 var(--mono); color: var(--osso);
+    background: color-mix(in oklab, var(--fundo) 80%, transparent); border: 1px solid var(--linha-forte); border-radius: 3px; padding: 8px 10px; cursor: pointer; }
+  .tela .tocar:hover { border-color: var(--ambar); color: var(--ambar); }
+  .js .tela .tocar { display: inline-block; }
+  .legenda { font: 400 13px/1.5 var(--sans); color: var(--apagado); padding-top: 14px; }
+
+  /* veja funcionando: o vídeo grande, saindo um pouco das guias como a janela antiga */
+  .funcionando .quadro { padding: 8px 0 44px; }
+  .funcionando .tela { margin: 0 calc(-1 * var(--fora)); }
+  .funcionando .legenda { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px var(--pad) 0; }
+  .funcionando .legenda a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+  .funcionando .legenda a:hover { text-decoration-color: var(--ambar); }
+
+  /* como funciona: três etapas, cada uma com o texto e o vídeo do que acontece */
+  .etapas .quadro { display: grid; }
+  .etapa { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; }
+  .etapa + .etapa { border-top: 1px solid var(--linha); }
+  .etapa-txt { padding: 40px var(--pad); display: grid; gap: 12px; align-content: center; }
+  .etapa-txt .n { font: 800 30px/1 var(--mono); color: var(--ambar); letter-spacing: -.04em; }
+  .etapa-txt h3 { font: 800 clamp(20px, 1.9vw, 24px)/1.15 var(--mono); color: var(--osso); letter-spacing: -.035em; }
+  .etapa-txt p { font: 400 16px/1.55 var(--sans); color: #a9a49b; max-width: 42ch; text-wrap: pretty; }
+  .etapa-txt p strong { color: var(--texto); font-weight: 500; }
+  .etapa-txt ul { list-style: none; display: grid; gap: 6px; margin-top: 4px; }
+  .etapa-txt li { font: 400 14px/1.45 var(--sans); color: var(--texto); padding-left: 16px; position: relative; }
+  .etapa-txt li::before { content: ''; position: absolute; left: 0; top: .72em; width: 7px; height: 1px; background: var(--ambar); }
+  .etapa-vid { padding: 28px var(--pad) 28px 0; }
+  .etapa:nth-child(even) .etapa-txt { order: 2; }
+  .etapa:nth-child(even) .etapa-vid { padding: 28px 0 28px var(--pad); }
+
+  /* ao vivo e jogos: o vídeo e, ao lado, o que ele mede, em linhas (não em cartões) */
+  .vivo-bloco { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+  .vivo-bloco .etapa-vid { padding: 28px var(--pad) 28px 0; }
+  .fatos { border-left: 1px solid var(--linha); display: grid; align-content: stretch; }
+  .fatos > div { padding: 22px var(--pad); display: grid; gap: 4px; align-content: center; }
+  .fatos > div + div { border-top: 1px solid var(--linha); }
+  .fatos b { font: 700 15px/1.3 var(--mono); color: var(--osso); }
+  .fatos span { font: 400 14.5px/1.5 var(--sans); color: #a9a49b; }
+
+  /* central de inteligência: a frase e a foto da tela de sugestões */
+  .central { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; }
+  .central .etapa-txt { border-right: 1px solid var(--linha); align-self: stretch; }
+  .central figure { padding: 28px 0 28px var(--pad); margin: 0; }
+
+  /* baixar: duas escolhas lado a lado, a recomendada em âmbar; os detalhes de cada uma em linhas */
+  .baixar .quadro { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .escolha { padding: 34px var(--pad) 30px; display: grid; gap: 14px; align-content: start; }
+  .escolha + .escolha { border-left: 1px solid var(--linha); }
+  .escolha header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .escolha h3 { font: 800 22px/1.15 var(--mono); color: var(--osso); letter-spacing: -.035em; }
+  .escolha .rec { font: 500 11px/1 var(--mono); color: var(--fundo); background: var(--ambar); padding: 4px 6px; border-radius: 2px; }
+  .escolha p { font: 400 15px/1.55 var(--sans); color: #a9a49b; max-width: 46ch; }
+  .escolha dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; border-top: 1px dashed var(--linha-forte); padding-top: 14px; }
+  .escolha dt { color: var(--apagado); }
+  .escolha dd { color: var(--texto); font-family: var(--sans); font-size: 14px; }
+  .escolha .botao { justify-self: start; margin-top: 6px; }
+  .escolha code { font: 500 13px var(--mono); color: var(--osso); }
+  .conferir { grid-column: 1 / -1; border-top: 1px solid var(--linha); padding: 20px var(--pad); display: flex; gap: 10px 28px; flex-wrap: wrap; font: 400 14px/1.5 var(--sans); color: var(--apagado); }
+  .conferir b { color: var(--osso); font: 700 13px var(--mono); }
+  .conferir a { color: var(--osso); text-decoration: underline; text-decoration-color: var(--linha-forte); text-underline-offset: 3px; }
+  .conferir a:hover { text-decoration-color: var(--ambar); }
+
+  /* seguro: o que ele nunca faz (riscado quando aparece) e como ele se prova */
+  .provas { border-top: 1px solid var(--linha); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 calc(-1 * var(--fora)); }
+  .provas > div { padding: 22px 24px 24px; display: grid; gap: 4px; }
+  .provas > div + div { border-left: 1px solid var(--linha); }
+  .provas b { font: 700 14px/1.3 var(--mono); color: var(--osso); }
+  .provas span { font: 400 14px/1.5 var(--sans); color: #a9a49b; }
+  .nunca-bloco .nunca { border-radius: 10px 10px 0 0; }
+  .nunca-bloco .provas { border: 1px solid var(--linha-forte); border-top: 0; border-radius: 0 0 10px 10px; background: var(--painel); position: relative; z-index: 32; box-shadow: 0 0 0 8px var(--fundo); }
+
+  @media (max-width: 1000px) {
+    .etapa, .vivo-bloco, .central { grid-template-columns: 1fr; }
+    .etapa:nth-child(even) .etapa-txt { order: 0; }
+    .etapa-txt { padding-bottom: 8px; }
+    .etapa-vid, .etapa:nth-child(even) .etapa-vid, .vivo-bloco .etapa-vid { padding: 0 var(--pad) 28px; }
+    .fatos { border-left: 0; border-top: 1px solid var(--linha); }
+    .central .etapa-txt { border-right: 0; }
+    .central figure { padding: 0 var(--pad) 28px; }
+    .baixar .quadro { grid-template-columns: 1fr; }
+    .escolha + .escolha { border-left: 0; border-top: 1px solid var(--linha); }
+    .provas { grid-template-columns: 1fr; margin: 0; }
+    .provas > div + div { border-left: 0; border-top: 1px solid var(--linha); }
+  }
 
   /* ── telas menores ── */
   @media (max-width: 1000px) {
@@ -502,20 +400,19 @@
   <div class="quadro celulas">
     <a class="marca" href="#" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v3.1.2</small></a>
     <nav class="menu" aria-label="Seções">
-      <a href="#usar">usar</a>
-      <a href="#modos">modos</a>
-      <a href="#tudo">tudo</a>
+      <a href="#funcionando">ver funcionando</a>
+      <a href="#como">como funciona</a>
       <a href="#jogos">jogos</a>
-      <a href="#limites">limites</a>
-      <a href="#novidades">novidades</a>
-      <a href="#contribuir">contribuir</a>
+      <a href="#seguro">segurança</a>
+      <a href="#tudo">tudo</a>
+      <a href="#perguntas">perguntas</a>
     </nav>
     <div class="acoes">
       <a class="botao vazio" href="https://github.com/kessleru/Katharos">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.6 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
         GitHub
       </a>
-      <a class="botao cheio" href="https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip">Baixar</a>
+      <a class="botao cheio" href="#baixar">Baixar</a>
     </div>
   </div>
 </header>
@@ -527,13 +424,13 @@
         <h1 id="titulo" class="titulo">katharos<span class="bloco" aria-hidden="true"></span></h1>
         <p class="lead">Otimiza o Windows. <strong>Mostra cada mudança antes</strong> e desfaz quando você quiser.</p>
         <div class="ctas">
-          <a class="botao cheio grande" href="https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip">
+          <a class="botao cheio grande" href="#baixar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>
             Baixar o Katharos
           </a>
-          <a class="botao vazio grande" href="https://github.com/kessleru/Katharos">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.6 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
-            Ver o código
+          <a class="botao vazio grande" href="#funcionando">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
+            Ver funcionando
           </a>
         </div>
         <p class="grego"><b>καθαρός</b>, em grego: limpo</p>
@@ -547,119 +444,126 @@
 
   <section class="faixa dados" aria-label="Resumo">
     <dl class="quadro celulas">
-      <div><dt>funciona em</dt><dd>Windows 10 e 11</dd></div>
-      <div><dt>ajustes</dt><dd>mais de 170</dd></div>
+      <div><dt>funciona em</dt><dd>Windows 10 e 11, todas as edições</dd></div>
+      <div><dt>ajustes</dt><dd>mais de 170, item por item</dd></div>
       <div><dt>versão</dt><dd><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">3.1.2</a>, 10 nov 2026</dd></div>
     </dl>
   </section>
 
   <div class="faixa divisor espada" aria-hidden="true"><div class="quadro"><i class="fio"></i><img src="divisor-espada.webp" alt="" width="1000" height="246"><i class="fio"></i></div></div>
-  <section class="faixa" aria-label="O Katharos rodando">
-    <div class="quadro janela-bloco">
-      <div class="janela" id="janela" role="img" aria-label="O Katharos no terminal: o menu, a escolha do raio-x e o resultado, com nota 62 de 100 e o que fazer primeiro">
-        <div class="abas"><span class="pontos"><i></i><i></i><i></i></span><b>Katharos</b><span>Administrador: Windows PowerShell</span><button class="repetir" type="button">repetir</button></div>
-        <div class="paineis">
-<div class="painel" id="p-menu"><span class="t-o">katharos</span>
-
-    <span class="t-a"> 1</span>  <span class="t-o">raiox    </span> <span class="t-s">nota do PC e o que fazer primeiro (só lê)</span>
-    <span class="t-a"> 2</span>  <span class="t-o">turbo    </span> <span class="t-s">otimiza tudo de uma vez, no modo que você escolher</span>
-    <span class="t-a"> 3</span>  <span class="t-o">escolher </span> <span class="t-s">otimiza por área: você escolhe a área e os itens</span>
-    <span class="t-a"> 4</span>  <span class="t-o">painel   </span> <span class="t-s">gráficos do PC ao longo do tempo, no navegador</span>
-    <span class="t-a"> 5</span>  <span class="t-o">desfazer </span> <span class="t-s">volta qualquer mudança</span>
-    <span class="t-a"> 6</span>  <span class="t-o">mais     </span> <span class="t-s">medir, acompanhamento, segurança, preferências...</span>
-
-<span class="t-m">     0  sair</span>
-
-<span class="t-m">    número ou nome · 0 sai</span>
-
-<span class="t-s">o que fazer</span> <span class="t-a">›</span> <span class="digitado">1</span><span class="cursor"></span></div>
-<div class="painel" id="p-raiox"><span class="t-o">katharos</span> <span class="t-a">›</span> <span class="t-o">raiox</span>  <span class="t-m">Ryzen 5 5600 · 16 GB · SSD</span>
-
-<span class="t-s">nota</span>
-<span class="nota-g">62</span><span class="t-m">/100</span>  <span class="t-s">dá para melhorar bastante</span>
-
-<span class="t-a">◇</span>  <span class="t-o">o que encontrei</span>
-    <span class="t-r">■</span> 16 programas abrem com o Windows   <span class="t-a">inicializacao</span>
-      <span class="t-m">o boot leva 48 s; o normal é menos de 20</span>
-    <span class="t-r">■</span> 10 desligamentos sem aviso        <span class="t-a">reparar</span>
-      <span class="t-m">no último mês, segundo o Windows</span>
-    <span class="t-a">●</span> 7,7 GB de caches e temporários    <span class="t-a">limpar</span>
-    <span class="t-a">●</span> telemetria e anúncios ligados     <span class="t-a">privacidade</span>
-
-<span class="t-g">✓</span> <span class="t-m">pronto em 52 s · nada foi alterado</span>
-<div class="lendo" aria-hidden="true"><span class="passo">medindo o disco</span><div class="trilho"><i></i></div></div></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="faixa" id="usar" aria-labelledby="usar-t">
+  <section class="faixa" id="funcionando" aria-labelledby="func-t">
     <div class="quadro cab celulas">
-      <div><h2 id="usar-t">Como usar<span>.</span></h2></div>
+      <div><h2 id="func-t">Veja funcionando<span>.</span></h2><p>Do raio-x à mudança conferida no Windows, em 20 segundos. É a tela de verdade do Katharos, com dados de exemplo.</p></div>
     </div>
   </section>
-  <section class="faixa passos" aria-label="Passos">
-    <ol class="quadro celulas">
-      <li><h3>Baixe e extraia o ZIP</h3><p>Vêm o Katharos.exe e a pasta do programa.</p></li>
-      <li><h3>Abra o Katharos.exe</h3><p>Aceite o pedido de administrador.</p></li>
-      <li><h3>Digite <kbd>1</kbd></h3><p>O raio-x dá uma nota. Não muda nada.</p></li>
-    </ol>
+  <section class="faixa funcionando" aria-label="Vídeo do Katharos em uso">
+    <div class="quadro">
+      <figure class="tela"><video muted loop playsinline autoplay preload="metadata" poster="video/tour.webp" width="1280" height="800" aria-label="O Katharos em uso: o Início, o raio-x com o que fazer, um item desmarcado na tela Otimizar e a aplicação conferida"><source src="video/tour.webm" type='video/webm; codecs="av01.0.05M.08"'><source src="video/tour.mp4" type="video/mp4"></video><button class="tocar" type="button">pausar</button></figure>
+      <p class="legenda"><span>O raio-x acha o que segura o PC, você tira o que não quer e ele aplica, conferindo cada ajuste depois.</span><a href="#baixar">Baixar</a></p>
+    </div>
   </section>
 
   <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
-  <section class="faixa" id="painel" aria-labelledby="painel-t">
+  <section class="faixa" id="como" aria-labelledby="como-t">
     <div class="quadro cab celulas">
-      <div><h2 id="painel-t">Painel<span>.</span></h2><p>Ao vivo no ícone perto do relógio. O histórico abre no navegador.</p></div>
+      <div><h2 id="como-t">Como funciona<span>.</span></h2><p>Três passos, sempre nesta ordem. Nada muda sem você ver antes.</p></div>
     </div>
   </section>
-  <section class="faixa telas-painel" aria-label="Painel do Katharos, exemplo animado">
+  <section class="faixa etapas" aria-label="Os três passos">
     <div class="quadro">
-      <div class="dash" id="dash" role="img" aria-label="Exemplo do painel: tempo de boot antes e depois do turbo, temperatura por hora e propostas de correção">
-        <div class="dash-kpis" aria-hidden="true">
-          <div class="kpi"><span>liberado</span><b data-n="7.7" data-d="1">0<small>GB</small></b><em class="bom">caches e temporários</em></div>
-          <div class="kpi"><span>boot</span><b data-n="22">0<small>s</small></b><em class="bom">−27 s<span class="mes"> com o turbo</span></em></div>
-          <div class="kpi"><span><i class="vivo"></i>temperatura</span><b data-n="47" id="k-temp">0<small>°C</small></b><em class="bom">−1 °C<span class="mes"> no mês</span></em></div>
+      <article class="etapa">
+        <div class="etapa-txt">
+          <span class="n">1</span>
+          <h3>O raio-x diz o que vale a pena</h3>
+          <p>Lê o PC em um a três minutos e <strong>não muda nada</strong>. Dá uma nota e explica, do mais grave para o menos, o que deixa o seu PC lento e onde resolver.</p>
         </div>
-        <div class="dash-graf" aria-hidden="true">
-          <figure class="gc"><header><b>tempo de boot</b><span>antes e depois do turbo</span></header><svg id="g-disco" viewBox="0 0 600 180"></svg></figure>
-          <figure class="gc"><header><b>quando esquenta</b><span>por hora</span></header><div class="calor" id="g-calor"></div><div class="horas"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div></figure>
+        <div class="etapa-vid">
+      <figure class="tela"><video muted loop playsinline autoplay preload="none" poster="video/raiox.webp" width="1280" height="800" aria-label="O raio-x rodando: lendo o PC, analisando e a nota com o que fazer"><source src="video/raiox.webm" type='video/webm; codecs="av01.0.05M.08"'><source src="video/raiox.mp4" type="video/mp4"></video><button class="tocar" type="button">pausar</button></figure>
         </div>
-        <div class="dash-baixo" aria-hidden="true">
-          <div class="prop" style="--i:0"><span class="nv nv3">grave</span><b>Driver com problema</b><code>katharos atualizar</code><i class="btn">Corrigir</i></div>
-          <div class="prop" style="--i:1"><span class="nv nv3">grave</span><b>Tela azul, 3 vezes</b><code>katharos raiox</code><i class="btn">Abrir</i></div>
+      </article>
+      <article class="etapa">
+        <div class="etapa-txt">
+          <span class="n">2</span>
+          <h3>Você escolhe o que muda</h3>
+          <p>Três modos: <strong>seguro</strong>, <strong>equilibrado</strong> e <strong>extremo</strong>. O modo só marca; você tira ou põe cada item.</p>
+          <ul>
+            <li>Cada item diz o que ganha e o que você perde.</li>
+            <li>O que já está assim no seu PC aparece como feito e não roda de novo.</li>
+          </ul>
         </div>
-      </div>
-      <p class="tp-nota">Dados de exemplo. Ao vivo: <code>segundo-plano</code>. Histórico: <code>painel</code>.</p>
+        <div class="etapa-vid">
+      <figure class="tela"><video muted loop playsinline autoplay preload="none" poster="video/otimizar.webp" width="1280" height="800" aria-label="Escolhendo o modo e tirando um item da lista antes de aplicar"><source src="video/otimizar.webm" type='video/webm; codecs="av01.0.05M.08"'><source src="video/otimizar.mp4" type="video/mp4"></video><button class="tocar" type="button">pausar</button></figure>
+        </div>
+      </article>
+      <article class="etapa">
+        <div class="etapa-txt">
+          <span class="n">3</span>
+          <h3>Aplica, confere e volta quando quiser</h3>
+          <p>Antes, cria um ponto de restauração. Depois, <strong>lê cada ajuste de volta no Windows</strong> e diz o que não ficou. Tudo volta pelo Desfazer, a um clique.</p>
+          <ul>
+            <li>Mudança arriscada pergunta "está tudo funcionando?" e desfaz sozinha em 90 s sem resposta.</li>
+          </ul>
+        </div>
+        <div class="etapa-vid">
+      <figure class="tela"><video muted loop playsinline autoplay preload="none" poster="video/desfazer.webp" width="1280" height="800" aria-label="Desfazendo uma mudança com um clique e a confirmação"><source src="video/desfazer.webm" type='video/webm; codecs="av01.0.05M.08"'><source src="video/desfazer.mp4" type="video/mp4"></video><button class="tocar" type="button">pausar</button></figure>
+        </div>
+      </article>
     </div>
   </section>
 
-  <section class="faixa" id="modos" aria-labelledby="modos-t">
+  <section class="faixa" id="jogos" aria-labelledby="jogos-t">
     <div class="quadro cab celulas">
-      <div><h2 id="modos-t">Modos<span>.</span></h2></div>
+      <div><h2 id="jogos-t">Ao vivo e nos jogos<span>.</span></h2><p>Perto do relógio, ele acompanha o PC a cada segundo e grava cada partida: o FPS de verdade e o que segurou o jogo.</p></div>
     </div>
   </section>
-  <section class="faixa perfis" aria-label="Modos">
-    <div class="quadro celulas">
-      <article class="perfil">
-        <header><div><h3><span class="nv nv1">1</span> seguro</h3><p class="para">para PC de trabalho</p><code>turbo --modo seguro</code></div></header>
-        <p class="perde">Só o que não tem contrapartida: telemetria, anúncios e lixo.</p>
-        <a class="ver-lista" href="#tudo" data-modo="1">Marca 40 itens<span>ver a lista</span></a>
-      </article>
-      <article class="perfil">
-        <header><div><h3><span class="nv nv2">2</span> equilibrado</h3><p class="para">para o dia a dia (recomendado)</p><code>turbo --modo equilibrado</code></div></header>
-        <p class="perde">O seguro mais o que quase ninguém usa.</p>
-        <a class="ver-lista" href="#tudo" data-modo="2">Marca 96 itens<span>ver a lista</span></a>
-      </article>
-      <article class="perfil">
-        <header><div><h3><span class="nv nv3">3</span> extremo</h3><p class="para">para tirar tudo o que dá</p><code>turbo --modo extremo</code></div></header>
-        <p class="perde">Tudo o que ajuda neste PC. Você perde recursos; cada item diz quais.</p>
-        <a class="ver-lista" href="#tudo" data-modo="3">Marca 130 itens<span>ver a lista</span></a>
-      </article>
-      <article class="perfil montar">
-        <span class="vazio-slot" aria-hidden="true">+</span>
-        <div><h3>Ou escolha item por item</h3><p>Mais 31 itens só entram se você marcar.</p></div>
-        <code>escolher</code>
-      </article>
+  <section class="faixa" aria-label="O acompanhamento ao vivo">
+    <div class="quadro vivo-bloco">
+      <div class="etapa-vid">
+      <figure class="tela"><video muted loop playsinline autoplay preload="none" poster="video/aovivo.webp" width="1280" height="800" aria-label="O acompanhamento ao vivo durante um jogo: FPS, o que limita e os números do PC"><source src="video/aovivo.webm" type='video/webm; codecs="av01.0.05M.08"'><source src="video/aovivo.mp4" type="video/mp4"></video><button class="tocar" type="button">pausar</button></figure>
+      </div>
+      <div class="fatos">
+        <div><b>FPS de verdade</b><span>Média, 1% mais lento e travadas, pelos eventos do próprio Windows (PresentMon, da Intel).</span></div>
+        <div><b>O que segura o jogo</b><span>Placa de vídeo, CPU, memória ou calor, em uma frase e com o número.</span></div>
+        <div><b>Antes e depois</b><span>Compara as partidas do mesmo jogo antes e depois de cada mudança. Se piorou, propõe desfazer.</span></div>
+        <div><b>Sem tocar no jogo</b><span>Não abre, não lê e não injeta nada no jogo: seguro com anti-cheat. Usa menos de 1 % da CPU.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="faixa" aria-labelledby="central-t">
+    <div class="quadro central">
+      <div class="etapa-txt">
+        <h3 id="central-t">Uma central que aprende com o seu PC</h3>
+        <p>Com alguns dias de medida, ela sabe o que é normal <strong>neste</strong> PC, propõe só o que tem número por trás e diz se a mudança ajudou. Você responde, e ela pesa isso da próxima vez.</p>
+      </div>
+      <figure><div class="tela"><img src="tela-sugestoes.webp" alt="Tela de sugestões do Katharos: o que a central previu e aconteceu, e propostas com o número que as justifica" width="1280" height="820" loading="lazy"></div></figure>
+    </div>
+  </section>
+
+  <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
+  <section class="faixa" id="seguro" aria-labelledby="seguro-t">
+    <div class="quadro cab celulas">
+      <div><h2 id="seguro-t">Seguro por padrão<span>.</span></h2><p>Ele deixa o Windows mais rápido sem tirar o que protege o seu PC.</p></div>
+    </div>
+  </section>
+  <section class="faixa limites" aria-label="O que ele nunca faz">
+    <div class="quadro nunca-bloco">
+      <div class="nunca">
+        <div class="nunca-lado"><strong>0</strong><span>proteções do Windows que o Katharos desliga.</span></div>
+        <ul>
+          <li style="--i:0"><s>Desligar o Defender</s><span>antivírus ligado</span></li>
+          <li style="--i:1"><s>Bloquear o Windows Update</s><span>segue atualizando</span></li>
+          <li style="--i:2"><s>Firewall, UAC, SmartScreen</s><span>ficam ligados</span></li>
+          <li style="--i:3"><s>Integridade de Memória</s><span>fica ligada</span></li>
+          <li style="--i:4"><s>Encerrar processos sozinho</s><span>ele diz qual; você fecha</span></li>
+          <li style="--i:5"><s>Apagar arquivos seus de vez</s><span>vão para a Lixeira</span></li>
+        </ul>
+      </div>
+      <div class="provas">
+        <div><b>Conferido no Windows</b><span>Depois de aplicar, cada ajuste é lido de volta. O que não ficou aparece como não ficou.</span></div>
+        <div><b>Sem porta aberta</b><span>Não abre porta de rede nem instala driver. O antivírus do Windows passa em cada versão antes de sair.</span></div>
+        <div><b>Assinado pelo GitHub</b><span>Cada arquivo da versão tem atestado de procedência e SHA-256 publicados.</span></div>
+      </div>
     </div>
   </section>
 
@@ -696,34 +600,33 @@
     </div>
   </section>
 
-  <section class="faixa jogos-home" id="jogos" aria-labelledby="jogos-t">
-    <div class="jh-arte" aria-hidden="true"><img src="jg-hero.webp" alt="" width="1792" height="768" loading="lazy"></div>
-    <div class="quadro">
-      <div class="jh-texto">
-        <h2 id="jogos-t">Jogos<span>.</span></h2>
-        <p>Mais FPS e menos atraso em qualquer jogo. Já vem em cada modo. Com o segundo plano ligado, ele grava cada partida e diz o que segurou o FPS.</p>
-      </div>
-      <div class="focos">
-        <div><h3><span class="nv nv1">1</span> seguro</h3><p>Modo de Jogo e jogos em janela otimizados.</p></div>
-        <div><h3><span class="nv nv2">2</span> equilibrado</h3><p>Mais: sem gravação de fundo e, em PC com jogos, mouse sem aceleração.</p></div>
-        <div><h3><span class="nv nv3">3</span> extremo</h3><p>Mais, em PC com jogos: placa de vídeo sempre no desempenho e menos atraso de rede e de entrada. Gasta mais energia.</p></div>
-      </div>
+  <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
+  <section class="faixa" id="baixar" aria-labelledby="baixar-t">
+    <div class="quadro cab celulas">
+      <div><h2 id="baixar-t">Baixar<span>.</span></h2><p>Grátis e de código aberto, sem garantia. Leia o <a href="https://github.com/kessleru/Katharos#antes-de-usar">aviso de uso</a> antes.</p></div>
     </div>
   </section>
-
-  <section class="faixa limites" id="limites" aria-label="O que ele nunca faz">
-    <div class="quadro nunca-bloco">
-      <div class="nunca">
-        <div class="nunca-lado"><strong>0</strong><span>proteções do Windows que o Katharos desliga.</span></div>
-        <ul>
-          <li style="--i:0"><s>Desligar o Defender</s><span>antivírus ligado</span></li>
-          <li style="--i:1"><s>Bloquear o Windows Update</s><span>segue atualizando</span></li>
-          <li style="--i:2"><s>Firewall, UAC, SmartScreen</s><span>ficam ligados</span></li>
-          <li style="--i:3"><s>Integridade de Memória</s><span>fica ligada</span></li>
-          <li style="--i:4"><s>Desligar a memória virtual</s><span>fica ligada</span></li>
-          <li style="--i:5"><s>Apagar arquivos seus de vez</s><span>vão para a Lixeira</span></li>
-        </ul>
-      </div>
+  <section class="faixa baixar" aria-label="Escolha como usar">
+    <div class="quadro">
+      <article class="escolha">
+        <header><h3>Com janelas</h3><span class="rec">recomendado</span></header>
+        <p>O jeito mais fácil: instala em um clique, sem pedir nada antes, e se atualiza sozinho.</p>
+        <dl><dt>arquivo</dt><dd>Katharos-win-Setup.exe, uns 70 MB</dd><dt>precisa</dt><dd>Windows 10 1809 ou mais novo, ou Windows 11</dd><dt>vem junto</dt><dd>o acompanhamento ao vivo, a medida de FPS e o Python</dd></dl>
+        <a class="botao cheio grande" href="https://github.com/kessleru/Katharos/releases/latest/download/Katharos-win-Setup.exe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>
+          Baixar o instalador
+        </a>
+      </article>
+      <article class="escolha">
+        <header><h3>No terminal</h3></header>
+        <p>Para quem prefere o teclado: o mesmo motor, no PowerShell. Abra o Katharos.exe e digite o número; comece por <code>raiox</code>, depois <code>turbo</code> ou <code>escolher</code>. O <code>mais</code> tem o resto.</p>
+        <dl><dt>arquivo</dt><dd>Katharos.zip, extraia e abra o Katharos.exe</dd><dt>precisa</dt><dd>Python 3.8 ou mais novo (se faltar, ele instala)</dd></dl>
+        <a class="botao vazio grande" href="https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>
+          Baixar o ZIP
+        </a>
+      </article>
+      <p class="conferir"><b>Conferir o download</b><span><code>gh attestation verify Katharos-win-Setup.exe --repo kessleru/Katharos</code>, ou compare o SHA-256 com o da <a href="https://github.com/kessleru/Katharos/releases/latest">página da versão</a>.</span></p>
     </div>
   </section>
 
@@ -735,12 +638,12 @@
   </section>
   <section class="faixa faq" aria-label="Perguntas e respostas">
     <div class="quadro">
-      <details><summary>É seguro?</summary><p>Cria um ponto de restauração. <code>desfazer</code> põe tudo de volta.</p></details>
-      <details><summary>Pode dar ban em jogo?</summary><p>Não. Ele não abre nem altera nenhum jogo: só ajusta o Windows. O segundo plano lê o que o Gerenciador de Tarefas lê.</p></details>
-      <details><summary>O segundo plano pesa?</summary><p>Uns 30 a 60 MB de RAM e menos de 1 % de CPU, em prioridade baixa. O ritmo é seu: de 1 a 10 s.</p></details>
-      <details><summary>O Windows avisou "aplicativo não reconhecido"</summary><p>É o aviso de todo programa novo sem certificado pago. Clique em Mais informações e Executar assim mesmo. O ZIP tem a assinatura do GitHub para conferir.</p></details>
-      <details><summary>Preciso instalar algo?</summary><p>Só o Python; se faltar, ele instala.</p></details>
-      <details><summary>Manda meus dados para algum lugar?</summary><p>Não. Tudo fica no seu PC.</p></details>
+      <details><summary>Pode dar ban em jogo?</summary><p>Não. Ele não abre, não lê e não altera nenhum jogo: só ajusta o Windows. O acompanhamento lê o que o Gerenciador de Tarefas lê, e o FPS vem dos eventos do próprio Windows.</p></details>
+      <details><summary>E se algo der errado?</summary><p>Antes de mudar, ele cria um ponto de restauração. Cada ajuste guarda o valor de antes e volta pelo Desfazer. Mudança arriscada pergunta se está tudo funcionando e desfaz sozinha se você não responder.</p></details>
+      <details><summary>O Windows avisou "aplicativo não reconhecido"</summary><p>É o aviso de todo programa novo sem certificado pago. Clique em Mais informações e Executar assim mesmo. Para ter certeza do que baixou, confira a assinatura do GitHub (em Baixar).</p></details>
+      <details><summary>Funciona no meu Windows?</summary><p>Windows 10 (1809 ou mais novo) e 11, em qualquer edição: Home, Pro, Enterprise, Education e LTSC. Quando uma edição não aceita um ajuste, ele diz e não finge que fez.</p></details>
+      <details><summary>O acompanhamento pesa?</summary><p>Menos de 1 % da CPU, em prioridade baixa, e uns 50 MB de RAM. Se a leitura ficar cara num PC, ele mesmo espaça o ritmo.</p></details>
+      <details><summary>Manda meus dados para algum lugar?</summary><p>Não. Tudo fica no seu PC. A única conexão é a conferência de versão nova, que você pode desligar.</p></details>
     </div>
   </section>
 
@@ -757,27 +660,13 @@
       <p class="nov-todas"><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">Todas as versões</a></p>
     </div>
   </section>
-
-  <div class="faixa listras" aria-hidden="true"><div class="quadro"></div></div>
-  <section class="faixa" id="contribuir" aria-labelledby="contr-t">
-    <div class="quadro cab celulas">
-      <div><h2 id="contr-t">Contribuir<span>.</span></h2></div>
-    </div>
-  </section>
-  <section class="faixa contribui" aria-label="Como contribuir">
-    <div class="quadro celulas">
-      <a href="https://github.com/kessleru/Katharos/issues/new/choose"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><h3>Contar um problema</h3><p>Abra uma issue.</p></a>
-      <a href="https://github.com/kessleru/Katharos/pulls"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v10M18 17V9a3 3 0 0 0-3-3h-4M13 3.5 10.5 6 13 8.5"/></svg><h3>Propor um ajuste</h3><p>Envie um pull request.</p></a>
-      <a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5M12 14.5v2.5"/></svg><h3>Falha de segurança</h3><p>Conte em privado.</p></a>
-    </div>
-  </section>
 </main>
 
 <footer class="faixa rodape">
   <div class="horizonte" aria-hidden="true"></div>
   <div class="quadro celulas">
-    <span>Feito por <a href="https://github.com/kessleru">Otávio Kessler Ustra</a>. Código aberto, sem garantia.</span>
-    <nav aria-label="Links"><a href="https://github.com/kessleru/Katharos#readme">manual</a><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">versões</a><a href="https://github.com/kessleru/Katharos#antes-de-usar">antes de usar</a><a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md#verificar-o-que-você-baixou">conferir o download</a><a href="https://github.com/kessleru/Katharos/blob/main/LICENSE">licença</a></nav>
+    <span>Feito por <a href="https://github.com/kessleru">Otávio Kessler Ustra</a>. Código aberto, sem garantia. Achou um problema? <a href="https://github.com/kessleru/Katharos/issues/new/choose">Conte aqui</a>.</span>
+    <nav aria-label="Links"><a href="https://github.com/kessleru/Katharos#readme">manual</a><a href="https://github.com/kessleru/Katharos/blob/main/CHANGELOG.md">versões</a><a href="https://github.com/kessleru/Katharos#antes-de-usar">antes de usar</a><a href="https://github.com/kessleru/Katharos/blob/main/SECURITY.md">segurança</a><a href="https://github.com/kessleru/Katharos/blob/main/CONTRIBUTING.md">contribuir</a><a href="https://github.com/kessleru/Katharos/blob/main/LICENSE">licença</a></nav>
   </div>
 </footer>
 
@@ -792,6 +681,23 @@
       { rootMargin: '0px 0px -8% 0px' });
     alvos.forEach(a => io.observe(a));
   }
+  // os limites são riscados quando aparecem
+  const lim = document.querySelector('.limites');
+  if (lim) { if (calmo) lim.classList.add('vis'); else new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { lim.classList.add('vis'); o.disconnect(); } }, { threshold: .3 }).observe(lim); }
+
+  // vídeos: só carregam e tocam quando aparecem; param quando saem da tela (nada gira escondido).
+  // Com "reduzir movimento", nada toca sozinho: o botão toca.
+  document.querySelectorAll('.tela video').forEach(v => {
+    const bt = v.parentElement.querySelector('.tocar');
+    const marca = () => { if (bt) bt.textContent = v.paused ? 'tocar' : 'pausar'; };
+    if (bt) bt.addEventListener('click', () => { v.dataset.parado = v.paused ? '' : '1'; v.paused ? v.play() : v.pause(); marca(); });
+    v.addEventListener('play', marca); v.addEventListener('pause', marca);
+    if (calmo) { v.removeAttribute('autoplay'); marca(); return; }
+    new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting && !v.dataset.parado) { if (v.preload === 'none') v.preload = 'auto'; v.play().catch(() => {}); }
+      else if (!e.isIntersecting) v.pause();
+    }), { threshold: .35 }).observe(v);
+  });
 })();
 </script>
 <script>
@@ -811,156 +717,12 @@
     conta.textContent = +m === 4 ? tot + ' mudanças no total' : nomes[m] + ' marca ' + tot;
   };
   bts.forEach(b => b.addEventListener('click', () => aplica(b.dataset.modo)));
-  document.querySelectorAll('.ver-lista').forEach(a => a.addEventListener('click', () => aplica(a.dataset.modo)));
   aplica(2);
 })();
 </script>
 <script>
 (() => {
-  const dash = document.getElementById('dash'); if (!dash) return;
   const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let sd = 7; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
-  const NS = 'http://www.w3.org/2000/svg';
-  const el = (tag, attrs, pai) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); pai.appendChild(n); return n; };
-  const caminho = pts => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-  function grade(svg, x0, x1, ys, rot) {
-    ys.forEach(y => el('line', { x1: x0, x2: x1, y1: y, y2: y, class: 'grade' }, svg));
-    rot.forEach(([x, y, t, a]) => { const n = el('text', { x, y, class: 'eixo', 'text-anchor': a || 'start' }, svg); n.textContent = t; });
-  }
-  // tempo de boot medido todo dia: sobe devagar, o turbo é aplicado no dia 18 e ele cai. Só o que foi medido, sem previsão.
-  const disco = document.getElementById('g-disco');
-  const X0 = 44, X1 = 588, DIAS = 29, DT = 18, Y0 = 150, Y = v => 14 + (60 - v) / 60 * (Y0 - 14);
-  const XD = d => X0 + d / DIAS * (X1 - X0), XT = XD(DT);
-  const defs = el('defs', {}, disco);
-  const gr = el('linearGradient', { id: 'g-area', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-  el('stop', { offset: 0, 'stop-color': '#e2a85c', 'stop-opacity': .26 }, gr); el('stop', { offset: 1, 'stop-color': '#e2a85c', 'stop-opacity': 0 }, gr);
-  const pt = el('pattern', { id: 'g-hach', width: 8, height: 8, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
-  el('line', { x1: 0, y1: 0, x2: 0, y2: 8, stroke: '#242428', 'stroke-width': 1 }, pt);
-  el('rect', { x: XT, y: 8, width: X1 - XT, height: Y0 - 8, fill: 'url(#g-hach)', class: 'depois' }, disco);
-  [[60, '60'], [30, '30'], [0, '0 s']].forEach(([v, t]) => {
-    el('line', { x1: X0, x2: X1, y1: Y(v), y2: Y(v), class: 'grade' }, disco);
-    const n = el('text', { x: X0 - 8, y: Y(v) + 3.5, class: 'eixo', 'text-anchor': 'end' }, disco); n.textContent = t;
-  });
-  [[0, '11/10', 'start'], [DT, 'turbo', 'middle'], [DIAS, '09/11', 'end']].forEach(([d, t, an]) => {
-    const n = el('text', { x: XD(d), y: Y0 + 20, class: 'eixo' + (d === DT ? ' hoje' : ''), 'text-anchor': an }, disco); n.textContent = t;
-  });
-  el('line', { x1: XT, x2: XT, y1: 8, y2: Y0, class: 'marco' }, disco);
-  const vals = []; for (let d = 0; d <= DIAS; d++) vals.push(d < DT ? 38 + d * .6 + (rnd() - .5) * 5 : 22 + (rnd() - .5) * 3);
-  vals[DIAS] = 22;
-  const pts = vals.map((v, d) => [XD(d), Y(v)]);
-  el('path', { class: 'area', d: caminho(pts) + ` L${X1} ${Y0} L${X0} ${Y0}Z` }, disco);
-  el('path', { class: 'linha', pathLength: 1, d: caminho(pts) }, disco);
-  el('circle', { class: 'ponto', cx: X1, cy: pts[DIAS][1], r: 4 }, disco);
-  const rv = el('text', { class: 'rot-v', x: X1, y: pts[DIAS][1] - 12, 'text-anchor': 'end' }, disco); rv.textContent = Math.round(vals[DIAS]) + ' s';
-  // passar o mouse: o dia e quanto o boot levou
-  const mira = el('g', { class: 'mira' }, disco);
-  const ml = el('line', { y1: 8, y2: Y0, class: 'mira-l' }, mira), mp = el('circle', { r: 3.5, class: 'mira-p' }, mira);
-  const mt = el('text', { class: 'mira-t', y: 4 }, mira);
-  const data = d => { const x = new Date(2026, 9, 11 + d); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0'); };
-  const move = ev => {
-    const r = disco.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * 600;
-    const d = Math.max(0, Math.min(DIAS, Math.round((x - X0) / (X1 - X0) * DIAS))), xx = XD(d), v = vals[d];
-    ml.setAttribute('x1', xx); ml.setAttribute('x2', xx); mp.setAttribute('cx', xx); mp.setAttribute('cy', Y(v));
-    mt.setAttribute('x', xx); mt.setAttribute('text-anchor', xx > 480 ? 'end' : xx < 110 ? 'start' : 'middle');
-    mt.textContent = data(d) + '  ' + Math.round(v) + ' s';
-    mira.classList.add('on');
-  };
-  disco.addEventListener('pointermove', move); disco.addEventListener('pointerleave', () => mira.classList.remove('on'));
-  // mapa de calor: máxima por hora; esquenta no fim da tarde e à noite
-  const calor = document.getElementById('g-calor');
-  for (let r = 0; r < 10; r++) for (let c = 0; c < 24; c++) {
-    const base = c >= 18 ? 3 : c >= 13 ? 2 : c >= 8 ? 1 : 0, dia = (r % 3 === 0) ? 1 : 0;
-    const l = Math.max(0, Math.min(4, base + (rnd() < .3 ? 1 : 0) - (rnd() < .35 ? 1 : 0) + (c >= 19 && dia && rnd() < .6 ? 1 : 0)));
-    const i = document.createElement('i'); i.dataset.l = l; i.style.setProperty('--c', c); i.style.setProperty('--r', r); calor.appendChild(i);
-  }
-  // números que sobem
-  const nums = [...dash.querySelectorAll('.kpi b[data-n]')];
-  const fmt = (v, d) => v.toFixed(d).replace('.', ',');
-  const un = n => n.querySelector('small');
-  const escreve = (n, v) => { const d = +(n.dataset.d || 0), u = un(n); n.firstChild.nodeValue = fmt(v, d); };
-  nums.forEach(n => { n.insertBefore(document.createTextNode('0'), n.firstChild); n.firstChild.nextSibling.nodeType === 3 && n.firstChild.nextSibling.remove(); });
-  const sobe = () => {
-    const t0 = performance.now(), dur = 700;
-    const f = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-      nums.forEach(n => escreve(n, +n.dataset.n * e)); if (k < 1) requestAnimationFrame(f); };
-    requestAnimationFrame(f);
-  };
-  const tic = () => { const t = document.getElementById('k-temp'); let base = 47, vis = true;
-    setInterval(() => { if (document.hidden) return; base = 46 + Math.round(rnd() * 3); escreve(t, base); }, 2600); };
-  const entra = () => { dash.parentElement.classList.add('vis'); sobe(); setTimeout(tic, 900); };
-  if (calmo) { dash.parentElement.classList.add('vis'); nums.forEach(n => escreve(n, +n.dataset.n)); }
-  else new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); entra(); } }, { threshold: .25 }).observe(dash);
-})();
-</script>
-<script>
-(() => {
-  const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const espera = ms => new Promise(r => setTimeout(r, ms));
-
-  // seções que animam quando aparecem
-  const io = new IntersectionObserver(es => es.forEach(e => {
-    if (e.isIntersecting) { e.target.classList.add('vis'); if (!e.target.dataset.sempre) io.unobserve(e.target); }
-  }), { threshold: .3 });
-  document.querySelectorAll('.perfis, .limites, .passos').forEach(el => io.observe(el));
-  if (calmo) document.querySelectorAll('.perfis, .limites, .passos').forEach(el => el.classList.add('vis'));
-
-
-  // ── a janela: o menu aparece, alguém digita 1, o raio-x mede e mostra a nota ──
-  const jan = document.getElementById('janela');
-  const pm = document.getElementById('p-menu'), pr = document.getElementById('p-raiox');
-  const lendo = pr.querySelector('.lendo');
-  pr.removeChild(lendo);
-  const quebra = el => {
-    el.innerHTML = el.innerHTML.split('\n').map(l => '<span class="ln">' + (l || ' ') + '</span>').join('\n');
-    return [...el.querySelectorAll('.ln')];
-  };
-  const lm = quebra(pm), lr = quebra(pr);
-  pr.appendChild(lendo);
-  const nota = pr.querySelector('.nota-g');
-  const linhaRaiox = lm.find(l => /raiox/.test(l.textContent) && /\b1\b/.test(l.textContent));
-  const prompt = lm[lm.length - 1];
-  const digitado = prompt.querySelector('.digitado');
-  let rodada = 0;
-
-  async function roda() {
-    const minha = ++rodada;
-    const vivo = () => minha === rodada;
-    lm.forEach(l => l.classList.add('oculta')); lr.forEach(l => l.classList.add('oculta'));
-    linhaRaiox && linhaRaiox.classList.remove('sel');
-    if (digitado) digitado.textContent = '';
-    nota.textContent = '0';
-    for (const l of lm) { if (!vivo()) return; l.classList.remove('oculta'); await espera(55); }
-    await espera(700); if (!vivo()) return;
-    if (digitado) digitado.textContent = '1';
-    linhaRaiox && linhaRaiox.classList.add('sel');
-    await espera(650); if (!vivo()) return;
-    lr[0].classList.remove('oculta');
-    lendo.classList.add('on');
-    const barra = lendo.querySelector('i'), passo = lendo.querySelector('.passo');
-    const etapas = ['medindo o disco', 'lendo o que abre com o Windows', 'contando os desligamentos', 'somando caches e temporários'];
-    for (let i = 0; i < etapas.length; i++) {
-      if (!vivo()) return;
-      passo.textContent = etapas[i];
-      barra.style.transition = 'width .5s linear'; barra.style.width = ((i + 1) / etapas.length * 100) + '%';
-      await espera(520);
-    }
-    lendo.classList.remove('on'); barra.style.transition = 'none'; barra.style.width = '0';
-    for (let i = 1; i < lr.length; i++) {
-      if (!vivo()) return;
-      lr[i].classList.remove('oculta');
-      if (lr[i].contains(nota)) {
-        const t0 = performance.now();
-        await new Promise(fim => { const passo = t => { const k = Math.min(1, (t - t0) / 900); nota.textContent = Math.round(62 * (1 - Math.pow(1 - k, 3))); k < 1 && vivo() ? requestAnimationFrame(passo) : fim(); }; requestAnimationFrame(passo); });
-      }
-      await espera(95);
-    }
-  }
-  if (!calmo) {
-    lm.forEach(l => l.classList.add('oculta')); lr.forEach(l => l.classList.add('oculta'));
-    new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); roda(); } }, { threshold: .35 }).observe(jan);
-  }
-  jan.querySelector('.repetir').addEventListener('click', () => calmo ? null : roda());
-
   // ── sementes de capim soltas pelo vento, por cima da gravura ──
   const cv = document.getElementById('sementes');
   if (cv && !calmo) {
@@ -1003,7 +765,7 @@
     else scrollTo({ top: y, behavior: suave && !reduz ? 'smooth' : 'auto' });
     return true;
   }
-  document.querySelectorAll('.menu a[href^="#"]').forEach(a => a.addEventListener('click', ev => {
+  document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', ev => {
     const id = a.getAttribute('href').slice(1);
     if (id && vaiPara(id, true)) { ev.preventDefault(); history.replaceState(null, '', '#' + id); }
   }));

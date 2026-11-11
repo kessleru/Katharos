@@ -144,7 +144,27 @@ mais_de = total // 10 * 10
 TAG_PUBLICADA = True
 ZIP = 'https://github.com/kessleru/Katharos/releases/latest/download/Katharos.zip' if TAG_PUBLICADA else 'https://github.com/kessleru/Katharos/archive/refs/heads/main.zip'
 
-VALORES = {'GH': GH, 'N_ITENS': f'mais de {mais_de}', 'N_CMD': str(N_CMD), 'N_GRUPOS': str(len(k.GRUPOS)),
+SETUP = 'https://github.com/kessleru/Katharos/releases/latest/download/Katharos-win-Setup.exe'
+
+# ── vídeos do programa em uso (scripts/videos.sh grava com a interface de verdade): só tocam quando aparecem ──
+ROTULO_VIDEO = {
+    'tour': 'O Katharos em uso: o Início, o raio-x com o que fazer, um item desmarcado na tela Otimizar e a aplicação conferida',
+    'raiox': 'O raio-x rodando: lendo o PC, analisando e a nota com o que fazer',
+    'otimizar': 'Escolhendo o modo e tirando um item da lista antes de aplicar',
+    'desfazer': 'Desfazendo uma mudança com um clique e a confirmação',
+    'aovivo': 'O acompanhamento ao vivo durante um jogo: FPS, o que limita e os números do PC',
+}
+
+
+def video(nome):
+    principal = nome == 'tour'
+    return (f'      <figure class="tela"><video muted loop playsinline autoplay preload="{"metadata" if principal else "none"}" '
+            f'poster="video/{nome}.webp" width="1280" height="800" aria-label="{e(ROTULO_VIDEO[nome])}">'
+            f'<source src="video/{nome}.webm" type=\'video/webm; codecs="av01.0.05M.08"\'><source src="video/{nome}.mp4" type="video/mp4"></video>'
+            f'<button class="tocar" type="button">pausar</button></figure>')
+
+
+VALORES = {'GH': GH, 'SETUP': SETUP, **{f'VIDEO_{n}': video(n) for n in ROTULO_VIDEO}, 'N_ITENS': f'mais de {mais_de}', 'N_CMD': str(N_CMD), 'N_GRUPOS': str(len(k.GRUPOS)),
            'MOCK_MENU': MOCK, 'TUDO': TUDO, 'N_TUDO': str(total_itens), 'MODOS': '\n'.join(cards), 'N_OPCIONAIS': str(N_OPCIONAIS),
            'NOVIDADES': novidades(), 'ZIP': ZIP, 'VERSAO': k.VERSAO, 'DATA_VERSAO': k.DATA_VERSAO}
 

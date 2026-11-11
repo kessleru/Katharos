@@ -522,23 +522,23 @@ desfazer, painel ao vivo, central de inteligência, FPS em jogo).
 primeira tela, prova visual, ritmo de leitura, vídeo e movimento que servem ao conteúdo) e registrar no cofre (`03 • Research`).
 
 Tarefas a mais desta reformulação:
-- [ ] **6.R** Pesquisa de sites de produto excelentes (lançamentos de apps de desktop, ferramentas de dev, sites premiados): o que
+- [x] **6.R** Pesquisa de sites de produto excelentes (lançamentos de apps de desktop, ferramentas de dev, sites premiados): o que
   repetem, o que evitam, como usam vídeo sem pesar. Nota no cofre e critérios para a revisão 6.6.
-- [ ] **6.V** Vídeos: roteiro de cada um (5 a 15 s), gravação da interface com dados de exemplo (o modo `--foto` vira `--video`:
+- [x] **6.V** Vídeos: roteiro de cada um (5 a 15 s), gravação da interface com dados de exemplo (o modo `--foto` vira `--video`:
   roteiro de cliques e telas, quadro a quadro, sem depender de tela real), edição com ffmpeg (zoom, cortes, moldura), saída em AV1 ou
   H.264 + WebM com poster, `preload="none"` e tocar só quando aparece na tela (sem pesar no celular nem no Lighthouse). Uma versão
   curta em GIF ou MP4 para o README.
 - [ ] **6.0** Direção visual antes de codar: 2 ou 3 propostas para as seções depois do hero (rascunho no Figma ou em HTML), escolha com o
   dono e registro da escolha no cofre (`04 • Decisions`).
-- [ ] **6.0b** Mapa das seções novas: o que cada uma precisa contar (baixar CLI ou GUI, o que ele faz, o painel ao vivo, a central de
+- [x] **6.0b** Mapa das seções novas: o que cada uma precisa contar (baixar CLI ou GUI, o que ele faz, o painel ao vivo, a central de
   inteligência, jogos com FPS de verdade, segurança e desfazer, novidades) e o componente de cada uma.
 - [ ] **6.1** `site/` com Astro, Tailwind v4, shadcn/ui e Magic UI; tokens do site atual (cores, fontes, espaçamentos) num só lugar.
 - [ ] **6.2** Dados gerados do motor: modos, áreas e itens, contagens, novidades do changelog, versão (substitui o `gera_site.py`).
-- [ ] **6.3** Seções na ordem de hoje, refeitas com componentes: abertura (cavaleiro intacto), como usar, painel (exemplo vivo com números
+- [x] **6.3** Seções na ordem de hoje, refeitas com componentes: abertura (cavaleiro intacto), como usar, painel (exemplo vivo com números
   contando e gráficos), modos, tudo o que ele faz (filtro por modo, acordeão por área), jogos, limites, FAQ, novidades, contribuir.
-- [ ] **6.4** **Baixar**: escolha entre "Com janelas (recomendado)" e "Terminal (CLI)", com tamanho, o que vem em cada um e como conferir a
+- [x] **6.4** **Baixar**: escolha entre "Com janelas (recomendado)" e "Terminal (CLI)", com tamanho, o que vem em cada um e como conferir a
   assinatura. Detecta Windows e mostra a versão atual lida das releases no build.
-- [ ] **6.5** Página do segundo plano e da central de inteligência (o que lê, quanto pesa, anti-cheat).
+- [x] **6.5** Página do segundo plano e da central de inteligência (o que lê, quanto pesa, anti-cheat).
 - [ ] **6.6** Revisão crítica: comparar com sites de referência, cortar texto e animação que não serve, conferir no celular, Lighthouse e
   leitor de tela.
 - [ ] **6.7** Deploy pelo Actions no GitHub Pages; manter o endereço `kessleru.github.io/Katharos` e redirecionar âncoras antigas.
@@ -655,3 +655,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | Fase 1: `katharos api` (JSON por linha; leitura e mudança com progresso e conferência depois; contrato congelado em `tests/api/contrato.json`) e motor elevado por pipe com senha da sessão | 3.1.2 | ramo v4 | testes 330, CI Windows |
 | 10 nov 2026 | Fase 2: todas as telas ligadas ao motor (Início, Raio-x, Otimizar com aplicar e "manter ou desfazer" em 90 s, Ao vivo pelo agora.json, Jogos, Sugestões, Desfazer, Configurações, aviso de uso); job `interface` no CI compila, desenha as 9 telas e conversa com o motor | 3.1.2 | ramo v4 | CI Windows |
 | 10 nov 2026 | Fase 4: instalador Velopack (Setup de 68,7 MB; app .NET 10 sem precisar instalar o .NET, motor, segundo plano, PresentMon e Python 3.14.10 embutido conferido por SHA-256), instalado em silêncio no Windows do CI e motor instalado respondendo; atualização pelo GitHub (avisar, automático ou nunca; nunca no meio de uma mudança) | 3.1.2 | ramo v4 | CI Windows |
+| 10 nov 2026 | Fase 6: site repaginado (hero mantido; seções novas: Veja funcionando, Como funciona em 3 passos com vídeo, Ao vivo e nos jogos, Central, Seguro por padrão com provas, Baixar com janelas ou terminal; saíram Como usar, Painel, Modos e Contribuir em bloco). Cinco vídeos gravados da interface de verdade (`scripts/videos.sh`: cursor, cliques e câmera em vetor; AV1 + H.264 + pôster, 5,4 MB no total, só carregam quando aparecem). Decisão: sem Astro/React por ora; o mesmo gerador em Python com CSS próprio (página estática mais leve; shadcn e Magic UI são para apps React) | 3.1.2 | ramo v4 | fotos 1440 e 390 px |
