@@ -3536,3 +3536,20 @@ class TestEnsaioRepetido(_CasaTmp):
 
     def test_area_nao_aplicada_nao_ensaia(self):
         self.assertIn('erro', k.ensaio_repetido(None, 'visual'))
+
+
+class TestItensNoFormatoD9(unittest.TestCase):
+    """2b.14: todo item no formato de três linhas: o que faz (curto), o que ganha e o que perde, sempre preenchidos."""
+
+    def test_todo_item_tem_ganho_custo_e_explicacao_curta(self):
+        t = k.Terminal(True, True)
+        ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
+        for notebook in (True, False):
+            ctx.perfil = json.loads(json.dumps(k.PC_MODELO))
+            ctx.perfil['pc']['notebook'] = notebook
+            for nome, pac in k.PACOTES.items():
+                for i in [x for x in (pac.itens(ctx) or []) if x]:
+                    with self.subTest(item=f'{nome}:{i.id}'):
+                        self.assertTrue((i.ganho or '').strip() and (i.custo or '').strip())
+                        self.assertLessEqual(len(i.explica or ''), 320)
+                        self.assertLessEqual(len(i.titulo), 70)
