@@ -4404,6 +4404,7 @@ def executa_itens(ctx, pac, itens, teste=False):
             if not teste:
                 _andamento_avanca([i.id for i in bloco])
     ctx.ultimos_eventos = eventos   # a API devolve os avisos e erros de cada bloco para a interface
+    ctx.ultimas_provas = provas     # e o que cada item rendeu, medido antes e depois (2b.12)
     if not teste:
         e = estado()
         e.pop('em_andamento', None)
@@ -4920,7 +4921,20 @@ def ferramenta_provas(ctx, args):
     t = ctx.t
     t.aba('o que cada item rendeu de verdade, medido neste PC')
     provas, ens = le_provas(), le_ensaios()
+    try:   # 2c.7: o antes e depois nos jogos (sessões do mesmo jogo antes e depois de cada mudança) também é prova
+        jogos = comparacoes_por_jogo(le_sessoes(90), pacotes_aplicados_dt())
+    except Exception as ex:
+        LOG.escreve(f'provas: jogos: {ex!r}')
+        jogos = []
+    if jogos:
+        t.titulo('nos jogos (sessões antes e depois de cada mudança)')
+        cor = {'melhor': 'verde', 'pior': 'vermelho'}
+        for c in jogos[:10]:
+            t.item('●', next((v for k_, v in cor.items() if k_ in str(c.get('veredito'))), 'apagado'), f'{c["jogo"]} · {c["rotulo"]}',
+                   f'{br(c.get("antes"), 0)} → {br(c.get("depois"), 0)} {c.get("un") or ""} depois de {c["nome_pacote"]} ({c["veredito"]})')
     if not provas and not ens:
+        if jogos:
+            return 0
         t.paragrafo('Ainda não há provas. A partir de agora, cada item que você aplicar é medido antes e depois (espaço, RAM, processos e '
                     'serviços), e cada aplicação guarda a medida de antes para comparar boot, CPU e RAM depois que você reiniciar.', 2, 'sub')
         return 0
@@ -14807,6 +14821,7 @@ def api_aplicar(ctx, p, ev):
                     continue
                 livre_ant = livre_bytes()
                 ctx.ultimos_eventos = []
+                ctx.ultimas_provas = []
                 feitos, avisos, erros = executa_itens(ctx, pac, its)
                 evs = getattr(ctx, 'ultimos_eventos', []) or []
                 nao_ficou = []
@@ -14819,7 +14834,11 @@ def api_aplicar(ctx, p, ev):
                 if cache_ja:
                     for chave in [c for c in cache_ja if c[0] == nome]:
                         del cache_ja[chave]
+                pv = [l for l in (getattr(ctx, 'ultimas_provas', None) or []) if isinstance(l, dict)]
+                soma = {ch: sum((l.get('d') or {}).get(ch) or 0 for l in pv) for ch in ('livre', 'ram', 'proc', 'svc')}
                 res.append({'pacote': nome, 'titulo': pac.titulo, 'itens': len(its), 'feitos': feitos,
+                            'medido': texto_ganho(soma) or ('sem ganho imediato mensurável: boot, CPU e RAM em repouso mudam depois de reiniciar, '
+                                                             'e o Katharos compara sozinho' if any(l.get('mudou') for l in pv) else ''),
                             'avisos': [a for e in evs for a in e.get('avisos', [])], 'erros': [a for e in evs for a in e.get('erros', [])],
                             'nao_ficou': nao_ficou, 'ignorados': sorted(ids - {i.id for i in its}),
                             'liberado': (livre_dep - livre_ant) if livre_ant is not None and livre_dep is not None and livre_dep > livre_ant else 0,
@@ -14995,7 +15014,21 @@ def api_historico(ctx, p, ev):
                         'medidas': [{'rotulo': r, 'veredito': v, 'antes': round(a, c) if isinstance(a, (int, float)) else a,
                                      'depois': round(b, c) if isinstance(b, (int, float)) else b, 'casas': c, 'unidade': u} for r, v, a, b, c, u in cel]})
     return {'series': series, 'marcas': [{'quando': q.isoformat(timespec='minutes'), 'titulo': t} for q, _, t in pacotes if q >= corte],
-            'efeitos': efeitos, 'tendencia': [t for _, t in analisa_tendencia(am)], 'amostras': len(am), 'anomalias': anomalias_da_memoria(dias)}
+            'efeitos': efeitos, 'tendencia': [t for _, t in analisa_tendencia(am)], 'amostras': len(am), 'anomalias': anomalias_da_memoria(dias),
+            'jogos': _jogos_antes_depois(dias)}
+
+
+def _jogos_antes_depois(dias):
+    """2c.7: nos jogos, o antes e depois de cada mudança (mesma regra da central: 3 sessões de cada lado, com margem)."""
+    try:
+        out = comparacoes_por_jogo(le_sessoes(dias), pacotes_aplicados_dt())
+    except Exception as ex:
+        LOG.escreve(f'histórico: jogos: {ex!r}')
+        return []
+    for c in out:
+        if isinstance(c.get('quando'), datetime):
+            c['quando'] = c['quando'].isoformat(timespec='minutes')
+    return out[:12]
 
 
 def anomalias_da_memoria(dias=60):

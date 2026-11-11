@@ -318,7 +318,20 @@ def ferramenta_provas(ctx, args):
     t = ctx.t
     t.aba('o que cada item rendeu de verdade, medido neste PC')
     provas, ens = le_provas(), le_ensaios()
+    try:   # 2c.7: o antes e depois nos jogos (sessões do mesmo jogo antes e depois de cada mudança) também é prova
+        jogos = comparacoes_por_jogo(le_sessoes(90), pacotes_aplicados_dt())
+    except Exception as ex:
+        LOG.escreve(f'provas: jogos: {ex!r}')
+        jogos = []
+    if jogos:
+        t.titulo('nos jogos (sessões antes e depois de cada mudança)')
+        cor = {'melhor': 'verde', 'pior': 'vermelho'}
+        for c in jogos[:10]:
+            t.item('●', next((v for k_, v in cor.items() if k_ in str(c.get('veredito'))), 'apagado'), f'{c["jogo"]} · {c["rotulo"]}',
+                   f'{br(c.get("antes"), 0)} → {br(c.get("depois"), 0)} {c.get("un") or ""} depois de {c["nome_pacote"]} ({c["veredito"]})')
     if not provas and not ens:
+        if jogos:
+            return 0
         t.paragrafo('Ainda não há provas. A partir de agora, cada item que você aplicar é medido antes e depois (espaço, RAM, processos e '
                     'serviços), e cada aplicação guarda a medida de antes para comparar boot, CPU e RAM depois que você reiniciar.', 2, 'sub')
         return 0

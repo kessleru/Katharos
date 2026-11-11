@@ -421,6 +421,7 @@ def executa_itens(ctx, pac, itens, teste=False):
             if not teste:
                 _andamento_avanca([i.id for i in bloco])
     ctx.ultimos_eventos = eventos   # a API devolve os avisos e erros de cada bloco para a interface
+    ctx.ultimas_provas = provas     # e o que cada item rendeu, medido antes e depois (2b.12)
     if not teste:
         e = estado()
         e.pop('em_andamento', None)

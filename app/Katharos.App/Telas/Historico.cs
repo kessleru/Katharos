@@ -100,6 +100,20 @@ public class Historico : Tela
             }
             efeitos = S(p);
         }
-        Monta(cab, tend, S(new StackPanel { Children = { grade, legenda } }), anomalias, efeitos);
+        // nos jogos: o antes e depois de cada mudança (2c.7)
+        Control? jogos = null;
+        var js = d.A("jogos").ToList();
+        if (js.Count > 0)
+        {
+            var p = new StackPanel { Children = { Subtitulo("Nos jogos", "Sessões do mesmo jogo antes e depois de cada mudança; diferença menor que a variação normal conta como sem diferença.") } };
+            foreach (var c in js)
+            {
+                string v = c.S("veredito");
+                var cor = v.Contains("melhor") ? Tema.Verde : v.Contains("pior") ? Tema.Vermelho : Tema.Apagado;
+                p.Children.Add(Linha($"{c.S("jogo")} · {c.S("rotulo")}: {Num(c.D("antes"))} → {Num(c.D("depois"))} {c.S("un")}", $"depois de {c.S("nome_pacote")} ({Quando(c.S("quando"))})", Etiqueta(v == "" ? "?" : v, cor)));
+            }
+            jogos = S(p);
+        }
+        Monta(cab, tend, S(new StackPanel { Children = { grade, legenda } }), anomalias, efeitos, jogos);
     }
 }

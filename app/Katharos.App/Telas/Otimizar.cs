@@ -276,6 +276,8 @@ public class Otimizar : Tela
             foreach (var x in nao.Take(4)) bloco.Children.Add(T("não ficou (conferido no Windows): " + x, null, Tema.Ambar, 13, true));
             foreach (var x in avisos.Take(3)) bloco.Children.Add(T("aviso: " + x, "rotulo", tamanho: 13, quebra: true));
             if (p.D("liberado") is double lib && lib > 0) bloco.Children.Add(T($"liberou {Num(lib / 1073741824.0, 1)} GB", null, Tema.Verde, 13));
+            // medido antes e depois de cada item, neste PC (o mesmo que fica em "provas")
+            if (p.S("medido") != "") bloco.Children.Add(T("Medido agora: " + p.S("medido") + ".", "rotulo", tamanho: 13, quebra: true));
             corpo.Children.Add(bloco);
         }
         string titulo = problemas == 0 ? $"Pronto: {feitos} {(feitos == 1 ? "mudança feita e conferida" : "mudanças feitas e conferidas")}" : $"Feito, com {problemas} {(problemas == 1 ? "ponto" : "pontos")} para olhar";
