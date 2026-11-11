@@ -119,7 +119,6 @@ Bugs:
 ### Fase 4: personalizações próprias e estilos (4.3.0)
 - [ ] **4.1** Estilos prontos com prévia do conjunto e volta em grupo.
 - [ ] **4.2** Personalizações próprias da seção 2 (tema por horário, atalhos sem seta, menu mais curto, papel de parede por horário, pastas, relógio, sons), cada uma lida de volta e com Desfazer, e testada no Windows do CI.
-- [ ] **4.3** Exportar e importar o seu estilo (JSON), com lista antes de aplicar.
 
 ### Fase 5: otimizações novas (4.4.0)
 - [ ] **5.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
@@ -176,3 +175,4 @@ Bugs:
 - 11 nov 2026 (08:52): relatório só sem conta (Worker e repositório privado); saíram o caminho pelo GitHub e o formulário de issue pública.
 - 11 nov 2026 (08:53): a seção de antivírus saiu da fase 1, só por agora; guardada em [adiado-antivirus.md](adiado-antivirus.md).
 - 11 nov 2026 (08:54): o Katharos cria as próprias personalizações; saiu o PowerToys.
+- 11 nov 2026 (08:55): saiu exportar e importar estilo.
