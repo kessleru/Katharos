@@ -2653,7 +2653,15 @@ $tt = LeTemperaturas $true
 $temp = $tt.cpu
 $gpuUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
 $vramUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory -ErrorAction Stop); if ($g.Count) { [math]::Round(([double]($g | Measure-Object -Property DedicatedUsage -Maximum).Maximum) / 1GB, 2) } else { $null } } $null
-$boot = Tenta { $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction Stop; [int](([xml]$e.ToXml()).Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text' } $null
+# boot medido pelo Windows (2e.6): o caminho principal (MainPathBootTime) dos ultimos boots, sem os que vieram logo depois de instalar
+# atualizacao (BootIsRebootAfterInstall), e a mediana deles em vez de um boot so
+$boot = Tenta {
+    $v = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 12 -ErrorAction Stop | ForEach-Object {
+        $d = @{}; foreach ($x in ([xml]$_.ToXml()).Event.EventData.Data) { $d[$x.Name] = $x.'#text' }
+        if ($d['BootIsRebootAfterInstall'] -ne 'true' -and $d['BootIsRebootAfterInstall'] -ne '1') { $t = $(if ($d['MainPathBootTime']) { [int]$d['MainPathBootTime'] } else { [int]$d['BootTime'] }); if ($t -gt 0) { $t } }
+    } | Select-Object -First 7)
+    if ($v.Count -eq 0) { $null } else { $o = @($v | Sort-Object); if ($o.Count % 2) { $o[[int][math]::Floor($o.Count / 2)] } else { ($o[$o.Count / 2 - 1] + $o[$o.Count / 2]) / 2 } }
+} $null
 $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $mem = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop } $null
 $li = ListaInicio
@@ -4917,8 +4925,66 @@ def mostra_provas_da_aplicacao(t, linhas):
                     'sozinho na próxima medição (comando "provas").', 2, 'apagado')
 
 
+def ensaio_repetido(ctx, nome, medir=None, desfazer=None, aplicar=None):
+    """2e.7: para efeito pequeno, uma medida só engana. Com a área aplicada: mede, desfaz, mede, aplica de novo os mesmos itens, mede.
+    O ganho "se repetiu" quando desfazer perde e reaplicar devolve, além do ruído, na mesma métrica. Devolve o resultado (e grava nas provas)."""
+    medir = medir or retrato
+    reg = (estado().get('pacotes') or {}).get(nome) or {}
+    pac = PACOTES.get(nome)
+    if not pac or not reg or reg.get('revertido'):
+        return {'erro': 'a área precisa estar aplicada (o ensaio desfaz e aplica de novo os mesmos itens)'}
+    if not pac.reversivel:
+        return {'erro': 'esta área não volta pelo desfazer (remoções): não dá para ensaiar'}
+    ids = set(reg.get('itens') or [])
+    r0 = medir()
+    cod = (desfazer or (lambda: desfaz_pacote(ctx, nome)))()
+    if cod:
+        return {'erro': 'o desfazer não terminou: o ensaio parou aqui'}
+    r1 = medir()
+    its = [i for i in (pac.itens(ctx) or []) if i and i.id in ids]
+    (aplicar or (lambda: executa_itens(ctx, pac, its)))()
+    r2 = medir()
+    perdeu, voltou = delta_retrato(r1, r0), delta_retrato(r1, r2)   # positivo = o ganho que a área dá
+    out = {'pacote': nome, 'titulo': pac.titulo, 'itens': len(its), 'metricas': {}}
+    for ch in ('livre', 'ram', 'proc', 'svc'):
+        a, b = perdeu.get(ch), voltou.get(ch)
+        if a is None or b is None:
+            continue
+        out['metricas'][ch] = {'ao_desfazer': a, 'ao_reaplicar': b, 'repetiu': a > 0 and b > 0, 'sem_efeito': a == 0 and b == 0}
+    m = out['metricas'].values()
+    out['veredito'] = 'repetiu' if any(x['repetiu'] for x in m) else ('sem efeito imediato' if all(x['sem_efeito'] for x in m) else 'não repetiu')
+    try:
+        registra_provas([{'t': agora_iso(), 'pacote': nome, 'id': '*ensaio', 'titulo': f'ensaio repetido de {pac.titulo}', 'd': voltou, 'mudou': len(its),
+                          'ensaio': out}])
+    except Exception as ex:
+        LOG.escreve(f'ensaio repetido: {ex!r}')
+    return out
+
+
 def ferramenta_provas(ctx, args):
     t = ctx.t
+    if getattr(args, 'repetir', None):
+        nome = args.repetir
+        t.aba(f'ensaio repetido de {nome}: desfaz, mede, aplica de novo, mede')
+        if nome not in PACOTES:
+            t.erro(f'Área "{nome}" não existe.')
+            return 1
+        if not aviso_aceito():
+            t.erro('Este ensaio muda o PC: leia e aceite o aviso antes ("katharos aviso").')
+            return 1
+        if not t.confirma(f'Vou desfazer {PACOTES[nome].titulo} e aplicar de novo os mesmos itens, medindo antes e depois. Continuar?', sim=bool(getattr(args, 'sim', False))):
+            return 0
+        r = ensaio_repetido(ctx, nome)
+        if r.get('erro'):
+            t.erro(r['erro'] + '.')
+            return 1
+        nomes = {'livre': 'espaço livre', 'ram': 'RAM disponível', 'proc': 'processos', 'svc': 'serviços'}
+        for ch, x in r['metricas'].items():
+            t.item('●', 'verde' if x['repetiu'] else 'apagado', nomes[ch], f'ao desfazer: {x["ao_desfazer"]:+d}; ao reaplicar: {x["ao_reaplicar"]:+d}'
+                   + (' (o ganho se repetiu)' if x['repetiu'] else ''))
+        t.ok({'repetiu': 'O ganho se repetiu: é efeito da área, não acaso.', 'sem efeito imediato': 'Sem efeito imediato mensurável (pode aparecer depois de reiniciar).',
+              'não repetiu': 'O ganho não se repetiu: o que se viu da primeira vez era oscilação.'}[r['veredito']])
+        return 0
     t.aba('o que cada item rendeu de verdade, medido neste PC')
     provas, ens = le_provas(), le_ensaios()
     try:   # 2c.7: o antes e depois nos jogos (sessões do mesmo jogo antes e depois de cada mudança) também é prova
@@ -14243,6 +14309,25 @@ def r_jogo_antes_depois(ev):
                             f'desfazer {c["pacote"]}', 'alta', 'o jogo volta ao desempenho de antes', 'perde o que a área fazia', 4, 0))
     return out
 
+
+def qualidade_da_medida(minutos, de, ate):
+    """2e.8: quanto dá para confiar numa comparação: dos minutos medidos na janela, quantos estavam sujos (Windows Update, Defender,
+    indexação, logo depois do boot) ou com o PC muito carregado pelos programas da pessoa. {'nivel': 'boa'|'fraca'|None, 'texto': ...}"""
+    ms = [m for m in minutos if m.get('_dt') and de <= m['_dt'] < ate and not m.get('jogo')]
+    if len(ms) < 30:
+        return {'nivel': None, 'texto': 'poucas medidas para dizer a qualidade'}
+    sujos = sum(1 for m in ms if m.get('sujo'))
+    pesados = sum(1 for m in ms if isinstance(m.get('cpu'), (int, float)) and m['cpu'] >= 60)
+    f_sujo, f_pesado = sujos / len(ms), pesados / len(ms)
+    if f_sujo < 0.2 and f_pesado < 0.25:
+        return {'nivel': 'boa', 'texto': f'medida boa ({len(ms)} minutos, quase todos limpos)'}
+    motivos = []
+    if f_sujo >= 0.2:
+        motivos.append(f'manutenção do Windows rodando em {br(100 * f_sujo, 0)} % dos minutos')
+    if f_pesado >= 0.25:
+        motivos.append(f'CPU ocupada pelos seus programas em {br(100 * f_pesado, 0)} % dos minutos')
+    return {'nivel': 'fraca', 'texto': 'medida fraca (' + '; '.join(motivos) + '): para medir melhor, deixe o PC ligado parado por um tempo'}
+
 # ███████████████████████████████████████████████████████████████████████████
 #
 #   API PARA A INTERFACE COM JANELAS (katharos api)
@@ -14620,6 +14705,7 @@ def linha_do_tempo_propostas():
         LOG.escreve(f'linha do tempo: {ex!r}')
         res = []
     vistas = e.get('conselheiro_vistas') or {}
+    mins = le_minutos(24 * 45)
     cor = {'como previsto': 'verde', 'em parte': 'verde', 'sem diferença': 'cinza', 'cedo para dizer': 'cinza', 'piorou': 'vermelho'}
     out = []
     for r in sorted(res, key=lambda r: r['quando'], reverse=True):
@@ -14627,6 +14713,7 @@ def linha_do_tempo_propostas():
         out.append({'id': r['id'], 'titulo': r['titulo'], 'quando': r['quando'].isoformat(timespec='minutes'), 'previsto': r.get('previsto'),
                     'veredito': r['veredito'], 'cor': cor.get(r['veredito'], 'cinza'), 'antes': r.get('antes'), 'depois': r.get('depois'), 'un': r.get('un'),
                     'desfazer': cmd if r['veredito'] == 'piorou' and cmd in PACOTES else None,
+                    'qualidade': qualidade_da_medida(mins, r['quando'] - timedelta(days=7), r['quando'] + timedelta(days=7)),
                     'respondido': (e.get('conselheiro_respostas') or {}).get(r['id'])})
     return out[:30]
 
@@ -15009,8 +15096,10 @@ def api_historico(ctx, p, ev):
         faixa = {'p10': round(_percentil(velhos, 10), casas), 'p90': round(_percentil(velhos, 90), casas)} if len(velhos) >= 10 else None
         series.append({'chave': chave, 'rotulo': rot, 'melhor': melhor, 'unidade': un, 'casas': casas, 'pontos': pontos, 'faixa': faixa})
     efeitos = []
+    mins = le_minutos(24 * (dias + 8))
     for titulo, quando, cel in tabela_efeito(am, pacotes):
         efeitos.append({'titulo': titulo, 'quando': quando.isoformat(timespec='minutes'),
+                        'qualidade': qualidade_da_medida(mins, quando - timedelta(days=7), quando + timedelta(days=7)),
                         'medidas': [{'rotulo': r, 'veredito': v, 'antes': round(a, c) if isinstance(a, (int, float)) else a,
                                      'depois': round(b, c) if isinstance(b, (int, float)) else b, 'casas': c, 'unidade': u} for r, v, a, b, c, u in cel]})
     return {'series': series, 'marcas': [{'quando': q.isoformat(timespec='minutes'), 'titulo': t} for q, _, t in pacotes if q >= corte],
@@ -16626,7 +16715,8 @@ def monta_parser():
     vs = sub.add_parser('versoes', parents=[depois], help='as versões do Katharos que já rodaram neste PC e o que cada troca preservou')
     vs.add_argument('--atualizar', action='store_true', help='baixa a versão nova (confere o SHA-256 antes) e guarda a atual para voltar')
     vs.add_argument('--voltar', action='store_true', help='volta para a versão guardada na última atualização')
-    sub.add_parser('provas', parents=[depois], help='o que cada item rendeu, medido neste PC: na hora e depois de reiniciar')
+    pv = sub.add_parser('provas', parents=[depois], help='o que cada item rendeu, medido neste PC: na hora e depois de reiniciar')
+    pv.add_argument('--repetir', metavar='AREA', help='ensaio repetido: desfaz a área, mede, aplica de novo, mede e diz se o ganho se repetiu')
     sub.add_parser('aviso', parents=[depois], help='o aviso de uso: riscos e responsabilidade')
     au = sub.add_parser('autenticidade', parents=[depois], help='confere se este programa é o que o autor publicou (SHA-256, local e online)')
     au.add_argument('--offline', action='store_true', help='não baixa a lista oficial; só compara com o SHA256SUMS.txt que veio junto')

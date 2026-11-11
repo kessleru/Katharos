@@ -316,7 +316,15 @@ $tt = LeTemperaturas $true
 $temp = $tt.cpu
 $gpuUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -Filter "Name LIKE '%engtype_3D%'" -ErrorAction Stop); if ($g.Count) { [math]::Min(100, [math]::Round(($g | Measure-Object -Property UtilizationPercentage -Sum).Sum, 0)) } else { $null } } $null
 $vramUso = Tenta { $g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory -ErrorAction Stop); if ($g.Count) { [math]::Round(([double]($g | Measure-Object -Property DedicatedUsage -Maximum).Maximum) / 1GB, 2) } else { $null } } $null
-$boot = Tenta { $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction Stop; [int](([xml]$e.ToXml()).Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text' } $null
+# boot medido pelo Windows (2e.6): o caminho principal (MainPathBootTime) dos ultimos boots, sem os que vieram logo depois de instalar
+# atualizacao (BootIsRebootAfterInstall), e a mediana deles em vez de um boot so
+$boot = Tenta {
+    $v = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 12 -ErrorAction Stop | ForEach-Object {
+        $d = @{}; foreach ($x in ([xml]$_.ToXml()).Event.EventData.Data) { $d[$x.Name] = $x.'#text' }
+        if ($d['BootIsRebootAfterInstall'] -ne 'true' -and $d['BootIsRebootAfterInstall'] -ne '1') { $t = $(if ($d['MainPathBootTime']) { [int]$d['MainPathBootTime'] } else { [int]$d['BootTime'] }); if ($t -gt 0) { $t } }
+    } | Select-Object -First 7)
+    if ($v.Count -eq 0) { $null } else { $o = @($v | Sort-Object); if ($o.Count % 2) { $o[[int][math]::Floor($o.Count / 2)] } else { ($o[$o.Count / 2 - 1] + $o[$o.Count / 2]) / 2 } }
+} $null
 $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $mem = Tenta { Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop } $null
 $li = ListaInicio

@@ -376,6 +376,7 @@ def linha_do_tempo_propostas():
         LOG.escreve(f'linha do tempo: {ex!r}')
         res = []
     vistas = e.get('conselheiro_vistas') or {}
+    mins = le_minutos(24 * 45)
     cor = {'como previsto': 'verde', 'em parte': 'verde', 'sem diferença': 'cinza', 'cedo para dizer': 'cinza', 'piorou': 'vermelho'}
     out = []
     for r in sorted(res, key=lambda r: r['quando'], reverse=True):
@@ -383,6 +384,7 @@ def linha_do_tempo_propostas():
         out.append({'id': r['id'], 'titulo': r['titulo'], 'quando': r['quando'].isoformat(timespec='minutes'), 'previsto': r.get('previsto'),
                     'veredito': r['veredito'], 'cor': cor.get(r['veredito'], 'cinza'), 'antes': r.get('antes'), 'depois': r.get('depois'), 'un': r.get('un'),
                     'desfazer': cmd if r['veredito'] == 'piorou' and cmd in PACOTES else None,
+                    'qualidade': qualidade_da_medida(mins, r['quando'] - timedelta(days=7), r['quando'] + timedelta(days=7)),
                     'respondido': (e.get('conselheiro_respostas') or {}).get(r['id'])})
     return out[:30]
 
@@ -765,8 +767,10 @@ def api_historico(ctx, p, ev):
         faixa = {'p10': round(_percentil(velhos, 10), casas), 'p90': round(_percentil(velhos, 90), casas)} if len(velhos) >= 10 else None
         series.append({'chave': chave, 'rotulo': rot, 'melhor': melhor, 'unidade': un, 'casas': casas, 'pontos': pontos, 'faixa': faixa})
     efeitos = []
+    mins = le_minutos(24 * (dias + 8))
     for titulo, quando, cel in tabela_efeito(am, pacotes):
         efeitos.append({'titulo': titulo, 'quando': quando.isoformat(timespec='minutes'),
+                        'qualidade': qualidade_da_medida(mins, quando - timedelta(days=7), quando + timedelta(days=7)),
                         'medidas': [{'rotulo': r, 'veredito': v, 'antes': round(a, c) if isinstance(a, (int, float)) else a,
                                      'depois': round(b, c) if isinstance(b, (int, float)) else b, 'casas': c, 'unidade': u} for r, v, a, b, c, u in cel]})
     return {'series': series, 'marcas': [{'quando': q.isoformat(timespec='minutes'), 'titulo': t} for q, _, t in pacotes if q >= corte],

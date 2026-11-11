@@ -100,6 +100,8 @@ public class Sugestoes : Tela
         var c = cor == "verde" ? Tema.Verde : cor == "vermelho" ? Tema.Vermelho : Tema.Apagado;
         string num = r.D("antes") is double a && r.D("depois") is double b ? $": {Num(a)} → {Num(b)} {r.S("un")}" : "";
         string texto = r.S("texto") != "" ? r.S("texto") : $"Previ {r.S("previsto")}; {ver}{num}.";
+        string q = r?["qualidade"].S("texto") ?? "";
+        if (q != "" && r?["qualidade"].S("nivel") != "") texto += " " + char.ToUpper(q[0]) + q[1..] + ".";
         var bt = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         if (r.S("desfazer") != "") bt.Children.Add(Botao("Desfazer", true, () => Abre("desfazer")));
         if (r.S("respondido") == "" && ver != "cedo para dizer")

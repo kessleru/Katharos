@@ -3517,3 +3517,22 @@ class TestItensNovos(unittest.TestCase):
         self.assertLess(f.index('ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 2'), f.index('Guarda-Desfazer'))
         self.assertLess(f.index('Guarda-Desfazer'), f.index('ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 1'))
         self.assertIn('EnumDisplaySettings($Dev, -1, [ref]$l)', f)
+
+
+class TestEnsaioRepetido(_CasaTmp):
+    """2e.7: desfaz, mede, aplica de novo, mede; o ganho só conta se repetiu."""
+
+    def test_repetiu_quando_desfazer_perde_e_reaplicar_devolve(self):
+        e = k.estado(); e['pacotes'] = {'visual': {'quando': '2026-11-10T10:00:00', 'itens': ['efeitos'], 'revertido': False}}; k.salva_estado(e)
+        medidas = iter([{'livre': 1000, 'ram': 5000, 'proc': 200, 'svc': 100}, {'livre': 1000, 'ram': 4600, 'proc': 210, 'svc': 100},
+                        {'livre': 1000, 'ram': 5000, 'proc': 200, 'svc': 100}])
+        t = k.Terminal(True, True)
+        ctx = k.Ctx(type('A', (), {'ascii': True, 'sem_cor': True, 'teste': False, 'sim': False, 'modo': None})(), t)
+        ctx.perfil = json.loads(json.dumps(k.PC_MODELO))
+        r = k.ensaio_repetido(ctx, 'visual', medir=lambda: next(medidas), desfazer=lambda: 0, aplicar=lambda: None)
+        self.assertEqual(r['veredito'], 'repetiu')
+        self.assertTrue(r['metricas']['ram']['repetiu'])
+        self.assertEqual(k.le_provas()[-1]['id'], '*ensaio')
+
+    def test_area_nao_aplicada_nao_ensaia(self):
+        self.assertIn('erro', k.ensaio_repetido(None, 'visual'))

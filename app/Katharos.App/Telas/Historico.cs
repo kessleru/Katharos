@@ -95,6 +95,8 @@ public class Historico : Tela
                     return $"{m.S("rotulo")}: {Num(m.D("antes"), c)} → {Num(m.D("depois"), c)} {u} ({m.S("veredito")})";
                 }).ToList();
                 string titulo = e.S("titulo");
+                string q = e?["qualidade"].S("texto") ?? "";
+                if (q != "" && e?["qualidade"].S("nivel") != "") linhas.Add(char.ToUpper(q[0]) + q[1..] + ".");
                 p.Children.Add(Linha($"{char.ToUpper(titulo[0]) + titulo[1..]}, {Quando(e.S("quando"))}",
                                      linhas.Count > 0 ? string.Join("\n", linhas) : "Poucas medidas antes e depois para dizer algo com certeza."));
             }

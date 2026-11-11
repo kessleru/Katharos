@@ -314,8 +314,66 @@ def mostra_provas_da_aplicacao(t, linhas):
                     'sozinho na próxima medição (comando "provas").', 2, 'apagado')
 
 
+def ensaio_repetido(ctx, nome, medir=None, desfazer=None, aplicar=None):
+    """2e.7: para efeito pequeno, uma medida só engana. Com a área aplicada: mede, desfaz, mede, aplica de novo os mesmos itens, mede.
+    O ganho "se repetiu" quando desfazer perde e reaplicar devolve, além do ruído, na mesma métrica. Devolve o resultado (e grava nas provas)."""
+    medir = medir or retrato
+    reg = (estado().get('pacotes') or {}).get(nome) or {}
+    pac = PACOTES.get(nome)
+    if not pac or not reg or reg.get('revertido'):
+        return {'erro': 'a área precisa estar aplicada (o ensaio desfaz e aplica de novo os mesmos itens)'}
+    if not pac.reversivel:
+        return {'erro': 'esta área não volta pelo desfazer (remoções): não dá para ensaiar'}
+    ids = set(reg.get('itens') or [])
+    r0 = medir()
+    cod = (desfazer or (lambda: desfaz_pacote(ctx, nome)))()
+    if cod:
+        return {'erro': 'o desfazer não terminou: o ensaio parou aqui'}
+    r1 = medir()
+    its = [i for i in (pac.itens(ctx) or []) if i and i.id in ids]
+    (aplicar or (lambda: executa_itens(ctx, pac, its)))()
+    r2 = medir()
+    perdeu, voltou = delta_retrato(r1, r0), delta_retrato(r1, r2)   # positivo = o ganho que a área dá
+    out = {'pacote': nome, 'titulo': pac.titulo, 'itens': len(its), 'metricas': {}}
+    for ch in ('livre', 'ram', 'proc', 'svc'):
+        a, b = perdeu.get(ch), voltou.get(ch)
+        if a is None or b is None:
+            continue
+        out['metricas'][ch] = {'ao_desfazer': a, 'ao_reaplicar': b, 'repetiu': a > 0 and b > 0, 'sem_efeito': a == 0 and b == 0}
+    m = out['metricas'].values()
+    out['veredito'] = 'repetiu' if any(x['repetiu'] for x in m) else ('sem efeito imediato' if all(x['sem_efeito'] for x in m) else 'não repetiu')
+    try:
+        registra_provas([{'t': agora_iso(), 'pacote': nome, 'id': '*ensaio', 'titulo': f'ensaio repetido de {pac.titulo}', 'd': voltou, 'mudou': len(its),
+                          'ensaio': out}])
+    except Exception as ex:
+        LOG.escreve(f'ensaio repetido: {ex!r}')
+    return out
+
+
 def ferramenta_provas(ctx, args):
     t = ctx.t
+    if getattr(args, 'repetir', None):
+        nome = args.repetir
+        t.aba(f'ensaio repetido de {nome}: desfaz, mede, aplica de novo, mede')
+        if nome not in PACOTES:
+            t.erro(f'Área "{nome}" não existe.')
+            return 1
+        if not aviso_aceito():
+            t.erro('Este ensaio muda o PC: leia e aceite o aviso antes ("katharos aviso").')
+            return 1
+        if not t.confirma(f'Vou desfazer {PACOTES[nome].titulo} e aplicar de novo os mesmos itens, medindo antes e depois. Continuar?', sim=bool(getattr(args, 'sim', False))):
+            return 0
+        r = ensaio_repetido(ctx, nome)
+        if r.get('erro'):
+            t.erro(r['erro'] + '.')
+            return 1
+        nomes = {'livre': 'espaço livre', 'ram': 'RAM disponível', 'proc': 'processos', 'svc': 'serviços'}
+        for ch, x in r['metricas'].items():
+            t.item('●', 'verde' if x['repetiu'] else 'apagado', nomes[ch], f'ao desfazer: {x["ao_desfazer"]:+d}; ao reaplicar: {x["ao_reaplicar"]:+d}'
+                   + (' (o ganho se repetiu)' if x['repetiu'] else ''))
+        t.ok({'repetiu': 'O ganho se repetiu: é efeito da área, não acaso.', 'sem efeito imediato': 'Sem efeito imediato mensurável (pode aparecer depois de reiniciar).',
+              'não repetiu': 'O ganho não se repetiu: o que se viu da primeira vez era oscilação.'}[r['veredito']])
+        return 0
     t.aba('o que cada item rendeu de verdade, medido neste PC')
     provas, ens = le_provas(), le_ensaios()
     try:   # 2c.7: o antes e depois nos jogos (sessões do mesmo jogo antes e depois de cada mudança) também é prova

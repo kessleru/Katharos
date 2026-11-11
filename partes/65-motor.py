@@ -286,3 +286,22 @@ def r_jogo_antes_depois(ev):
                             f'O 1% low caiu de {num} ({n}), além da variação normal. Desfazer esta área volta como estava.',
                             f'desfazer {c["pacote"]}', 'alta', 'o jogo volta ao desempenho de antes', 'perde o que a área fazia', 4, 0))
     return out
+
+
+def qualidade_da_medida(minutos, de, ate):
+    """2e.8: quanto dá para confiar numa comparação: dos minutos medidos na janela, quantos estavam sujos (Windows Update, Defender,
+    indexação, logo depois do boot) ou com o PC muito carregado pelos programas da pessoa. {'nivel': 'boa'|'fraca'|None, 'texto': ...}"""
+    ms = [m for m in minutos if m.get('_dt') and de <= m['_dt'] < ate and not m.get('jogo')]
+    if len(ms) < 30:
+        return {'nivel': None, 'texto': 'poucas medidas para dizer a qualidade'}
+    sujos = sum(1 for m in ms if m.get('sujo'))
+    pesados = sum(1 for m in ms if isinstance(m.get('cpu'), (int, float)) and m['cpu'] >= 60)
+    f_sujo, f_pesado = sujos / len(ms), pesados / len(ms)
+    if f_sujo < 0.2 and f_pesado < 0.25:
+        return {'nivel': 'boa', 'texto': f'medida boa ({len(ms)} minutos, quase todos limpos)'}
+    motivos = []
+    if f_sujo >= 0.2:
+        motivos.append(f'manutenção do Windows rodando em {br(100 * f_sujo, 0)} % dos minutos')
+    if f_pesado >= 0.25:
+        motivos.append(f'CPU ocupada pelos seus programas em {br(100 * f_pesado, 0)} % dos minutos')
+    return {'nivel': 'fraca', 'texto': 'medida fraca (' + '; '.join(motivos) + '): para medir melhor, deixe o PC ligado parado por um tempo'}
