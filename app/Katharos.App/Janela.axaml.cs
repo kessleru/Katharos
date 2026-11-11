@@ -37,6 +37,9 @@ public partial class Janela : Window
         Atualizacao.Mudou += () => Dispatcher.UIThread.Post(() => { if (this.FindControl<ContentControl>("Tela")!.Content is Inicio i) _ = i.Recarrega(); });
     }
 
+    /// <summary>A raiz da janela (as fotos e os vídeos põem por cima o cursor e movem a câmera aqui).</summary>
+    public Grid Raiz => this.FindControl<Grid>("RaizGrade")!;
+
     IEnumerable<Button> Botoes() => this.FindControl<StackPanel>("Nav")!.Children.OfType<Button>().Append(this.FindControl<Button>("BtConfig")!);
 
     void Navega(object? o, RoutedEventArgs e)

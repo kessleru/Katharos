@@ -10,13 +10,16 @@ namespace Katharos.App;
 public static class Servico
 {
     public static bool Exemplo;
+    /// <summary>No modo exemplo, quem grava os vídeos pode responder no lugar do motor (com eventos de progresso no tempo do vídeo).</summary>
+    public static Func<string, object?, Action<string, JsonNode?>?, Task<JsonNode?>>? Simulador;
+    public static Func<JsonNode?>? AgoraSimulado;
     static MotorComum? comum;
     static MotorElevado? elevado;
     static readonly SemaphoreSlim abrindo = new(1, 1);
 
     public static async Task<JsonNode?> Le(string metodo, object? p = null, Action<string, JsonNode?>? evento = null)
     {
-        if (Exemplo) return DadosDeExemplo.Para(metodo);
+        if (Exemplo) return Simulador != null ? await Simulador(metodo, p, evento) : DadosDeExemplo.Para(metodo);
         await abrindo.WaitAsync();
         try { comum ??= await MotorComum.Abre(); comum.Caiu += _ => comum = null; }
         finally { abrindo.Release(); }
@@ -26,7 +29,7 @@ public static class Servico
     /// <summary>Muda o PC: abre o motor elevado na primeira vez (o Windows pergunta se pode).</summary>
     public static async Task<JsonNode?> Muda(string metodo, object? p = null, Action<string, JsonNode?>? evento = null)
     {
-        if (Exemplo) return DadosDeExemplo.Para(metodo);
+        if (Exemplo) return Simulador != null ? await Simulador(metodo, p, evento) : DadosDeExemplo.Para(metodo);
         await abrindo.WaitAsync();
         try { elevado ??= await MotorElevado.Abre(); elevado.Caiu += _ => elevado = null; }
         finally { abrindo.Release(); }
@@ -44,7 +47,7 @@ public static class Servico
     /// <summary>A leitura de agora do segundo plano, direto do arquivo (sem motor: atualiza a cada segundo sem custo).</summary>
     public static JsonNode? Agora()
     {
-        if (Exemplo) return DadosDeExemplo.Para("agora");
+        if (Exemplo) return AgoraSimulado?.Invoke() ?? DadosDeExemplo.Para("agora");
         try
         {
             var arq = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "agora.json");

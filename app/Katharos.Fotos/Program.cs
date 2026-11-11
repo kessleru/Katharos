@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using Katharos.App;
 
 // uso: Katharos.Fotos <pasta> [largura altura]     desenha as telas
+//      Katharos.Fotos --video <pasta> [roteiro...]  grava os vídeos do site (quadros em PNG; o ffmpeg monta)
 //      Katharos.Fotos --motor                     confere a conversa com o motor de verdade (katharos.py api)
 if (args.Length > 0 && args[0] == "--motor")
 {
@@ -19,10 +20,25 @@ if (args.Length > 0 && args[0] == "--motor")
     catch (ErroDoMotor e) { Console.WriteLine("aplicar sem aceite: " + e.Codigo); }
     return;
 }
+Servico.Exemplo = true;
+if (args.Length > 1 && args[0] == "--video")
+{
+    AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    Roteiros.LigaSimulador();
+    foreach (var nome in args.Length > 2 ? args[2..] : Roteiros.Todos.Keys.ToArray())
+    {
+        var jv = new Janela { Width = 1280, Height = 800 };
+        jv.Show();
+        var f = new Filmagem(jv, Path.Combine(args[1], nome));
+        Roteiros.Todos[nome](jv, f);
+        jv.Close();
+        Console.WriteLine(nome + ": " + Directory.GetFiles(Path.Combine(args[1], nome), "*.png").Length + " quadros");
+    }
+    return;
+}
 var pasta = args.Length > 0 ? args[0] : "fotos";
 double w = args.Length > 2 ? double.Parse(args[1]) : 1280, h = args.Length > 2 ? double.Parse(args[2]) : 820;
 Directory.CreateDirectory(pasta);
-Servico.Exemplo = true;
 AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
 var j = new Janela { Width = w, Height = h };
 j.Show();

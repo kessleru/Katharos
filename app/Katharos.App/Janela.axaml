@@ -7,7 +7,7 @@
         Background="{x:Static k:Tema.Fundo}"
         Icon="avares://Katharos/Assets/katharos.ico"
         WindowStartupLocation="CenterScreen">
-  <Grid>
+  <Grid x:Name="RaizGrade">
     <DockPanel>
       <!-- navegação: sempre visível, com o nome de cada tela por extenso -->
       <Border DockPanel.Dock="Left" Width="232" BorderBrush="{x:Static k:Tema.Linha}" BorderThickness="0,0,1,0">
