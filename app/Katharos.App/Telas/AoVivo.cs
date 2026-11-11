@@ -26,7 +26,11 @@ public class AoVivo : Tela
     readonly List<Cel> cels;
     StackPanel? jogo, conclusoes;
     TextBlock? ritmo;
-    bool montado;
+    bool montado, lendo;
+    string assinaturaConclusoes = "";
+    bool? faixaEmJogo;
+    TextBlock? jogoTopo, jogoNome, jogoLimite, jogoFps;
+    TextBlock[] jogoValores = Array.Empty<TextBlock>();
     // o que a tela mostra quando não há leitura: o aviso de desligado, o "ligando" ou o erro. O relógio de 1 s não pode refazer
     // nada disso (refazer o botão a cada segundo derruba o clique, e trocar o "ligando" pelo aviso faz a tela piscar)
     enum Estado { Leitura, Desligado, Ligando, Erro }
@@ -45,7 +49,14 @@ public class AoVivo : Tela
             new("Memória da placa", a => a.D("vram_gb"), "GB", 1, a => a.D("vram_total_gb") is double t ? ($"de {Num(t)} GB" + (a.D("vram_gb") / t >= .95 ? ": quase cheia" : ""), a.D("vram_gb") / t >= .95 ? Tema.Ambar : Tema.Verde) : ("", Tema.Apagado), 16, double.NaN),
             new("Disco", a => a.D("disco"), "%", 0, a => ($"lendo {Num(a.D("disco_le_mbs"), 1)} MB/s", a.D("disco") >= 95 ? Tema.Ambar : Tema.Verde), 100, 95, "disco"),
         };
-        relogio.Tick += (_, _) => Atualiza();
+        // o arquivo é lido fora da linha da tela (num disco lento ou com o antivírus olhando, a leitura não trava a janela), uma por vez
+        relogio.Tick += async (_, _) =>
+        {
+            if (lendo) return;
+            lendo = true;
+            try { var a = await Task.Run(Servico.Agora); Atualiza(a); }
+            finally { lendo = false; }
+        };
         DetachedFromVisualTree += (_, _) => relogio.Stop();
     }
 
@@ -55,7 +66,7 @@ public class AoVivo : Tela
     {
         montado = false;
         estado = Estado.Leitura;
-        Atualiza();
+        Atualiza(Servico.Agora());
         relogio.Start();
         // o normal deste PC (linha de base do motor): a faixa clara atrás de cada gráfico
         try { normal = (await Servico.Le("linha_de_base"))?["metricas"]; } catch (Exception e) { Registro.Escreve("linha de base: " + e.Message); }
@@ -70,9 +81,8 @@ public class AoVivo : Tela
         ToolTip.SetTip(c.G, b == null ? null : $"O normal deste PC {(emJogo ? "em jogo" : "fora de jogo")}: entre {Num(b.D("p10"))} e {Num(b.D("p90"))} {c.Unidade} ({Num(b.D("dias"))} dias medidos).");
     }
 
-    void Atualiza()
+    void Atualiza(JsonNode? a)
     {
-        var a = Servico.Agora();
         if (estado is Estado.Ligando or Estado.Erro) return;
         if (a == null)
         {
@@ -97,28 +107,25 @@ public class AoVivo : Tela
             c.G!.Valores = c.Hist.ToArray();
         }
         var j = a["jogo"];
-        jogo!.Children.Clear();
-        jogo.IsVisible = j != null;
+        jogo!.IsVisible = j != null;
         if (j != null)
-        {
-            string limite = j.S("principal") switch { "gpu" => "O limite é a placa de vídeo: ela está no máximo e a CPU sobra.", "cpu" => "O limite é a CPU: a placa de vídeo espera por ela.", "calor" => "O PC está esquentando e freando.", _ => "Nada está no limite agora." };
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), Margin = new Thickness(32, 24) };
-            g.Children.Add(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { T($"Jogando agora · há {Num(j.D("min"))} min", "rotulo"), T(j.S("nome"), "forte", tamanho: 21), T(limite, null, null, 14, true) } });
-            int col = 1;
-            foreach (var (rot, val, un) in new[] { ("FPS médio", j.D("fps_med") ?? j.D("fps"), ""), ("1% mais lento", j.D("fps_1low"), ""), ("travadas", j.D("travadas_por_min"), "por min") })
-            {
-                var n = new StackPanel { Orientation = Orientation.Horizontal, Children = { T(val.HasValue ? Num(val) : "-", "numero") } };
-                if (un != "") n.Children.Add(T(un, "unidade"));
-                var s = new StackPanel { Margin = new Thickness(28, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { T(rot, "rotulo"), n } };
-                Grid.SetColumn(s, col++); g.Children.Add(s);
-            }
-            if (j.S("fps_estado") is string est && est != "" && est != "medindo" && !j.D("fps_med").HasValue)
-                g.Children.Add(T(est == "sem permissão" ? "FPS: libere em Configurações > FPS nos jogos" : "FPS: " + est, "rotulo").Com(t => { Grid.SetColumn(t, 1); Grid.SetColumnSpan(t, 3); t.Margin = new Thickness(28, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
-            jogo.Children.Add(g);
+        {   // os controles do jogo são os mesmos a cada segundo: só os textos mudam (refazer tudo a cada leitura pesava e piscava)
+            jogoTopo!.Text = $"Jogando agora · há {Num(j.D("min"))} min";
+            jogoNome!.Text = j.S("nome");
+            jogoLimite!.Text = j.S("principal") switch { "gpu" => "O limite é a placa de vídeo: ela está no máximo e a CPU sobra.", "cpu" => "O limite é a CPU: a placa de vídeo espera por ela.", "calor" => "O PC está esquentando e freando.", _ => "Nada está no limite agora." };
+            var vals = new[] { j.D("fps_med") ?? j.D("fps"), j.D("fps_1low"), j.D("travadas_por_min") };
+            for (int k = 0; k < jogoValores.Length; k++) jogoValores[k].Text = vals[k].HasValue ? Num(vals[k]) : "-";
+            string est = j.S("fps_estado");
+            jogoFps!.IsVisible = est != "" && est != "medindo" && !j.D("fps_med").HasValue;
+            jogoFps.Text = est == "sem permissão" ? "FPS: libere em Configurações > FPS nos jogos" : "FPS: " + est;
         }
-        foreach (var c in cels) Faixa(c, a["jogo"] != null);
-        conclusoes!.Children.Clear();
+        bool emJogo = a["jogo"] != null;
+        if (faixaEmJogo != emJogo) { faixaEmJogo = emJogo; foreach (var c in cels) Faixa(c, emJogo); }
         var cs = a.A("conclusoes").ToList();
+        string assinatura = string.Join("|", cs.Select(c => c.S("id") + c.D("nivel") + c.S("titulo") + c.S("texto")));
+        if (assinatura == assinaturaConclusoes) return;   // as mesmas conclusões: nada a refazer
+        assinaturaConclusoes = assinatura;
+        conclusoes!.Children.Clear();
         if (cs.Count > 0)
         {
             conclusoes.Children.Add(Subtitulo("O que fazer agora"));
@@ -139,6 +146,24 @@ public class AoVivo : Tela
         ritmo = T("", "rotulo").Com(t => t.HorizontalAlignment = HorizontalAlignment.Right);
         var luz = new StackPanel { Spacing = 2, Children = { new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8, Fill = Tema.Verde, VerticalAlignment = VerticalAlignment.Center }, T("ao vivo", null, Tema.Osso) } }, ritmo } };
         jogo = new StackPanel();
+        jogoTopo = T("", "rotulo"); jogoNome = T("", "forte", tamanho: 21); jogoLimite = T("", null, null, 14, true);
+        jogoFps = T("", "rotulo").Com(t => { Grid.SetColumn(t, 1); Grid.SetColumnSpan(t, 3); t.Margin = new Thickness(28, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; t.IsVisible = false; });
+        var gj = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), Margin = new Thickness(32, 24) };
+        gj.Children.Add(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { jogoTopo, jogoNome, jogoLimite } });
+        int col = 1;
+        var valores = new List<TextBlock>();
+        foreach (var (rot, un) in new[] { ("FPS médio", ""), ("1% mais lento", ""), ("travadas", "por min") })
+        {
+            var v = T("-", "numero"); valores.Add(v);
+            var n = new StackPanel { Orientation = Orientation.Horizontal, Children = { v } };
+            if (un != "") n.Children.Add(T(un, "unidade"));
+            var s = new StackPanel { Margin = new Thickness(28, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { T(rot, "rotulo"), n } };
+            Grid.SetColumn(s, col++); gj.Children.Add(s);
+        }
+        gj.Children.Add(jogoFps);
+        jogoValores = valores.ToArray();
+        jogo.Children.Add(gj);
+        faixaEmJogo = null; assinaturaConclusoes = "\u0000";
         var grade = new UniformGrid { Columns = 3 };
         foreach (var c in cels)
         {
@@ -155,19 +180,38 @@ public class AoVivo : Tela
     {
         if (estado == Estado.Ligando) return;   // dois cliques seguidos não abrem duas ligações
         estado = Estado.Ligando;
+        bool comecou = false;
         try
         {
-            Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."), Carregando("Ligando o acompanhamento").secao);
+            var (sec, passo, _) = Carregando("Abrindo o acompanhamento (na primeira vez, o Windows e o antivírus podem levar alguns segundos)");
+            Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."), sec);
+            Trabalho.Comeca("Ligando o acompanhamento…"); comecou = true;
             await Servico.Le("segundo_plano", new { ligar = true });
+            passo.Text = "Aberto. Esperando a primeira leitura do PC";
             // o segundo plano leva alguns segundos para gravar a primeira leitura (num PC mais lento, mais): espera até 20 s
             for (int i = 0; i < 40 && Servico.Agora() == null; i++) await Task.Delay(500);
+            if (Servico.Agora() == null && SegundoPlano.Rodando())
+            {   // abriu, mas a primeira leitura demora (PC lento, antivírus olhando): espera mais, dizendo isso
+                passo.Text = "Está rodando. A primeira leitura demora mais neste PC: esperando mais um pouco";
+                for (int i = 0; i < 80 && Servico.Agora() == null; i++) await Task.Delay(500);
+                if (Servico.Agora() == null)
+                {
+                    Trabalho.Termina(); comecou = false;
+                    estado = Estado.Desligado;   // o relógio troca para as leituras assim que a primeira chegar
+                    Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."),
+                          Vazio("O acompanhamento está rodando", "Ele abriu (o ícone fica perto do relógio), mas ainda não gravou a primeira leitura: neste PC isso está demorando. Esta tela muda sozinha quando ela chegar; não precisa clicar de novo."));
+                    return;
+                }
+            }
             if (Servico.Agora() == null) throw new ErroDoMotor("nao_ligou", "O acompanhamento não começou a ler. Veja ~/.katharos/segundo-plano.log.");
             estado = Estado.Leitura;
-            Atualiza();
+            Trabalho.Termina(); comecou = false;
+            Atualiza(Servico.Agora());
         }
         catch (Exception e)
         {
             Registro.Escreve("ligar o acompanhamento: " + e);
+            if (comecou) Trabalho.Termina();
             estado = Estado.Erro;   // a mensagem fica na tela até a pessoa tentar de novo
             Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora."), Erro(e, async () => { estado = Estado.Leitura; await Liga(); }));
         }

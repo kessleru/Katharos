@@ -20,8 +20,12 @@ Quando uma versão existe:
 
 ## 4.1.0 · 11 de novembro de 2026
 
-A janela agora conta o que mudou depois de cada atualização.
+A janela agora mostra o que está fazendo, fica mais fluida e conta o que mudou depois de cada atualização.
 
+- **Sempre dá para ver que está fazendo**: todo botão que conversa com o motor mostra "…" e fica desligado enquanto trabalha (um segundo clique não roda de novo), e a barra lateral acende em âmbar com o que está acontecendo. Ligar o acompanhamento mostra cada passo ("abrindo", "esperando a primeira leitura") e, num PC lento, diz que já está rodando em vez de parecer travado. Aplicar e desfazer mostram onde aparece o pedido de permissão do Windows, e toda espera longa mostra há quantos segundos está trabalhando.
+- **Ao vivo mais leve**: a tela não se refaz mais a cada leitura, só os números mudam, e a leitura do arquivo saiu da linha da janela (um disco lento não trava a tela).
+- **Início abre na hora**: mostra a última leitura e troca quando a nova chega, sem "carregando" a cada visita.
+- **Otimizar não pula**: a conferência do que já está feito atualiza os itens no lugar, sem refazer a tela (antes a rolagem pulava).
 - **Novidades ao abrir**: na primeira abertura depois de atualizar, uma caixa mostra o que mudou desde a última versão que você viu, com o mesmo texto deste histórico. Aparece uma vez só por versão e nunca na primeira instalação. Para rever depois, vá em Configurações > Novidades.
 - **Esc fecha as caixas**: as caixas de aviso e de resultado também fecham com a tecla Esc.
 

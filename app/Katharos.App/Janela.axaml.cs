@@ -18,7 +18,8 @@ public partial class Janela : Window
     public static Janela? Atual { get; private set; }
     readonly DispatcherTimer relogio = new() { Interval = TimeSpan.FromSeconds(2) };
     TaskCompletionSource<bool>? resposta;
-    bool caixaFechavel;
+    bool caixaFechavel, lendoAgora;
+    JsonNode? ultimoAgora = Servico.Agora();
 
     public Janela()
     {
@@ -26,8 +27,13 @@ public partial class Janela : Window
         Atual = this;
         foreach (var b in Botoes()) b.Click += Navega;
         this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.1.0";
-        relogio.Tick += (_, _) =>
+        relogio.Tick += async (_, _) =>
         {
+            if (!lendoAgora)
+            {   // lido fora da linha da tela: um disco lento nunca trava a janela
+                lendoAgora = true;
+                try { ultimoAgora = await Task.Run(Servico.Agora); } finally { lendoAgora = false; }
+            }
             AtualizaEstado();
             if (SegundoPlano.TelaPedida() is string t) { Mostra(t); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
         };
@@ -81,12 +87,14 @@ public partial class Janela : Window
     }
 
     /// <summary>O estado do acompanhamento, lido do arquivo que o segundo plano grava (nunca o que foi pedido: o que está acontecendo).</summary>
-    void AtualizaEstado()
+    public void AtualizaEstado()
     {
-        var a = Servico.Agora();
         var luz = this.FindControl<Avalonia.Controls.Shapes.Ellipse>("Luz")!;
         var est = this.FindControl<TextBlock>("Estado")!;
         var mais = this.FindControl<TextBlock>("EstadoMais")!;
+        // trabalhando de verdade (não esperando a pessoa responder a uma pergunta)
+        if (Trabalho.Ativo && resposta == null) { luz.Fill = Tema.Ambar; est.Text = Trabalho.Texto; mais.Text = "aguarde: está fazendo"; return; }
+        var a = ultimoAgora;
         if (a == null) { luz.Fill = Tema.Apagado; est.Text = "Acompanhamento desligado"; mais.Text = "ligue em Ao vivo"; return; }
         luz.Fill = Tema.Verde;
         est.Text = a["jogo"] is { } j ? "Jogando: " + j.S("nome") : "Acompanhando o PC";

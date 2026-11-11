@@ -122,7 +122,9 @@ public class Desfazer : Tela
         if (pacotes.Length == 0) return;
         if (!await j.Confirma(titulo == "tudo" ? "Desfazer tudo?" : $"Desfazer {titulo}?",
                 T("Os ajustes voltam ao valor de antes. O Windows vai pedir permissão de administrador.", "sub"), "Desfazer")) return;
-        j.MostraCaixa(Janela.Caixa("Desfazendo", T("Voltando os ajustes ao que eram antes.", "sub")));
+        j.MostraCaixa(Janela.Caixa("Desfazendo", Andamento("Esperando a permissão de administrador do Windows",
+            "Se o pedido do Windows não aparecer na frente, ele pode estar piscando na barra de tarefas. Depois disso, os ajustes voltam ao que eram antes.").painel));
+        Trabalho.Comeca("Desfazendo…");
         try
         {
             var r = await Servico.Muda("desfazer", new { pacotes });
@@ -132,6 +134,7 @@ public class Desfazer : Tela
                 Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
         }
         catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para desfazer", T(e.Message, "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+        finally { Trabalho.Termina(); }
     }
 }
 

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using static Katharos.App.Ui;
@@ -10,8 +11,15 @@ public class Inicio : Tela
     protected override async Task Carrega()
     {
         var cab = Cabecalho("Início", "Como está o seu PC e o que fazer agora.");
-        Monta(cab, Carregando("Lendo o que já está guardado").secao);
+        // a última leitura aparece na hora; a nova troca quando chegar (só se mudou)
+        var g = Servico.Guardado("inicio");
+        if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo o que já está guardado").secao);
         var d = await Servico.Le("inicio");
+        if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
+    }
+
+    void Desenha(Control cab, JsonNode? d)
+    {
         var rx = d?["raiox"];
 
         // a ação principal: uma só, a que faz mais sentido agora

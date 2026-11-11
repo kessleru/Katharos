@@ -26,7 +26,18 @@ public static class Servico
         MotorComum m;
         try { if (comum == null) { var c = await MotorComum.Abre(); c.Caiu += _ => { if (comum == c) comum = null; }; comum = c; } m = comum; }
         finally { abrindoComum.Release(); }
-        return await m.Pede(metodo, p, evento);
+        var r = await m.Pede(metodo, p, evento);
+        lock (guardados) guardados[Chave(metodo, p)] = r?.DeepClone();
+        return r;
+    }
+
+    // a última resposta de cada leitura: a tela abre na hora com ela e troca quando a resposta nova chega (sem "carregando" a cada visita)
+    static readonly Dictionary<string, JsonNode?> guardados = new();
+    static string Chave(string metodo, object? p) => metodo + System.Text.Json.JsonSerializer.Serialize(p);
+    public static JsonNode? Guardado(string metodo, object? p = null)
+    {
+        if (Exemplo) return null;
+        lock (guardados) return guardados.TryGetValue(Chave(metodo, p), out var r) ? r?.DeepClone() : null;
     }
 
     /// <summary>Muda o PC: abre o motor elevado na primeira vez (o Windows pergunta se pode).</summary>

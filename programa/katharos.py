@@ -15738,8 +15738,24 @@ NOVIDADES = [
  {
   "versao": "4.1.0",
   "data": "11 de novembro de 2026",
-  "resumo": "A janela agora conta o que mudou depois de cada atualização.",
+  "resumo": "A janela agora mostra o que está fazendo, fica mais fluida e conta o que mudou depois de cada atualização.",
   "itens": [
+   {
+    "titulo": "Sempre dá para ver que está fazendo",
+    "texto": "todo botão que conversa com o motor mostra \"…\" e fica desligado enquanto trabalha (um segundo clique não roda de novo), e a barra lateral acende em âmbar com o que está acontecendo. Ligar o acompanhamento mostra cada passo (\"abrindo\", \"esperando a primeira leitura\") e, num PC lento, diz que já está rodando em vez de parecer travado. Aplicar e desfazer mostram onde aparece o pedido de permissão do Windows, e toda espera longa mostra há quantos segundos está trabalhando."
+   },
+   {
+    "titulo": "Ao vivo mais leve",
+    "texto": "a tela não se refaz mais a cada leitura, só os números mudam, e a leitura do arquivo saiu da linha da janela (um disco lento não trava a tela)."
+   },
+   {
+    "titulo": "Início abre na hora",
+    "texto": "mostra a última leitura e troca quando a nova chega, sem \"carregando\" a cada visita."
+   },
+   {
+    "titulo": "Otimizar não pula",
+    "texto": "a conferência do que já está feito atualiza os itens no lugar, sem refazer a tela (antes a rolagem pulava)."
+   },
    {
     "titulo": "Novidades ao abrir",
     "texto": "na primeira abertura depois de atualizar, uma caixa mostra o que mudou desde a última versão que você viu, com o mesmo texto deste histórico. Aparece uma vez só por versão e nunca na primeira instalação. Para rever depois, vá em Configurações > Novidades."

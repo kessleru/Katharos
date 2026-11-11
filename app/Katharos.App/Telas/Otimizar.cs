@@ -34,7 +34,7 @@ public class Otimizar : Tela
     TextBlock resumo = T("", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold);
     TextBlock conferindo = T("", "rotulo");
     Button aplicar = new();
-    bool conferido;
+    bool conferido, semEventos;
 
     readonly Border barra = new() { Background = Tema.Painel, BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(72, 16), IsVisible = false };
 
@@ -82,12 +82,28 @@ public class Otimizar : Tela
         conferindo.Text = "Conferindo o que já está feito no PC…";
         try
         {
-            await CarregaItens(true, (t, d) => Dispatcher.UIThread.Post(() =>
+            var d = await Servico.Le("itens", new { modo, conferir = true }, (t, d) => Dispatcher.UIThread.Post(() =>
             {
                 if (t == "etapa") conferindo.Text = Primeira(d.S("texto")) + (d.D("de") is double de ? $" ({Num(d.D("n"))} de {Num(de)})" : "") + "…";
             }));
+            // atualiza no lugar o que já está assim (antes a tela inteira era refeita: pulava a rolagem e as áreas abertas piscavam)
+            var vistos = new Dictionary<string, JsonNode?>();
+            foreach (var x in d.A("areas").SelectMany(a => a.A("itens"))) vistos[x.S("pacote") + "/" + x.S("id")] = x["ja"]?.DeepClone();
+            conferido = true;
+            semEventos = true;
+            try
+            {
+                foreach (var i in areas.SelectMany(a => a.Itens))
+                {
+                    string k = i.Pacote + "/" + i.Id;
+                    if (!vistos.TryGetValue(k, out var v)) continue;
+                    i.J["ja"] = v; ja[k] = i.Ja;
+                    if (i.Caixa != null) { i.Caixa.IsEnabled = i.Ja != true; i.Caixa.IsChecked = i.Ja == true || i.Marcado; }
+                }
+            }
+            finally { semEventos = false; }
             conferindo.Text = "Conferido agora: o que já está assim não roda de novo.";
-            Desenha(Corpo.Children[0]);
+            AtualizaContas();
         }
         catch (Exception e) { conferindo.Text = "Não deu para conferir o que já está feito: " + e.Message; }
     }
@@ -179,7 +195,7 @@ public class Otimizar : Tela
             if (i.J.S("alerta") != "") textos.Children.Add(T("atenção: " + i.J.S("alerta"), null, Tema.Ambar, 13, true));
             if (i.J.B("sem_volta")) textos.Children.Add(T("sem volta: o Desfazer não traz de volta", null, Tema.Vermelho, 13, true));
             i.Caixa = new CheckBox { Content = textos, IsChecked = i.Ja == true || i.Marcado, IsEnabled = i.Ja != true, VerticalAlignment = VerticalAlignment.Top };
-            i.Caixa.IsCheckedChanged += (_, _) => { i.Marcado = i.Caixa.IsChecked == true; if (i.Marcado) Exclui(a, i); AtualizaContas(); };
+            i.Caixa.IsCheckedChanged += (_, _) => { if (semEventos) return; i.Marcado = i.Caixa.IsChecked == true; if (i.Marcado) Exclui(a, i); AtualizaContas(); };
             i.Estado = T("", null, null, 13).Com(t => { t.FontFamily = Tema.Mono; t.Margin = new Thickness(16, 3, 0, 0); });
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(56, 6, 32, 6), Children = { i.Caixa, i.Estado.Com(t => Grid.SetColumn(t, 1)) } };
             a.Lista!.Children.Add(g);
@@ -232,17 +248,19 @@ public class Otimizar : Tela
         if (semVolta > 0) corpo.Children.Add(T($"{semVolta} {(semVolta == 1 ? "item não volta" : "itens não voltam")} pelo Desfazer (remoções).", null, Tema.Vermelho, 13.5, true));
         if (!await j.Confirma($"Aplicar {itens.Count} {(itens.Count == 1 ? "mudança" : "mudanças")}?", corpo, $"Aplicar {itens.Count}")) return;
 
-        var passo = T("Abrindo o motor com permissão de administrador", null, Tema.Osso, 15, true);
+        var (painel, passo, barra) = Andamento("Esperando a permissão de administrador do Windows",
+            "Se o pedido do Windows não aparecer na frente, ele pode estar piscando na barra de tarefas. Pode usar o PC. Não desligue até terminar.");
         var item = T("", "rotulo", quebra: true);
-        var barra = new ProgressBar { IsIndeterminate = true, Height = 3, MinHeight = 3, Foreground = Tema.Ambar, Background = Tema.Linha, CornerRadius = new CornerRadius(0) };
-        j.MostraCaixa(Janela.Caixa("Aplicando", new StackPanel { Spacing = 12, Children = { passo, barra, item, T("Pode usar o PC. Não desligue até terminar.", "rotulo") } }));
+        painel.Children.Insert(2, item);
+        j.MostraCaixa(Janela.Caixa("Aplicando", painel));
+        Trabalho.Comeca("Aplicando mudanças…");
         try
         {
             var sel = new JsonObject();
             foreach (var g in itens.GroupBy(i => i.Pacote)) sel[g.Key] = new JsonArray(g.Select(i => (JsonNode)JsonValue.Create(i.Id)!).ToArray());
             var r = await Servico.Muda("aplicar", new { itens = sel }, (t, d) => Dispatcher.UIThread.Post(() =>
             {
-                if (t == "etapa") passo.Text = Primeira(d.S("texto"));
+                if (t == "etapa") { passo.Text = Primeira(d.S("texto")); if (painel.Children.Count > 4) painel.Children.RemoveAt(4); }   // permissão dada: a dica sai
                 else if (t == "pacote") passo.Text = $"{Primeira(d.S("titulo"))} ({Num(d.D("n"))} de {Num(d.D("de"))})";
                 else if (t == "progresso" && d.D("de") is double de && de > 0) { barra.IsIndeterminate = false; barra.Maximum = de; barra.Value = d.D("n") ?? 0; item.Text = d.S("item"); }
             }));
@@ -253,6 +271,7 @@ public class Otimizar : Tela
         {
             j.MostraCaixa(Janela.Caixa("Não deu certo", T(e.Message + " Nada foi marcado como feito; o que chegou a mudar volta pelo Desfazer.", "sub"), Botao("Fechar", false, j.FechaCaixa)), true);
         }
+        finally { Trabalho.Termina(); }
     }
 
     async Task MostraResultado(JsonNode? r)
@@ -306,7 +325,8 @@ public class Otimizar : Tela
         bool manter = await tcs.Task;
         rel.Stop();
         if (manter) { j.FechaCaixa(); await Recarrega(); return; }
-        j.MostraCaixa(Janela.Caixa("Desfazendo", T("Voltando " + string.Join(", ", pacotes) + " ao que era antes.", "sub")));
+        j.MostraCaixa(Janela.Caixa("Desfazendo", Andamento("Voltando " + string.Join(", ", pacotes) + " ao que era antes").painel));
+        Trabalho.Comeca("Desfazendo…");
         try
         {
             var r = await Servico.Muda("desfazer", new { pacotes });
@@ -314,6 +334,7 @@ public class Otimizar : Tela
             j.MostraCaixa(Janela.Caixa(ok ? "Desfeito" : "Desfeito em parte", T(ok ? "Voltou ao que era antes." : "Algo não voltou: abra o Desfazer para ver.", "sub"), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
         }
         catch (Exception e) { j.MostraCaixa(Janela.Caixa("Não deu para desfazer", T(e.Message + " Tente pela tela Desfazer.", "sub"), Botao("Fechar", false, j.FechaCaixa)), true); }
+        finally { Trabalho.Termina(); }
     }
 
     static string Primeira(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];

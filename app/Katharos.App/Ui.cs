@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Katharos.App.Controles;
 
 namespace Katharos.App;
@@ -79,12 +80,27 @@ public static class Ui
         return b;
     }
 
-    /// <summary>Botão que faz algo assíncrono (conversa com o motor): um erro vira a caixa de erro, nunca fecha o aplicativo.</summary>
-    public static Button Botao(string texto, bool primario, Func<Task> acao, bool ativo = true) => Botao(texto, primario, (Action)(async () =>
+    static readonly HashSet<Button> ocupados = new();
+
+    /// <summary>Botão que faz algo assíncrono (conversa com o motor): enquanto trabalha, fica desligado com "…" no texto e a barra
+    /// lateral diz que está trabalhando (sem isso, uma ação lenta parecia bug e convidava a clicar de novo); um segundo clique no
+    /// meio não roda de novo; um erro vira a caixa de erro, nunca fecha o aplicativo.</summary>
+    public static Button Botao(string texto, bool primario, Func<Task> acao, bool ativo = true)
     {
-        try { await acao(); }
-        catch (Exception e) { MostraErro(e); }
-    }), ativo);
+        Button? b = null;
+        b = Botao(texto, primario, (Action)(async () =>
+        {
+            if (!ocupados.Add(b!)) return;
+            var conteudo = b!.Content; bool estava = b.IsEnabled, marcou = false;
+            // o "…" só aparece se demorar: numa ação rápida (gravar uma preferência) o botão não pisca
+            DispatcherTimer.RunOnce(() => { if (ocupados.Contains(b)) { marcou = true; b.Content = texto + "…"; b.IsEnabled = false; } }, TimeSpan.FromMilliseconds(250));
+            Trabalho.Comeca();
+            try { await acao(); }
+            catch (Exception e) { MostraErro(e); }
+            finally { Trabalho.Termina(); ocupados.Remove(b); if (marcou) { b.Content = conteudo; b.IsEnabled = estava; } }
+        }), ativo);
+        return b;
+    }
 
     public static void MostraErro(Exception e)
     {
@@ -130,10 +146,27 @@ public static class Ui
     /// <summary>Carregando: o que está acontecendo, com a barra que anda (e o passo, quando o motor manda).</summary>
     public static (Secao secao, TextBlock passo, ProgressBar barra) Carregando(string texto)
     {
-        var passo = T(texto, null, Tema.Osso, 15);
-        var barra = new ProgressBar { IsIndeterminate = true, Height = 3, MinHeight = 3, Foreground = Tema.Ambar, Background = Tema.Linha, CornerRadius = new CornerRadius(0), MaxWidth = 480, HorizontalAlignment = HorizontalAlignment.Left };
-        var p = new StackPanel { Spacing = 14, Margin = new Thickness(32, 40), Children = { passo, barra } };
+        var (p, passo, barra) = Andamento(texto);
+        p.Margin = new Thickness(32, 40);
+        barra.MaxWidth = 480; barra.HorizontalAlignment = HorizontalAlignment.Left;
         return (S(p), passo, barra);
+    }
+
+    /// <summary>O que está acontecendo agora: o passo, a barra que anda e, depois de 3 s, há quanto tempo (uma espera longa nunca parece
+    /// tela parada). Opcional: uma dica embaixo (ex.: onde aparece o pedido de permissão do Windows).</summary>
+    public static (StackPanel painel, TextBlock passo, ProgressBar barra) Andamento(string texto, string? dica = null)
+    {
+        var passo = T(texto, null, Tema.Osso, 15, true);
+        var barra = new ProgressBar { IsIndeterminate = true, Height = 3, MinHeight = 3, Foreground = Tema.Ambar, Background = Tema.Linha, CornerRadius = new CornerRadius(0) };
+        var tempo = T("", "rotulo");
+        var p = new StackPanel { Spacing = 12, Children = { passo, barra, tempo } };
+        if (dica != null) p.Children.Add(T(dica, "rotulo", quebra: true));
+        var inicio = DateTime.Now;
+        var rel = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        rel.Tick += (_, _) => { int s = (int)(DateTime.Now - inicio).TotalSeconds; tempo.Text = s < 3 ? "" : $"trabalhando há {s} s"; };
+        p.AttachedToVisualTree += (_, _) => rel.Start();
+        p.DetachedFromVisualTree += (_, _) => rel.Stop();
+        return (p, passo, barra);
     }
 
     public static Secao Erro(Exception e, Action? tentar = null)
@@ -206,4 +239,22 @@ public abstract class Tela : UserControl
     }
 
     protected abstract Task Carrega();
+}
+
+/// <summary>Se a janela está fazendo algo agora (a barra lateral mostra, em âmbar, no lugar do estado do acompanhamento).</summary>
+public static class Trabalho
+{
+    static int n;
+    static string? texto;
+    static DateTime desde;
+    /// <summary>Só conta depois de 300 ms: uma ação rápida não acende a barra lateral à toa.</summary>
+    public static bool Ativo => n > 0 && (DateTime.Now - desde).TotalMilliseconds >= 300;
+    public static string Texto => texto ?? "Trabalhando…";
+    public static void Comeca(string? oQue = null)
+    {
+        if (n++ == 0) desde = DateTime.Now;
+        if (oQue != null) texto = oQue;
+        DispatcherTimer.RunOnce(() => Janela.Atual?.AtualizaEstado(), TimeSpan.FromMilliseconds(320));
+    }
+    public static void Termina() { n = Math.Max(0, n - 1); if (n == 0) texto = null; Janela.Atual?.AtualizaEstado(); }
 }
