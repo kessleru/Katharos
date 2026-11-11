@@ -373,7 +373,8 @@ class TestRobustez(unittest.TestCase):
         # outra "instância" com o PID do pai (vivo) segura a trava
         (self.tmp / 'katharos.lock').write_text(f'{__import__("os").getppid()} x\n')
         b = k.Trava(self.tmp)
-        self.assertFalse(b.pega())
+        with mock.patch.object(k, '_eh_python', return_value=True):   # no Windows do CI o pai é o PowerShell, não um Python
+            self.assertFalse(b.pega())
         self.assertEqual(b.dona, __import__('os').getppid())
         # PID que não existe: trava velha, pode pegar
         (self.tmp / 'katharos.lock').write_text('999999999 x\n')
@@ -2809,6 +2810,13 @@ class TestAProvaDeInvasores(unittest.TestCase):
 
 class TestApi(_CasaTemporaria):
     """katharos api: o que a interface com janelas usa. JSON por linha; erro vira resposta, nunca derruba; mudar o PC pede aceite."""
+
+    def setUp(self):
+        super().setUp()
+        # a API lê o PC de verdade no Windows; aqui, o PC modelo (o mesmo do site), em qualquer sistema
+        self._win = mock.patch.object(k, 'WINDOWS', False)
+        self._win.start()
+        self.addCleanup(self._win.stop)
 
     def conversa(self, *pedidos):
         import io
