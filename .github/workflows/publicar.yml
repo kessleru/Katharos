@@ -64,6 +64,22 @@ jobs:
           if ($p.ExitCode) { exit 1 }
           $p = Start-Process .\Katharos.exe -ArgumentList '--foto', "$d\painel.png" -Wait -PassThru
           if ($p.ExitCode -or -not (Test-Path "$d\painel.png")) { Get-Content "$env:USERPROFILE\.katharos\segundo-plano.log" -ErrorAction SilentlyContinue; exit 1 }
+      - name: teste de travadas por driver (rastreio do kernel, 10 s, só lê)
+        shell: pwsh
+        run: |
+          $d = "$env:RUNNER_TEMP"
+          $p = Start-Process .\Katharos.exe -ArgumentList '--travadas', '10', "$d\travadas.json" -Wait -PassThru
+          $j = Get-Content "$d\travadas.json" -Raw | ConvertFrom-Json
+          Write-Host "código $($p.ExitCode), eventos $($j.eventos), sem endereço $($j.sem_endereco), drivers $($j.drivers_carregados), erro: $($j.erro)"
+          $j.drivers | Select-Object -First 8 | Format-Table driver, n, maior_us, acima_1ms | Out-String | Write-Host
+          if ($p.ExitCode -or $j.eventos -lt 100 -or -not $j.drivers) { exit 1 }
+          # a sessão do kernel não pode ficar ligada depois do teste
+          $sessao = logman query -ets | Select-String 'NT Kernel Logger'
+          if ($sessao) { Write-Host 'a sessão do kernel ficou ligada'; exit 1 }
+          New-Item -ItemType Directory -Force "$env:USERPROFILE\.katharos" | Out-Null
+          Copy-Item "$d\travadas.json" "$env:USERPROFILE\.katharos\travadas.json"
+          python programa/katharos.py travadas --ultimo --sem-cor
+          if ($LASTEXITCODE) { exit 1 }
       - name: motor elevado (pipe com senha da sessão), de verdade no Windows
         # O motor que a interface abre como administrador: só aceita quem traz a senha da sessão; senha errada fecha na hora.
         shell: pwsh
