@@ -55,7 +55,7 @@ def coleta_evidencias(ctx=None, agora=None):
             'saude': (le_saude() or {}).get('analise') or {}, 'termica': analisa_termica(le_horas()), 'fundo_ligado': bool(e.get('manut_freq')) or e.get('segundo_plano') == 'sim',
             'agora': agora or datetime.now(), 'perfil': getattr(ctx, 'perfil', None) or {},
             'sessoes': le_sessoes(60, agora), 'minutos': le_minutos(24 * BASE_DIAS + 24, agora), 'segundo_plano': e.get('segundo_plano') == 'sim',
-            'respostas': e.get('conselheiro_respostas') or {}, 'feitos': e.get('conselheiro_feitos') or {}}
+            'respostas': e.get('conselheiro_respostas') or {}, 'feitos': e.get('conselheiro_feitos') or {}, 'travadas': travadas_recente()}
 
 
 # ───────── regras ─────────

@@ -1640,7 +1640,7 @@ class TestRaioxInteligente(unittest.TestCase):
 
     def test_dpc_alto_aponta_para_drivers(self):
         a = [x for x in self.analisa(medidas={'dpc': 4, 'interrupcoes': 2}) if 'interrompendo' in x.titulo]
-        self.assertEqual(a[0].comando, 'saude')
+        self.assertEqual(a[0].comando, 'travadas')   # o teste de travadas diz qual driver é
         self.assertNotIn('Drivers interrompendo o processador', self.titulos(medidas={'dpc': 0.4, 'interrupcoes': 0.3}))
 
     def test_xmp_desligado_so_quando_a_diferenca_e_clara(self):
@@ -2502,9 +2502,18 @@ class TestSegundoPlano(_CasaTemporaria):
 
     def test_executavel_nao_mexe_em_processo_de_jogo(self):
         """Anti-cheat: só contadores do Windows, nomes de processo e o driver de vídeo. Nada que abra, leia ou injete em outro processo."""
-        proibido = re.compile(r'OpenProcess|ReadProcessMemory|WriteProcessMemory|VirtualAllocEx|CreateRemoteThread|SetWindowsHookEx|NtQueryInformationProcess'
+        proibido = re.compile(r'OpenProcess(?!Token)|ReadProcessMemory|WriteProcessMemory|VirtualAllocEx|CreateRemoteThread|SetWindowsHookEx|NtQueryInformationProcess'
                               r'|\.MainModule|\.Modules\b|\.MainWindowHandle|\bp\.Handle\b|\.StartTime\b|TotalProcessorTime|PrivateMemorySize|GetProcessById')
         self.assertEqual(proibido.findall(self.CS), [])
+        # o único token aberto é o do próprio Katharos (para o teste de travadas ler endereço de driver no Windows 11 24H2)
+        self.assertEqual(re.findall(r'OpenProcessToken\((\w+)\(', self.CS), ['GetCurrentProcess'])
+
+    def test_teste_de_travadas_so_le_e_sempre_para_a_sessao(self):
+        trecho = self.CS[self.CS.index('static class Travadas'):self.CS.index('static class Programa')]
+        self.assertIn('EVENT_TRACE_CONTROL_STOP', trecho)
+        self.assertEqual(re.findall(r'\bFLAG_\w+ = 0x\w+', trecho), ['FLAG_DPC = 0x20', 'FLAG_INTERRUPT = 0x40'])   # só DPC e interrupção
+        self.assertIn('if (iniciou) try { ControlTraceW', trecho)   # sessão de outro programa nunca é parada
+        self.assertIn('if (cod == 0)', trecho)
 
     def test_executavel_e_csharp_5(self):
         """Compila com o csc.exe que vem dentro do Windows (C# 5): sem $"", ?., nameof, => em membro."""
@@ -3211,7 +3220,12 @@ class TestFpsAntesDepois(unittest.TestCase):
         self.assertEqual([x['comando'] for x in sug], ['desfazer visual'])
 
 
-class TestMotorNovo(TestRobustez):
+class _CasaTmp(unittest.TestCase):
+    setUp = TestRobustez.setUp
+    tearDown = TestRobustez.tearDown
+
+
+class TestMotorNovo(_CasaTmp):
     """I7 a I15: memória em SQLite, detectores, causas, planejador, avaliador, eventos e orçamento de avisos."""
 
     def _sessoes(self, n, limites, dias=4, **kw):
@@ -3365,3 +3379,42 @@ class TestMotorNovo(TestRobustez):
             self.assertIn(c['problema'], k.PROBLEMAS)
             for s in list(c['confirma']) + c['descarta'] + c['precisa']:
                 self.assertIn(s, k._NOME_SINTOMA, s)
+
+
+class TestTravadas(_CasaTmp):
+    """2c.9 a 2c.11: o teste de travadas por driver, em linguagem simples, no raio-x e na manutenção."""
+
+    MEDIDA = {'quando': '2026-11-10T10:00:00', 'eventos': 52000, 'sem_endereco': 10, 'drivers': [
+        {'driver': 'ntoskrnl.exe', 'n': 30000, 'maior_us': 3000, 'acima_1ms': 4},
+        {'driver': 'ndis.sys', 'n': 9000, 'maior_us': 2100, 'acima_1ms': 12},
+        {'driver': 'nvlddmkm.sys', 'n': 8000, 'maior_us': 5200, 'acima_1ms': 3},
+        {'driver': 'storport.sys', 'n': 500, 'maior_us': 300, 'acima_1ms': 0}]}
+
+    def test_culpados_em_linguagem_simples_sem_o_proprio_windows(self):
+        c = k.analisa_travadas(self.MEDIDA)
+        self.assertEqual([x['driver'] for x in c], ['ndis.sys', 'nvlddmkm.sys'])
+        self.assertEqual(c[0]['o_que'], 'a pilha de rede do Windows')
+        self.assertTrue(c[1]['grave'])
+        self.assertIn('NVIDIA', c[1]['fazer'])
+
+    def test_driver_desconhecido_ainda_tem_o_que_fazer(self):
+        self.assertEqual(k.quem_e_o_driver('xyz123.sys')[0], 'um driver')
+
+    def test_detector_confirma_causa_driver_com_nome(self):
+        ev = TestMotorNovo._ev(self, travadas=self.MEDIDA,
+                               sessoes=TestMotorNovo._sessoes(self, 6, {}, fps_med=120, fps_1low=40, travadas_por_min=3))
+        d = {x['problema']: x for x in k.pensa(ev)['diagnosticos']}
+        self.assertEqual(d['travadas']['causa'], 'driver')
+        self.assertTrue(any('ndis.sys' in e for e in d['travadas']['evidencias']))
+
+    def test_manutencao_so_mede_quando_pendente_e_fora_do_jogo(self):
+        with mock.patch.object(k, 'mede_travadas') as m:
+            self.assertIsNone(k.roda_travadas_se_pendente())
+            m.assert_not_called()
+            e = k.estado(); e['travadas_pendente'] = True; k.salva_estado(e)
+            (self.tmp / 'agora.json').write_text('{"jogo": "x"}', encoding='utf-8')
+            self.assertIsNone(k.roda_travadas_se_pendente())
+            m.assert_not_called()
+            (self.tmp / 'agora.json').write_text('{}', encoding='utf-8')
+            m.return_value = dict(self.MEDIDA)
+            self.assertEqual(k.roda_travadas_se_pendente()['eventos'], 52000)

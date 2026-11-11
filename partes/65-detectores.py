@@ -137,6 +137,18 @@ def d_raiox(ev):
     return out
 
 
+@detector
+def d_travadas(ev):
+    """O teste de travadas (últimos 7 dias) nomeia o driver: confirma a causa 'driver' com nome e o que fazer."""
+    tv = ev.get('travadas')
+    out = []
+    for c in (analisa_travadas(tv) if tv else [])[:1]:
+        out.append(_achado('travadas-' + c['driver'].lower(), 'limite', f'{c["o_que"][0].upper()}{c["o_que"][1:]} trava o processador',
+                           f'no teste de travadas, {c["driver"]} segurou o processador por até {br(c["maior_ms"], 1)} ms', ['dpc_alto', 'driver_culpado'],
+                           'alta', 'teste de travadas', '', {'driver': c['driver'], 'fazer': c['fazer']}, 3 if c['grave'] else 2))
+    return out
+
+
 def detecta(ev):
     """Roda todos os detectores (um com defeito não derruba os outros). Achados com confiança None (ainda não sei) ficam de fora."""
     out = []
@@ -172,7 +184,7 @@ CAUSAS = [
      'descarta': [], 'acao': 'raiox', 'faria': 'conferir no raio-x o tipo de disco, o espaço e quem escreve nele', 'previsao': None, 'risco': 'nenhum: só leitura'},
     {'id': 'driver', 'problema': 'travadas', 'nome': 'um driver segurando o processador', 'precisa': ['travadas'],
      'confirma': {'travadas': 1, 'sem_limite': 3, 'dpc_alto': 3, 'driver_erro': 1}, 'descarta': ['ram_cheia', 'vram_cheia', 'disco_cheio', 'calor'],
-     'acao': 'travadas', 'faria': 'rodar o teste de travadas (1 minuto) para dizer qual driver é',
+     'acao': 'travadas', 'faria': 'rodar o teste de travadas (1 minuto) para dizer qual driver é; com o culpado já medido, atualizar o driver dele',
      'previsao': None, 'risco': 'nenhum: só leitura'},
     {'id': 'repouso-cpu', 'problema': 'pc', 'nome': 'algo ocupando a CPU fora dos jogos', 'precisa': ['cpu_acima'], 'confirma': {'cpu_acima': 3, 'repouso': 1},
      'descarta': [], 'acao': 'raiox', 'faria': 'ver no raio-x quem gasta a CPU', 'previsao': None, 'risco': 'nenhum: só leitura'},
@@ -190,7 +202,7 @@ _NOME_SINTOMA = {'calor': 'calor acima do seguro', 'freio': 'CPU freando', 'cpu_
                  'travadas': 'travadas', 'sem_limite': 'travadas sem nenhum limite', 'dpc_alto': 'DPC alto', 'driver_erro': 'erro de driver',
                  'pagefile_hd': 'paginação num HD', 'tela_azul': 'tela azul', 'cpu_acima': 'CPU acima do normal', 'ram_acima': 'RAM acima do normal',
                  'boot_lento': 'boot mais lento', 'inicializacao_cresceu': 'mais programas na inicialização', 'ram_subindo': 'RAM subindo',
-                 'calor_repouso': 'temperatura subindo', 'disco_erro': 'erro de disco', 'repouso': 'fora dos jogos'}
+                 'calor_repouso': 'temperatura subindo', 'driver_culpado': 'driver medido no teste', 'disco_erro': 'erro de disco', 'repouso': 'fora dos jogos'}
 
 
 def diagnostica(achados):
@@ -325,6 +337,14 @@ def pensa(ev):
         LOG.escreve(f'avaliador: {ex!r}')
     nunca = {x.strip().lower() for x in re.split(r'[,;\s]+', str(config('motor-nunca') or '')) if x.strip()}
     prot = set()
+    if any(d['causa'] == 'driver' for d in diags) and not ev.get('travadas'):
+        try:
+            e = estado()
+            if 'travadas_pendente' not in e:
+                e['travadas_pendente'] = True
+                salva_estado(e)
+        except Exception as ex:
+            LOG.escreve(f'travadas pendente: {ex!r}')
     props = planeja(sug, diags, memoria_pesos(), prot | nunca)
     props = [p for p in props if (p.get('comando') or '').split(' ')[0] not in nunca]
     return {'achados': achados, 'diagnosticos': diags, 'propostas': props}

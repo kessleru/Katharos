@@ -88,6 +88,7 @@ GRUPOS = [
         ('tendencia', 'o PC está piorando com o tempo?', 'ferramenta_tendencia'),
         ('conselheiro', 'central de inteligência: propõe com base nas medidas', 'ferramenta_conselheiro'),
         ('saude', 'erros do Windows, drivers e o que ajustar', 'ferramenta_saude'),
+        ('travadas', 'qual driver trava o PC (mede 1 minuto, só lê)', 'ferramenta_travadas'),
         ('agendar', 'manutenção sozinha: semanal, diária ou contínua', 'ferramenta_agendar'),
     ]),
     ('segurança', 'só olha, não muda nada', [
@@ -182,7 +183,7 @@ COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (o mesmo que segundo-plano)', 'ferramenta_segundo_plano')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+SEM_ESTADO = {'travadas', 'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 # comandos depois dos quais o motor de inteligência pensa de novo (evento "aplicou" ou "desfez")
@@ -268,6 +269,9 @@ def monta_parser():
     td.add_argument('--agora', action='store_true', help='grava uma medida agora antes de mostrar')
     sd = sub.add_parser('saude', parents=[depois], help='erros do Windows, drivers e o que o sistema precisa ajustar (só lê)')
     sd.add_argument('--ultimo', action='store_true', help='mostra o último retrato em vez de ler os logs de novo')
+    tv = sub.add_parser('travadas', parents=[depois], help='qual driver trava o PC: mede 1 minuto e diz o culpado (só lê)')
+    tv.add_argument('--segundos', type=int, default=60, help='quanto tempo medir (10 a 300)')
+    tv.add_argument('--ultimo', action='store_true', help='mostra a última medida sem medir de novo')
     cs = sub.add_parser('conselheiro', parents=[depois], help='propõe mudanças com base nas medidas do segundo plano (não aplica nada)')
     cs.add_argument('--dispensar', metavar='ID', help='esconde uma proposta por 30 dias')
     cs.add_argument('--resposta', nargs=2, metavar=('ID', 'RESPOSTA'), help='diz se uma proposta ajudou: sim, nao ou nao-importa')

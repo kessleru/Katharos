@@ -539,6 +539,12 @@ def ferramenta_manutencao(ctx, args):
             cod, _ = roda_exe(['DISM.exe', '/Online', '/Cleanup-Image', '/StartComponentCleanup'], 35, pr)
             if cod != -1:
                 e['manut_mensal'] = agora_iso()
+    try:   # o motor viu travadas sem nenhum limite: mede uma vez qual driver é (fora do jogo; esta tarefa já roda como administrador)
+        tv = roda_travadas_se_pendente(pr)
+        if tv:
+            alertas += [f'travadas: {c["o_que"]} ({c["driver"]}), até {br(c["maior_ms"], 1)} ms' for c in analisa_travadas(tv)[:2]]
+    except Exception as ex:
+        LOG.escreve(f'manutenção: travadas: {ex!r}')
     alertas += avisa_tendencia(ctx, e)
     alertas += avisa_saude(ctx, e)
     alertas += avisa_propostas(e, ctx)

@@ -2868,6 +2868,180 @@ namespace KatharosApp
         }
     }
 
+
+    // ───────── teste de travadas por driver (o que o LatencyMon faz) ─────────
+    // Liga por N segundos a sessão de rastreio do kernel do Windows só com os eventos de DPC e de interrupção (o tempo que cada driver
+    // segurou um processador), soma por driver e devolve o pior. Só lê: não instala driver, não abre processo, não mexe em nada.
+    // Precisa de administrador (o kernel só entrega esses eventos para ele). Se outra ferramenta já usa a sessão do kernel, não mexe
+    // nela: diz isso e para.
+    static class Travadas
+    {
+        const uint WNODE_FLAG_TRACED_GUID = 0x20000, EVENT_TRACE_REAL_TIME_MODE = 0x100, FLAG_DPC = 0x20, FLAG_INTERRUPT = 0x40;
+        const uint PROCESS_TRACE_MODE_REAL_TIME = 0x100, PROCESS_TRACE_MODE_RAW_TIMESTAMP = 0x1000, PROCESS_TRACE_MODE_EVENT_RECORD = 0x10000000;
+        const uint EVENT_TRACE_CONTROL_STOP = 1;
+        const string NOME = "NT Kernel Logger";
+        static readonly Guid SystemTrace = new Guid("9e814aad-3204-11d2-9a82-006008a86939");
+        static readonly Guid PerfInfo = new Guid("ce1dbfb4-137e-4da6-87b0-3f59aa102cbc");
+
+        [StructLayout(LayoutKind.Sequential)] struct WNODE_HEADER { public uint BufferSize, ProviderId; public ulong HistoricalContext; public long TimeStamp; public Guid Guid; public uint ClientContext, Flags; }
+        [StructLayout(LayoutKind.Sequential)] struct EVENT_TRACE_PROPERTIES
+        {
+            public WNODE_HEADER Wnode; public uint BufferSize, MinimumBuffers, MaximumBuffers, MaximumFileSize, LogFileMode, FlushTimer, EnableFlags;
+            public int AgeLimit; public uint NumberOfBuffers, FreeBuffers, EventsLost, BuffersWritten, LogBuffersLost, RealTimeBuffersLost; public IntPtr LoggerThreadId;
+            public uint LogFileNameOffset, LoggerNameOffset;
+        }
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate void EventRecordCallback(IntPtr rec);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate uint BufferCallback(IntPtr log);
+        // EVENT_TRACE_LOGFILEW, montado à mão (o tamanho muda entre 32 e 64 bits; só os campos usados importam)
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct EVENT_TRACE_LOGFILE
+        {
+            public string LogFileName; public string LoggerName; public long CurrentTime; public uint BuffersRead, ProcessTraceMode;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 88)] public byte[] CurrentEvent;   // EVENT_TRACE (88 bytes em 64 bits; 32 bits cabe)
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 280)] public byte[] LogfileHeader; // TRACE_LOGFILE_HEADER
+            public BufferCallback BufferCallback; public uint BufferSize, Filled, EventsLost; public EventRecordCallback EventRecordCallback;
+            public uint IsKernelTrace; public IntPtr Context;
+        }
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern uint StartTraceW(out ulong h, string nome, IntPtr props);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern uint ControlTraceW(ulong h, string nome, IntPtr props, uint ctl);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern ulong OpenTraceW(ref EVENT_TRACE_LOGFILE log);
+        [DllImport("advapi32.dll")] static extern uint ProcessTrace(ulong[] h, uint n, IntPtr ini, IntPtr fim);
+        [DllImport("advapi32.dll")] static extern uint CloseTrace(ulong h);
+        [DllImport("psapi.dll", SetLastError = true)] static extern bool EnumDeviceDrivers([Out] IntPtr[] bases, uint tam, out uint precisa);
+        [DllImport("psapi.dll", CharSet = CharSet.Unicode)] static extern uint GetDeviceDriverBaseNameW(IntPtr b, StringBuilder nome, uint tam);
+        [DllImport("kernel32.dll")] static extern bool QueryPerformanceFrequency(out long f);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr p, uint acesso, out IntPtr t);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool LookupPrivilegeValueW(string s, string n, out long luid);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr t, bool tudo, ref TOKEN_PRIV novo, uint tam, IntPtr ant, IntPtr ret);
+        [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+        [StructLayout(LayoutKind.Sequential, Pack = 4)] struct TOKEN_PRIV { public uint Count; public long Luid; public uint Attr; }
+
+        class PorDriver { public long N; public double TotalUs, MaiorUs; public int Acima1ms; public bool Isr; }
+
+        static ulong[] bases; static string[] nomes;
+        static readonly Dictionary<string, PorDriver> dpc = new Dictionary<string, PorDriver>(StringComparer.OrdinalIgnoreCase);
+        static double usPorTick; static long eventos, semEndereco;
+
+        // Windows 11 24H2 em diante só mostra endereço do kernel para quem tem o privilégio de depuração ligado (administrador tem, desligado)
+        static void LigaDepuracao()
+        {
+            IntPtr t;
+            if (!OpenProcessToken(GetCurrentProcess(), 0x28, out t)) return;
+            try { long luid; if (LookupPrivilegeValueW(null, "SeDebugPrivilege", out luid)) { var p = new TOKEN_PRIV { Count = 1, Luid = luid, Attr = 2 }; AdjustTokenPrivileges(t, false, ref p, 0, IntPtr.Zero, IntPtr.Zero); } }
+            finally { CloseHandle(t); }
+        }
+
+        static void CarregaDrivers()
+        {
+            uint precisa; var b = new IntPtr[4096];
+            if (!EnumDeviceDrivers(b, (uint)(b.Length * IntPtr.Size), out precisa)) { bases = new ulong[0]; nomes = new string[0]; return; }
+            int n = (int)Math.Min(b.Length, precisa / IntPtr.Size);
+            var par = new List<KeyValuePair<ulong, string>>();
+            for (int i = 0; i < n; i++)
+            {
+                if (b[i] == IntPtr.Zero) continue;
+                var sb = new StringBuilder(260); GetDeviceDriverBaseNameW(b[i], sb, 260);
+                par.Add(new KeyValuePair<ulong, string>(unchecked((ulong)b[i].ToInt64()), sb.ToString()));
+            }
+            par.Sort((x, y) => x.Key.CompareTo(y.Key));
+            bases = new ulong[par.Count]; nomes = new string[par.Count];
+            for (int i = 0; i < par.Count; i++) { bases[i] = par[i].Key; nomes[i] = par[i].Value; }
+        }
+
+        static string DriverDe(ulong rotina)
+        {
+            if (rotina == 0 || bases.Length == 0) return null;
+            int i = Array.BinarySearch(bases, rotina);
+            if (i < 0) i = ~i - 1;
+            return i >= 0 ? nomes[i] : null;
+        }
+
+        static void AoEvento(IntPtr r)
+        {
+            try
+            {
+                var prov = (Guid)Marshal.PtrToStructure(new IntPtr(r.ToInt64() + 24), typeof(Guid));
+                if (prov != PerfInfo) return;
+                byte op = Marshal.ReadByte(r, 45);
+                bool isr = op == 67 || op == 50;
+                if (!(isr || op == 66 || op == 68 || op == 69)) return;
+                long ts = Marshal.ReadInt64(r, 16);
+                IntPtr dados = Marshal.ReadIntPtr(r, IntPtr.Size == 8 ? 96 : 92);
+                int tam = Marshal.ReadInt16(r, 86);
+                if (dados == IntPtr.Zero || tam < 8 + IntPtr.Size) return;
+                long ini = Marshal.ReadInt64(dados, 0);
+                ulong rotina = IntPtr.Size == 8 ? unchecked((ulong)Marshal.ReadInt64(dados, 8)) : (uint)Marshal.ReadInt32(dados, 8);
+                double us = (ts - ini) * usPorTick;
+                if (us < 0 || us > 1e6) return;   // relógio fora de ordem: descarta
+                eventos++;
+                string drv = DriverDe(rotina);
+                if (drv == null) { semEndereco++; drv = "(desconhecido)"; }
+                PorDriver p;
+                if (!dpc.TryGetValue(drv, out p)) dpc[drv] = p = new PorDriver();
+                p.N++; p.TotalUs += us; if (us > p.MaiorUs) p.MaiorUs = us; if (us >= 1000) p.Acima1ms++; if (isr) p.Isr = true;
+            }
+            catch { }
+        }
+
+        static EventRecordCallback cbEvento = AoEvento;            // referência viva: o Windows chama de outra thread
+        static BufferCallback cbBuffer = delegate (IntPtr l) { return 1; };
+
+        static IntPtr Propriedades()
+        {
+            int tam = Marshal.SizeOf(typeof(EVENT_TRACE_PROPERTIES)) + 2 * 1024;
+            IntPtr mem = Marshal.AllocHGlobal(tam);
+            for (int i = 0; i < tam; i++) Marshal.WriteByte(mem, i, 0);
+            var p = new EVENT_TRACE_PROPERTIES();
+            p.Wnode.BufferSize = (uint)tam; p.Wnode.Guid = SystemTrace; p.Wnode.Flags = WNODE_FLAG_TRACED_GUID; p.Wnode.ClientContext = 1;
+            p.BufferSize = 64; p.MinimumBuffers = 16; p.MaximumBuffers = 64; p.LogFileMode = EVENT_TRACE_REAL_TIME_MODE; p.FlushTimer = 1;
+            p.EnableFlags = FLAG_DPC | FLAG_INTERRUPT; p.LoggerNameOffset = (uint)Marshal.SizeOf(typeof(EVENT_TRACE_PROPERTIES));
+            Marshal.StructureToPtr(p, mem, false);
+            return mem;
+        }
+
+        /// <summary>Mede por `segundos` e grava o resultado em JSON. 0 = ok, 2 = sem administrador, 4 = sessão do kernel ocupada, 3 = outro erro.</summary>
+        public static int Mede(int segundos, string destino)
+        {
+            var res = new Dictionary<string, object> { { "quando", K.Iso(DateTime.Now) }, { "segundos", segundos } };
+            long f; QueryPerformanceFrequency(out f); usPorTick = 1e6 / f;
+            LigaDepuracao(); CarregaDrivers();
+            IntPtr props = Propriedades(); ulong h; int cod = 0; bool iniciou = false;
+            try
+            {
+                uint e = StartTraceW(out h, NOME, props);
+                if (e == 5) { res["erro"] = "precisa de administrador"; cod = 2; }
+                else if (e == 183) { res["erro"] = "outro programa está usando o rastreio do kernel (LatencyMon, xperf, Process Monitor...): feche-o e tente de novo"; cod = 4; }
+                else if (e != 0) { res["erro"] = "o Windows recusou o rastreio (código " + e + ")"; cod = 3; }
+                iniciou = e == 0;
+                if (cod == 0)
+                {
+                    var log = new EVENT_TRACE_LOGFILE { LoggerName = NOME, ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD | PROCESS_TRACE_MODE_RAW_TIMESTAMP,
+                                                        CurrentEvent = new byte[88], LogfileHeader = new byte[280], EventRecordCallback = cbEvento, BufferCallback = cbBuffer };
+                    ulong leitor = OpenTraceW(ref log);
+                    var t = new Thread(() => { try { ProcessTrace(new[] { leitor }, 1, IntPtr.Zero, IntPtr.Zero); } catch { } }) { IsBackground = true };
+                    t.Start();
+                    Thread.Sleep(Math.Max(5, Math.Min(300, segundos)) * 1000);
+                    // sempre para a sessão (mesmo com erro acima): nada fica ligado depois do teste
+                    ControlTraceW(0, NOME, props, EVENT_TRACE_CONTROL_STOP);
+                    t.Join(5000); CloseTrace(leitor);
+                }
+            }
+            catch (Exception ex) { res["erro"] = ex.Message; cod = 3; if (iniciou) try { ControlTraceW(0, NOME, props, EVENT_TRACE_CONTROL_STOP); } catch { } }
+            finally { Marshal.FreeHGlobal(props); }
+            res["eventos"] = eventos; res["sem_endereco"] = semEndereco; res["drivers_carregados"] = bases == null ? 0 : bases.Length;
+            var lista = new List<object>();
+            var ordem = new List<KeyValuePair<string, PorDriver>>(dpc);
+            ordem.Sort((x, y) => y.Value.MaiorUs.CompareTo(x.Value.MaiorUs));
+            if (ordem.Count > 25) ordem.RemoveRange(25, ordem.Count - 25);
+            foreach (var kv in ordem)
+                lista.Add(new Dictionary<string, object> { { "driver", kv.Key }, { "n", kv.Value.N }, { "total_ms", Math.Round(kv.Value.TotalUs / 1000, 2) },
+                    { "maior_us", Math.Round(kv.Value.MaiorUs, 0) }, { "acima_1ms", kv.Value.Acima1ms }, { "isr", kv.Value.Isr } });
+            res["drivers"] = lista;
+            try { File.WriteAllText(destino, new JavaScriptSerializer().Serialize(res), new UTF8Encoding(false)); } catch { return 3; }
+            return cod;
+        }
+    }
+
     static class Programa
     {
         [STAThread]
@@ -2878,6 +3052,16 @@ namespace KatharosApp
             {
                 try { int i = lista.IndexOf("--teste-fps"); return Testes.TesteFps(i + 1 < lista.Count ? lista[i + 1] : K.Arq("teste-fps.txt")); }
                 catch (Exception e) { Log.Escreve("teste fps: " + e); return 3; }
+            }
+            if (lista.Contains("--travadas"))
+            {
+                try
+                {
+                    int i = lista.IndexOf("--travadas"), seg;
+                    if (!(i + 1 < lista.Count && int.TryParse(lista[i + 1], out seg))) seg = 60;
+                    return Travadas.Mede(seg, i + 2 < lista.Count ? lista[i + 2] : K.Arq("travadas.json"));
+                }
+                catch (Exception e) { Log.Escreve("travadas: " + e); return 3; }
             }
             if (lista.Contains("--teste-no-pc"))
             {

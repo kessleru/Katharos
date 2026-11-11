@@ -854,7 +854,17 @@ def analisa(p, m, d):
         A.append(Achado(2, ['jogos', 'lento', 'tudo'], 'Drivers interrompendo o processador',
                         f'{br(dpc, 1)}% da CPU em interrupções e DPC com o PC parado (o normal é abaixo de 2%).',
                         'É a causa mais comum de áudio picotando e de engasgos em jogos mesmo com FPS alto. Quase sempre é driver de rede, '
-                        'de áudio ou de vídeo desatualizado, ou um dispositivo USB com defeito: veja os drivers antigos em "saude".', 'saude'))
+                        'de áudio ou de vídeo desatualizado, ou um dispositivo USB com defeito: "travadas" mede 1 minuto e diz qual driver é.', 'travadas'))
+    # o teste de travadas (feito nos últimos 7 dias) diz o culpado com nome: vira achado com o que fazer
+    try:
+        tv = travadas_recente()
+    except Exception:
+        tv = None
+    for c in (analisa_travadas(tv) if tv else [])[:2]:
+        A.append(Achado(3 if c['grave'] else 2, ['jogos', 'lento', 'tudo'], f'{c["o_que"][0].upper()}{c["o_que"][1:]} ({c["driver"]}) trava o processador',
+                        f'No teste de travadas de {Quando_curto(tv["quando"])}, ele segurou o processador por até {br(c["maior_ms"], 1)} ms '
+                        f'({c["vezes_acima_1ms"]} vezes acima de 1 ms; acima de 1 ms já dá travadinha e estalo no áudio).',
+                        c['fazer'][0].upper() + c['fazer'][1:] + '. Depois, rode "travadas" de novo para conferir.', 'travadas'))
 
     # ── o que o hardware entrega e não está sendo usado ──
     pentes = [x for x in lista(pf(p, 'ram.pentes')) if isinstance(x, dict)]
