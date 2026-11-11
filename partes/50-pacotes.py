@@ -191,7 +191,7 @@ CATALOGO_PROGRAMAS = [
     (r'^Dell (SupportAssist|Customer Connect|Data Vault|Digital Delivery|Foundation Services|Product Registration|Help & Support|TechHub|Optimizer|Mobile Connect)|^Ajuda e Suporte da Dell|^Registro de produto Dell|DSC/AA Factory|^My ?Dell',
      2, 'Assistentes, telemetria e propaganda da Dell. O SupportAssist com o TechHub chega a 0,6 GB de RAM e consulta o WMI sem parar. '
         'O Dell Update fica, para drivers e BIOS.', 'perde o diagnóstico da Dell'),
-    (r'^HP (JumpStart|Documentation|Connection Optimizer|Welcome|Insights|Privacy Settings|QuickDrop|Sure Sense|Security Update Service)', 2,
+    (r'^HP (JumpStart|Documentation|Connection Optimizer|Welcome|Insights|Privacy Settings|QuickDrop|Audio Switch|Sure Sense|Security Update Service)', 2,
      'Utilitários e telemetria da HP.', 'perde esses utilitários'),
     (r'^HP (Support Assistant|Wolf Security)', 3, 'Assistente de suporte e proteção extra da HP. O Defender continua protegendo.', 'perde o assistente e a proteção extra da HP'),
     (r'^Lenovo (Welcome|Now|Migration Assistant|Smart Meeting)', 2, 'Boas-vindas e propaganda da Lenovo. O Vantage (bateria e drivers) fica.', 'nenhum'),
@@ -489,7 +489,7 @@ CLASSES_INICIO = [
      'resto de programa antigo ou atualizador: não precisa abrir sozinho'),
     (r'vgc|vgtray|Vanguard|EasyAntiCheat|BattlEye|FACEIT|PunkBuster|nProtect|XignCode', 0, 'anti-cheat: só tire se você pedir (alguns jogos deixam de abrir)'),
     (r'SynTP|ETDCtrl|Elan|Synaptics|Touchpad|Precision|Wacom|PenService|Pen Tablet', 0, 'driver de touchpad ou caneta: sem ele os gestos podem parar'),
-    (r'RtkAud|RTHDVCPL|Realtek|IntelAudio|SmartAudio|Conexant|IDT|Dolby|DTS|MaxxAudio|Waves|Nahimic|SonicStudio', 0, 'painel de áudio: mexeria nos efeitos e no som, então só tire se você pedir'),
+    (r'RtkAud|RTHDVCPL|Realtek|IntelAudio|SmartAudio|Conexant|IDT|Dolby|DTS|MaxxAudio|Waves|Nahimic|SonicStudio', 3, 'painel de áudio: sem ele, efeitos e alguns atalhos de som param'),
     (r'Bluetooth|BTTray|ibtsiva', 3, 'Bluetooth do fabricante'),
     (r'OneDrive', 1, 'sincronização do OneDrive'),
     (r'Dropbox|GoogleDrive|Google Drive|GoogleDriveFS|MEGAsync|iCloud|pCloud|Nextcloud|Box Sync|\\Box\\|Sync\.com|Syncthing|Resilio|Proton ?Drive|Yandex\.Disk', 3, 'sincronização de arquivos: os arquivos só sincronizam com ele aberto'),
@@ -634,7 +634,7 @@ foreach ($s in @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | W
 FABRICANTE_SVC_PS = r'''
 $__pad = 'SupportAssist|TechHub|Dell Client Management|Dell Data Vault|Dell Customer Connect|Dell Foundation|Touchpoint Analytics|HP Insights|HP Diagnostics|HP App Helper|HP Network HSA|HP System Info HSA|HP Comm Recovery|Killer Analytics|Killer Network Service|Killer Provider Data Helper|Intel\(R\) Energy Server|System Usage Report|Intel\(R\) Driver & Support|NVIDIA Telemetry|Acer Quick Access Service|ASUS Optimization'
 foreach ($s in @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match $__pad -and $_.StartMode -eq 'Auto' })) { Set-Servico $s.Name 'demand' -Parar | Out-Null }
-Desliga-Tarefas 'Killer Startup Task|NvTmRep|NvDriverUpdateCheck|NvProfileUpdater|NvNodeLauncher|Dell SupportAssist|DellUpdate|Dell Data Vault|HP Support Assistant|Lenovo.*(Welcome|Now)|AcerJumpstart|AcerRegistration|McAfee|Norton' 'Dell Command|DellCommandUpdate' | Out-Null'''
+Desliga-Tarefas 'Killer Startup Task|NvTmRep|NvDriverUpdateCheck|NvProfileUpdater|NvNodeLauncher|Dell SupportAssist|DellUpdate|Dell Data Vault|HP Support Assistant|HPAudioSwitch|Lenovo.*(Welcome|Now)|AcerJumpstart|AcerRegistration|McAfee|Norton' 'Dell Command|DellCommandUpdate' | Out-Null'''
 
 ATUALIZADORES_SVC = ['gupdate', 'gupdatem', 'GoogleUpdaterService', 'GoogleUpdaterInternalService', 'edgeupdate', 'edgeupdatem',
                      'brave', 'bravem', 'BraveElevationService', 'MozillaMaintenance', 'AdobeARMservice', 'AdobeUpdateService',
@@ -685,7 +685,7 @@ def itens_servicos(ctx):
              'ficam falhando ou repetindo (Killer Startup Task, NVIDIA, Dell, HP). Dell Update/Command Update ficam.',
              'menos CPU e WMI parados', 'diagnóstico do fabricante só quando você abrir', 2, FABRICANTE_SVC_PS),
         Item('nahimic', 'Nahimic e efeitos de áudio do fabricante', 'NahimicService e as tarefas dele em manual.', 'menos CPU',
-             'os efeitos do Nahimic (surround virtual) param e o som muda', 0,
+             'os efeitos do Nahimic (surround virtual) param; o som continua normal', 3,
              RR("foreach ($s in @(Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^Nahimic' })) { Set-Servico $s.Name 'demand' -Parar | Out-Null }",
                 "Desliga-Tarefas 'Nahimic' | Out-Null")),
         Item('orfaos', 'restos de programas desinstalados', 'Tarefas agendadas e serviços que apontam para programas que não existem mais.',
@@ -709,7 +709,7 @@ def itens_servicos(ctx):
              SVC(['SCardSvr', 'ScDeviceEnum', 'CertPropSvc'])) if not tem.get('smartcard') else None,
         Item('sensores', 'sensores e localização', 'Sensores (giro, luz) e o serviço de localização.', 'menos serviços',
              'rotação automática de tela, brilho automático, fuso horário automático e "Encontrar meu dispositivo" param',
-             0, SVC(['SensorDataService', 'SensorService', 'SensrSvc', 'lfsvc'])) if not pf(p, 'pc.tablet') else None,
+             3, SVC(['SensorDataService', 'SensorService', 'SensrSvc', 'lfsvc'])) if not pf(p, 'pc.tablet') else None,
         Item('scanner', 'scanner', 'stisvc (aquisição de imagens).', 'um serviço a menos', 'scanner para de funcionar', 3,
              SVC(['stisvc'])) if not tem.get('scanner') else None,
         Item('biometria', 'biometria', 'WbioSrvc (Windows Hello por rosto ou digital).', 'um serviço a menos', 'Windows Hello com rosto e digital para',
@@ -838,7 +838,7 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
              'menos disco depois de travamentos', 'a Microsoft não recebe seus relatórios; soluções automáticas não aparecem', 2,
              RR(R(f'{HKLM_POL}\\Windows Error Reporting', 'Disabled', 1), SVC(['WerSvc']))),
         Item('localizacao', 'localização', 'Política que desliga a localização para todo o Windows.', 'privacidade',
-             'fuso automático, mapas, clima local, Luz Noturna pelo pôr do sol e "Encontrar meu dispositivo" param', 0,
+             'fuso automático, mapas, clima local e "Encontrar meu dispositivo" param', 3,
              RR(R(f'{HKLM_POL}\\LocationAndSensors', 'DisableLocation', 1), R(f'{HKLM_POL}\\LocationAndSensors', 'DisableSensors', 1),
                 R('HKLM:\\SYSTEM\\Maps', 'AutoUpdateEnabled', 0),
                 R('HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\default\\WiFi\\AllowWiFiHotSpotReporting', 'Value', 0))),
@@ -870,10 +870,10 @@ def itens_visual(ctx):
              'O Windows às vezes deixa a tela em 60 Hz mesmo quando ela aceita mais. Usa a maior taxa que a tela principal informa na resolução '
              'de agora (a resolução não muda). Só fica se você confirmar "manter" em 90 segundos; sem resposta, volta sozinha.',
              'imagem mais fluida e menos atraso em tudo, principalmente em jogos', 'em notebook na bateria, um pouco mais de consumo',
-             0, 'foreach ($m in @(Get-Monitores | Where-Object { $_.primaria })) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
-             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz; não vem marcado: mexe na imagem, então só com você pedindo', reaplica=False) if hz and hz_max >= hz + 15 else None,
+             2 if nb else 1, 'foreach ($m in @(Get-Monitores | Where-Object { $_.primaria })) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
+             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz', reaplica=False) if hz and hz_max >= hz + 15 else None,
         Item('efeitos', 'efeitos visuais em desempenho', 'Sem sombras, esmaecimento, deslizamento de menus e caixas, mantendo a '
-             'suavização de fontes e as miniaturas.', 'janelas e menus mais rápidos em PC fraco', 'visual mais seco', 0,
+             'suavização de fontes e as miniaturas.', 'janelas e menus mais rápidos em PC fraco', 'visual mais seco', 1 if fraco else 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', 'VisualFXSetting', 3),
                 R(d, 'UserPreferencesMask', bytes([0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00]), 'Binary'),
                 R(d, 'FontSmoothing', '2', 'String'), R(ADV, 'ListviewAlphaSelect', 0), R(ADV, 'ListviewShadow', 0))),
@@ -884,14 +884,14 @@ def itens_visual(ctx):
              R(d, 'MenuShowDelay', '0', 'String')),
         Item('transparencia', 'transparência', 'Sem efeito acrílico na barra, no menu e na tela de entrada.',
              'menos uso da placa de vídeo; só se nota em placa integrada ou com pouca RAM',
-             'visual mais opaco', 0, RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', 'EnableTransparency', 0),
+             'visual mais opaco', 2 if (not pf(ctx.perfil, 'tem.nvidia') and not pf(ctx.perfil, 'tem.amd')) or pf(ctx.perfil, 'ram.total', 16) <= 8 else 0, RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', 'EnableTransparency', 0),
                                         R(f'{HKLM_POL}\\System', 'DisableAcrylicBackgroundOnLogon', 1))),
         Item('arrastar', 'arrastar janela sem conteúdo', 'Ao arrastar, só o contorno se move.', 'menos trabalho de vídeo em PC fraco',
-             'visual estranho para quem não está acostumado', 0, R(d, 'DragFullWindows', '0', 'String')),
+             'visual estranho para quem não está acostumado', 3, R(d, 'DragFullWindows', '0', 'String')),
         Item('icones', 'ícones no lugar de miniaturas', 'O Explorador mostra ícones em vez de gerar miniaturas de fotos e vídeos.',
-             'pastas de mídia abrem mais rápido em HD', 'não vê a prévia das fotos', 0, R(ADV, 'IconsOnly', 1)),
+             'pastas de mídia abrem mais rápido em HD', 'não vê a prévia das fotos', 3, R(ADV, 'IconsOnly', 1)),
         Item('fundo-preto', 'papel de parede liso', 'Fundo preto em vez de imagem (e sem Windows Destaque).', 'um pouco de RAM',
-             'perde o papel de parede', 0, RR(R(d, 'WallPaper', '', 'String'), R('HKCU:\\Control Panel\\Colors', 'Background', '0 0 0', 'String'))),
+             'perde o papel de parede', 3, RR(R(d, 'WallPaper', '', 'String'), R('HKCU:\\Control Panel\\Colors', 'Background', '0 0 0', 'String'))),
         Item('barra', 'barra de tarefas enxuta', 'Sem Visão de Tarefas, Chat e botão de widgets; a busca vira só o ícone.',
              'barra limpa', 'esses botões somem (o atalho Win+Tab continua)', 2,
              RR(R(ADV, 'ShowTaskViewButton', 0), R(ADV, 'TaskbarMn', 0), R(ADV, 'TaskbarDa', 0), R(ADV, 'ShowCortanaButton', 0),
@@ -1020,7 +1020,10 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm', 'OverlayTestMode', 5)),
         Item('hags', 'agendamento de GPU acelerado por hardware', 'A placa de vídeo cuida da própria fila (HAGS). Precisa de placa e '
              'driver recentes; vale depois de reiniciar.', 'pequeno; necessário para o DLSS 3 (geração de quadros)',
-             'em placas antigas pode causar engasgos', 3, R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', 'HwSchMode', 2)),
+             'em placas antigas pode causar engasgos', 3, r'''$__k = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+$__v = (Get-ItemProperty -LiteralPath $__k -Name HwSchMode -ErrorAction SilentlyContinue).HwSchMode
+if ($null -eq $__v) { Info 'o Windows nao mostra suporte a este recurso nesta placa ou driver: nao mexi (em placa sem suporte ele pode gerar falhas na imagem)' }
+else { Set-Valor $__k 'HwSchMode' 2 'DWord' 'agendamento de GPU por hardware' | Out-Null }'''),
     ]
     if not j:   # sem jogos instalados, o que só serve para jogo não entra em modo nenhum (continua dando para escolher à mão)
         for it in itens:

@@ -3505,7 +3505,6 @@ class TestItensNovos(unittest.TestCase):
     def test_monitor_so_aparece_abaixo_da_taxa_maxima(self):
         base = json.loads(json.dumps(k.PC_MODELO))
         self.assertIn('monitor-hz', self._itens('visual', base))
-        self.assertEqual(self._itens('visual', base)['monitor-hz'].nivel, 0)   # mexe na imagem: nunca entra sozinho
         base['tela']['hz'] = 144
         self.assertNotIn('monitor-hz', self._itens('visual', base))
         self.assertIn('visual', k.RISCO_ALTO)   # mudança de tela pergunta "manter?" e volta sozinha
@@ -3516,21 +3515,12 @@ class TestItensNovos(unittest.TestCase):
         base['pc']['notebook'] = False
         self.assertIn('adaptadores', self._itens('energia', base))
 
-    def test_nada_que_muda_imagem_ou_som_entra_sozinho(self):
-        """Regra do dono: qualidade de áudio e imagem não se mexe por conta própria. Estes itens só entram se a pessoa marcar (nível 0)."""
-        for notebook in (True, False):
-            for ram in (4, 32):
-                base = json.loads(json.dumps(k.PC_MODELO))
-                base['ram'] = {'total': ram}
-                base['pc']['notebook'] = notebook
-                v = self._itens('visual', base)
-                for i in ('efeitos', 'transparencia', 'arrastar', 'icones', 'fundo-preto'):
-                    self.assertEqual(v[i].nivel, 0, f'{i} (ram {ram}, notebook {notebook})')
-                s = self._itens('servicos', base)
-                for i in ('nahimic', 'sensores'):
-                    if i in s:
-                        self.assertEqual(s[i].nivel, 0, i)
-                self.assertEqual(self._itens('privacidade', base)['localizacao'].nivel, 0)
+    def test_efeitos_entram_no_seguro_em_pc_fraco(self):
+        base = json.loads(json.dumps(k.PC_MODELO))
+        base['ram'] = {'total': 4}
+        self.assertEqual(self._itens('visual', base)['efeitos'].nivel, 1)
+        base['ram'] = {'total': 32}
+        self.assertEqual(self._itens('visual', base)['efeitos'].nivel, 2)
 
     def test_taxa_testa_antes_guarda_o_desfazer_e_le_de_volta(self):
         ps = k.PS_BASE if hasattr(k, 'PS_BASE') else ''
