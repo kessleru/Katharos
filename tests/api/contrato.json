@@ -24,6 +24,9 @@
   "desfazer": {
    "muda": true
   },
+  "historico": {
+   "muda": false
+  },
   "inicio": {
    "muda": false
   },

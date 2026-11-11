@@ -316,11 +316,13 @@ Telas, na ordem do uso real (o raio-x primeiro, como na CLI):
   que está no limite agora.
 - [x] **2.6** **Jogos**: as sessões gravadas e o que segurou cada uma.
 - [x] **2.7** **Central de inteligência**: as propostas com o número que as justifica, botão para executar (pede confirmação) e dispensar.
-- [ ] **2.8** **Histórico** (substitui o painel em HTML, D8): agora, o que está mudando (tendência), evolução (espaço, RAM, boot, CPU,
+- [x] **2.8** **Histórico** (substitui o painel em HTML, D8): agora, o que está mudando (tendência), evolução (espaço, RAM, boot, CPU,
   temperatura) com as marcas de quando cada pacote foi aplicado, temperatura por hora do dia, consumo, provas de ganho, benchmark ao
   longo do tempo e saúde do Windows. Mesmos números que o painel de hoje (teste comparando com `monta_painel`).
 - [ ] **2.8b** Tirar o painel em HTML: `painel` na CLI abre esta tela ou mostra o resumo no terminal; remover `64-painel.py`/`64-termica.py`
   da saída HTML e os cliques `katharos://` do HTML (o protocolo passa a abrir telas do aplicativo).
+  Decidido: na interface não há HTML (o Histórico é a tela); o `painel` em HTML fica só para quem usa a versão de terminal, que não tem
+  janelas. Tirar de vez quando a versão de terminal também ganhar o resumo no próprio terminal.
 - [x] **2.9** **Desfazer**: os pacotes com backup, o ponto de restauração "Antes do Katharos" e desfazer tudo.
 - [x] **2.10** **Configurações**: modo padrão, ritmo do segundo plano, avisos, jogo aberto, iniciar com o Windows, atualizações.
 - [x] **2.11** O aviso de uso (o mesmo aceite da CLI) na primeira abertura.
@@ -656,3 +658,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | Fase 2: todas as telas ligadas ao motor (Início, Raio-x, Otimizar com aplicar e "manter ou desfazer" em 90 s, Ao vivo pelo agora.json, Jogos, Sugestões, Desfazer, Configurações, aviso de uso); job `interface` no CI compila, desenha as 9 telas e conversa com o motor | 3.1.2 | ramo v4 | CI Windows |
 | 10 nov 2026 | Fase 4: instalador Velopack (Setup de 68,7 MB; app .NET 10 sem precisar instalar o .NET, motor, segundo plano, PresentMon e Python 3.14.10 embutido conferido por SHA-256), instalado em silêncio no Windows do CI e motor instalado respondendo; atualização pelo GitHub (avisar, automático ou nunca; nunca no meio de uma mudança) | 3.1.2 | ramo v4 | CI Windows |
 | 10 nov 2026 | Fase 6: site repaginado (hero mantido; seções novas: Veja funcionando, Como funciona em 3 passos com vídeo, Ao vivo e nos jogos, Central, Seguro por padrão com provas, Baixar com janelas ou terminal; saíram Como usar, Painel, Modos e Contribuir em bloco). Cinco vídeos gravados da interface de verdade (`scripts/videos.sh`: cursor, cliques e câmera em vetor; AV1 + H.264 + pôster, 5,4 MB no total, só carregam quando aparecem). Decisão: sem Astro/React por ora; o mesmo gerador em Python com CSS próprio (página estática mais leve; shadcn e Magic UI são para apps React) | 3.1.2 | ramo v4 | fotos 1440 e 390 px |
+| 10 nov 2026 | 2.8 Histórico na interface (medidas por dia com marca de cada mudança e o efeito honesto de cada uma; API `historico`); 2b: raio-x acha paginação num HD, integridade de memória (só informa) e agendamento de GPU | 3.1.2 | ramo v4 | testes 326 |

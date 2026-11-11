@@ -42,7 +42,7 @@ Directory.CreateDirectory(pasta);
 AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
 var j = new Janela { Width = w, Height = h };
 j.Show();
-foreach (var tela in new[] { "inicio", "raiox", "otimizar:servicos", "aovivo", "jogos", "sugestoes", "desfazer", "config", "aviso" })
+foreach (var tela in new[] { "inicio", "raiox", "otimizar:servicos", "aovivo", "jogos", "sugestoes", "historico", "desfazer", "config", "aviso" })
 {
     j.Mostra(tela);
     for (int i = 0; i < 6; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }

@@ -13794,6 +13794,34 @@ def api_segundo_plano(ctx, p, ev):
     elif p.get('ligar') is False:
         remove_segundo_plano(ctx)
     return _segundo_plano()
+
+
+@metodo_api('historico')
+def api_historico(ctx, p, ev):
+    """O PC ao longo do tempo (substitui o painel em HTML): cada medida por dia (mediana), as marcas de quando cada mudança entrou,
+    o efeito de cada mudança (com veredito honesto: melhorou, piorou, sem diferença, já vinha mudando, poucas medidas) e o que está
+    mudando agora."""
+    am = le_metricas()
+    dias = int(p.get('dias') or 60)
+    corte = datetime.now() - timedelta(days=dias)
+    pacotes = pacotes_aplicados_dt()
+    series = []
+    for chave, rot, melhor, casas, un in METRICAS_EFEITO:
+        s = [(d, v) for d, v in _serie(am, chave) if d >= corte]
+        if not s:
+            continue
+        por_dia = {}
+        for d, v in s:
+            por_dia.setdefault(d.date(), []).append(v)
+        pontos = [{'dia': dia.isoformat(), 'v': round(sorted(vs)[len(vs) // 2], casas)} for dia, vs in sorted(por_dia.items())]
+        series.append({'chave': chave, 'rotulo': rot, 'melhor': melhor, 'unidade': un, 'casas': casas, 'pontos': pontos})
+    efeitos = []
+    for titulo, quando, cel in tabela_efeito(am, pacotes):
+        efeitos.append({'titulo': titulo, 'quando': quando.isoformat(timespec='minutes'),
+                        'medidas': [{'rotulo': r, 'veredito': v, 'antes': round(a, c) if isinstance(a, (int, float)) else a,
+                                     'depois': round(b, c) if isinstance(b, (int, float)) else b, 'casas': c, 'unidade': u} for r, v, a, b, c, u in cel]})
+    return {'series': series, 'marcas': [{'quando': q.isoformat(timespec='minutes'), 'titulo': t} for q, _, t in pacotes if q >= corte],
+            'efeitos': efeitos, 'tendencia': [t for _, t in analisa_tendencia(am)], 'amostras': len(am)}
 # ─────────────── saúde do Windows: erros dos logs, drivers e o que o Windows precisa ───────────────
 # Coleta só leitura (Visualizador de Eventos, drivers instalados, estado do Windows) → catálogo de causas conhecidas → problemas
 # explicados, com o que fazer. Regras: (1) só explica o que está no catálogo; o resto aparece como "sem explicação catalogada",

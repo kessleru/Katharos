@@ -41,6 +41,7 @@
             <Button Classes="nav" Content="Ao vivo" Tag="aovivo" />
             <Button Classes="nav" Content="Jogos" Tag="jogos" />
             <Button Classes="nav" Content="Sugestões" Tag="sugestoes" />
+            <Button Classes="nav" Content="Histórico" Tag="historico" />
             <Button Classes="nav" Content="Desfazer" Tag="desfazer" />
           </StackPanel>
         </DockPanel>

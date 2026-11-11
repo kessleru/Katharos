@@ -59,6 +59,7 @@ public partial class Janela : Window
             "aovivo" => new AoVivo(),
             "jogos" => new Jogos(),
             "sugestoes" => new Sugestoes(),
+            "historico" => new Historico(),
             "desfazer" => new Desfazer(),
             "config" => new Configuracoes(),
             "aviso" => new Aviso(arg),

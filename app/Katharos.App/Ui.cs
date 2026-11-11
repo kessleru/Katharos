@@ -129,7 +129,15 @@ public static class Ui
 
     // ───── leitura dos dados da API (JsonNode) sem estourar: o que faltar vira o padrão ─────
     public static string S(this JsonNode? n, string chave, string padrao = "") => n?[chave] is JsonValue v && v.TryGetValue(out string? s) ? s ?? padrao : (n?[chave]?.ToString() ?? padrao);
-    public static double? D(this JsonNode? n, string chave) => n?[chave] is JsonValue v && v.TryGetValue(out double d) ? d : null;
+    public static double? D(this JsonNode? n, string chave)
+    {
+        if (n?[chave] is not JsonValue v) return null;
+        if (v.TryGetValue(out double d)) return d;
+        if (v.TryGetValue(out int i)) return i;
+        if (v.TryGetValue(out long l)) return l;
+        if (v.TryGetValue(out decimal m)) return (double)m;
+        return double.TryParse(v.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out d) ? d : null;
+    }
     public static bool B(this JsonNode? n, string chave) => n?[chave] is JsonValue v && v.TryGetValue(out bool b) && b;
     public static IEnumerable<JsonNode> A(this JsonNode? n, string chave) => (n?[chave] as JsonArray)?.Where(x => x != null).Select(x => x!) ?? Enumerable.Empty<JsonNode>();
 

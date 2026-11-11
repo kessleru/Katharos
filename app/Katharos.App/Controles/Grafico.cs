@@ -13,6 +13,9 @@ public class Grafico : Control
     public static readonly StyledProperty<IReadOnlyList<double>?> ValoresProperty = AvaloniaProperty.Register<Grafico, IReadOnlyList<double>?>(nameof(Valores));
     public static readonly StyledProperty<double> MaximoProperty = AvaloniaProperty.Register<Grafico, double>(nameof(Maximo), 100);
     public static readonly StyledProperty<double> LimiteProperty = AvaloniaProperty.Register<Grafico, double>(nameof(Limite), double.NaN);
+    /// <summary>Marcas verticais (0 a 1 na largura): quando cada mudança entrou.</summary>
+    public static readonly StyledProperty<IReadOnlyList<double>?> MarcasProperty = AvaloniaProperty.Register<Grafico, IReadOnlyList<double>?>(nameof(Marcas));
+    public IReadOnlyList<double>? Marcas { get => GetValue(MarcasProperty); set => SetValue(MarcasProperty, value); }
     public static readonly StyledProperty<IBrush> CorProperty = AvaloniaProperty.Register<Grafico, IBrush>(nameof(Cor), Tema.Ambar);
 
     public IReadOnlyList<double>? Valores { get => GetValue(ValoresProperty); set => SetValue(ValoresProperty, value); }
@@ -20,7 +23,7 @@ public class Grafico : Control
     public double Limite { get => GetValue(LimiteProperty); set => SetValue(LimiteProperty, value); }
     public IBrush Cor { get => GetValue(CorProperty); set => SetValue(CorProperty, value); }
 
-    static Grafico() { AffectsRender<Grafico>(ValoresProperty, MaximoProperty, LimiteProperty, CorProperty); }
+    static Grafico() { AffectsRender<Grafico>(ValoresProperty, MaximoProperty, LimiteProperty, CorProperty, MarcasProperty); }
 
     public override void Render(DrawingContext c)
     {
@@ -55,6 +58,12 @@ public class Grafico : Control
             double y = Math.Round(h - 1 - Math.Clamp(Limite / Maximo, 0, 1) * (h - 2)) + .5;
             c.DrawLine(new Pen(Tema.LinhaForte, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(0, y), new Point(w, y));
         }
+        if (Marcas != null)
+            foreach (var m in Marcas)
+            {
+                double x = Math.Round(Math.Clamp(m, 0, 1) * (w - 1)) + .5;
+                c.DrawLine(new Pen(Tema.Ambar, 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(x, 0), new Point(x, h));
+            }
         c.DrawGeometry(null, new Pen(Cor, 1.6, lineJoin: PenLineJoin.Round), linha);
     }
 }

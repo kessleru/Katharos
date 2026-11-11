@@ -87,6 +87,7 @@ public static class DadosDeExemplo
                             {"id": "gpu", "nivel": 0, "titulo": "A placa de vídeo é o limite", "texto": "Isso é o esperado num jogo pesado. Mais FPS vem de baixar resolução ou qualidade, não de otimizar o Windows."}]}
             """),
         "aviso" => Carrega("exemplo-aviso.json"),
+        "historico" => Historico(),
         "config_ler" => Carrega("exemplo-config.json"),
         "raiox_guardado" => JsonNode.Parse("""
             {"quando": "2026-11-10T09:12:00", "nota": 72,
@@ -119,6 +120,32 @@ public static class DadosDeExemplo
             """),
         _ => null,
     };
+
+    // 45 dias de medidas de exemplo: o boot cai no dia em que "inicialização" foi aplicada (dia 28)
+    static JsonNode Historico()
+    {
+        var r = new Random(5); var hoje = DateTime.Today; var series = new JsonArray();
+        (string chave, string rot, string un, int casas, Func<int, double> f)[] ms = {
+            ("boot_s", "o tempo de boot", "s", 0, i => i < 28 ? 46 + r.NextDouble() * 6 : 24 + r.NextDouble() * 3),
+            ("ram_usada", "a RAM em uso", "GB", 1, i => 6.4 + r.NextDouble() * .6 - (i >= 28 ? .5 : 0)),
+            ("livre_c", "o espaço livre em C:", "GB", 0, i => 196 - i * .4 + (i >= 28 ? 9 : 0)),
+            ("processos", "o número de processos", "", 0, i => 214 - (i >= 28 ? 31 : 0) + r.Next(0, 9)) };
+        foreach (var m in ms)
+        {
+            var pts = new JsonArray();
+            for (int i = 0; i < 45; i++) pts.Add(new JsonObject { ["dia"] = hoje.AddDays(i - 44).ToString("yyyy-MM-dd"), ["v"] = Math.Round(m.f(i), m.casas) });
+            series.Add(new JsonObject { ["chave"] = m.chave, ["rotulo"] = m.rot, ["unidade"] = m.un, ["casas"] = m.casas, ["pontos"] = pts });
+        }
+        string q = hoje.AddDays(28 - 44).ToString("yyyy-MM-dd") + "T21:40";
+        return new JsonObject
+        {
+            ["series"] = series, ["marcas"] = new JsonArray(new JsonObject { ["quando"] = q, ["titulo"] = "inicialização" }), ["tendencia"] = new JsonArray(),
+            ["efeitos"] = new JsonArray(new JsonObject { ["titulo"] = "inicialização", ["quando"] = q, ["medidas"] = new JsonArray(
+                new JsonObject { ["rotulo"] = "o tempo de boot", ["veredito"] = "melhorou", ["antes"] = 49, ["depois"] = 25, ["casas"] = 0, ["unidade"] = "s" },
+                new JsonObject { ["rotulo"] = "o número de processos", ["veredito"] = "melhorou", ["antes"] = 218, ["depois"] = 187, ["casas"] = 0, ["unidade"] = "" },
+                new JsonObject { ["rotulo"] = "a RAM em uso", ["veredito"] = "sem diferença mensurável", ["antes"] = 6.7, ["depois"] = 6.3, ["casas"] = 1, ["unidade"] = "GB" }) }),
+        };
+    }
 
     static JsonNode? Carrega(string nome)
     {
