@@ -38,8 +38,8 @@ gera as capturas (próprias, nunca de terceiros) aplicando cada opção numa má
 
 **P4. Relatório.** Sem conta: o aplicativo envia o relatório já limpo a um Cloudflare Worker (grátis) que abre uma issue no repositório
 **privado** `kessleru/katharos-relatorios`; a pessoa recebe um código `KTH-...`. Limites: 200 KB, esquema validado, limite por IP, Turnstile,
-nada guardado no Worker. Com conta GitHub: abre a issue pública só com o resumo, sem dado pessoal. Sempre com prévia e consentimento.
-**(dono decide)** criar a conta da Cloudflare e o repositório privado; sem isso, a 4.1.0 sai só com o caminho do GitHub.
+nada guardado no Worker. É o **único** caminho de envio: sem conta no GitHub e sem issue pública. Sempre com prévia e consentimento.
+**(dono)** cria a conta grátis da Cloudflare e o repositório privado `katharos-relatorios`.
 
 **P5. Sem fins lucrativos.** Pessoal, gratuito, MIT, sem venda, anúncio, rastreamento ou doação. Aparece no site, no aplicativo, no README,
 no instalador e no relatório (J1 a J8). Isso é transparência, não parecer jurídico.
@@ -107,11 +107,10 @@ Bugs:
 ### Fase 2: relatório completo (4.1.0)
 - [ ] **2.1** Conteúdo novo: erros internos do motor e da janela, itens que "não ficaram", tempo de cada etapa, versão e histórico de atualização; Windows (build, edição, idioma), antivírus e se algum mexeu em arquivo do Katharos; telas azuis, desligamentos, disco, temperatura, travadas.
 - [ ] **2.2** Limpeza antes de sair: nome de usuário, nome do PC, números de série, IP, MAC, Wi-Fi, e-mails, arquivos de pastas pessoais. Teste com relatório "envenenado".
-- [ ] **2.3** Tela **Enviar relatório**: prévia, seções que dá para tirar, campo "o que aconteceu?", consentimento, os dois caminhos de P4, código `KTH-...` no Histórico.
-- [ ] **2.4** Worker de recebimento (se o dono aprovar P4): em `servidor/relatorio-worker`, com testes e deploy pelo CI.
-- [ ] **2.5** Formulário de issue pública (`.github/ISSUE_TEMPLATE/problema.yml`) sem campo de dado pessoal.
-- [ ] **2.6** Envio automático em erro: desligado por padrão; ligado, ainda mostra a prévia no primeiro envio.
-- [ ] **2.7** Resumo semanal para o dono, feito pelo CI a partir do repositório privado.
+- [ ] **2.3** Tela **Enviar relatório**: prévia, seções que dá para tirar, campo "o que aconteceu?", consentimento, envio sem conta (P4), código `KTH-...` no Histórico.
+- [ ] **2.4** Worker de recebimento (P4): em `servidor/relatorio-worker`, com testes e deploy pelo CI.
+- [ ] **2.5** Envio automático em erro: desligado por padrão; ligado, ainda mostra a prévia no primeiro envio.
+- [ ] **2.6** Resumo semanal para o dono, feito pelo CI a partir do repositório privado.
 
 ### Fase 3: personalização nativa com galeria (4.2.0)
 - [ ] **3.1** Pacote `personalizar` no motor, fora dos modos, com as opções nativas da seção 2; cada uma lida de volta e com desfazer.
@@ -172,8 +171,7 @@ Bugs:
 - Commits sem coautoria. Versões pela regra do CHANGELOG. Cada release conferida.
 
 ## 8. Fontes
-[limites do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits),
-[issue por URL](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue#creating-an-issue-from-a-url-query).
+[limites do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
 
 ---
 
@@ -181,3 +179,4 @@ Bugs:
 - 11 nov 2026: plano escrito (pedidos das 08:22 e 08:26).
 - 11 nov 2026 (08:46 e 08:47): enxugado a pedido do dono: só o que dá para fazer hoje.
 - 11 nov 2026 (08:49 e 08:51): saíram todos os programas além do PowerToys, inclusive o Windhawk e os mods.
+- 11 nov 2026 (08:52): relatório só sem conta (Worker e repositório privado); saíram o caminho pelo GitHub e o formulário de issue pública.
