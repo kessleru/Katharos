@@ -3414,10 +3414,10 @@ class TestTravadas(_CasaTmp):
             self.assertIsNone(k.roda_travadas_se_pendente())
             m.assert_not_called()
             e = k.estado(); e['travadas_pendente'] = True; k.salva_estado(e)
-            (self.tmp / 'agora.json').write_text('{"jogo": "x"}', encoding='utf-8')
+            (self.tmp / 'agora.json').write_text(json.dumps({'quando': datetime.now().isoformat(timespec='seconds'), 'jogo': 'x'}), encoding='utf-8')
             self.assertIsNone(k.roda_travadas_se_pendente())
             m.assert_not_called()
-            (self.tmp / 'agora.json').write_text('{}', encoding='utf-8')
+            (self.tmp / 'agora.json').write_text(json.dumps({'quando': datetime.now().isoformat(timespec='seconds')}), encoding='utf-8')
             m.return_value = dict(self.MEDIDA)
             self.assertEqual(k.roda_travadas_se_pendente()['eventos'], 52000)
 

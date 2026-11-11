@@ -493,7 +493,7 @@ def exporta_propostas(ctx=None):
              'resultados': pendentes[:3], 'diagnosticos': [{k: x.get(k) for k in ('problema', 'titulo', 'causa', 'nome', 'confianca', 'evidencias', 'descartadas', 'faria', 'mudaria')}
                                                            for x in p['diagnosticos']],
              'achados': [{k: x.get(k) for k in ('id', 'tipo', 'titulo', 'vi', 'confianca', 'gravidade', 'contexto', 'fonte')} for x in p['achados']][:20]}
-        tmp = CASA / 'propostas.json.tmp'
+        tmp = CASA / f'propostas.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'propostas.json')
         return 0

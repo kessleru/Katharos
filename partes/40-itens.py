@@ -15,7 +15,8 @@ class Item:
     nota: o que este PC tem que mudou a recomendação."""
 
     def __init__(self, id, titulo, explica, ganho='', custo='', nivel=1, ps=None, py=None, minutos=3,
-                 sozinho=False, grupo=None, nota='', reverte=True, dados=None, conflita=(), alerta='', recorrente=False):
+                 sozinho=False, grupo=None, nota='', reverte=True, dados=None, conflita=(), alerta='', recorrente=False, reaplica=True):
+        self.reaplica = reaplica  # False: a manutenção nunca reaplica sozinha (tela, adaptador novo): só com a pessoa olhando
         self.id, self.titulo, self.explica, self.ganho, self.custo = id, titulo, explica, ganho, custo
         self.nivel, self.ps, self.py, self.minutos, self.sozinho = nivel, ps, py, minutos, sozinho
         self.grupo, self.nota, self.reverte, self.dados = grupo, nota, reverte, dados

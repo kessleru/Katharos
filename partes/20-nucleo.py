@@ -101,7 +101,7 @@ def le_json(arq, padrao):
 def grava_json(arq, dados):
     arq = Path(arq)
     arq.parent.mkdir(parents=True, exist_ok=True)
-    tmp = arq.with_suffix(arq.suffix + '.tmp')
+    tmp = arq.with_name(f'{arq.name}.{os.getpid()}.tmp')   # um por processo: o motor comum, o elevado e a manutenção gravam juntos
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=1)
     os.replace(tmp, arq)
@@ -624,10 +624,10 @@ function Get-Monitores {
                 $w = $dm.dmPelsWidth; $h = $dm.dmPelsHeight; $b = $dm.dmBitsPerPel; $hz = $dm.dmDisplayFrequency; $max = $hz; $m = 0
                 $x = New-Object 'Katharos.KTela+DEVMODE'; $x.dmSize = $dm.dmSize
                 while ($m -lt 4000 -and [Katharos.KTela]::EnumDisplaySettings($d.DeviceName, $m, [ref]$x)) {
-                    if ($x.dmPelsWidth -eq $w -and $x.dmPelsHeight -eq $h -and $x.dmBitsPerPel -eq $b -and $x.dmDisplayFrequency -gt $max -and $x.dmDisplayFrequency -le 500) { $max = $x.dmDisplayFrequency }
+                    if ($x.dmPelsWidth -eq $w -and $x.dmPelsHeight -eq $h -and $x.dmBitsPerPel -eq $b -and $x.dmDisplayFrequency -gt $max -and $x.dmDisplayFrequency -le 500 -and -not ($x.dmDisplayFlags -band 2)) { $max = $x.dmDisplayFrequency }
                     $m++
                 }
-                $out += [pscustomobject]@{ dev = $d.DeviceName; nome = $d.DeviceString; hz = $hz; max = $max; w = $w; h = $h }
+                $out += [pscustomobject]@{ dev = $d.DeviceName; nome = $d.DeviceString; hz = $hz; max = $max; w = $w; h = $h; primaria = [bool]($d.StateFlags -band 4) }
             }
         }
         $i++
@@ -648,6 +648,16 @@ function Set-TaxaMonitor([string]$Dev, [int]$Hz, [string]$Rotulo) {
     if ([Katharos.KTela]::ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 1, [IntPtr]::Zero) -ne 0) { Aviso ("{0}: o Windows nao aceitou" -f $Rotulo); return $false }
     $l = New-Object 'Katharos.KTela+DEVMODE'; $l.dmSize = $dm.dmSize
     if ([Katharos.KTela]::EnumDisplaySettings($Dev, -1, [ref]$l) -and $l.dmDisplayFrequency -ne $Hz) { Aviso ("{0}: a tela ficou em {1} Hz" -f $Rotulo, $l.dmDisplayFrequency); return $false }
+    # como a troca de resolucao do Windows: fica so se a pessoa confirmar "manter" em 90 s (a janela e o terminal gravam tela-ok.txt);
+    # sem resposta (tela apagada, ninguem olhando), um vigia separado volta a taxa de antes sozinho
+    $k = Join-Path $env:USERPROFILE '.katharos'; New-Item -ItemType Directory -Force -Path $k | Out-Null
+    $pend = Join-Path $k 'tela-pendente.txt'; $ok = Join-Path $k 'tela-ok.txt'
+    Set-Content -LiteralPath $pend -Value (Get-Date -Format o) -Encoding ascii
+    $volta = "Start-Sleep 90; `$p = '$pend'; `$o = '$ok'; if ((Test-Path `$o) -and (Test-Path `$p) -and (Get-Item `$o).LastWriteTime -ge (Get-Item `$p).LastWriteTime) { exit }; " +
+             "function _KTela {" + ${function:_KTela}.ToString() + "}; _KTela; `$dm = New-Object 'Katharos.KTela+DEVMODE'; `$dm.dmSize = [int16][Runtime.InteropServices.Marshal]::SizeOf(`$dm); " +
+             "if ([Katharos.KTela]::EnumDisplaySettings('" + ($Dev -replace "'", "''") + "', -1, [ref]`$dm) -and `$dm.dmDisplayFrequency -eq $Hz) { `$dm.dmDisplayFrequency = $antes; `$dm.dmFields = 0x400000; [Katharos.KTela]::ChangeDisplaySettingsEx('" + ($Dev -replace "'", "''") + "', [ref]`$dm, [IntPtr]::Zero, 1, [IntPtr]::Zero) | Out-Null }"
+    $psx = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    Start-Process -FilePath $psx -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand', ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($volta)))
     $script:MUDOU++
     return $true
 }
@@ -657,9 +667,12 @@ function Set-EconomiaAdaptadores {
         $pm = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue
         if (-not $pm -or "$($pm.AllowComputerToTurnOffDevice)" -ne 'Enabled') { continue }
         if ($TESTE) { Plano ("{0}: sem desligar para economizar" -f $a.Name); continue }
-        Guarda-Desfazer ("adaptador|" + $a.Name) ("Set-NetAdapterPowerManagement -Name '{0}' -AllowComputerToTurnOffDevice Enabled -NoRestart -ErrorAction SilentlyContinue" -f ($a.Name -replace "'", "''"))
+        $g = "$($a.InterfaceGuid)"
+        # o desfazer acha o adaptador pelo GUID (o nome pode mudar)
+        Guarda-Desfazer ("adaptador|" + $g) ("Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object {{ `$_.InterfaceGuid -eq '{0}' }} | ForEach-Object {{ Set-NetAdapterPowerManagement -Name `$_.Name -AllowComputerToTurnOffDevice Enabled -NoRestart -ErrorAction SilentlyContinue }}" -f $g)
         Set-NetAdapterPowerManagement -Name $a.Name -AllowComputerToTurnOffDevice Disabled -NoRestart -ErrorAction SilentlyContinue
-        $script:MUDOU++
+        $depois = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue
+        if ($depois -and "$($depois.AllowComputerToTurnOffDevice)" -ne 'Enabled') { $script:MUDOU++ } else { Aviso ("{0}: o Windows nao aceitou desligar a economia" -f $a.Name) }
     }
 }
 function Roda([string]$Exe, [string]$Argumentos = '', [double]$Minutos = 5, [switch]$Visivel) {

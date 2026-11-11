@@ -373,7 +373,7 @@ def le_agora(max_idade_s=15):
     return d
 
 
-def _le_jsonl(arq, campo, desde):
+def _le_jsonl(arq, campo, desde, ate=None):
     out = []
     try:
         with open(arq, encoding='utf-8', errors='replace') as f:
@@ -383,7 +383,7 @@ def _le_jsonl(arq, campo, desde):
                     dt = datetime.fromisoformat(d[campo])
                 except (ValueError, KeyError, TypeError):
                     continue
-                if dt >= desde:
+                if dt >= desde and (ate is None or dt <= ate):
                     d['_dt'] = dt
                     out.append(d)
     except OSError:
@@ -398,7 +398,7 @@ def le_minutos(horas=24, agora=None):
         m = memoria_minutos(desde, agora)
         if m:
             return m
-    return _le_jsonl(CASA / 'minutos.jsonl', 't', desde)
+    return _le_jsonl(CASA / 'minutos.jsonl', 't', desde, agora)
 
 
 def le_sessoes(dias=60, agora=None):

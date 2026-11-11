@@ -110,6 +110,14 @@ def espera_tecla(t, segundos, texto):
         t.para_vivo()
 
 
+def confirma_tela():
+    """A taxa nova da tela só fica com a confirmação (o vigia do Set-TaxaMonitor volta sozinho sem ela)."""
+    try:
+        (CASA / 'tela-ok.txt').write_text(agora_iso(), encoding='ascii')
+    except OSError as ex:
+        LOG.escreve(f'confirmar a tela: {ex!r}')
+
+
 def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
     """Como a troca de resolução do Windows: depois de mudar algo de risco, pergunta se está tudo bem. Se o PC ficar
     pior (tela preta, sem som, jogo que não abre), é só deixar o tempo passar ou apertar D."""
@@ -128,6 +136,7 @@ def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
                  if desfaz_se_calar else f'Se não responder em {segundos} s, ele mantém.'), 2, 'sub')
     r = espera_tecla(t, segundos, '  M mantém · D desfaz · desfazendo sozinho em' if desfaz_se_calar else '  M mantém · D desfaz · mantendo sozinho em')
     if r == 'm' or (r is None and not desfaz_se_calar):
+        confirma_tela()
         t.ok('Mantido.')
         return
     t.aviso('Desfazendo.' if r == 'd' else 'Sem resposta: desfazendo para garantir.')

@@ -132,8 +132,8 @@ def Quando_curto(iso):
 
 def travadas_pendente_no_jogo():
     """Há jogo aberto agora (agora.json do segundo plano)? O teste sozinho só roda fora do jogo."""
-    a = le_json(CASA / 'agora.json', {}) or {}
-    return bool(a.get('jogo'))
+    a = le_agora(max_idade_s=60)
+    return True if not a else bool(a.get('jogo'))   # sem leitura recente não dá para saber: trata como jogo (não mede)
 
 
 def roda_travadas_se_pendente(pr=None):

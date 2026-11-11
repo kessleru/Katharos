@@ -66,7 +66,13 @@ def _mem_importa_jsonl(con, nome, tabela, campo):
     except OSError:
         return 0
     lin = con.execute('SELECT posicao, tamanho FROM importado WHERE arquivo=?', (nome,)).fetchone()
-    pos = lin[0] if lin and lin[1] is not None and tam >= lin[0] else 0
+    with open(arq, 'rb') as f:
+        cabeca = f.readline()[:200]
+    # o segundo plano gira o arquivo tirando linhas do começo e continua escrevendo no fim: o tamanho pode até crescer. O que
+    # denuncia a rotação é a primeira linha ter mudado; aí lê de novo do começo (a chave primária evita repetir)
+    marca = con.execute('SELECT valor FROM meta WHERE chave=?', ('inicio:' + nome,)).fetchone()
+    girou = marca is None or marca[0] != cabeca.decode('utf-8', 'replace')
+    pos = lin[0] if lin and lin[1] is not None and tam >= lin[0] and not girou else 0
     n = 0
     with open(arq, 'rb') as f:
         f.seek(pos)
@@ -88,6 +94,7 @@ def _mem_importa_jsonl(con, nome, tabela, campo):
                             (chave, str(d.get('tipo') or ''), json.dumps(d.get('dados') or {}, ensure_ascii=False), f'{chave}|{d.get("tipo")}|{json.dumps(d.get("dados"), sort_keys=True)}'))
         n += r.rowcount
     con.execute('INSERT OR REPLACE INTO importado VALUES (?,?,?)', (nome, pos + fim, tam))
+    con.execute('INSERT OR REPLACE INTO meta VALUES (?,?)', ('inicio:' + nome, cabeca.decode('utf-8', 'replace')))
     return n
 
 
@@ -106,7 +113,7 @@ def _mem_mudancas(con):
 
 def _mem_compacta(con, agora):
     """Minutos com mais de 120 dias viram a média de cada hora (o que importa para tendência e linha de base longa)."""
-    corte = (agora - timedelta(days=MEMORIA_MINUTOS_DIAS)).isoformat(timespec='seconds')
+    corte = (agora - timedelta(days=MEMORIA_MINUTOS_DIAS)).replace(minute=0, second=0, microsecond=0).isoformat(timespec='seconds')   # hora inteira
     velhos = con.execute('SELECT t, dados FROM minutos WHERE t < ? ORDER BY t', (corte,)).fetchall()
     if not velhos:
         return 0
@@ -329,7 +336,13 @@ def memoria_apaga():
     exp = None
     if memoria_arq().exists():
         exp = memoria_exporta(CASA / f'memoria-exportada-{datetime.now():%Y-%m-%d-%H%M%S}.json')
-    for nome in ('katharos.db', 'katharos.db-wal', 'katharos.db-shm', 'linha-de-base.json', 'propostas.json'):
+        if not exp:   # sem a cópia guardada, não apaga nada
+            raise OSError('a memória está em uso agora e não deu para guardar a cópia antes; tente de novo em instantes')
+        try:
+            memoria_arq().unlink()   # o banco primeiro: se ele está aberto, nada mais é apagado
+        except OSError as ex:
+            raise OSError('a memória está em uso agora (o motor está pensando); tente de novo em instantes') from ex
+    for nome in ('katharos.db-wal', 'katharos.db-shm', 'linha-de-base.json', 'propostas.json'):
         try:
             (CASA / nome).unlink()
         except OSError:

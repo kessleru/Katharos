@@ -426,7 +426,10 @@ def api_memoria_apagar(ctx, p, ev):
     """Apaga o que o motor aprendeu deste PC (guarda uma exportação antes). Não toca em backups do desfazer."""
     if p.get('confirmo') is not True:
         raise ErroApi('pedido_invalido', '{"confirmo": true}')
-    arq = memoria_apaga()
+    try:
+        arq = memoria_apaga()
+    except OSError as ex:
+        raise ErroApi('ocupado', str(ex)) from ex
     return {'exportado': str(arq) if arq else None}
 
 
@@ -610,8 +613,9 @@ def api_aplicar(ctx, p, ev):
         except Exception as ex:
             LOG.escreve(f'api aplicar: pensar depois falhou: {ex!r}')
         arriscados = [n for n in ordem if n in RISCO_ALTO and any(r['feitos'] for r in res if r['pacote'] == n)]
+        tela = 'visual' in arriscados and 'monitor-hz' in set(sel.get('visual') or [])
         return {'pacotes': res, 'confirmar': str(config('confirmar') or 'risco'),
-                'perguntar_manter': arriscados if str(config('confirmar') or 'risco') != 'nunca' else []}
+                'perguntar_manter': arriscados if str(config('confirmar') or 'risco') != 'nunca' else (['visual'] if tela else [])}
     return _com_trava(faz)
 
 
@@ -790,6 +794,13 @@ def _jogos_antes_depois(dias):
     return out[:12]
 
 
+def _id_achado(dados):
+    try:
+        return json.loads(dados).get('id')
+    except (ValueError, AttributeError):
+        return None
+
+
 def anomalias_da_memoria(dias=60):
     """I23: o que o motor achou fora do normal ou mudando, por dia (da memória do PC), com a explicação para mostrar ao clicar."""
     desde = (datetime.now() - timedelta(days=dias)).date().isoformat()
@@ -804,5 +815,5 @@ def anomalias_da_memoria(dias=60):
             continue
         vistos.add(a.get('id'))
         out.append({'dia': dia, 'id': a.get('id'), 'titulo': a.get('titulo'), 'vi': a.get('vi'), 'tipo': a.get('tipo'), 'confianca': a.get('confianca'),
-                    'dias': sum(1 for d2, x in ls if json.loads(x).get('id') == a.get('id'))})
+                    'dias': sum(1 for d2, x in ls if _id_achado(x) == a.get('id'))})
     return out[:20]

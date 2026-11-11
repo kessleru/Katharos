@@ -1148,7 +1148,7 @@ def le_json(arq, padrao):
 def grava_json(arq, dados):
     arq = Path(arq)
     arq.parent.mkdir(parents=True, exist_ok=True)
-    tmp = arq.with_suffix(arq.suffix + '.tmp')
+    tmp = arq.with_name(f'{arq.name}.{os.getpid()}.tmp')   # um por processo: o motor comum, o elevado e a manutenção gravam juntos
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=1)
     os.replace(tmp, arq)
@@ -1671,10 +1671,10 @@ function Get-Monitores {
                 $w = $dm.dmPelsWidth; $h = $dm.dmPelsHeight; $b = $dm.dmBitsPerPel; $hz = $dm.dmDisplayFrequency; $max = $hz; $m = 0
                 $x = New-Object 'Katharos.KTela+DEVMODE'; $x.dmSize = $dm.dmSize
                 while ($m -lt 4000 -and [Katharos.KTela]::EnumDisplaySettings($d.DeviceName, $m, [ref]$x)) {
-                    if ($x.dmPelsWidth -eq $w -and $x.dmPelsHeight -eq $h -and $x.dmBitsPerPel -eq $b -and $x.dmDisplayFrequency -gt $max -and $x.dmDisplayFrequency -le 500) { $max = $x.dmDisplayFrequency }
+                    if ($x.dmPelsWidth -eq $w -and $x.dmPelsHeight -eq $h -and $x.dmBitsPerPel -eq $b -and $x.dmDisplayFrequency -gt $max -and $x.dmDisplayFrequency -le 500 -and -not ($x.dmDisplayFlags -band 2)) { $max = $x.dmDisplayFrequency }
                     $m++
                 }
-                $out += [pscustomobject]@{ dev = $d.DeviceName; nome = $d.DeviceString; hz = $hz; max = $max; w = $w; h = $h }
+                $out += [pscustomobject]@{ dev = $d.DeviceName; nome = $d.DeviceString; hz = $hz; max = $max; w = $w; h = $h; primaria = [bool]($d.StateFlags -band 4) }
             }
         }
         $i++
@@ -1695,6 +1695,16 @@ function Set-TaxaMonitor([string]$Dev, [int]$Hz, [string]$Rotulo) {
     if ([Katharos.KTela]::ChangeDisplaySettingsEx($Dev, [ref]$dm, [IntPtr]::Zero, 1, [IntPtr]::Zero) -ne 0) { Aviso ("{0}: o Windows nao aceitou" -f $Rotulo); return $false }
     $l = New-Object 'Katharos.KTela+DEVMODE'; $l.dmSize = $dm.dmSize
     if ([Katharos.KTela]::EnumDisplaySettings($Dev, -1, [ref]$l) -and $l.dmDisplayFrequency -ne $Hz) { Aviso ("{0}: a tela ficou em {1} Hz" -f $Rotulo, $l.dmDisplayFrequency); return $false }
+    # como a troca de resolucao do Windows: fica so se a pessoa confirmar "manter" em 90 s (a janela e o terminal gravam tela-ok.txt);
+    # sem resposta (tela apagada, ninguem olhando), um vigia separado volta a taxa de antes sozinho
+    $k = Join-Path $env:USERPROFILE '.katharos'; New-Item -ItemType Directory -Force -Path $k | Out-Null
+    $pend = Join-Path $k 'tela-pendente.txt'; $ok = Join-Path $k 'tela-ok.txt'
+    Set-Content -LiteralPath $pend -Value (Get-Date -Format o) -Encoding ascii
+    $volta = "Start-Sleep 90; `$p = '$pend'; `$o = '$ok'; if ((Test-Path `$o) -and (Test-Path `$p) -and (Get-Item `$o).LastWriteTime -ge (Get-Item `$p).LastWriteTime) { exit }; " +
+             "function _KTela {" + ${function:_KTela}.ToString() + "}; _KTela; `$dm = New-Object 'Katharos.KTela+DEVMODE'; `$dm.dmSize = [int16][Runtime.InteropServices.Marshal]::SizeOf(`$dm); " +
+             "if ([Katharos.KTela]::EnumDisplaySettings('" + ($Dev -replace "'", "''") + "', -1, [ref]`$dm) -and `$dm.dmDisplayFrequency -eq $Hz) { `$dm.dmDisplayFrequency = $antes; `$dm.dmFields = 0x400000; [Katharos.KTela]::ChangeDisplaySettingsEx('" + ($Dev -replace "'", "''") + "', [ref]`$dm, [IntPtr]::Zero, 1, [IntPtr]::Zero) | Out-Null }"
+    $psx = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    Start-Process -FilePath $psx -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand', ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($volta)))
     $script:MUDOU++
     return $true
 }
@@ -1704,9 +1714,12 @@ function Set-EconomiaAdaptadores {
         $pm = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue
         if (-not $pm -or "$($pm.AllowComputerToTurnOffDevice)" -ne 'Enabled') { continue }
         if ($TESTE) { Plano ("{0}: sem desligar para economizar" -f $a.Name); continue }
-        Guarda-Desfazer ("adaptador|" + $a.Name) ("Set-NetAdapterPowerManagement -Name '{0}' -AllowComputerToTurnOffDevice Enabled -NoRestart -ErrorAction SilentlyContinue" -f ($a.Name -replace "'", "''"))
+        $g = "$($a.InterfaceGuid)"
+        # o desfazer acha o adaptador pelo GUID (o nome pode mudar)
+        Guarda-Desfazer ("adaptador|" + $g) ("Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object {{ `$_.InterfaceGuid -eq '{0}' }} | ForEach-Object {{ Set-NetAdapterPowerManagement -Name `$_.Name -AllowComputerToTurnOffDevice Enabled -NoRestart -ErrorAction SilentlyContinue }}" -f $g)
         Set-NetAdapterPowerManagement -Name $a.Name -AllowComputerToTurnOffDevice Disabled -NoRestart -ErrorAction SilentlyContinue
-        $script:MUDOU++
+        $depois = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction SilentlyContinue
+        if ($depois -and "$($depois.AllowComputerToTurnOffDevice)" -ne 'Enabled') { $script:MUDOU++ } else { Aviso ("{0}: o Windows nao aceitou desligar a economia" -f $a.Name) }
     }
 }
 function Roda([string]$Exe, [string]$Argumentos = '', [double]$Minutos = 5, [switch]$Visivel) {
@@ -4026,7 +4039,8 @@ class Item:
     nota: o que este PC tem que mudou a recomendação."""
 
     def __init__(self, id, titulo, explica, ganho='', custo='', nivel=1, ps=None, py=None, minutos=3,
-                 sozinho=False, grupo=None, nota='', reverte=True, dados=None, conflita=(), alerta='', recorrente=False):
+                 sozinho=False, grupo=None, nota='', reverte=True, dados=None, conflita=(), alerta='', recorrente=False, reaplica=True):
+        self.reaplica = reaplica  # False: a manutenção nunca reaplica sozinha (tela, adaptador novo): só com a pessoa olhando
         self.id, self.titulo, self.explica, self.ganho, self.custo = id, titulo, explica, ganho, custo
         self.nivel, self.ps, self.py, self.minutos, self.sozinho = nivel, ps, py, minutos, sozinho
         self.grupo, self.nota, self.reverte, self.dados = grupo, nota, reverte, dados
@@ -5949,11 +5963,11 @@ def itens_visual(ctx):
     hz_max = tela.get('hz_max') if isinstance(tela.get('hz_max'), int) else 0
     return [
         Item('monitor-hz', f'monitor na taxa máxima ({hz_max} Hz)' if hz_max else 'monitor na taxa máxima',
-             'O Windows às vezes deixa a tela em 60 Hz mesmo quando ela aceita mais. Usa a maior taxa que a tela informa na resolução de agora '
-             '(a resolução não muda). Se a tela piscar ou apagar, ela volta sozinha em 90 segundos.',
+             'O Windows às vezes deixa a tela em 60 Hz mesmo quando ela aceita mais. Usa a maior taxa que a tela principal informa na resolução '
+             'de agora (a resolução não muda). Só fica se você confirmar "manter" em 90 segundos; sem resposta, volta sozinha.',
              'imagem mais fluida e menos atraso em tudo, principalmente em jogos', 'em notebook na bateria, um pouco mais de consumo',
-             2 if nb else 1, 'foreach ($m in Get-Monitores) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
-             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz') if hz and hz_max >= hz + 15 else None,
+             2 if nb else 1, 'foreach ($m in @(Get-Monitores | Where-Object { $_.primaria })) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
+             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz', reaplica=False) if hz and hz_max >= hz + 15 else None,
         Item('efeitos', 'efeitos visuais em desempenho', 'Sem sombras, esmaecimento, deslizamento de menus e caixas, mantendo a '
              'suavização de fontes e as miniaturas.', 'janelas e menus mais rápidos em PC fraco', 'visual mais seco', 1 if fraco else 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', 'VisualFXSetting', 3),
@@ -6164,7 +6178,7 @@ def itens_energia(ctx):
              'gasto mínimo de energia', 2, "Guarda-Energia; Set-Energia 'SCHEME_CURRENT' 'SUB_DISK' 'DISKIDLE' 0 $null 'disco sempre ligado na tomada' | Out-Null; if (-not $TESTE) { powercfg /setactive SCHEME_CURRENT | Out-Null }"),
         Item('adaptadores', 'placa de rede sem desligar para economizar', 'Em PC de mesa, o Windows deixa de desligar a placa de rede e o Wi-Fi '
              'para economizar energia (opção "permitir que o computador desligue este dispositivo").', 'evita queda e travadinha de rede',
-             'gasto mínimo de energia', 2, 'Set-EconomiaAdaptadores') if not nb else None,
+             'gasto mínimo de energia', 2, 'Set-EconomiaAdaptadores', reaplica=False) if not nb else None,
         Item('usb', 'sem suspensão seletiva de USB na tomada', 'O Windows para de desligar portas USB para economizar.',
              'evita mouse, teclado e headset desconectando ou com atraso', 'gasto mínimo de energia', 3 if nb else 2,
              f"Set-Energia 'SCHEME_CURRENT' {usb.split()[0]} {usb.split()[1]} 0 $null 'USB sem suspensao na tomada' | Out-Null; if (-not $TESTE) {{ powercfg /setactive SCHEME_CURRENT | Out-Null }}"),
@@ -7395,6 +7409,14 @@ def espera_tecla(t, segundos, texto):
         t.para_vivo()
 
 
+def confirma_tela():
+    """A taxa nova da tela só fica com a confirmação (o vigia do Set-TaxaMonitor volta sozinho sem ela)."""
+    try:
+        (CASA / 'tela-ok.txt').write_text(agora_iso(), encoding='ascii')
+    except OSError as ex:
+        LOG.escreve(f'confirmar a tela: {ex!r}')
+
+
 def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
     """Como a troca de resolução do Windows: depois de mudar algo de risco, pergunta se está tudo bem. Se o PC ficar
     pior (tela preta, sem som, jogo que não abre), é só deixar o tempo passar ou apertar D."""
@@ -7413,6 +7435,7 @@ def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
                  if desfaz_se_calar else f'Se não responder em {segundos} s, ele mantém.'), 2, 'sub')
     r = espera_tecla(t, segundos, '  M mantém · D desfaz · desfazendo sozinho em' if desfaz_se_calar else '  M mantém · D desfaz · mantendo sozinho em')
     if r == 'm' or (r is None and not desfaz_se_calar):
+        confirma_tela()
         t.ok('Mantido.')
         return
     t.aviso('Desfazendo.' if r == 'd' else 'Sem resposta: desfazendo para garantir.')
@@ -9340,7 +9363,7 @@ def ferramenta_manutencao(ctx, args):
             if nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
                 continue
             ids = set(reg.get('itens', []))
-            its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo]
+            its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo and getattr(i, 'reaplica', True)]
             its, _ = aplica_protegidos(nome, its)
             if not its:
                 continue
@@ -10393,8 +10416,8 @@ def Quando_curto(iso):
 
 def travadas_pendente_no_jogo():
     """Há jogo aberto agora (agora.json do segundo plano)? O teste sozinho só roda fora do jogo."""
-    a = le_json(CASA / 'agora.json', {}) or {}
-    return bool(a.get('jogo'))
+    a = le_agora(max_idade_s=60)
+    return True if not a else bool(a.get('jogo'))   # sem leitura recente não dá para saber: trata como jogo (não mede)
 
 
 def roda_travadas_se_pendente(pr=None):
@@ -11599,7 +11622,7 @@ def le_agora(max_idade_s=15):
     return d
 
 
-def _le_jsonl(arq, campo, desde):
+def _le_jsonl(arq, campo, desde, ate=None):
     out = []
     try:
         with open(arq, encoding='utf-8', errors='replace') as f:
@@ -11609,7 +11632,7 @@ def _le_jsonl(arq, campo, desde):
                     dt = datetime.fromisoformat(d[campo])
                 except (ValueError, KeyError, TypeError):
                     continue
-                if dt >= desde:
+                if dt >= desde and (ate is None or dt <= ate):
                     d['_dt'] = dt
                     out.append(d)
     except OSError:
@@ -11624,7 +11647,7 @@ def le_minutos(horas=24, agora=None):
         m = memoria_minutos(desde, agora)
         if m:
             return m
-    return _le_jsonl(CASA / 'minutos.jsonl', 't', desde)
+    return _le_jsonl(CASA / 'minutos.jsonl', 't', desde, agora)
 
 
 def le_sessoes(dias=60, agora=None):
@@ -13299,7 +13322,7 @@ def exporta_propostas(ctx=None):
              'resultados': pendentes[:3], 'diagnosticos': [{k: x.get(k) for k in ('problema', 'titulo', 'causa', 'nome', 'confianca', 'evidencias', 'descartadas', 'faria', 'mudaria')}
                                                            for x in p['diagnosticos']],
              'achados': [{k: x.get(k) for k in ('id', 'tipo', 'titulo', 'vi', 'confianca', 'gravidade', 'contexto', 'fonte')} for x in p['achados']][:20]}
-        tmp = CASA / 'propostas.json.tmp'
+        tmp = CASA / f'propostas.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'propostas.json')
         return 0
@@ -13768,7 +13791,13 @@ def _mem_importa_jsonl(con, nome, tabela, campo):
     except OSError:
         return 0
     lin = con.execute('SELECT posicao, tamanho FROM importado WHERE arquivo=?', (nome,)).fetchone()
-    pos = lin[0] if lin and lin[1] is not None and tam >= lin[0] else 0
+    with open(arq, 'rb') as f:
+        cabeca = f.readline()[:200]
+    # o segundo plano gira o arquivo tirando linhas do começo e continua escrevendo no fim: o tamanho pode até crescer. O que
+    # denuncia a rotação é a primeira linha ter mudado; aí lê de novo do começo (a chave primária evita repetir)
+    marca = con.execute('SELECT valor FROM meta WHERE chave=?', ('inicio:' + nome,)).fetchone()
+    girou = marca is None or marca[0] != cabeca.decode('utf-8', 'replace')
+    pos = lin[0] if lin and lin[1] is not None and tam >= lin[0] and not girou else 0
     n = 0
     with open(arq, 'rb') as f:
         f.seek(pos)
@@ -13790,6 +13819,7 @@ def _mem_importa_jsonl(con, nome, tabela, campo):
                             (chave, str(d.get('tipo') or ''), json.dumps(d.get('dados') or {}, ensure_ascii=False), f'{chave}|{d.get("tipo")}|{json.dumps(d.get("dados"), sort_keys=True)}'))
         n += r.rowcount
     con.execute('INSERT OR REPLACE INTO importado VALUES (?,?,?)', (nome, pos + fim, tam))
+    con.execute('INSERT OR REPLACE INTO meta VALUES (?,?)', ('inicio:' + nome, cabeca.decode('utf-8', 'replace')))
     return n
 
 
@@ -13808,7 +13838,7 @@ def _mem_mudancas(con):
 
 def _mem_compacta(con, agora):
     """Minutos com mais de 120 dias viram a média de cada hora (o que importa para tendência e linha de base longa)."""
-    corte = (agora - timedelta(days=MEMORIA_MINUTOS_DIAS)).isoformat(timespec='seconds')
+    corte = (agora - timedelta(days=MEMORIA_MINUTOS_DIAS)).replace(minute=0, second=0, microsecond=0).isoformat(timespec='seconds')   # hora inteira
     velhos = con.execute('SELECT t, dados FROM minutos WHERE t < ? ORDER BY t', (corte,)).fetchall()
     if not velhos:
         return 0
@@ -14031,7 +14061,13 @@ def memoria_apaga():
     exp = None
     if memoria_arq().exists():
         exp = memoria_exporta(CASA / f'memoria-exportada-{datetime.now():%Y-%m-%d-%H%M%S}.json')
-    for nome in ('katharos.db', 'katharos.db-wal', 'katharos.db-shm', 'linha-de-base.json', 'propostas.json'):
+        if not exp:   # sem a cópia guardada, não apaga nada
+            raise OSError('a memória está em uso agora e não deu para guardar a cópia antes; tente de novo em instantes')
+        try:
+            memoria_arq().unlink()   # o banco primeiro: se ele está aberto, nada mais é apagado
+        except OSError as ex:
+            raise OSError('a memória está em uso agora (o motor está pensando); tente de novo em instantes') from ex
+    for nome in ('katharos.db-wal', 'katharos.db-shm', 'linha-de-base.json', 'propostas.json'):
         try:
             (CASA / nome).unlink()
         except OSError:
@@ -14142,7 +14178,7 @@ def linha_de_base_toda(minutos, agora=None):
 def escreve_linha_de_base(minutos=None, agora=None):
     try:
         d = {'quando': agora_iso(), 'metricas': linha_de_base_toda(minutos if minutos is not None else le_minutos(24 * BASE_DIAS), agora)}
-        tmp = CASA / 'linha-de-base.json.tmp'
+        tmp = CASA / f'linha-de-base.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
         os.replace(tmp, CASA / 'linha-de-base.json')
         return d
@@ -14782,7 +14818,10 @@ def api_memoria_apagar(ctx, p, ev):
     """Apaga o que o motor aprendeu deste PC (guarda uma exportação antes). Não toca em backups do desfazer."""
     if p.get('confirmo') is not True:
         raise ErroApi('pedido_invalido', '{"confirmo": true}')
-    arq = memoria_apaga()
+    try:
+        arq = memoria_apaga()
+    except OSError as ex:
+        raise ErroApi('ocupado', str(ex)) from ex
     return {'exportado': str(arq) if arq else None}
 
 
@@ -14966,8 +15005,9 @@ def api_aplicar(ctx, p, ev):
         except Exception as ex:
             LOG.escreve(f'api aplicar: pensar depois falhou: {ex!r}')
         arriscados = [n for n in ordem if n in RISCO_ALTO and any(r['feitos'] for r in res if r['pacote'] == n)]
+        tela = 'visual' in arriscados and 'monitor-hz' in set(sel.get('visual') or [])
         return {'pacotes': res, 'confirmar': str(config('confirmar') or 'risco'),
-                'perguntar_manter': arriscados if str(config('confirmar') or 'risco') != 'nunca' else []}
+                'perguntar_manter': arriscados if str(config('confirmar') or 'risco') != 'nunca' else (['visual'] if tela else [])}
     return _com_trava(faz)
 
 
@@ -15146,6 +15186,13 @@ def _jogos_antes_depois(dias):
     return out[:12]
 
 
+def _id_achado(dados):
+    try:
+        return json.loads(dados).get('id')
+    except (ValueError, AttributeError):
+        return None
+
+
 def anomalias_da_memoria(dias=60):
     """I23: o que o motor achou fora do normal ou mudando, por dia (da memória do PC), com a explicação para mostrar ao clicar."""
     desde = (datetime.now() - timedelta(days=dias)).date().isoformat()
@@ -15160,7 +15207,7 @@ def anomalias_da_memoria(dias=60):
             continue
         vistos.add(a.get('id'))
         out.append({'dia': dia, 'id': a.get('id'), 'titulo': a.get('titulo'), 'vi': a.get('vi'), 'tipo': a.get('tipo'), 'confianca': a.get('confianca'),
-                    'dias': sum(1 for d2, x in ls if json.loads(x).get('id') == a.get('id'))})
+                    'dias': sum(1 for d2, x in ls if _id_achado(x) == a.get('id'))})
     return out[:20]
 # ─────────────── saúde do Windows: erros dos logs, drivers e o que o Windows precisa ───────────────
 # Coleta só leitura (Visualizador de Eventos, drivers instalados, estado do Windows) → catálogo de causas conhecidas → problemas
@@ -16450,7 +16497,7 @@ def responde_pergunta(texto, ctx=None):
         x = out['propostas'][0]
         out['resposta'] = f'{x["titulo"]}. {x.get("porque") or ""}'.strip()
     elif out['achados']:
-        out['resposta'] = out['achados'][0]['titulo'] + ': ' + out['achados'][0]['vi'] + '.'
+        out['resposta'] = (out['achados'][0].get('titulo') or '') + ': ' + (out['achados'][0].get('vi') or '') + '.'
     else:
         out['resposta'] = ('Ainda não sei: não tenho medida que responda isso. Com o segundo plano ligado e algumas sessões de jogo, '
                            'eu consigo dizer o que segura o PC.' if not d else 'Não achei nada medido que responda isso; os comandos abaixo tratam do assunto.')

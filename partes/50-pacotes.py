@@ -867,11 +867,11 @@ def itens_visual(ctx):
     hz_max = tela.get('hz_max') if isinstance(tela.get('hz_max'), int) else 0
     return [
         Item('monitor-hz', f'monitor na taxa máxima ({hz_max} Hz)' if hz_max else 'monitor na taxa máxima',
-             'O Windows às vezes deixa a tela em 60 Hz mesmo quando ela aceita mais. Usa a maior taxa que a tela informa na resolução de agora '
-             '(a resolução não muda). Se a tela piscar ou apagar, ela volta sozinha em 90 segundos.',
+             'O Windows às vezes deixa a tela em 60 Hz mesmo quando ela aceita mais. Usa a maior taxa que a tela principal informa na resolução '
+             'de agora (a resolução não muda). Só fica se você confirmar "manter" em 90 segundos; sem resposta, volta sozinha.',
              'imagem mais fluida e menos atraso em tudo, principalmente em jogos', 'em notebook na bateria, um pouco mais de consumo',
-             2 if nb else 1, 'foreach ($m in Get-Monitores) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
-             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz') if hz and hz_max >= hz + 15 else None,
+             2 if nb else 1, 'foreach ($m in @(Get-Monitores | Where-Object { $_.primaria })) { if ($m.max -ge $m.hz + 15) { Set-TaxaMonitor $m.dev $m.max ("{0} de {1} para {2} Hz" -f $m.nome, $m.hz, $m.max) | Out-Null } }',
+             nota=f'a tela está em {hz} Hz e aceita {hz_max} Hz', reaplica=False) if hz and hz_max >= hz + 15 else None,
         Item('efeitos', 'efeitos visuais em desempenho', 'Sem sombras, esmaecimento, deslizamento de menus e caixas, mantendo a '
              'suavização de fontes e as miniaturas.', 'janelas e menus mais rápidos em PC fraco', 'visual mais seco', 1 if fraco else 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', 'VisualFXSetting', 3),
@@ -1082,7 +1082,7 @@ def itens_energia(ctx):
              'gasto mínimo de energia', 2, "Guarda-Energia; Set-Energia 'SCHEME_CURRENT' 'SUB_DISK' 'DISKIDLE' 0 $null 'disco sempre ligado na tomada' | Out-Null; if (-not $TESTE) { powercfg /setactive SCHEME_CURRENT | Out-Null }"),
         Item('adaptadores', 'placa de rede sem desligar para economizar', 'Em PC de mesa, o Windows deixa de desligar a placa de rede e o Wi-Fi '
              'para economizar energia (opção "permitir que o computador desligue este dispositivo").', 'evita queda e travadinha de rede',
-             'gasto mínimo de energia', 2, 'Set-EconomiaAdaptadores') if not nb else None,
+             'gasto mínimo de energia', 2, 'Set-EconomiaAdaptadores', reaplica=False) if not nb else None,
         Item('usb', 'sem suspensão seletiva de USB na tomada', 'O Windows para de desligar portas USB para economizar.',
              'evita mouse, teclado e headset desconectando ou com atraso', 'gasto mínimo de energia', 3 if nb else 2,
              f"Set-Energia 'SCHEME_CURRENT' {usb.split()[0]} {usb.split()[1]} 0 $null 'USB sem suspensao na tomada' | Out-Null; if (-not $TESTE) {{ powercfg /setactive SCHEME_CURRENT | Out-Null }}"),

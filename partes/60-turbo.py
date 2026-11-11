@@ -526,7 +526,7 @@ def ferramenta_manutencao(ctx, args):
             if nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
                 continue
             ids = set(reg.get('itens', []))
-            its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo]
+            its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo and getattr(i, 'reaplica', True)]
             its, _ = aplica_protegidos(nome, its)
             if not its:
                 continue

@@ -223,7 +223,7 @@ def responde_pergunta(texto, ctx=None):
         x = out['propostas'][0]
         out['resposta'] = f'{x["titulo"]}. {x.get("porque") or ""}'.strip()
     elif out['achados']:
-        out['resposta'] = out['achados'][0]['titulo'] + ': ' + out['achados'][0]['vi'] + '.'
+        out['resposta'] = (out['achados'][0].get('titulo') or '') + ': ' + (out['achados'][0].get('vi') or '') + '.'
     else:
         out['resposta'] = ('Ainda não sei: não tenho medida que responda isso. Com o segundo plano ligado e algumas sessões de jogo, '
                            'eu consigo dizer o que segura o PC.' if not d else 'Não achei nada medido que responda isso; os comandos abaixo tratam do assunto.')
