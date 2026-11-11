@@ -11,7 +11,7 @@ Marque `[x]` ao concluir e anote no **Registro** (fim) a data, a versão e o com
 | fase | versão | o quê |
 |---|---|---|
 | 0 | — | confirmar no Windows do CI as chaves e o PowerToys |
-| 1 | 4.1.0 | antivírus, proteção jurídica, bugs |
+| 1 | 4.1.0 | proteção jurídica e bugs |
 | 2 | 4.1.0 | relatório completo com envio |
 | 3 | 4.2.0 | personalização nativa com galeria |
 | 4 | 4.3.0 | estilos prontos e PowerToys |
@@ -77,17 +77,7 @@ empacota programa de terceiro. Nenhum outro programa é integrado nem indicado.
 - [ ] **0.3** PowerToys no CI: onde fica o `settings.json` de cada módulo e se ligar por arquivo vale.
 - [ ] **0.4** Protótipo da galeria: 5 opções com foto antes e depois e um vídeo, no `katharos-galeria`.
 
-### Fase 1: antivírus, proteção jurídica e bugs (4.1.0)
-Antivírus (diagnóstico do ESET):
-- [ ] **1.1** Trocar o `-EncodedCommand` escondido do vigia de tela por script em arquivo na pasta protegida, com `-File`.
-- [ ] **1.2** Desfazer sem `Invoke-Expression`: operações de volta como registros estruturados; backups antigos lidos por lista de comandos permitidos.
-- [ ] **1.3** `atualiza.ps1` fora do instalador (fica só no ZIP de terminal).
-- [ ] **1.4** VirusTotal no CI: não publica se mais de um motor marcar; se só um marcar, publica e abre issue com o texto de falso positivo.
-- [ ] **1.5** Textos de falso positivo para ESET, Microsoft, Avast/AVG, Kaspersky e Bitdefender (`planos/falso-positivo.md`).
-- [ ] **1.6** Assinatura pela SignPath (`assinatura-signpath.md`): o dono envia o pedido.
-- [ ] **1.7** Repositório protegido: `main` com CI obrigatório, tags `v*` protegidas, ambiente `release` com aprovação, ações por SHA, Dependabot, CodeQL, varredura de segredos. Checklist do dono: 2FA, log de segurança, apps autorizados.
-- [ ] **1.8** Notas da release com o hash de cada arquivo e o link da atestação do build.
-
+### Fase 1: proteção jurídica e bugs (4.1.0)
 Proteção jurídica:
 - [ ] **J1** Site: rodapé "Projeto pessoal, gratuito e de código aberto, sem fins lucrativos. Sem anúncios, venda ou rastreamento. Não é afiliado à Microsoft nem a outras marcas citadas." Mais página **Aviso legal**.
 - [ ] **J2** Aplicativo: tela **Sobre** (aviso, MIT, sem garantia, licenças de terceiros) e o aviso curto na primeira abertura, sem bloquear.
@@ -99,10 +89,10 @@ Proteção jurídica:
 - [ ] **J8** Doação, patrocínio e venda não entram.
 
 Bugs:
-- [ ] **1.9** Pendências da 4.0: 2.13 (3 pessoas leigas), 2c.1 e 2c.2 (teste jogando no kesslerupc).
-- [ ] **1.10** Testes de abuso desta sessão viram testes permanentes no CI (estado corrompido, 57 comandos, sintaxe PowerShell 5.1, `pyflakes`, Python 3.8).
-- [ ] **1.11** Ida e volta (aplicar e desfazer, registro e serviços iguais) para **todos** os pacotes no CI.
-- [ ] **1.12** Lighthouse no celular (hoje 75), sem tocar na imagem do herói.
+- [ ] **1.1** Pendências da 4.0: 2.13 (3 pessoas leigas), 2c.1 e 2c.2 (teste jogando no kesslerupc).
+- [ ] **1.2** Testes de abuso desta sessão viram testes permanentes no CI (estado corrompido, 57 comandos, sintaxe PowerShell 5.1, `pyflakes`, Python 3.8).
+- [ ] **1.3** Ida e volta (aplicar e desfazer, registro e serviços iguais) para **todos** os pacotes no CI.
+- [ ] **1.4** Lighthouse no celular (hoje 75), sem tocar na imagem do herói.
 
 ### Fase 2: relatório completo (4.1.0)
 - [ ] **2.1** Conteúdo novo: erros internos do motor e da janela, itens que "não ficaram", tempo de cada etapa, versão e histórico de atualização; Windows (build, edição, idioma), antivírus e se algum mexeu em arquivo do Katharos; telas azuis, desligamentos, disco, temperatura, travadas.
@@ -152,7 +142,6 @@ Bugs:
 - O instalador não cresce por causa da galeria (menos de 100 KB).
 - O relatório "envenenado" não deixa sair dado pessoal; nenhum envio sem prévia e consentimento.
 - Aviso de "sem fins lucrativos e sem afiliação" no site, no aplicativo, no README e no instalador.
-- VirusTotal sem alerta de mais de um motor em cada release.
 
 ## 6. Riscos
 | risco | o que fazer |
@@ -160,7 +149,6 @@ Bugs:
 | Atualização do Windows muda uma chave | o job 0.1 roda toda semana; a opção vira "não funciona neste Windows" até corrigir |
 | Galeria fora do ar | só o texto aparece; nada deixa de funcionar |
 | Abuso do endpoint de relatório | Turnstile, limites, nada guardado no Worker, token só do repositório privado |
-| Antivírus marcar de novo | 1.1 a 1.6 e assinatura |
 
 ## 7. Regras que continuam valendo
 - Mostrar cada mudança antes, desfazer tudo, ponto de restauração, ler de volta antes de dizer "feito".
@@ -180,3 +168,4 @@ Bugs:
 - 11 nov 2026 (08:46 e 08:47): enxugado a pedido do dono: só o que dá para fazer hoje.
 - 11 nov 2026 (08:49 e 08:51): saíram todos os programas além do PowerToys, inclusive o Windhawk e os mods.
 - 11 nov 2026 (08:52): relatório só sem conta (Worker e repositório privado); saíram o caminho pelo GitHub e o formulário de issue pública.
+- 11 nov 2026 (08:53): saiu a seção de antivírus (1.1 a 1.8) da fase 1.
