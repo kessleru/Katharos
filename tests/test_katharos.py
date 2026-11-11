@@ -3593,6 +3593,7 @@ class TestEnvPs(unittest.TestCase):
         mp = ';'.join([r'C:\Users\a\Documents\PowerShell\Modules', r'C:\Program Files\PowerShell\7\Modules',
                               r'C:\Users\a\Documents\WindowsPowerShell\Modules', r'C:\Windows\system32\WindowsPowerShell\v1.0\Modules', r'C:\Outro\Modules'])
         with mock.patch.dict(os.environ, {'PSModulePath': mp}):
-            fica = k.env_ps()['PSModulePath'].split(';')
+            env = k.env_ps()
+            fica = env[next(c for c in env if c.lower() == 'psmodulepath')].split(';')
         self.assertEqual(fica, [r'C:\Users\a\Documents\WindowsPowerShell\Modules', r'C:\Windows\system32\WindowsPowerShell\v1.0\Modules', r'C:\Outro\Modules'])
 

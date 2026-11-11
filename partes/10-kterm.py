@@ -396,7 +396,7 @@ class Terminal:
                 pass
         # o Git Bash (mintty) entrega pipes ao Python, que então acha que não está num terminal
         mintty = bool(env.get('MSYSTEM')) or env.get('TERM_PROGRAM') == 'mintty'
-        win_moderno = ('WT_SESSION' in env or 'TERM_PROGRAM' in env or mintty or env.get('ConEmuANSI') == 'ON'
+        win_moderno = ('WT_SESSION' in env or 'TERM_PROGRAM' in env or mintty or (env.get('ConEmuANSI') or env.get('CONEMUANSI')) == 'ON'
                        or bool(env.get('WEZTERM_PANE')))
         termo = env.get('TERM', '')
         self.tty = sys.stdout.isatty() or mintty

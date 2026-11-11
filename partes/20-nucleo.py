@@ -367,9 +367,10 @@ def env_ps():
     """O ambiente para o Windows PowerShell 5.1: sem os caminhos de módulo do PowerShell 7 (herdados quando o Katharos foi aberto
     de dentro do pwsh), que o 5.1 não carrega e fariam comandos como Get-FileHash e Set-Acl "não existirem"."""
     env = dict(os.environ)
-    mp = env.get('PSModulePath')
+    chave = next((c for c in env if c.lower() == 'psmodulepath'), None)   # no Windows o Python devolve as chaves em maiúsculas
+    mp = env.get(chave) if chave else None
     if mp:
-        env['PSModulePath'] = ';'.join(x for x in mp.split(';')
+        env[chave] = ';'.join(x for x in mp.split(';')
                                               if 'WindowsPowerShell' in x or not re.search(r'[\\/]PowerShell[\\/]', x, re.I))
     return env
 
