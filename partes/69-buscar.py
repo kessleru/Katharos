@@ -7,7 +7,7 @@
 # palavra que a pessoa usa → palavras que aparecem nos itens
 SINONIMOS = {
     # autenticidade
-    'sha': ('autenticidade',), 'sha256': ('autenticidade',), 'hash': ('autenticidade',), 'assinatura': ('autenticidade',), 'original': ('autenticidade',), 'adulterado': ('autenticidade',), 'virus': ('autenticidade',),
+    'sha': ('autenticidade',), 'sha256': ('autenticidade',), 'hash': ('autenticidade',), 'assinatura': ('autenticidade',), 'original': ('autenticidade',), 'adulterado': ('autenticidade',),
     # privacidade
     'propaganda': ('anuncio', 'sugest'), 'propagandas': ('anuncio', 'sugest'), 'ads': ('anuncio',), 'anuncios': ('anuncio',),
     'publicidade': ('anuncio', 'sugest'), 'sugestao': ('sugest',), 'sugestoes': ('sugest',), 'dica': ('sugest', 'dicas'),
@@ -61,7 +61,7 @@ SINONIMOS = {
     # programas
     'bloatware': ('fabrica', 'apps', 'remov'), 'bloat': ('fabrica', 'apps', 'remov'), 'desinstalar': ('remov', 'desinstal'), 'remover': ('remov',),
     'apps': ('apps', 'app'), 'programas': ('programa',), 'fabrica': ('fabrica',), 'mcafee': ('mcafee', 'antivirus'), 'norton': ('norton', 'antivirus'),
-    'antivirus': ('antivirus', 'defender'), 'virus': ('defender', 'antivirus', 'verifica'), 'office': ('office', 'microsoft 365'),
+    'antivirus': ('antivirus', 'defender'), 'virus': ('defender', 'antivirus', 'verifica', 'autenticidade'), 'office': ('office', 'microsoft 365'),
     'teams': ('teams',), 'skype': ('skype',), 'candy': ('apps', 'instalados sozinhos'), 'tiktok': ('apps', 'instalados sozinhos'),
     # sistema
     'atualizacao': ('update', 'atualiz'), 'atualizacoes': ('update', 'atualiz'), 'update': ('update', 'atualiz'), 'updates': ('update', 'atualiz'),
@@ -196,6 +196,7 @@ def ferramenta_buscar(ctx, args):
 def responde_pergunta(texto, ctx=None):
     """I25: "por que meu jogo trava?" → o que o motor concluiu que bate com a pergunta, e os comandos e itens que tratam disso.
     Tudo local, pelos mesmos sinônimos da busca. Sem nada que bata, diz que não sabe (e o que medir para saber)."""
+    texto = str(texto or '')[:500]   # pergunta é uma frase: texto enorme não vira trabalho nem volta inteiro na resposta
     palavras = _palavras(texto)
     d = le_json(CASA / 'propostas.json', {}) or {}
     # sem exigir todas as palavras: conta quantas batem (pergunta é frase, não busca)

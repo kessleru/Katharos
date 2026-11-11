@@ -2109,6 +2109,16 @@ class TestAbrirRelatorio(_CasaTemporaria):
             self.assertFalse(k.abre_arquivo(self.casa))
 
 
+class TestPerguntarRodada2(unittest.TestCase):
+    def test_virus_acha_autenticidade_e_antivirus(self):
+        sin = set(k.SINONIMOS['virus'])
+        self.assertTrue({'autenticidade', 'defender', 'antivirus'} <= sin)
+
+    def test_texto_enorme_e_cortado(self):
+        r = k.responde_pergunta('a' * 100000)
+        self.assertLessEqual(len(r['pergunta']), 500)
+
+
 if __name__ == '__main__':
     unittest.main()
 
@@ -3564,3 +3574,4 @@ class TestEnvPs(unittest.TestCase):
         with mock.patch.dict(os.environ, {'PSModulePath': mp}):
             fica = k.env_ps()['PSModulePath'].split(';')
         self.assertEqual(fica, [r'C:\Users\a\Documents\WindowsPowerShell\Modules', r'C:\Windows\system32\WindowsPowerShell\v1.0\Modules', r'C:\Outro\Modules'])
+
