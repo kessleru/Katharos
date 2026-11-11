@@ -459,7 +459,13 @@ try { Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction Stop } catc
 $k = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
 $antes = (Get-ItemProperty $k -Name SystemRestorePointCreationFrequency -ErrorAction SilentlyContinue).SystemRestorePointCreationFrequency
 New-ItemProperty $k -Name SystemRestorePointCreationFrequency -Value 0 -PropertyType DWord -Force | Out-Null
-try { Checkpoint-Computer -Description 'Antes do Katharos' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop; Ok 'ponto de restauracao criado: "Antes do Katharos"' }
+$__t0 = (Get-Date).AddMinutes(-10)
+try {
+  Checkpoint-Computer -Description 'Antes do Katharos' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+  # confere lendo de volta: só diz "criado" se o Windows mostra um ponto novo com este nome
+  $__rp = Get-ComputerRestorePoint -ErrorAction SilentlyContinue | Where-Object { $_.Description -eq 'Antes do Katharos' -and $_.ConvertToDateTime($_.CreationTime) -ge $__t0 } | Select-Object -First 1
+  if ($__rp) { Ok 'ponto de restauracao criado: "Antes do Katharos"' } else { Aviso 'o Windows nao mostra o ponto de restauracao novo (a Protecao do Sistema pode estar desligada por politica)' }
+}
 catch { Aviso ('ponto de restauracao nao criado: ' + $_.Exception.Message) }
 if ($null -eq $antes) { Remove-ItemProperty $k -Name SystemRestorePointCreationFrequency -ErrorAction SilentlyContinue } else { Set-ItemProperty $k -Name SystemRestorePointCreationFrequency -Value $antes }
 '''

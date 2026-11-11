@@ -681,7 +681,10 @@ $__s = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration (New-TimeSpan -
 if ($TESTE) { Plano 'criar a tarefa de segundo plano'; return }
 Unregister-ScheduledTask -TaskName «antiga» -Confirm:$false -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes, em segundo plano, sem janela. Criada pelo Katharos.' -Force | Out-Null
-Feito 'manutenção sozinha ligada: «quando», com o PC ocioso por 10 min e na tomada'
+# confere lendo de volta: a tarefa existe e está pronta
+$__tk = Get-ScheduledTask -TaskName «nome» -ErrorAction SilentlyContinue
+if ($__tk -and "$($__tk.State)" -ne 'Disabled') { Feito 'manutenção sozinha ligada: «quando», com o PC ocioso por 10 min e na tomada' }
+else { Erro 'o Windows não mostra a tarefa de manutenção depois de criar: nada foi ligado' }
 ''', exe=psq(exe), arg=psq(arg), nome=psq(TAREFA_MANUT), antiga=psq(TAREFA_MANUT_ANTIGA), gatilho=gatilho, quando=quando)
     s = roda_ps(ctx.t, corpo, 'agendar', minutos=2)
     if s.ok and not s.erros:

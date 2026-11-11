@@ -595,11 +595,12 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
   como administrador sai de uma cópia em `%ProgramData%\Katharos` (só administrador grava) conferida por hash, nunca da pasta do
   usuário; assinatura (5.3, 5.4); se algum antivírus marcar por engano, enviar para análise da Microsoft (o dono envia; o texto fica
   pronto aqui) e conferir no VirusTotal antes da 4.0.0.
-- [ ] **S4** Sem falso positivo (pedido de 10 nov, 20:07): toda ação que muda o PC lê de volta e só diz "feito" quando o Windows mostra
+- [x] **S4** Sem falso positivo (pedido de 10 nov, 20:07): toda ação que muda o PC lê de volta e só diz "feito" quando o Windows mostra
   que ficou; se não ficou, diz o erro e o motivo provável ("não dá neste PC" é resposta válida). Já valem: pacotes (conferência depois
   de aplicar, `nao-ficou`), energia no notebook (prova ao ligar, leitura na hora e 15 s depois, erro no ícone mesmo com avisos
-  desligados), permissão de FPS (lê o grupo de volta). Falta: revisar com a mesma régua cada comando que diz "feito" (agendar, segundo
-  plano, ponto de restauração, desfazer, atalhos) e a interface nova.
+  desligados), permissão de FPS (lê o grupo de volta), ponto de restauração (procura o ponto novo com o nome), tarefa de manutenção
+  (lê a tarefa de volta), ligar o acompanhamento pela interface (só diz rodando com o processo de pé), desfazer pela interface ("ok"
+  só com backup e sem erro), aplicar pela interface ("não ficou" conferido).
 - [x] **S3** Segundo plano leve sem perder nada (pedido de 10 nov, 19:57): RAM pode usar, mas nunca pico de CPU nem muita coisa no mesmo
   instante. Lista de processos numa chamada só (NtQuerySystemInformation, poucos ms, sem abrir processo) no lugar do contador "Process"
   (dezenas a centenas de ms); leituras pesadas espalhadas (uma por vez no ritmo de 1 s); freio que espaça o ritmo se a leitura passar
@@ -659,3 +660,4 @@ Nada que o Katharos faz pode travar o PC, dar tela azul, apagar o arquivo errado
 | 10 nov 2026 | Fase 4: instalador Velopack (Setup de 68,7 MB; app .NET 10 sem precisar instalar o .NET, motor, segundo plano, PresentMon e Python 3.14.10 embutido conferido por SHA-256), instalado em silêncio no Windows do CI e motor instalado respondendo; atualização pelo GitHub (avisar, automático ou nunca; nunca no meio de uma mudança) | 3.1.2 | ramo v4 | CI Windows |
 | 10 nov 2026 | Fase 6: site repaginado (hero mantido; seções novas: Veja funcionando, Como funciona em 3 passos com vídeo, Ao vivo e nos jogos, Central, Seguro por padrão com provas, Baixar com janelas ou terminal; saíram Como usar, Painel, Modos e Contribuir em bloco). Cinco vídeos gravados da interface de verdade (`scripts/videos.sh`: cursor, cliques e câmera em vetor; AV1 + H.264 + pôster, 5,4 MB no total, só carregam quando aparecem). Decisão: sem Astro/React por ora; o mesmo gerador em Python com CSS próprio (página estática mais leve; shadcn e Magic UI são para apps React) | 3.1.2 | ramo v4 | fotos 1440 e 390 px |
 | 10 nov 2026 | 2.8 Histórico na interface (medidas por dia com marca de cada mudança e o efeito honesto de cada uma; API `historico`); 2b: raio-x acha paginação num HD, integridade de memória (só informa) e agendamento de GPU | 3.1.2 | ramo v4 | testes 326 |
+| 10 nov 2026 | S4: ponto de restauração e tarefa de manutenção conferidos lendo de volta; motor de administrador só atende aplicar e desfazer; README e texto da 4.0.0 | 3.1.2 | ramo v4 | testes 327 |

@@ -4367,7 +4367,13 @@ try { Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction Stop } catc
 $k = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
 $antes = (Get-ItemProperty $k -Name SystemRestorePointCreationFrequency -ErrorAction SilentlyContinue).SystemRestorePointCreationFrequency
 New-ItemProperty $k -Name SystemRestorePointCreationFrequency -Value 0 -PropertyType DWord -Force | Out-Null
-try { Checkpoint-Computer -Description 'Antes do Katharos' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop; Ok 'ponto de restauracao criado: "Antes do Katharos"' }
+$__t0 = (Get-Date).AddMinutes(-10)
+try {
+  Checkpoint-Computer -Description 'Antes do Katharos' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+  # confere lendo de volta: só diz "criado" se o Windows mostra um ponto novo com este nome
+  $__rp = Get-ComputerRestorePoint -ErrorAction SilentlyContinue | Where-Object { $_.Description -eq 'Antes do Katharos' -and $_.ConvertToDateTime($_.CreationTime) -ge $__t0 } | Select-Object -First 1
+  if ($__rp) { Ok 'ponto de restauracao criado: "Antes do Katharos"' } else { Aviso 'o Windows nao mostra o ponto de restauracao novo (a Protecao do Sistema pode estar desligada por politica)' }
+}
 catch { Aviso ('ponto de restauracao nao criado: ' + $_.Exception.Message) }
 if ($null -eq $antes) { Remove-ItemProperty $k -Name SystemRestorePointCreationFrequency -ErrorAction SilentlyContinue } else { Set-ItemProperty $k -Name SystemRestorePointCreationFrequency -Value $antes }
 '''
@@ -9295,7 +9301,10 @@ $__s = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration (New-TimeSpan -
 if ($TESTE) { Plano 'criar a tarefa de segundo plano'; return }
 Unregister-ScheduledTask -TaskName «antiga» -Confirm:$false -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName «nome» -Action $__a -Trigger $__t -Principal $__p -Settings $__s -Description 'Limpeza leve, saude do disco e reaplicacao das otimizacoes, em segundo plano, sem janela. Criada pelo Katharos.' -Force | Out-Null
-Feito 'manutenção sozinha ligada: «quando», com o PC ocioso por 10 min e na tomada'
+# confere lendo de volta: a tarefa existe e está pronta
+$__tk = Get-ScheduledTask -TaskName «nome» -ErrorAction SilentlyContinue
+if ($__tk -and "$($__tk.State)" -ne 'Disabled') { Feito 'manutenção sozinha ligada: «quando», com o PC ocioso por 10 min e na tomada' }
+else { Erro 'o Windows não mostra a tarefa de manutenção depois de criar: nada foi ligado' }
 ''', exe=psq(exe), arg=psq(arg), nome=psq(TAREFA_MANUT), antiga=psq(TAREFA_MANUT_ANTIGA), gatilho=gatilho, quando=quando)
     s = roda_ps(ctx.t, corpo, 'agendar', minutos=2)
     if s.ok and not s.erros:
