@@ -102,6 +102,10 @@ def md_limpo(t):
 
 # resumo escrito à mão para versões cujo changelog é longo demais para cortar sozinho
 RESUMO = {
+    '4.0.0': [('Katharos com janelas', 'instalador que se atualiza sozinho; o ícone perto do relógio e a janela são um programa só'),
+              ('Central que aprende', 'diz a causa mais provável com o que viu, o que faria e o que mudaria a conclusão'),
+              ('Qual driver trava', 'um minuto de medida diz o culpado, como o LatencyMon'),
+              ('FPS de verdade', 'média, 1% mais lento e travadas, e o antes e depois de cada mudança por jogo')],
     '3.1.2': [('Menu do ícone', 'só o que se resolve num clique: pausar, ritmo, avisos e iniciar com o Windows')],
     '3.1.1': [('Temperatura da CPU', 'lida do MSI Afterburner, HWiNFO, Core Temp ou AIDA64 abertos, sem driver'),
               ('Painel do ícone', 'ganhou o X para fechar')],
