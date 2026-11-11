@@ -332,22 +332,22 @@ A ideia: o raio-x acha o problema com prova (número, de onde veio), e a otimiza
 nova é feita em C# (preferência do usuário: mais rápida), e o motor recebe o resultado.
 
 Raio-x, novas leituras (cada uma vira achado com gravidade, prova e o item ou a instrução que resolve):
-- [ ] **2b.1** **Monitor abaixo da taxa máxima** (ex.: monitor de 144 Hz rodando em 60 Hz): `EnumDisplaySettings` lista os modos; é um dos
+- [x] **2b.1** **Monitor abaixo da taxa máxima** (ex.: monitor de 144 Hz rodando em 60 Hz): `EnumDisplaySettings` lista os modos; é um dos
   ganhos mais comuns e mais fáceis. Item novo: usar a taxa máxima (desfaz voltando à anterior).
-- [ ] **2b.2** **Memória abaixo da velocidade** (XMP/EXPO desligado): velocidade configurada x velocidade do pente (WMI
+- [x] **2b.2** **Memória abaixo da velocidade** (XMP/EXPO desligado): velocidade configurada x velocidade do pente (WMI
   `Win32_PhysicalMemory`). Não dá para ligar pelo Windows: o achado explica como ligar na BIOS, com o nome certo para Intel e AMD.
-- [ ] **2b.3** **Memória em canal único** (um pente só ou pentes nos slots errados): reduz FPS em jogos que dependem de CPU.
-- [ ] **2b.4** **Integridade de memória (VBS/HVCI) ligada**: custa FPS em alguns PCs. Achado com o custo e o risco de desligar (segurança);
+- [x] **2b.3** **Memória em canal único** (um pente só ou pentes nos slots errados): reduz FPS em jogos que dependem de CPU.
+- [x] **2b.4** **Integridade de memória (VBS/HVCI) ligada**: custa FPS em alguns PCs. Achado com o custo e o risco de desligar (segurança);
   item só no extremo, com aviso claro, e sempre desfazível.
-- [ ] **2b.5** **Driver de vídeo velho** (data da versão): instrução para atualizar pelo site do fabricante (o Katharos não instala driver).
-- [ ] **2b.6** **Resizable BAR e agendamento de GPU** (estado atual), **plano de energia** e **modo de jogo**: hoje parte disso está nos
+- [x] **2b.5** **Driver de vídeo velho** (data da versão): instrução para atualizar pelo site do fabricante (o Katharos não instala driver).
+- [x] **2b.6** **Resizable BAR e agendamento de GPU** (estado atual), **plano de energia** e **modo de jogo**: hoje parte disso está nos
   itens; o raio-x passa a mostrar o estado e o que muda.
-- [ ] **2b.7** **Arquivo de paginação num HD** quando há SSD, **disco do sistema quase cheio**, **SSD com desgaste** (SMART, já existe:
+- [x] **2b.7** **Arquivo de paginação num HD** quando há SSD, **disco do sistema quase cheio**, **SSD com desgaste** (SMART, já existe:
   integrar à tela nova).
 - [ ] **2b.8** **CPU freando, calor, RAM e disco no limite durante jogos**: vêm das sessões do segundo plano (já gravadas) e entram no
   raio-x como achados com o tempo medido.
-- [ ] **2b.9** **Programas que mais pesam ao iniciar** com o impacto medido (tempo de boot por programa, do log do Windows).
-- [ ] **2b.10** Nota do raio-x explicada: de onde vem cada ponto perdido e quanto cada correção devolve.
+- [x] **2b.9** **Programas que mais pesam ao iniciar** com o impacto medido (tempo de boot por programa, do log do Windows).
+- [x] **2b.10** Nota do raio-x explicada: de onde vem cada ponto perdido e quanto cada correção devolve.
 
 Otimizações:
 - [ ] **2b.11** **Plano por evidência**: o turbo e a tela Otimizar marcam primeiro o que o raio-x e o segundo plano provaram que pesa

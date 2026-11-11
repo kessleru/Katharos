@@ -2338,6 +2338,14 @@ $plano = Tenta { (powercfg /getactivescheme | Out-String).Trim() } ''
 $gpus = @(Tenta { Get-CimInstance Win32_VideoController | ForEach-Object { [string]$_.Name } } @())
 $dono = Tenta { (Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" | Select-Object -First 1 | Invoke-CimMethod -MethodName GetOwner).User } ''
 $pf = Tenta { Get-CimInstance Win32_PageFileSetting } $null
+# onde está o arquivo de paginação e em que tipo de disco (para achar paginação num HD quando há SSD)
+$pfDiscos = @(Tenta { Get-CimInstance Win32_PageFileUsage -ErrorAction Stop | ForEach-Object { $l = ([string]$_.Name).Substring(0, 1)
+    $n = Tenta { (Get-Partition -DriveLetter $l -ErrorAction Stop | Get-Disk -ErrorAction Stop).Number } $null
+    $pd = $(if ($null -ne $n) { Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { "$($_.DeviceId)" -eq "$n" } | Select-Object -First 1 })
+    [pscustomobject]@{ letra = $l; tipo = $(if ($pd) { [string]$pd.MediaType } else { '' }) } } } @())
+# integridade de memória (HVCI) e agendamento de GPU por hardware: só leitura, para o raio-x explicar
+$hvci = Tenta { [bool](@((Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop).SecurityServicesRunning) -contains 2) } $null
+$hags = Tenta { [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -ErrorAction Stop).HwSchMode -eq 2 } $null
 $pfAuto = Tenta { (Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile } $true
 $mm = Tenta { (Get-MMAgent -ErrorAction Stop).MemoryCompression } $null
 $pentesL = @($pentes | ForEach-Object { [pscustomobject]@{ gb = [math]::Round([double]$_.Capacity / 1GB, 0); mhz = [int]$_.ConfiguredClockSpeed; mhz_max = [int]$_.Speed; fab = ([string]$_.Manufacturer).Trim(); modelo = ([string]$_.PartNumber).Trim() } })
@@ -2402,7 +2410,9 @@ Dado 'perfil' @{
     antivirus = (Lista $av)
     defender = @{ tempo_real = [bool]$mp.RealTimeProtectionEnabled; ativo = [bool]$mp.AntivirusEnabled; modo = [string]$mp.AMRunningMode }
     energia = @{ plano = $plano }
-    memoria = @{ pagefile_auto = [bool]$pfAuto; pagefile_config = [bool]$pf; compressao = $mm }
+    memoria = @{ pagefile_auto = [bool]$pfAuto; pagefile_config = [bool]$pf; compressao = $mm; pagefile_discos = (Lista $pfDiscos) }
+    seguranca = @{ hvci = $hvci }
+    video_cfg = @{ hags = $hags }
     sistema = @{ uptime_h = $uptime; reinicio_pendente = $pend; admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator); dono_explorer = [string]$dono; usuario = $env:USERNAME }
 }
 '''
@@ -3249,6 +3259,23 @@ def analisa(p, m, d):
     if not pf(p, 'memoria.pagefile_auto', True) and not pf(p, 'memoria.pagefile_config', True):
         A.append(Achado(2, ['lento', 'tudo'], 'Memória virtual desligada', 'Sem arquivo de paginação.',
                         'Ninguém recomenda desligar: programas fecham sozinhos sem ela. O pacote de disco volta para automático.', 'disco'))
+    # arquivo de paginação num HD quando há SSD: o Windows busca memória no disco lento
+    pfd = [x for x in lista(pf(p, 'memoria.pagefile_discos')) if isinstance(x, dict)]
+    tem_ssd = any(str(x.get('tipo')) == 'SSD' for x in lista(p.get('discos')) if isinstance(x, dict))
+    if tem_ssd and any(str(x.get('tipo')) == 'HDD' for x in pfd):
+        A.append(Achado(1, ['lento', 'tudo'], 'Arquivo de paginação num HD',
+                        'O Windows guarda parte da memória em ' + ', '.join(f'{x["letra"]}:' for x in pfd if x.get('tipo') == 'HDD') + ', que é um HD; o PC tem SSD.',
+                        'Ponha o arquivo de paginação no SSD: Configurações > Sistema > Sobre > Configurações avançadas do sistema > Desempenho > '
+                        'Avançado > Memória virtual. O Katharos não muda isso sozinho (mexe em disco).'))
+    if pf(p, 'seguranca.hvci') is True and joga(p):
+        A.append(Achado(0, ['jogos', 'tudo'], 'Integridade de memória ligada',
+                        'Protege o Windows contra drivers maliciosos; em alguns jogos custa um pouco de FPS.',
+                        'O Katharos não desliga: é proteção. Se você decidir trocar segurança por FPS, é em Segurança do Windows > Segurança do '
+                        'dispositivo > Isolamento de núcleo.'))
+    if pf(p, 'video_cfg.hags') is False and joga(p) and (pf(p, 'so.build', 0) or 0) >= 19041 \
+            and any(isinstance(v, dict) and not v.get('integrada') and not v.get('basico') for v in lista(p.get('video'))):
+        A.append(Achado(0, ['jogos', 'tudo'], 'Agendamento de GPU por hardware desligado',
+                        'Em placas de vídeo recentes ele reduz um pouco o atraso nos jogos.', 'Vem no modo extremo (jogos), com volta pelo Desfazer.', 'jogos'))
     if pf(p, 'memoria.compressao') is False and ram_t < 16:
         A.append(Achado(1, ['lento', 'tudo'], 'Compressão de memória desligada', f'Com {gb(ram_t)}, ela ajuda.', 'O pacote de disco liga de novo.', 'disco'))
     if not pf(p, 'so.win11') and pf(p, 'so.build', 0):

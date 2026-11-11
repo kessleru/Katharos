@@ -2880,6 +2880,38 @@ class TestApi(_CasaTemporaria):
         self.assertEqual(sorted(item), contrato['item'])
 
 
+class TestRaioxNovo(unittest.TestCase):
+    """Achados novos do raio-x (2b): só informam; nada desliga proteção."""
+    def perfil(self, **extra):
+        p = {'so': {'build': 26200, 'win11': True, 'edicao': 'Professional'}, 'jogos': ['Steam'], 'ram': {'total': 16, 'pentes': []},
+             'disco': {'tipo': 'SSD', 'livre': 200, 'total': 500}, 'discos': [{'tipo': 'SSD'}, {'tipo': 'HDD'}],
+             'video': [{'nome': 'NVIDIA GeForce RTX 4060', 'integrada': False, 'basico': False}], 'memoria': {}, 'pc': {}}
+        for k_, v in extra.items():
+            p.setdefault(k_.split('_')[0], {})
+        return p
+
+    def titulos(self, p):
+        return [a.titulo for a in k.analisa(p, {}, {})]
+
+    def test_paginacao_no_hd(self):
+        p = self.perfil(); p['memoria']['pagefile_discos'] = [{'letra': 'D', 'tipo': 'HDD'}]
+        self.assertIn('Arquivo de paginação num HD', self.titulos(p))
+        p['memoria']['pagefile_discos'] = [{'letra': 'C', 'tipo': 'SSD'}]
+        self.assertNotIn('Arquivo de paginação num HD', self.titulos(p))
+
+    def test_integridade_de_memoria_so_informa(self):
+        p = self.perfil(); p['seguranca'] = {'hvci': True}
+        a = [x for x in k.analisa(p, {}, {}) if x.titulo == 'Integridade de memória ligada']
+        self.assertEqual(len(a), 1)
+        self.assertEqual(a[0].impacto, 0)   # não tira ponto da nota
+        self.assertEqual(a[0].comando, '')  # nenhum comando desliga
+
+    def test_hags_aponta_para_jogos(self):
+        p = self.perfil(); p['video_cfg'] = {'hags': False}
+        a = [x for x in k.analisa(p, {}, {}) if x.titulo.startswith('Agendamento de GPU')]
+        self.assertEqual([x.comando for x in a], ['jogos'])
+
+
 class TestFonte(unittest.TestCase):
     """A fonte está no repositório: o katharos.py publicado é exatamente a soma das partes, na ordem do nome."""
 
