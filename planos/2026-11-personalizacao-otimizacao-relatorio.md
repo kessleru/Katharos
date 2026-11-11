@@ -10,12 +10,13 @@ Marque `[x]` ao concluir e anote no **Registro** (fim) a data, a versão e o com
 
 | fase | versão | o quê |
 |---|---|---|
-| 0 | — | confirmar no Windows do CI as chaves das personalizações |
+| 0 | — | confirmar no Windows do CI as chaves e o PowerToys |
 | 1 | 4.1.0 | proteção jurídica e bugs |
 | 2 | 4.1.0 | relatório completo com envio |
 | 3 | 4.2.0 | personalização nativa com galeria |
-| 4 | 4.3.0 | otimizações novas e perfis automáticos |
-| 5 | 4.4.0 | interface |
+| 4 | 4.3.0 | PowerToys |
+| 5 | 4.4.0 | otimizações novas e perfis automáticos |
+| 6 | 4.5.0 | interface |
 
 ---
 
@@ -26,8 +27,7 @@ abre a tela **Personalizar**, vê a prévia, marca o que quer, e tudo volta pelo
 
 **P2. Caminho de cada opção, nesta ordem:**
 1. **Nativo do Windows** (registro, política oficial ou atalho para Configurações): padrão; sobrevive a atualizações e é lido de volta.
-2. **Própria do Katharos:** quando o Windows não tem a opção pronta, o Katharos cria a sua (tarefa agendada, script dele), sem programa de
-   terceiro, sem injetar em processo e com Desfazer.
+2. **PowerToys** (Microsoft, código aberto): instalado pelo winget só se a pessoa pedir.
 
 Fora de qualquer caminho: trocar arquivo do sistema, patch de tema, fonte do sistema, DPI e escala.
 
@@ -46,7 +46,7 @@ no instalador e no relatório (J1 a J8). Isso é transparência, não parecer ju
 
 ---
 
-## 2. Personalização (fase 3)
+## 2. Personalização (fases 3 e 4)
 
 Todas as chaves são confirmadas na fase 0 (Windows 10 22H2, 11 24H2, 11 25H2). Valor bloqueado pelo UCPD vira atalho para a tela do Windows.
 
@@ -59,9 +59,12 @@ Todas as chaves são confirmadas na fase 0 (Windows 10 22H2, 11 24H2, 11 25H2). 
 - Bloqueio e sons: sem dicas na tela de bloqueio, tela de entrada sem desfoque, esquema "Sem sons".
 - Atalhos para Configurações: papel de parede, não perturbe com horário, ponteiro, tecla Copilot, temas da Loja.
 
-## 3. Sem programas de terceiros
+**PowerToys (fase 4):** Light Switch (tema por horário), FancyZones, Always on Top, Keyboard Manager, Command Palette, PowerRename, Image Resizer, Peek.
 
-Tudo é feito pelo próprio Katharos. Nenhum programa é instalado, empacotado ou indicado.
+## 3. Programa auxiliar
+
+Só o **PowerToys** (Microsoft, gratuito e de código aberto) entra. O Katharos instala pelo winget só a pedido, com fonte oficial, e nunca
+empacota programa de terceiro. Nenhum outro programa é integrado nem indicado.
 
 ---
 
@@ -69,7 +72,8 @@ Tudo é feito pelo próprio Katharos. Nenhum programa é instalado, empacotado o
 
 ### Fase 0: confirmar no Windows de verdade
 - [ ] **0.1** Job `personalizacao` no CI: grava, lê, desfaz e confere cada chave; marca as bloqueadas pelo UCPD.
-- [ ] **0.3** Protótipo da galeria: 5 opções com foto antes e depois e um vídeo, no `katharos-galeria`.
+- [ ] **0.3** PowerToys no CI: onde fica o `settings.json` de cada módulo e se ligar por arquivo vale.
+- [ ] **0.4** Protótipo da galeria: 5 opções com foto antes e depois e um vídeo, no `katharos-galeria`.
 
 ### Fase 1: proteção jurídica e bugs (4.1.0)
 Proteção jurídica:
@@ -103,24 +107,28 @@ Bugs:
 - [ ] **3.4** Página **Personalizar** no site com a mesma galeria.
 - [ ] **3.5** Testes de cada opção em cada Windows do CI; foto refeita quando o Windows mudar.
 
-### Fase 4: otimizações novas (4.3.0)
-- [ ] **4.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
-- [ ] **4.2** Placa de vídeo por jogo em notebook com duas placas (preferência "alto desempenho" de Configurações > Tela > Gráficos), com desfazer.
-- [ ] **4.3** Limite de banda da Otimização de Entrega e horário ativo do Windows Update (políticas oficiais).
-- [ ] **4.4** Segundo plano por app, com o custo medido de cada um.
-- [ ] **4.5** Inicialização atrasada em vez de removida, medida no boot seguinte.
-- [ ] **4.6** Modo de energia do Windows 11 (melhor desempenho e melhor eficiência), lido de volta.
-- [ ] **4.7** Disco pequeno: compactação do Windows só em SSD pequeno e quase cheio, com o ganho estimado antes.
-- [ ] **4.8** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
+### Fase 4: PowerToys (4.3.0)
+- [ ] **4.1** PowerToys: detectar, instalar a pedido, ligar módulos e explicar.
 
-### Fase 5: interface (4.4.0)
-- [ ] **5.1** Busca em tudo (Ctrl+K), com prévia.
-- [ ] **5.2** Prévia também no Otimizar, usando a mesma galeria.
-- [ ] **5.3** Modo simples e avançado.
-- [ ] **5.4** Acessibilidade: teclado, leitor de tela, alto contraste, tamanho de texto.
-- [ ] **5.5** Histórico com o "antes e depois" de cada valor.
-- [ ] **5.6** Novidades da versão na primeira abertura depois de atualizar.
-- [ ] **5.7** Inglês no aplicativo, no site e na galeria.
+### Fase 5: otimizações novas (4.4.0)
+- [ ] **5.1** Perfis automáticos pelo segundo plano, sem tocar no jogo: ao abrir, plano "melhor desempenho", pausa de downloads do Windows Update e não perturbe; ao fechar, volta. No notebook, perfil de tomada e de bateria. Tudo opcional, no Histórico.
+- [ ] **5.2** Placa de vídeo por jogo em notebook com duas placas (preferência "alto desempenho" de Configurações > Tela > Gráficos), com desfazer.
+- [ ] **5.3** Limite de banda da Otimização de Entrega e horário ativo do Windows Update (políticas oficiais).
+- [ ] **5.4** Segundo plano por app, com o custo medido de cada um.
+- [ ] **5.5** Inicialização atrasada em vez de removida, medida no boot seguinte.
+- [ ] **5.6** Modo de energia do Windows 11 (melhor desempenho e melhor eficiência), lido de volta.
+- [ ] **5.7** Disco pequeno: compactação do Windows só em SSD pequeno e quase cheio, com o ganho estimado antes.
+- [ ] **5.8** Kits de programas pelo winget (jogos, escritório, estudo), com os já instalados marcados.
+- [ ] **5.9** Não entram, com o motivo no site: limpador de memória standby, arquivo de paginação, desligar Defender ou Integridade de Memória, apagar drivers, "boosters" de FPS.
+
+### Fase 6: interface (4.5.0)
+- [ ] **6.1** Busca em tudo (Ctrl+K), com prévia.
+- [ ] **6.2** Prévia também no Otimizar, usando a mesma galeria.
+- [ ] **6.3** Modo simples e avançado.
+- [ ] **6.4** Acessibilidade: teclado, leitor de tela, alto contraste, tamanho de texto.
+- [ ] **6.5** Histórico com o "antes e depois" de cada valor.
+- [ ] **6.6** Novidades da versão na primeira abertura depois de atualizar.
+- [ ] **6.7** Inglês no aplicativo, no site e na galeria.
 
 ---
 
@@ -157,6 +165,4 @@ Bugs:
 - 11 nov 2026 (08:49 e 08:51): saíram todos os programas além do PowerToys, inclusive o Windhawk e os mods.
 - 11 nov 2026 (08:52): relatório só sem conta (Worker e repositório privado); saíram o caminho pelo GitHub e o formulário de issue pública.
 - 11 nov 2026 (08:53): a seção de antivírus saiu da fase 1, só por agora; guardada em [adiado-antivirus.md](adiado-antivirus.md).
-- 11 nov 2026 (08:54): o Katharos cria as próprias personalizações; saiu o PowerToys.
-- 11 nov 2026 (08:55): saiu exportar e importar estilo.
-- 11 nov 2026 (08:56): saíram as personalizações próprias do Katharos e os estilos prontos; fases 5 e 6 viraram 4 e 5.
+- 11 nov 2026 (08:57): a pedido do dono, voltou ao estado de antes das personalizações próprias: PowerToys de volta, kits do winget de volta; seguem fora estilos prontos, exportar e importar, Windhawk, outros programas, antivírus (adiado) e relatório pelo GitHub.
