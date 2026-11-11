@@ -2849,6 +2849,16 @@ class TestApi(_CasaTemporaria):
         d = self.um('desfazer', {'pacotes': ['servicos']})['dados']['pacotes'][0]
         self.assertEqual((d['ok'], d['nada']), (False, True))
 
+    def test_motor_elevado_so_atende_o_que_precisa_de_administrador(self):
+        import io
+        saida = io.StringIO()
+        k.roda_api([], entrada=io.StringIO('{"id": 1, "metodo": "config_gravar", "params": {"chave": "modo", "valor": "extremo"}}\n{"id": 2, "metodo": "versao"}\n'),
+                   saida=saida, permitidos=k.METODOS_ELEVADOS)
+        r = [json.loads(l) for l in saida.getvalue().splitlines()]
+        self.assertEqual(r[1]['erro']['codigo'], 'nao_permitido')
+        self.assertTrue(r[2]['ok'])
+        self.assertEqual(k.config('modo'), k.PADROES['modo'])
+
     def test_itens_iguais_aos_do_site(self):
         d = self.um('itens', {'modo': 'equilibrado'})['dados']
         total = sum(len(a['itens']) for a in d['areas'])

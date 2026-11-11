@@ -49,7 +49,11 @@ class CanalApi:
         self.manda({'id': id_, 'evento': tipo, 'dados': dados})
 
 
-def responde_api(ctx, canal, pedido):
+# o motor de administrador só faz o que precisa de administrador (e o mínimo para conversar): o resto é com o motor comum
+METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos'}
+
+
+def responde_api(ctx, canal, pedido, permitidos=None):
     """Um pedido → uma resposta (e os eventos no meio). Erro nunca derruba a API: vira resposta com código."""
     id_ = pedido.get('id') if isinstance(pedido, dict) else None
     try:
@@ -58,6 +62,8 @@ def responde_api(ctx, canal, pedido):
         nome = pedido['metodo']
         if nome not in METODOS_API:
             raise ErroApi('metodo_desconhecido', f'"{nome}" não existe; os métodos estão em "metodos"')
+        if permitidos is not None and nome not in permitidos:
+            raise ErroApi('nao_permitido', f'o motor de administrador não atende "{nome}"')
         f, muda = METODOS_API[nome]
         params = pedido.get('params') or {}
         if not isinstance(params, dict):
@@ -76,7 +82,7 @@ def responde_api(ctx, canal, pedido):
         canal.manda({'id': id_, 'ok': False, 'erro': {'codigo': 'interno', 'texto': f'{type(e).__name__}: {e}'}})
 
 
-def roda_api(argv, entrada=None, saida=None):
+def roda_api(argv, entrada=None, saida=None, permitidos=None):
     """katharos api              conversa por linhas (a interface usa assim)
        katharos api METODO [JSON] um pedido só, para testar no terminal"""
     if argv and argv[0] == '--pipe':   # motor elevado (ver roda_api_elevada)
@@ -118,7 +124,7 @@ def roda_api(argv, entrada=None, saida=None):
             if isinstance(pedido, dict) and pedido.get('metodo') == 'sair':
                 canal.manda({'id': pedido.get('id'), 'ok': True, 'dados': None})
                 break
-            responde_api(ctx, canal, pedido)
+            responde_api(ctx, canal, pedido, permitidos)
         return 0
     finally:
         sys.stdout = canal_real
@@ -558,7 +564,7 @@ def roda_api_elevada(nome, sid, senha):
         LOG.escreve('motor elevado: senha errada na conexão; fechando')
         canal.write(json.dumps({'id': None, 'ok': False, 'erro': {'codigo': 'senha', 'texto': 'senha da sessão errada'}}) + '\n')
         return 3
-    return roda_api([], entrada=linhas, saida=canal)
+    return roda_api([], entrada=linhas, saida=canal, permitidos=METODOS_ELEVADOS)
 
 
 @metodo_api('segundo_plano')

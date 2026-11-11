@@ -89,8 +89,10 @@ public static class OndeEsta
         string app = AppContext.BaseDirectory;
         string? motor = new[]
         {
+            // instalado: o motor ao lado do aplicativo vem primeiro, e nada de fora (variável de ambiente) passa na frente dele,
+            // porque é este mesmo caminho que o motor de administrador abre
+            Path.Combine(app, "motor", "programa", "katharos.py"),
             Environment.GetEnvironmentVariable("KATHAROS_MOTOR"),
-            Path.Combine(app, "motor", "programa", "katharos.py"),   // instalado: o motor e o Katharos.exe do segundo plano ficam em motor\
             Path.Combine(app, "..", "..", "..", "..", "..", "programa", "katharos.py"),   // rodando de dentro do repositório
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "katharos.py"),
         }.Where(p => !string.IsNullOrEmpty(p)).Select(p => Path.GetFullPath(p!)).FirstOrDefault(File.Exists);
