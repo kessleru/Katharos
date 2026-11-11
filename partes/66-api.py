@@ -213,18 +213,17 @@ def frase_do_motor(rx=None):
     d = le_json(CASA / 'propostas.json', {}) or {}
     props = [x for x in d.get('propostas') or [] if x.get('tipo') == 'acao' and x.get('comando')]
     diags = d.get('diagnosticos') or []
-    top = props[0] if props else None
+    # o motor só toma a frente do Início quando concluiu algo com medida (diagnóstico ou proposta de confiança alta); ligar o
+    # acompanhamento e o que o raio-x já mostra continuam com o próximo passo de sempre
+    fortes = [x for x in props if x.get('confianca') == 'alta' and x.get('id') != 'ligar-fundo' and not str(x.get('id', '')).startswith('raiox:')]
+    top = (props[0] if diags and props else (fortes[0] if fortes else None))
     if diags:
         g = diags[0]
         frase = f'{g["titulo"]}: {g["nome"]}.'
     elif top:
         frase = top['titulo'] + '.'
-    elif rx and isinstance(rx.get('nota'), (int, float)) and rx['nota'] >= 80:
-        frase = 'Seu PC está bem: nada pesa de forma que valha mexer agora.'
-    elif not d:
-        frase = None
     else:
-        frase = 'Nada a propor agora: nenhuma medida mostra algo piorando.'
+        frase = None
     acao = None
     if top:
         exp = top.get('explicacao') or {}
