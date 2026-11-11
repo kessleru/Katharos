@@ -152,8 +152,9 @@ public static class OndeEsta
 public sealed class MotorComum : Conversa
 {
     Process? proc;
-    // o raio-x manda progresso a cada etapa, mas uma etapa lenta pode passar de 2 minutos sem mensagem: ele espera mais
-    protected override TimeSpan SilencioDe(string metodo) => TimeSpan.FromSeconds(metodo == "raiox" ? 600 : 120);
+    // o raio-x e a conferência dos itens mandam progresso a cada etapa, mas uma etapa lenta (PC com disco mecânico) pode passar de
+    // 2 minutos sem mensagem: esses esperam mais
+    protected override TimeSpan SilencioDe(string metodo) => TimeSpan.FromSeconds(metodo == "raiox" ? 600 : metodo == "itens" ? 300 : 120);
     protected override void Derruba() { try { proc?.Kill(true); } catch { } }
 
     public static async Task<MotorComum> Abre(CancellationToken ct = default)
