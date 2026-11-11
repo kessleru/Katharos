@@ -2250,7 +2250,8 @@ class TestSiteSuave(unittest.TestCase):
     def test_rolagem_suave_vem_do_proprio_site_e_respeita_reduzir_movimento(self):
         for nome in ('index.html',):
             h = (RAIZ / 'docs' / nome).read_text(encoding='utf-8')
-            self.assertIn('src="lenis.min.js"', h)
+            self.assertIn("s.src = 'lenis.min.js'", h)   # do próprio site, só com mouse ou touchpad, depois de abrir
+            self.assertIn("matchMedia('(pointer: fine)')", h)
             self.assertIn('prefers-reduced-motion: reduce', h)
             self.assertNotIn('https://cdn', h)
             self.assertNotRegex(h, r'html \{[^}]*scroll-behavior: smooth')

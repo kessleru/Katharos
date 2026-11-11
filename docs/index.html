@@ -15,9 +15,10 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo:wght@400;500&display=swap" rel="stylesheet">
-<link rel="preload" as="image" href="gravura.webp">
-<link rel="stylesheet" href="lenis.css">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Archivo:wght@400;500&display=swap" rel="stylesheet"></noscript>
+<link rel="preload" as="image" href="gravura.webp" fetchpriority="high">
+<style>html.lenis, html.lenis body { height: auto; } .lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; } .lenis [data-lenis-prevent], .lenis [data-lenis-prevent-wheel], .lenis [data-lenis-prevent-touch], .lenis [data-lenis-prevent-vertical], .lenis [data-lenis-prevent-horizontal] { overscroll-behavior: contain; } .lenis.lenis-smooth iframe { pointer-events: none; } .lenis.lenis-autoToggle { transition-property: overflow; transition-duration: 1ms; transition-behavior: allow-discrete; }</style>
 <script>document.documentElement.classList.add('js');</script>
 <style>
   :root {
@@ -104,7 +105,7 @@
   .js .lead { animation: chega .45s cubic-bezier(.2,.6,.2,1) .45s both; }
   .js .ctas { animation: chega .45s cubic-bezier(.2,.6,.2,1) .5s both; }
   .js .grego { animation: chega .45s cubic-bezier(.2,.6,.2,1) .55s both; }
-  @keyframes acende { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes acende { from { opacity: .01; } to { opacity: 1; } }
   @keyframes escreve { from { clip-path: inset(-10% 100% -10% 0); } to { clip-path: inset(-10% -2% -10% 0); } }
   @keyframes chega { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
   /* abrir e fechar com altura de verdade, onde o navegador deixa */
@@ -232,7 +233,7 @@
   .nov-todas a:hover { text-decoration-color: var(--ambar); }
   .rodape .celulas { grid-template-columns: minmax(0, 1fr) auto; }
   .rodape .celulas > * { padding: 20px; font-size: 12px; color: var(--apagado); }
-  .rodape a { color: var(--texto); } .rodape a:hover { color: var(--osso); }
+  .rodape a { color: var(--texto); text-decoration: underline; text-decoration-color: rgba(205,200,190,.35); text-underline-offset: 3px; } .rodape a:hover { color: var(--osso); text-decoration-color: currentColor; }
   .rodape nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
   .rodape .celulas > * { min-width: 0; }
   @media (max-width: 760px) { .rodape .celulas { grid-template-columns: 1fr; } .rodape .celulas > * + * { border-left: 0; border-top: 1px solid var(--linha); } }
@@ -398,7 +399,7 @@
 
 <header class="faixa topo">
   <div class="quadro celulas">
-    <a class="marca" href="#" aria-label="Katharos, início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v3.1.2</small></a>
+    <a class="marca" href="#" title="início"><img src="marca.png" alt="" width="30" height="30"> katharos <small class="versao">v3.1.2</small></a>
     <nav class="menu" aria-label="Seções">
       <a href="#funcionando">ver funcionando</a>
       <a href="#como">como funciona</a>
@@ -774,16 +775,23 @@
   }));
   if (location.hash.length > 1) addEventListener('load', () => setTimeout(() => vaiPara(decodeURIComponent(location.hash.slice(1)), false), 60));
 </script>
-<script src="lenis.min.js"></script>
 <script>
-  /* rolagem suave da roda e do touchpad (Lenis, o mesmo do portfólio); toque continua nativo e "reduzir movimento" desliga */
+  /* rolagem suave da roda e do touchpad (Lenis): só com mouse ou touchpad (no toque a rolagem é a nativa), carregado depois que a
+     página abriu, e "reduzir movimento" desliga. No celular, nada disso é baixado. */
   (function () {
-    var reduz = matchMedia('(prefers-reduced-motion: reduce)'), l = null;
+    var reduz = matchMedia('(prefers-reduced-motion: reduce)'), fino = matchMedia('(pointer: fine)'), l = null, carregando = false;
     function liga() {
-      if (!reduz.matches && !l && window.Lenis) { l = new Lenis({ autoRaf: true, lerp: 0.12, anchors: true, allowNestedScroll: true, stopInertiaOnNavigate: true }); window.lenis = l; }
-      else if (reduz.matches && l) { l.destroy(); l = window.lenis = null; }
+      if (reduz.matches || !fino.matches) { if (l) { l.destroy(); l = window.lenis = null; } return; }
+      if (l) return;
+      if (!window.Lenis) {
+        if (carregando) return;
+        carregando = true;
+        var s = document.createElement('script'); s.src = 'lenis.min.js'; s.async = true; s.onload = liga; document.body.appendChild(s);
+        return;
+      }
+      l = new Lenis({ autoRaf: true, lerp: 0.12, anchors: true, allowNestedScroll: true, stopInertiaOnNavigate: true }); window.lenis = l;
     }
-    liga();
+    addEventListener('load', function () { (window.requestIdleCallback || setTimeout)(liga, { timeout: 1500 }); });
     reduz.addEventListener('change', liga);
   })();
 </script>

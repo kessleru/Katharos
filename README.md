@@ -28,7 +28,7 @@ O programa é distribuído sob a licença MIT (arquivo `LICENSE`), que também d
 
 ## Com janelas
 
-O instalador põe o Katharos no menu Iniciar. As telas, na ordem do uso: **Início** (como está o PC e o próximo passo), **Raio-x**, **Otimizar** (modo, item por item, aplicar), **Ao vivo**, **Jogos**, **Sugestões**, **Histórico**, **Desfazer** e **Configurações**. Ler o PC roda como você; para mudar, o Windows pede administrador uma vez por sessão. Depois de aplicar, cada ajuste é lido de volta no Windows. Atualização: em Configurações (avisar, automático ou nunca); nunca troca de versão no meio de uma mudança.
+O instalador põe o Katharos no menu Iniciar. As telas, na ordem do uso: **Início** (como está o PC e o próximo passo, que sai do motor quando ele já concluiu algo; na primeira vez, três passos guiados), **Raio-x**, **Otimizar** (modo, item por item, com o que o motor recomenda para este PC marcado e o motivo), **Ao vivo** (com a faixa do normal deste PC), **Jogos** (por jogo: o que segura o FPS e a evolução), **Central** (o diagnóstico em quatro partes, as propostas, o que previu e aconteceu, e "pergunte ao Katharos"), **Histórico**, **Desfazer** e **Configurações** (inclusive o que o motor pode avisar e a memória do PC: ver, exportar e apagar). Ler o PC roda como você; para mudar, o Windows pede administrador uma vez por sessão. Depois de aplicar, cada ajuste é lido de volta no Windows. O motor de administrador roda de uma cópia em `%ProgramData%\Katharos` conferida pelo SHA-256 gravado no aplicativo. Atualização: em Configurações (avisar, automático ou nunca; canal estável ou prévia); nunca troca de versão no meio de uma mudança. O ícone do segundo plano abre esta janela na tela certa: é um programa só.
 
 O código está em `app/` (C#, Avalonia, .NET 10). A interface fala com o motor por `katharos api` (JSON, uma linha por mensagem; o contrato está em `tests/api/contrato.json`).
 
@@ -56,7 +56,8 @@ O Windows pode avisar "aplicativo não reconhecido" na primeira vez: é o aviso 
 
 - **Clique no ícone**: o painel ao vivo, com gráfico dos últimos 2 minutos de cada métrica, o que está no limite agora e o que a central de inteligência propõe. Botão direito: o que se resolve num clique (abrir o Katharos, pausar, ritmo da leitura, avisos, iniciar com o Windows, sair).
 - **Jogos**: ele percebe quando há um jogo aberto (quem usa a placa de vídeo, na frente ou em tela cheia) e grava a sessão: quanto tempo, o que ficou no limite (placa de vídeo, CPU, CPU freando, RAM, memória de vídeo, disco, calor).
-- **Central de inteligência** (`conselheiro`): aprende com as sessões e com as últimas 24 horas minuto a minuto. Exemplo: "a CPU segura seus jogos em 40 % do tempo" vira uma proposta com o comando que resolve.
+- **Central de inteligência** (`conselheiro`): guarda meses de medida numa memória local (`~/.katharos/katharos.db`), acha o que pesa e diz a causa mais provável com as descartadas: o que viu, por que acha isso, o que faria e o que mudaria a conclusão. Exemplo: "CPU freando em 31 % do tempo, sem calor, parte na bateria" vira "economia de energia", com o plano certo e como desfazer. Pouco dado é "ainda não sei".
+- **Avisos**: no máximo um por tipo a cada 6 horas (`config avisos-intervalo`), nada durante o jogo além de calor grave (`config avisos-no-jogo`), ou um resumo por dia (`config resumo-diario sim`).
 - **Painel** (`painel`): seção "Ao vivo e jogos", com as últimas 24 horas e a tabela das sessões.
 - **No terminal**: `aovivo`.
 - **Custo**: uns 30 a 60 MB de RAM e menos de 1 % de CPU, em prioridade baixa. Roda como o seu usuário (nunca como administrador).
@@ -132,11 +133,12 @@ O `raiox` não só lista: ele mede e explica. Além de CPU, RAM e disco, olha a 
 | Conhecer | `tendencia` | Mostra se espaço, boot, RAM, CPU ou temperatura estão piorando com o tempo (usa as medidas do segundo plano) |
 | | `conselheiro` | O motor de inteligência: propõe mudanças com o número que as justifica, a confiança e o comando; não aplica nada sozinho e mede o resultado depois |
 | | `saude` | Lê os erros do Windows (Visualizador de Eventos, 14 dias), confere drivers e o estado do sistema e explica cada problema e o que fazer; só leitura |
+| | `travadas` | Mede por 1 minuto quanto cada driver segura o processador (o que o LatencyMon faz) e diz o culpado e o que fazer; só leitura, precisa de administrador |
 | | `painel` | Gera um painel HTML com gráficos das medidas, dos benchmarks, das datas de cada pacote e da saúde do Windows; sem internet e sem scripts. `--ativar-cliques` liga botões "Corrigir" que abrem o Katharos já no comando (você confirma lá) |
 | | `amostrar` | Uma leitura leve do sistema (CPU, RAM, disco, temperatura), somada ao histórico por hora; a tarefa de 15 min do modo contínuo chama. `config coleta-em-jogo pausar` para não coletar com jogo aberto |
 | | `retomar` | Se o PC travou ou a janela fechou no meio de uma aplicação, termina só o que faltou (`--descartar` esquece a anotação) |
-| | `provas` | O que cada item rendeu de verdade neste PC: na hora (disco, RAM, processos e serviços, item por item) e depois de reiniciar (boot, CPU e RAM em repouso, por rodada). O painel mostra o mesmo com barras |
-| | `versoes` | As versões que já rodaram neste PC, o que está guardado e as cópias feitas a cada troca. Para atualizar, basta abrir a versão nova: os dados ficam em `~/.katharos` e são reconhecidos e convertidos sozinhos |
+| | `provas` | O que cada item rendeu de verdade neste PC: na hora (disco, RAM, processos e serviços, item por item), depois de reiniciar (boot, CPU e RAM em repouso, por rodada) e nos jogos (sessões antes e depois). `--repetir AREA` desfaz, mede, aplica de novo e diz se o ganho se repetiu |
+| | `versoes` | As versões que já rodaram neste PC, o que está guardado e as cópias feitas a cada troca. `--atualizar` baixa a versão nova (o PowerShell confere o SHA-256 pela lista da release antes de trocar e guarda a atual); `--voltar` volta. Os dados ficam em `~/.katharos` e são convertidos sozinhos |
 | | `buscar` | Acha um item ou comando pelo que você digitar (`buscar telemetria`, `buscar ventoinha`): sem acento, com palavras do dia a dia e erro de digitação; abre a área só com o item achado marcado |
 | | `estado` · `config` | O que já foi aplicado · modo padrão, explicações, cores, símbolos, tamanho mínimo do `grandes`, navegador do turbo |
 
