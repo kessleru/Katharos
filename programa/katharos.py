@@ -6129,7 +6129,7 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm', 'OverlayTestMode', 5)),
         Item('hags', 'agendamento de GPU acelerado por hardware', 'A placa de vídeo cuida da própria fila (HAGS). Precisa de placa e '
              'driver recentes; vale depois de reiniciar.', 'pequeno; necessário para o DLSS 3 (geração de quadros)',
-             'em placas antigas pode causar engasgos', 3, r'''$__k = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+             'o ganho é pequeno e varia; em placa antiga ou com 8 GB de memória de vídeo pode engasgar, e alguns jogos (VRChat, CS:GO) ficam piores. Já vem ligado no Windows 11; só liga se o Windows mostrar suporte', 3, r'''$__k = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
 $__v = (Get-ItemProperty -LiteralPath $__k -Name HwSchMode -ErrorAction SilentlyContinue).HwSchMode
 if ($null -eq $__v) { Info 'o Windows nao mostra suporte a este recurso nesta placa ou driver: nao mexi (em placa sem suporte ele pode gerar falhas na imagem)' }
 else { Set-Valor $__k 'HwSchMode' 2 'DWord' 'agendamento de GPU por hardware' | Out-Null }'''),
