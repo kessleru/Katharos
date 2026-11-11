@@ -24,6 +24,9 @@
   "desfazer": {
    "muda": true
   },
+  "dispensar": {
+   "muda": false
+  },
   "historico": {
    "muda": false
   },
@@ -33,7 +36,22 @@
   "itens": {
    "muda": false
   },
+  "linha_de_base": {
+   "muda": false
+  },
+  "memoria": {
+   "muda": false
+  },
+  "memoria_apagar": {
+   "muda": false
+  },
+  "memoria_exportar": {
+   "muda": false
+  },
   "metodos": {
+   "muda": false
+  },
+  "perguntar": {
    "muda": false
   },
   "raiox": {
@@ -60,7 +78,9 @@
  },
  "inicio": [
   "aviso_aceito",
+  "motor",
   "pc",
+  "primeira_vez",
   "raiox",
   "segundo_plano",
   "temperatura",

@@ -203,7 +203,34 @@ def api_inicio(ctx, p, ev):
         'ultima_mudanca': _ultima_mudanca(),
         'segundo_plano': _segundo_plano(),
         'aviso_aceito': aviso_aceito(),
+        'motor': frase_do_motor(rx),
+        'primeira_vez': not quando and not (estado().get('pacotes') or {}),
     }
+
+
+def frase_do_motor(rx=None):
+    """I16: a frase principal do Início sai do motor: o que mais pesa, a ação que mais rende, a previsão e como desfazer."""
+    d = le_json(CASA / 'propostas.json', {}) or {}
+    props = [x for x in d.get('propostas') or [] if x.get('tipo') == 'acao' and x.get('comando')]
+    diags = d.get('diagnosticos') or []
+    top = props[0] if props else None
+    if diags:
+        g = diags[0]
+        frase = f'{g["titulo"]}: {g["nome"]}.'
+    elif top:
+        frase = top['titulo'] + '.'
+    elif rx and isinstance(rx.get('nota'), (int, float)) and rx['nota'] >= 80:
+        frase = 'Seu PC está bem: nada pesa de forma que valha mexer agora.'
+    elif not d:
+        frase = None
+    else:
+        frase = 'Nada a propor agora: nenhuma medida mostra algo piorando.'
+    acao = None
+    if top:
+        exp = top.get('explicacao') or {}
+        acao = {'id': top['id'], 'titulo': top['titulo'], 'comando': top['comando'], 'area': top['comando'].split(' ')[0] if top['comando'].split(' ')[0] in PACOTES else None,
+                'porque': exp.get('vi') or top.get('porque'), 'previsao': exp.get('faria') or '', 'desfazer': top.get('desfazer') or '', 'confianca': top.get('confianca')}
+    return {'frase': frase, 'acao': acao, 'quando': d.get('quando')}
 
 
 @metodo_api('raiox')
@@ -315,7 +342,84 @@ def api_sugestoes(ctx, p, ev):
     """As propostas da central de inteligência, com o número que as justifica, e o que ela previu e aconteceu."""
     exporta_propostas(ctx)
     d = le_json(CASA / 'propostas.json', {}) or {}
-    return {'quando': d.get('quando'), 'propostas': d.get('propostas') or [], 'resultados': d.get('resultados') or []}
+    return {'quando': d.get('quando'), 'propostas': d.get('propostas') or [], 'resultados': d.get('resultados') or [],
+            'diagnosticos': d.get('diagnosticos') or [], 'achados': d.get('achados') or [], 'linha_do_tempo': linha_do_tempo_propostas()}
+
+
+def linha_do_tempo_propostas():
+    """I18: cada coisa aplicada por proposta, com a previsão e o que aconteceu (verde, cinza ou vermelho) e o desfazer onde piorou."""
+    e = estado()
+    agora = datetime.now()
+    try:
+        res = resultados_previstos(e, le_minutos(24 * 30), le_sessoes(60), agora)
+    except Exception as ex:
+        LOG.escreve(f'linha do tempo: {ex!r}')
+        res = []
+    vistas = e.get('conselheiro_vistas') or {}
+    cor = {'como previsto': 'verde', 'em parte': 'verde', 'sem diferença': 'cinza', 'cedo para dizer': 'cinza', 'piorou': 'vermelho'}
+    out = []
+    for r in sorted(res, key=lambda r: r['quando'], reverse=True):
+        cmd = ((vistas.get(r['id']) or {}).get('comando') or '').split(' ')[0]
+        out.append({'id': r['id'], 'titulo': r['titulo'], 'quando': r['quando'].isoformat(timespec='minutes'), 'previsto': r.get('previsto'),
+                    'veredito': r['veredito'], 'cor': cor.get(r['veredito'], 'cinza'), 'antes': r.get('antes'), 'depois': r.get('depois'), 'un': r.get('un'),
+                    'desfazer': cmd if r['veredito'] == 'piorou' and cmd in PACOTES else None,
+                    'respondido': (e.get('conselheiro_respostas') or {}).get(r['id'])})
+    return out[:30]
+
+
+@metodo_api('dispensar')
+def api_dispensar(ctx, p, ev):
+    """'Agora não': esconde a proposta por 30 dias."""
+    id_ = p.get('id')
+    if not isinstance(id_, str) or not id_:
+        raise ErroApi('pedido_invalido', '{"id": "..."}')
+    e = estado()
+    e.setdefault('conselheiro_dispensadas', {})[id_] = agora_iso()
+    salva_estado(e)
+    return {'ok': True, 'dias': DISPENSA_DIAS}
+
+
+@metodo_api('linha_de_base')
+def api_linha_de_base(ctx, p, ev):
+    """I19: o normal deste PC por métrica e contexto (a faixa desenhada nos gráficos do Ao vivo)."""
+    return le_json(CASA / 'linha-de-base.json', {}) or {}
+
+
+@metodo_api('memoria')
+def api_memoria(ctx, p, ev):
+    """I24: o que a memória do PC guarda."""
+    memoria_atualiza()
+    return memoria_resumo() or {'contagens': {}, 'desde': None, 'bytes': 0}
+
+
+@metodo_api('memoria_exportar')
+def api_memoria_exportar(ctx, p, ev):
+    arq = memoria_exporta(CASA / f'memoria-exportada-{datetime.now():%Y-%m-%d-%H%M%S}.json')
+    if not arq:
+        raise ErroApi('sem_memoria', 'a memória do PC ainda está vazia')
+    return {'arquivo': str(arq)}
+
+
+@metodo_api('memoria_apagar')
+def api_memoria_apagar(ctx, p, ev):
+    """Apaga o que o motor aprendeu deste PC (guarda uma exportação antes). Não toca em backups do desfazer."""
+    if p.get('confirmo') is not True:
+        raise ErroApi('pedido_invalido', '{"confirmo": true}')
+    arq = memoria_apaga()
+    return {'exportado': str(arq) if arq else None}
+
+
+@metodo_api('perguntar')
+def api_perguntar(ctx, p, ev):
+    """I25: a pessoa escreve uma pergunta; a resposta sai do motor (diagnósticos, propostas e achados que batem com ela) e da busca
+    de comandos (os mesmos sinônimos do "buscar"). Sem IA externa: nada sai do PC."""
+    texto = str(p.get('texto') or '').strip()
+    if len(texto) < 3:
+        raise ErroApi('pedido_invalido', '{"texto": "por que meu jogo trava?"}')
+    if ctx.perfil is None:
+        ctx.perfil = perfil_pc(ctx) if WINDOWS else json.loads(json.dumps(PC_MODELO))
+    return responde_pergunta(texto, ctx)
+
 
 
 @metodo_api('responder')
@@ -351,7 +455,31 @@ def api_sessoes(ctx, p, ev):
         if isinstance(c.get('quando'), datetime):
             c['quando'] = c['quando'].isoformat(timespec='minutes')
     resumo = resumo_sessoes(ss)
-    return {'sessoes': [{k: v for k, v in x.items() if k != '_dt'} for x in ss[-200:]], 'resumo': resumo, 'comparacoes': comp}
+    return {'sessoes': [{k: v for k, v in x.items() if k != '_dt'} for x in ss[-200:]], 'resumo': resumo, 'comparacoes': comp,
+            'por_jogo': por_jogo(ss, comp)}
+
+
+def por_jogo(ss, comp):
+    """I20: por jogo detectado: o que segura o FPS, a evolução de FPS e travadas entre sessões e o antes e depois das mudanças."""
+    grupos = {}
+    for s_ in ss:
+        if s_.get('jogo'):
+            grupos.setdefault(s_['jogo'], []).append(s_)
+    d = le_json(CASA / 'propostas.json', {}) or {}
+    diag_jogo = next((x for x in d.get('diagnosticos') or [] if x.get('problema') in ('jogos', 'travadas')), None)
+    out = []
+    for jogo, lst in grupos.items():
+        lst.sort(key=lambda x: x.get('inicio') or '')
+        r = resumo_sessoes(lst) or {}
+        lim = sorted(((k, v) for k, v in (r.get('limites') or {}).items() if v >= 10), key=lambda kv: -kv[1])
+        out.append({'jogo': jogo, 'sessoes': len(lst), 'horas': round(sum(x.get('min') or 0 for x in lst) / 60, 1), 'ultima': lst[-1].get('inicio'),
+                    'segura': [{'limite': k, 'nome': NOMES_LIMITE.get(k, k), 'pct': round(v)} for k, v in lim[:3]],
+                    'evolucao': [{'inicio': x.get('inicio'), 'fps_med': x.get('fps_med'), 'fps_1low': x.get('fps_1low'), 'travadas_por_min': x.get('travadas_por_min')}
+                                 for x in lst[-20:]],
+                    'antes_depois': [c for c in comp if c.get('jogo') == jogo],
+                    # o diagnóstico é do PC (o que segura os jogos em geral); vale para este jogo quando ele também bate em algum limite
+                    'recomendacao': {'titulo': diag_jogo['titulo'], 'nome': diag_jogo['nome'], 'faria': diag_jogo['faria']} if diag_jogo and lim else None})
+    return sorted(out, key=lambda x: -x['horas'])
 
 
 @metodo_api('config_ler')

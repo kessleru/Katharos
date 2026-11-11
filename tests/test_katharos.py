@@ -3418,3 +3418,42 @@ class TestTravadas(_CasaTmp):
             (self.tmp / 'agora.json').write_text('{}', encoding='utf-8')
             m.return_value = dict(self.MEDIDA)
             self.assertEqual(k.roda_travadas_se_pendente()['eventos'], 52000)
+
+
+class TestApiMotor(_CasaTemporaria):
+    """I16 a I25 pela API: frase do início, central com diagnóstico e linha do tempo, jogos, memória e perguntar."""
+    conversa = TestApi.conversa
+    um = TestApi.um
+
+    def setUp(self):
+        super().setUp()
+        self._win = mock.patch.object(k, 'WINDOWS', False)
+        self._win.start()
+        self.addCleanup(self._win.stop)
+
+    def test_api_central_frase_memoria_e_perguntar(self):
+        import json as _j
+        props = {'quando': '2026-11-10T10:00:00', 'propostas': [{'id': 'causa-calor', 'titulo': 'Calor', 'porque': 'x', 'comando': 'energia', 'confianca': 'média',
+                 'tipo': 'acao', 'explicacao': {'vi': 'calor em 30 % do tempo.', 'porque': 'p', 'faria': 'plano.', 'mudaria': 'm.'}, 'desfazer': 'katharos desfazer energia'}],
+                 'diagnosticos': [{'problema': 'jogos', 'titulo': 'O que segura os seus jogos', 'causa': 'calor', 'nome': 'calor', 'confianca': 'média',
+                                   'evidencias': ['calor acima do seguro em 30 % do tempo'], 'descartadas': [], 'faria': 'usar o plano fresco', 'mudaria': 'x'}]}
+        with mock.patch.object(k, 'exporta_propostas', lambda ctx=None: 0):
+            (k.CASA / 'propostas.json').write_text(_j.dumps(props), encoding='utf-8')
+            ini = self.um('inicio')['dados']['motor']
+            self.assertEqual(ini['frase'], 'O que segura os seus jogos: calor.')
+            self.assertEqual(ini['acao']['area'], 'energia')
+            self.assertEqual(ini['acao']['desfazer'], 'katharos desfazer energia')
+            c = self.um('sugestoes')['dados']
+            self.assertEqual(c['diagnosticos'][0]['causa'], 'calor')
+            self.assertIn('linha_do_tempo', c)
+            r = self.um('perguntar', {'texto': 'por que meus jogos esquentam?'})['dados']
+            self.assertIn('calor', r['resposta'])
+        self.assertTrue(self.um('dispensar', {'id': 'x'})['ok'])
+        self.assertIn('x', k.estado()['conselheiro_dispensadas'])
+        self.assertIn('contagens', self.um('memoria')['dados'])
+        self.assertFalse(self.um('memoria_apagar', {})['ok'])
+        self.assertTrue(self.um('memoria_apagar', {'confirmo': True})['ok'])
+
+    def test_perguntar_sem_dado_diz_que_nao_sabe(self):
+        r = self.um('perguntar', {'texto': 'por que meu jogo trava?'})['dados']
+        self.assertTrue(r['resposta'].startswith('Ainda não sei'))
