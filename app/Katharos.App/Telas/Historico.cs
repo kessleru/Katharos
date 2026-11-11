@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
+using System.Text.Json.Nodes;
 using Avalonia.Media;
 using Katharos.App.Controles;
 using static Katharos.App.Ui;
@@ -14,11 +15,41 @@ namespace Katharos.App.Telas;
 /// </summary>
 public class Historico : Tela
 {
+    int periodo = 30;
+    JsonNode? dados;
+
     protected override async Task Carrega()
     {
         var cab = Cabecalho("Histórico", "O seu PC ao longo do tempo e o que cada mudança fez de verdade.");
-        Monta(cab, Carregando("Lendo as medidas").secao);
+        var g = Servico.Guardado("historico", new { dias = 60 });
+        if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo as medidas").secao);
         var d = await Servico.Le("historico", new { dias = 60 });
+        if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
+    }
+
+    /// <summary>Uma medida pronta para desenhar: um valor por dia do período (NaN no dia sem leitura) e as marcas agrupadas por dia.</summary>
+    record Serie(string Rotulo, string Unidade, int Casas, double[] Valores, string[] Dias, double FaixaMin, double FaixaMax, int DiasComDado, List<MarcaGrafico> Marcas);
+
+    Serie Monta(JsonNode s, List<(DateTime quando, string titulo)> marcas, int dias)
+    {
+        var porDia = new Dictionary<DateTime, double>();
+        foreach (var x in s.A("pontos")) if (DateTime.TryParse(x.S("dia"), out var dd) && x.D("v") is double v) porDia[dd.Date] = v;
+        DateTime fim = porDia.Count > 0 ? porDia.Keys.Max() : DateTime.Today, ini = fim.AddDays(-(dias - 1));
+        var vals = new double[dias]; var rot = new string[dias];
+        for (int i = 0; i < dias; i++) { var dd = ini.AddDays(i); vals[i] = porDia.TryGetValue(dd, out var v) ? v : double.NaN; rot[i] = dd.ToString("dd/MM"); }
+        // as mudanças do mesmo dia viram uma marca só ("inicialização e serviços · 12/11")
+        var ms = marcas.Where(m => m.quando.Date >= ini && m.quando.Date <= fim).GroupBy(m => m.quando.Date)
+                       .Select(gr => new MarcaGrafico((gr.Key - ini).TotalDays / Math.Max(1, dias - 1), string.Join(" e ", gr.Select(m => m.titulo).Distinct()) + " · " + gr.Key.ToString("dd/MM"))).ToList();
+        var fx = s?["faixa"];
+        return new Serie(s.S("rotulo"), s.S("unidade"), (int)(s.D("casas") ?? 0), vals, rot, fx.D("p10") ?? double.NaN, fx.D("p90") ?? double.NaN,
+                         porDia.Count(kv => kv.Key >= ini), ms);
+    }
+
+    static string Fmt(double v, Serie s) => (Num(v, s.Casas) + " " + s.Unidade).Trim();
+
+    void Desenha(Control cab, JsonNode? d)
+    {
+        dados = d;
         var series = d.A("series").ToList();
         if (series.Count == 0)
         {
@@ -26,44 +57,56 @@ public class Historico : Tela
                              Botao("Ver o acompanhamento", false, () => Abre("aovivo"))));
             return;
         }
-        var marcas = d.A("marcas").Select(m => DateTime.TryParse(m.S("quando"), out var q) ? q : DateTime.MinValue).Where(q => q > DateTime.MinValue).ToList();
+        var marcas = d.A("marcas").Select(m => (DateTime.TryParse(m.S("quando"), out var q) ? q : DateTime.MinValue, m.S("titulo"))).Where(m => m.Item1 > DateTime.MinValue).ToList();
 
         // o que está mudando agora (só aparece quando é claro: o motor não chama oscilação de tendência)
         Control? tend = null;
         var ts = d.A("tendencia").Select(x => x.ToString()).ToList();
         if (ts.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Mudando agora") } };
+            var p = new StackPanel { Children = { Subtitulo("Mudando agora", null, "aovivo") } };
             foreach (var t in ts) p.Children.Add(Linha(Maiuscula(t) + ".", null, Etiqueta("atenção", Tema.Ambar)));
             tend = S(p);
         }
 
-        // uma célula por medida: o valor de hoje, o de 60 dias atrás e a linha com as marcas
+        // período: 7, 30 ou 60 dias
+        var per = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(32, 18, 32, 14) };
+        per.Children.Add(T("Período", "rotulo").Com(t => { t.VerticalAlignment = VerticalAlignment.Center; t.Margin = new Thickness(0, 0, 6, 0); }));
+        foreach (var n in new[] { 7, 30, 60 })
+            per.Children.Add(Botao(n + " dias", n == periodo, () => { periodo = n; Desenha(cab, dados); }).Com(b => b.Padding = new Thickness(12, 6)));
+
+        var todas = series.Select(s => Monta(s, marcas, periodo)).ToList();
         var grade = new UniformGrid { Columns = 2 };
-        foreach (var s in series)
+        foreach (var s in todas)
         {
-            var pts = s.A("pontos").ToList();
-            var dias = pts.Select(x => DateTime.Parse(x.S("dia"))).ToList();
-            var vals = pts.Select(x => x.D("v") ?? 0).ToArray();
-            int casas = (int)(s.D("casas") ?? 0);
-            double max = Math.Max(1, vals.Max() * 1.15);
-            DateTime ini = dias.First(), fim = dias.Last();
-            double total = Math.Max(1, (fim - ini).TotalDays);
-            var fx = s?["faixa"];
-            var g = new Grafico { Height = 70, Margin = new Thickness(0, 10, 0, 0), Valores = vals, Maximo = max, FaixaMin = fx.D("p10") ?? double.NaN, FaixaMax = fx.D("p90") ?? double.NaN,
-                                  Marcas = marcas.Where(m => m >= ini && m <= fim.AddDays(1)).Select(m => (m - ini).TotalDays / total).ToArray() };
-            string un = s.S("unidade");
-            string rot = s.S("rotulo");
+            bool aprendendo = s.DiasComDado < 7;
+            var g = new Grafico { Height = 70, Margin = new Thickness(0, 10, 0, 0), Valores = s.Valores, Rotulos = s.Dias, Formata = v => Fmt(v, s),
+                                  Maximo = Math.Max(1, s.Valores.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max() * 1.15),
+                                  // com menos de 7 dias, o "normal deste PC" ainda não vale: sem faixa e sem comparação
+                                  FaixaMin = aprendendo ? double.NaN : s.FaixaMin, FaixaMax = aprendendo ? double.NaN : s.FaixaMax, Marcas = s.Marcas };
+            g.PedeAmpliar += () => Amplia(s, todas);
+            g.MarcaClicada += m => MostraMarca(m);
+            var hoje = s.Valores.Where(v => !double.IsNaN(v)).DefaultIfEmpty(double.NaN).Last();
+            var antes = s.Valores.Where(v => !double.IsNaN(v)).DefaultIfEmpty(double.NaN).First();
+            var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = {
+                T(Maiuscula(s.Rotulo), "rotulo"),
+                new Button { Classes = { "link" }, Padding = new Thickness(4), Content = Icones.De("ampliar", 15, Tema.Apagado) }
+                    .Com(b => { Grid.SetColumn(b, 1); ToolTip.SetTip(b, "Ampliar (ou clique duas vezes no gráfico)"); b.Click += (_, _) => Amplia(s, todas); }) } };
             var corpo = new StackPanel { Spacing = 4, Children =
             {
-                T(Maiuscula(rot), "rotulo"),
-                new StackPanel { Orientation = Orientation.Horizontal, Children = { T(Num(vals[^1], casas), "numero"), T(un, "unidade") } },
-                T($"era {Num(vals[0], casas)} {un} em {ini:dd/MM}".Replace("  ", " "), "rotulo", tamanho: 13),
+                topo,
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { T(double.IsNaN(hoje) ? "-" : Num(hoje, s.Casas), "numero"), T(s.Unidade, "unidade") } },
+                T(aprendendo ? $"ainda aprendendo este PC ({s.DiasComDado} de 7 dias)" : $"era {Num(antes, s.Casas)} {s.Unidade} em {s.Dias[0]}".Replace("  ", " "), aprendendo ? null : "rotulo", aprendendo ? Tema.Ambar : null, 13),
                 g,
             } };
             grade.Children.Add(new Border { Padding = new Thickness(32, 22, 32, 20), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 1, 1), Child = corpo });
         }
-        var legenda = T("A linha âmbar tracejada marca o dia de cada mudança aplicada; a faixa clara é o normal deste PC.", "rotulo", tamanho: 13).Com(t => t.Margin = new Thickness(32, 14));
+        var legenda = new WrapPanel { Margin = new Thickness(32, 14) };
+        legenda.Children.Add(new Border { Width = 8, Height = 8, Background = Tema.Ambar, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        legenda.Children.Add(T("mudança aplicada (passe o mouse ou clique)", "rotulo", tamanho: 13).Com(t => t.Margin = new Thickness(0, 0, 20, 0)));
+        legenda.Children.Add(new Border { Width = 14, Height = 8, Background = new SolidColorBrush(Color.FromArgb(40, 0xEC, 0xE6, 0xD8)), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        legenda.Children.Add(T("o normal deste PC", "rotulo", tamanho: 13).Com(t => t.Margin = new Thickness(0, 0, 20, 0)));
+        legenda.Children.Add(T("dia sem leitura fica em branco", "rotulo", tamanho: 13));
 
         // o que o motor achou fora do normal: clicar abre a explicação
         Control? anomalias = null;
@@ -116,6 +159,65 @@ public class Historico : Tela
             }
             jogos = S(p);
         }
-        Monta(cab, tend, S(new StackPanel { Children = { grade, legenda } }), anomalias, efeitos, jogos);
+        Monta(cab, tend, S(new StackPanel { Children = { per, grade, legenda } }), anomalias, efeitos, jogos);
+    }
+
+    /// <summary>A marca clicada: o que foi aplicado nesse dia e, se já deu para medir, o que mudou.</summary>
+    void MostraMarca(MarcaGrafico m)
+    {
+        var j = Janela.Atual!;
+        var corpo = new StackPanel { Spacing = 8, MaxWidth = 560 };
+        var titulo = m.Texto.Split(" · ")[0];
+        var ef = dados.A("efeitos").FirstOrDefault(e => titulo.Contains(e.S("titulo")));
+        if (ef != null)
+            foreach (var x in ef.A("medidas").Where(x => x.S("veredito") != "poucas medidas"))
+            {
+                int c = (int)(x.D("casas") ?? 0);
+                corpo.Children.Add(Item($"{Num(x.D("antes"), c)} → {Num(x.D("depois"), c)} {x.S("unidade")} ({x.S("veredito")})", x.S("veredito") == "melhorou" ? Tema.Verde : x.S("veredito") == "piorou" ? Tema.Vermelho : Tema.Apagado, Maiuscula(x.S("rotulo"))));
+            }
+        if (corpo.Children.Count == 0) corpo.Children.Add(T("Ainda poucas medidas depois desta mudança para dizer o que ela fez. O Katharos compara sozinho, 7 dias antes e depois.", "sub", quebra: true));
+        j.MostraCaixa(Janela.Caixa("Aplicado: " + m.Texto, corpo, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0),
+            Children = { Botao("Ver no Desfazer", false, () => { j.FechaCaixa(); Abre("desfazer"); }), Botao("Fechar", true, j.FechaCaixa) } }), true);
+    }
+
+    /// <summary>
+    /// O gráfico grande: eixos com valores e datas, a faixa do normal, as marcas com o nome. A roda aproxima e afasta, arrastar escolhe
+    /// um trecho, "Ver tudo" volta. Dá para pôr uma segunda medida junto (escala própria, em verde) e ligar ou desligar cada uma. Esc fecha.
+    /// </summary>
+    void Amplia(Serie s, List<Serie> todas)
+    {
+        var j = Janela.Atual!;
+        var g = new Grafico { Height = Math.Max(300, (j.Bounds.Height > 0 ? j.Bounds.Height : 800) - 330), Eixos = true, Valores = s.Valores, Rotulos = s.Dias, Formata = v => Fmt(v, s),
+                              Maximo = Math.Max(1, s.Valores.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max() * 1.15),
+                              FaixaMin = s.DiasComDado < 7 ? double.NaN : s.FaixaMin, FaixaMax = s.DiasComDado < 7 ? double.NaN : s.FaixaMax, Marcas = s.Marcas };
+        g.MarcaClicada += MostraMarca;
+        var verTudo = Botao("Ver tudo", false, () => g.VerTudo()).Com(b => b.IsVisible = false);
+        g.ZoomMudou += () => verTudo.IsVisible = g.ComZoom;
+        Button Chave(string texto, IBrush cor, Func<bool> ligado, Action troca)
+        {
+            var b = new Button { Classes = { "link" } };
+            void Pinta() => b.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Opacity = ligado() ? 1 : .4, Children = { new Border { Width = 14, Height = 3, Background = cor, VerticalAlignment = VerticalAlignment.Center }, T(texto, null, Tema.Texto, 13) } };
+            Pinta();
+            b.Click += (_, _) => { troca(); Pinta(); };
+            ToolTip.SetTip(b, "Mostrar ou esconder");
+            return b;
+        }
+        var legenda = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        legenda.Children.Add(Chave(Maiuscula(s.Rotulo), Tema.Ambar, () => g.Mostra1, () => g.Mostra1 = !g.Mostra1));
+        var comparar = new ComboBox { PlaceholderText = "Comparar com…", MinWidth = 220, ItemsSource = todas.Where(x => x != s).Select(x => Maiuscula(x.Rotulo)).Prepend("Nada").ToList() };
+        Control? chave2 = null;
+        comparar.SelectionChanged += (_, _) =>
+        {
+            if (chave2 != null) legenda.Children.Remove(chave2);
+            var outra = todas.FirstOrDefault(x => Maiuscula(x.Rotulo) == comparar.SelectedItem as string);
+            if (outra == null) { g.Valores2 = null; return; }
+            g.Valores2 = outra.Valores; g.Mostra2 = true; g.Formata2 = v => Fmt(v, outra);
+            g.Maximo2 = Math.Max(1, outra.Valores.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max() * 1.15);
+            chave2 = Chave(Maiuscula(outra.Rotulo) + " (escala própria)", Tema.Verde, () => g.Mostra2, () => g.Mostra2 = !g.Mostra2);
+            legenda.Children.Add(chave2);
+        };
+        var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Children = { legenda, verTudo.Com(b => { Grid.SetColumn(b, 1); b.Margin = new Thickness(0, 0, 10, 0); }), comparar.Com(c => Grid.SetColumn(c, 2)) } };
+        var corpo = new StackPanel { Spacing = 12, Children = { topo, g, T("A roda do mouse aproxima e afasta; arrastar escolhe um trecho; clicar numa marca mostra o que foi aplicado. Esc fecha.", "rotulo", tamanho: 12.5) } };
+        j.MostraCaixa(Janela.Caixa(Maiuscula(s.Rotulo), corpo, Botao("Fechar", true, j.FechaCaixa).Com(b => b.HorizontalAlignment = HorizontalAlignment.Right)), true);
     }
 }

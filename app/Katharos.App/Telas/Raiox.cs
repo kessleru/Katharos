@@ -37,23 +37,38 @@ public class Raiox : Tela
     Control Resultado(JsonNode? rx, JsonNode? pc, string quando)
     {
         var p = new StackPanel();
-        double? nota = rx.D("nota");
+        double? nota = rx.D("nota"), notaRx = rx.D("nota_raiox");
+        if (notaRx is double nr && nota is double nn && nr != nn) quando += $" · era {Num(nr)} antes do que você resolveu";
         var pesa = rx.A("pesa").Select(x => $"{x.S("titulo")} (−{Num(x.D("pontos"))})").ToList();
         p.Children.Add(S(Celulas(
             Numero("Nota do PC", Num(nota), "de 100", (nota >= 80 ? "bem cuidado" : nota >= 55 ? "dá para melhorar" : "precisa de atenção") + " · " + quando,
                    nota >= 80 ? Tema.Verde : nota >= 55 ? Tema.Ambar : Tema.Vermelho,
                    pesa.Count > 0 ? T("O que mais tira ponto: " + string.Join("; ", pesa), "rotulo", tamanho: 13, quebra: true).Com(t => t.Margin = new Avalonia.Thickness(0, 6, 0, 0)) : null),
             PcInfo(pc))));
+        // o diagnóstico completo por categoria (boot, RAM, disco, segurança, saúde...), da que mais tira ponto para a que menos; o que
+        // foi resolvido depois deste raio-x fica no fim, apagado, para a pessoa ver que o Katharos sabe
         var achados = rx.A("achados").ToList();
-        var lista = new StackPanel { Children = { Subtitulo(achados.Count == 0 ? "Nada a resolver" : "O que fazer, do mais importante para o menos", achados.Count == 0 ? "O raio-x não achou problema neste PC." : null) } };
-        foreach (var a in achados)
+        var abertos = achados.Where(a => a.S("resolvido") == "").ToList();
+        var resolvidos = achados.Where(a => a.S("resolvido") != "").ToList();
+        if (abertos.Count == 0)
+            p.Children.Add(S(new StackPanel { Children = { Subtitulo("Nada a resolver", resolvidos.Count > 0 ? "O que o raio-x tinha achado já foi resolvido." : "O raio-x não achou problema neste PC.") } }));
+        foreach (var cat in abertos.GroupBy(a => Rotas.Categoria(a.S("categoria"), a.S("titulo"), a.S("comando"))).OrderByDescending(g => g.Sum(a => Peso(a))).ThenByDescending(g => g.Max(a => a.D("impacto") ?? 0)))
         {
-            var (g, cor) = Gravidade((int)(a.D("impacto") ?? 0));
-            string texto = a.S("evidencia") + (string.IsNullOrWhiteSpace(a.S("faz")) ? "" : "\n" + a.S("faz"));
-            string cmd = a.S("comando");
-            lista.Children.Add(Linha(a.S("titulo"), texto, Etiqueta(g, cor), cmd == "" ? null : Botao("Resolver", false, () => Abre(Sugestoes.TelaDo(cmd)))));
+            int pts = cat.Sum(a => Peso(a));
+            var lista = new StackPanel { Children = { Subtitulo(Maiuscula(cat.Key), (cat.Count() == 1 ? "1 achado" : $"{cat.Count()} achados") + (pts > 0 ? $" · −{pts} na nota" : " · não tira ponto"), Icones.DaCategoria(cat.Key)) } };
+            foreach (var a in cat.OrderByDescending(a => a.D("impacto") ?? 0))
+            {
+                var (g, cor) = Gravidade((int)(a.D("impacto") ?? 0));
+                lista.Children.Add(Linha(a.S("titulo"), a.S("evidencia"), Etiqueta(g, cor), Detalhe.Botoes(a, Abre, "Raio-x")));
+            }
+            p.Children.Add(S(lista));
         }
-        p.Children.Add(S(lista));
+        if (resolvidos.Count > 0)
+        {
+            var lista = new StackPanel { Opacity = 0.7, Children = { Subtitulo("Resolvido depois deste raio-x", "Não conta mais na nota.") } };
+            foreach (var a in resolvidos) lista.Children.Add(Linha(a.S("titulo"), Maiuscula(a.S("resolvido")) + ".", Etiqueta("resolvido", Tema.Verde), Detalhe.Botoes(a, Abre, "Raio-x")));
+            p.Children.Add(S(lista));
+        }
         // I21: o que o motor viu com o tempo (sessões de jogo, o normal deste PC, eventos do Windows); sem dado, diz que ainda não sabe
         var mot = rx?["motor"];
         var ma = mot.A("achados").ToList();
@@ -73,6 +88,8 @@ public class Raiox : Tela
         }
         return p;
     }
+
+    static int Peso(JsonNode a) => (int)(a.D("impacto") ?? 0) switch { 3 => 14, 2 => 6, 1 => 2, _ => 0 };   // o mesmo PESO_NOTA do motor
 
     static Control PcInfo(JsonNode? pc)
     {

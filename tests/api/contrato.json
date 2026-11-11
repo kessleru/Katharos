@@ -57,6 +57,9 @@
   "memoria_exportar": {
    "muda": false
   },
+  "memoria_programas": {
+   "muda": false
+  },
   "metodos": {
    "muda": false
   },
@@ -102,11 +105,13 @@
   "alerta",
   "conflita",
   "custo",
+  "dados",
   "explica",
   "ganho",
   "grupo",
   "id",
   "ja",
+  "ja_idade_h",
   "marcado",
   "nivel",
   "nota",

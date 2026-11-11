@@ -183,7 +183,8 @@ COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (o mesmo que segundo-plano)', 'ferramenta_segundo_plano')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'travadas', 'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+COMANDOS['conferir'] = ('confere o "já está assim" que venceu, sem mudar nada (o segundo plano chama com o PC parado)', 'ferramenta_conferir')
+SEM_ESTADO = {'conferir', 'travadas', 'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 # comandos depois dos quais o motor de inteligência pensa de novo (evento "aplicou" ou "desfez")
@@ -344,6 +345,8 @@ def monta_parser():
     c.add_argument('valor', nargs='?', help='valor novo (vazio volta ao padrão)')
     m = sub.add_parser('manutencao', parents=[depois], help='a manutenção em si (a tarefa agendada chama)')
     m.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
+    cf = sub.add_parser('conferir', parents=[depois], help='confere o "já está assim" que venceu (mais de 20 h), em modo teste: nada muda')
+    cf.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
     am = sub.add_parser('amostrar', parents=[depois], help='uma leitura leve do sistema, somada ao histórico por hora (a tarefa de 15 min chama)')
     am.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
     bj = sub.add_parser('bandeja', parents=[depois], help='o ícone do Katharos perto do relógio, com a última leitura e atalhos')
@@ -587,7 +590,7 @@ def main(argv=None):
     if tela:
         cru = cru[1:]
         argv = cru
-    if primeiro and not tela and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar'):
+    if primeiro and not tela and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar', 'conferir'):
         perto = comando_parecido(primeiro)
         if perto:
             print(f'katharos: "{primeiro}" não é um comando. Você quis dizer "{perto}"?  (katharos ajuda mostra o essencial)')
@@ -609,10 +612,10 @@ def main(argv=None):
     AVISOS_INICIO.clear()
     globals()['AVISO_VIVO'] = t.aviso
     try:   # versão nova rodando pela primeira vez: reconhece os dados da anterior, converte e atualiza as cópias
-        confere_versao(t, silencioso=bool(getattr(args, 'agendada', False)) or args.comando in ('amostrar', 'manutencao'))
+        confere_versao(t, silencioso=bool(getattr(args, 'agendada', False)) or args.comando in ('amostrar', 'manutencao', 'conferir'))
     except Exception as e:
         LOG.escreve(f'conferência de versão falhou: {e!r}')
-    if not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao'):
+    if not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'conferir'):
         try:   # automático e sem rede: avisa só se o SHA256SUMS.txt que veio junto não bate com este arquivo
             confere_na_abertura(t)
         except Exception as e:
@@ -625,7 +628,7 @@ def main(argv=None):
         elif not args.sim:   # sem terminal, quem usa --sim já está escolhendo seguir sem perguntar
             t.aviso('Leia o aviso de uso antes (katharos aviso) e aceite no menu, ou use --sim para seguir sem perguntar.')
             return 1
-    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'segundo-plano', 'bandeja') and not args.teste \
+    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'conferir', 'segundo-plano', 'bandeja') and not args.teste \
             and not getattr(args, 'exportar', False):
         try:   # quem tinha o acompanhamento contínuo passa para o Katharos.exe; quem já usa, fica com a config atualizada
             migra_segundo_plano(ctx)

@@ -22,19 +22,24 @@ public class Otimizar : Tela
         public string Id => J.S("id");
         public string Pacote => J.S("pacote");
         public bool? Ja => J["ja"] is JsonValue v && v.TryGetValue(out bool b) ? b : null;
+        /// <summary>Leitura com mais de um dia (ou nenhuma): mostrada, mas conferida de novo em segundo plano.</summary>
+        public bool Velho => J.D("ja_idade_h") is not double h || h > 24;
         public bool Marcado;
         public CheckBox? Caixa; public TextBlock? Estado;
     }
-    class AreaVm { public required JsonNode J; public List<ItemVm> Itens = new(); public bool Aberta; public TextBlock? Conta; public StackPanel? Lista; public TextBlock? Seta; }
+    class AreaVm { public required JsonNode J; public List<ItemVm> Itens = new(); public bool Aberta; public TextBlock? Conta; public StackPanel? Lista; public TextBlock? Seta; public Border? Caixa; }
 
     string modo = "equilibrado";
     readonly string foco;
+    bool focoFeito;
     List<AreaVm> areas = new();
-    Dictionary<string, bool?> ja = new();
-    TextBlock resumo = T("", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold);
-    TextBlock conferindo = T("", "rotulo");
+    JsonNode? lista;   // a última lista inteira (para guardar com o que a conferência trouxer)
+    readonly TextBlock resumo = T("", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold);
+    readonly TextBlock conferindo = T("", "rotulo");
+    readonly Button lerDeNovo;
     Button aplicar = new();
-    bool conferido, semEventos;
+    bool semEventos;
+    Control? cab;
 
     readonly Border barra = new() { Background = Tema.Painel, BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(72, 16), IsVisible = false };
 
@@ -48,70 +53,116 @@ public class Otimizar : Tela
         dock.Children.Add(barra);
         dock.Children.Add(new ScrollViewer { Content = Corpo, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
         Content = dock;
+        lerDeNovo = new Button { Classes = { "link" }, Content = "Ler de novo", Padding = new Thickness(0), Background = Brushes.Transparent, Foreground = Tema.Ambar, FontSize = 13 };
+        lerDeNovo.Click += (_, _) => Conferencia.Pede(areas.Select(x => x.J.S("nome")), forcar: true);
+        // a conferência vive fora da tela: entrar e sair do Otimizar não a cancela; enquanto a tela está aberta, ela ouve
+        AttachedToVisualTree += (_, _) => { Conferencia.AreaPronta += AreaConferida; Conferencia.Mudou += MostraAndamento; };
+        DetachedFromVisualTree += (_, _) => { Conferencia.AreaPronta -= AreaConferida; Conferencia.Mudou -= MostraAndamento; };
     }
+
+    object Pedido() => new { modo, conferir = false };
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Otimizar", "Escolha um modo. Antes de aplicar, você confere cada item e tira o que não quiser.");
-        Monta(cab, Carregando("Lendo o que dá para fazer neste PC").secao);
+        cab = Cabecalho("Otimizar", "Escolha um modo. Antes de aplicar, você confere cada item e tira o que não quiser.");
+        // abre na hora com o que está guardado (mesmo de outra abertura do Katharos); a leitura nova só troca o que mudou
+        modo = Servico.Guardado("config_ler")?["modo"].S("valor", modo) ?? modo;
+        var g = Servico.Guardado("itens", Pedido());
+        if (g != null) { Le(g); Desenha(cab); }
+        else Monta(cab, Carregando("Lendo o que dá para fazer neste PC").secao);
         var cfg = await Servico.Le("config_ler");
-        modo = cfg?["modo"].S("valor", "equilibrado") ?? "equilibrado";
-        await CarregaItens(false);
-        Desenha(cab);
-        if (!conferido && !Servico.Exemplo) _ = Confere();
+        string m = cfg?["modo"].S("valor", "equilibrado") ?? "equilibrado";
+        if (m != modo) { modo = m; g = null; }
+        var d = await Servico.Le("itens", Pedido());
+        if (g == null || Forma(g) != Forma(d)) { Le(d); Desenha(cab); }
+        else { lista = d; AtualizaItens(d.A("areas").SelectMany(a => a.A("itens"))); }
+        PedeConferencia(d);
     }
 
-    async Task CarregaItens(bool conferir, Action<string, JsonNode?>? ev = null)
+    /// <summary>A forma da lista (áreas e ids): se mudou, a tela é refeita; se não, só o "já está assim" de cada linha muda.</summary>
+    static string Forma(JsonNode? d) => string.Join("|", d.A("areas").Select(a => a.S("nome") + ":" + string.Join(",", a.A("itens").Select(i => i.S("id")))));
+
+    void Le(JsonNode? d)
     {
-        var d = await Servico.Le("itens", new { modo, conferir }, ev);
+        lista = d;
         var abertas = areas.Where(a => a.Aberta).Select(a => a.J.S("nome")).ToHashSet();
-        if (abertas.Count == 0 && foco != "") abertas.Add(foco);
+        // vindo de um botão ("Escolher quais abrem"): só aquela área aberta
+        if (!focoFeito && foco != "") abertas = new() { foco };
+        var marcas = areas.SelectMany(a => a.Itens).ToDictionary(i => i.Pacote + "/" + i.Id, i => i.Marcado);
         areas = d.A("areas").Where(a => a.A("itens").Any()).Select(a => new AreaVm
         {
             J = a, Aberta = abertas.Contains(a.S("nome")),
-            Itens = a.A("itens").Select(i => new ItemVm { J = i, Marcado = i.B("marcado") }).ToList(),
+            // a marca da pessoa nunca se perde numa leitura nova; item novo vem como o modo marca
+            Itens = a.A("itens").Select(i => new ItemVm { J = i, Marcado = marcas.TryGetValue(i.S("pacote") + "/" + i.S("id"), out var mk) ? mk : i.B("marcado") }).ToList(),
         }).ToList();
-        if (conferir) { conferido = true; foreach (var i in areas.SelectMany(a => a.Itens)) ja[i.Pacote + "/" + i.Id] = i.Ja; }
-        else foreach (var i in areas.SelectMany(a => a.Itens))   // troca de modo: mantém o "já está assim" conferido
-                if (ja.TryGetValue(i.Pacote + "/" + i.Id, out var v)) i.J["ja"] = v;
+        foreach (var a in areas) Conferencia.Nomes[a.J.S("nome")] = a.J.S("titulo");
     }
 
-    /// <summary>Confere em segundo plano o que já está assim no PC (modo teste: nada muda), área por área.</summary>
-    async Task Confere()
+    /// <summary>Confere em segundo plano, uma área por vez: primeiro a que a pessoa veio ver, depois as que estão sem leitura ou velhas.</summary>
+    void PedeConferencia(JsonNode? d)
     {
-        conferindo.Text = "Conferindo o que já está feito no PC…";
+        if (Servico.Exemplo) return;
+        var faltam = d.A("areas").Where(a => (a.D("faltam") ?? 0) > 0).Select(a => a.S("nome")).ToList();
+        Conferencia.Pede(faltam);
+        if (foco != "" && faltam.Contains(foco)) Conferencia.Pede(new[] { foco }, frente: true);
+        MostraAndamento();
+    }
+
+    /// <summary>Uma área conferida: troca o "já está assim" das linhas dela e guarda a lista inteira atualizada.</summary>
+    void AreaConferida(string nome, JsonNode area)
+    {
+        AtualizaItens(area.A("itens"));
+        if (lista?["areas"] is JsonArray arr)
+            foreach (var a in arr.OfType<JsonObject>().Where(a => a.S("nome") == nome))
+            {
+                a["faltam"] = 0;
+                foreach (var it in a.A("itens").OfType<JsonObject>())
+                    if (area.A("itens").FirstOrDefault(n => n.S("id") == it.S("id")) is JsonNode novo) { it["ja"] = novo["ja"]?.DeepClone(); it["ja_idade_h"] = novo["ja_idade_h"]?.DeepClone(); }
+            }
+        if (lista != null) Servico.Guarda("itens", Pedido(), lista);
+        MostraAndamento();
+    }
+
+    void AtualizaItens(IEnumerable<JsonNode> novos)
+    {
+        var vistos = novos.ToDictionary(x => x.S("pacote") + "/" + x.S("id"), x => x);
+        semEventos = true;
         try
         {
-            var d = await Servico.Le("itens", new { modo, conferir = true }, (t, d) => Dispatcher.UIThread.Post(() =>
+            foreach (var i in areas.SelectMany(a => a.Itens))
             {
-                if (t == "etapa") conferindo.Text = Primeira(d.S("texto")) + (d.D("de") is double de ? $" ({Num(d.D("n"))} de {Num(de)})" : "") + "…";
-            }));
-            // atualiza no lugar o que já está assim (antes a tela inteira era refeita: pulava a rolagem e as áreas abertas piscavam)
-            var vistos = new Dictionary<string, JsonNode?>();
-            foreach (var x in d.A("areas").SelectMany(a => a.A("itens"))) vistos[x.S("pacote") + "/" + x.S("id")] = x["ja"]?.DeepClone();
-            conferido = true;
-            semEventos = true;
-            try
-            {
-                foreach (var i in areas.SelectMany(a => a.Itens))
-                {
-                    string k = i.Pacote + "/" + i.Id;
-                    if (!vistos.TryGetValue(k, out var v)) continue;
-                    i.J["ja"] = v; ja[k] = i.Ja;
-                    if (i.Caixa != null) { i.Caixa.IsEnabled = i.Ja != true; i.Caixa.IsChecked = i.Ja == true || i.Marcado; }
-                }
+                if (!vistos.TryGetValue(i.Pacote + "/" + i.Id, out var v)) continue;
+                i.J["ja"] = v["ja"]?.DeepClone(); i.J["ja_idade_h"] = v["ja_idade_h"]?.DeepClone();
+                if (i.Caixa != null) { i.Caixa.IsEnabled = i.Ja != true; i.Caixa.IsChecked = i.Ja == true || i.Marcado; }
             }
-            finally { semEventos = false; }
-            conferindo.Text = "Conferido agora: o que já está assim não roda de novo.";
-            AtualizaContas();
         }
-        catch (Exception e) { conferindo.Text = "Não deu para conferir o que já está feito: " + e.Message; }
+        finally { semEventos = false; }
+        AtualizaContas();
     }
+
+    void MostraAndamento()
+    {
+        if (Conferencia.Rodando) { conferindo.Text = Conferencia.Texto + "… Pode mexer: só a linha muda quando chegar."; lerDeNovo.IsVisible = false; }
+        else if (Conferencia.Erro is string e) { conferindo.Text = "Não deu para conferir tudo: " + e; lerDeNovo.IsVisible = true; }
+        else
+        {
+            var idades = areas.SelectMany(a => a.Itens).Select(i => i.J.D("ja_idade_h")).OfType<double>().ToList();
+            double? h = idades.Count > 0 ? idades.Max() : null;
+            conferindo.Text = h == null ? "O que já está assim no PC aparece aqui depois de conferido (nada muda)."
+                : h < 0.1 ? "Conferido agora: o que já está assim não roda de novo."
+                : $"Conferido há {Idade(h.Value)}: o que já está assim não roda de novo. Depois de aplicar, cada item é lido de volta no Windows.";
+            lerDeNovo.IsVisible = true;
+        }
+        AtualizaContas();
+    }
+
+    static string Idade(double h) => h < 1 ? $"{Math.Max(1, (int)Math.Round(h * 60))} min" : h < 48 ? $"{(int)Math.Round(h)} h" : $"{(int)Math.Round(h / 24)} dias";
 
     void Desenha(Control cab)
     {
         // os textos que vivem de uma tela para a outra saem do lugar antigo antes de entrar no novo
         if (conferindo.Parent is Panel pc) pc.Children.Remove(conferindo);
+        if (lerDeNovo.Parent is Panel pl) pl.Children.Remove(lerDeNovo);
         if (cab.Parent is Panel pcab) pcab.Children.Remove(cab);
         // passo 1: o modo
         var modos = new UniformGrid { Columns = 3, Margin = new Thickness(32, 0, 32, 28) };
@@ -134,7 +185,7 @@ public class Otimizar : Tela
             {
                 if (modo == m) return;
                 var antes = modo;
-                try { modo = m; await CarregaItens(false); Desenha(cab); }
+                try { modo = m; var d = Servico.Guardado("itens", Pedido()) ?? await Servico.Le("itens", Pedido()); Le(d); Desenha(cab); }
                 catch (Exception e) { modo = antes; MostraErro(e, "Não deu para trocar de modo", "O modo continua o de antes."); }
             };
             modos.Children.Add(b);
@@ -143,7 +194,8 @@ public class Otimizar : Tela
 
         // passo 2: os itens por área
         var lista = new StackPanel();
-        lista.Children.Add(new StackPanel { Spacing = 4, Margin = new Thickness(32, 22, 32, 12), Children = { T("2. Confira os itens", "forte"), conferindo } });
+        lista.Children.Add(new StackPanel { Spacing = 4, Margin = new Thickness(32, 22, 32, 12), Children = { T("2. Confira os itens", "forte"),
+            new WrapPanel { Children = { conferindo.Com(t => { t.TextWrapping = TextWrapping.Wrap; t.Margin = new Thickness(0, 0, 10, 0); }), lerDeNovo } } } });
         foreach (var a in areas) lista.Children.Add(DesenhaArea(a));
         var passo2 = S(lista);
 
@@ -158,7 +210,13 @@ public class Otimizar : Tela
         };
         barra.IsVisible = true;
         Monta(cab, passo1, passo2);
-        AtualizaContas();
+        MostraAndamento();
+        // veio de um botão: rola até a área e destaca por um instante (uma vez só, não a cada leitura nova)
+        if (!focoFeito && foco != "" && areas.FirstOrDefault(x => x.J.S("nome") == foco)?.Caixa is Border alvo)
+        {
+            focoFeito = true;
+            Dispatcher.UIThread.Post(() => { alvo.BringIntoView(); Movimento.Destaca(alvo); }, DispatcherPriority.Background);
+        }
     }
 
     Control DesenhaArea(AreaVm a)
@@ -183,8 +241,12 @@ public class Otimizar : Tela
         {
             a.Aberta = !a.Aberta; a.Seta.Text = a.Aberta ? "−" : "+"; a.Lista.IsVisible = a.Aberta;
             if (a.Aberta && a.Lista.Children.Count == 0) PreencheItens(a);
+            if (a.Aberta) Movimento.Entra(a.Lista, 4);
+            // abriu uma área com leitura de algumas horas: confere ela primeiro (pega o que a pessoa mudou à mão no Windows)
+            if (a.Aberta && a.Itens.Any(i => i.J.D("ja_idade_h") is not double h || h > 6)) Conferencia.Pede(new[] { a.J.S("nome") }, frente: true);
         };
-        return new StackPanel { Children = { cab, a.Lista } };
+        a.Caixa = new Border { Child = new StackPanel { Children = { cab, a.Lista } } };
+        return a.Caixa;
     }
 
     void PreencheItens(AreaVm a)
@@ -229,8 +291,9 @@ public class Otimizar : Tela
             if (a.Conta != null) a.Conta.Text = (m > 0 ? $"{m} mudam" : "nada muda") + (f > 0 ? $" · {f} já feitos" : "") + $" · {a.Itens.Count} itens";
             foreach (var i in a.Itens.Where(i => i.Estado != null))
             {
-                i.Estado!.Text = i.Ja == true ? "já está assim" : i.Marcado ? "vai mudar" : "não marcado";
-                i.Estado.Foreground = i.Ja == true ? Tema.Verde : i.Marcado ? Tema.Ambar : Tema.Apagado;
+                bool lendo = Conferencia.NaFila(i.Pacote) && (i.Ja == null || i.Velho);
+                i.Estado!.Text = lendo && i.Ja != true ? "conferindo…" : i.Ja == true ? (i.Velho ? "já estava assim" : "já está assim") : i.Marcado ? "vai mudar" : "não marcado";
+                i.Estado.Foreground = i.Ja == true ? (i.Velho ? Tema.Apagado : Tema.Verde) : i.Marcado ? Tema.Ambar : Tema.Apagado;
             }
         }
         int n = VaoMudar().Count(), feitos = areas.Sum(a => a.Itens.Count(i => i.Ja == true));
@@ -241,106 +304,8 @@ public class Otimizar : Tela
 
     async Task Aplica()
     {
-        var j = Janela.Atual!;
-        var itens = VaoMudar().ToList();
-        if (itens.Count == 0) return;
-        var aviso = await Servico.Le("aviso");
-        if (!aviso.B("aceito")) { Abre("aviso:otimizar"); return; }
-        int semVolta = itens.Count(i => i.J.B("sem_volta"));
-        var corpo = new StackPanel { Spacing = 8 };
-        foreach (var g in itens.GroupBy(i => i.Pacote))
-            corpo.Children.Add(T($"{Primeira(areas.First(a => a.J.S("nome") == g.Key).J.S("titulo"))}: {g.Count()} {(g.Count() == 1 ? "item" : "itens")}", null, Tema.Texto, 14));
-        corpo.Children.Add(T("O Windows vai pedir permissão de administrador. Antes de mudar, o Katharos cria um ponto de restauração.", "rotulo", quebra: true).Com(t => t.Margin = new Thickness(0, 8, 0, 0)));
-        if (semVolta > 0) corpo.Children.Add(T($"{semVolta} {(semVolta == 1 ? "item não volta" : "itens não voltam")} pelo Desfazer (remoções).", null, Tema.Vermelho, 13.5, true));
-        if (!await j.Confirma($"Aplicar {itens.Count} {(itens.Count == 1 ? "mudança" : "mudanças")}?", corpo, $"Aplicar {itens.Count}")) return;
-
-        var (painel, passo, barra) = Andamento("Esperando a permissão de administrador do Windows",
-            "Se o pedido do Windows não aparecer na frente, ele pode estar piscando na barra de tarefas. Pode usar o PC. Não desligue até terminar.");
-        var item = T("", "rotulo", quebra: true);
-        painel.Children.Insert(2, item);
-        j.MostraCaixa(Janela.Caixa("Aplicando", painel));
-        Trabalho.Comeca("Aplicando mudanças…");
-        try
-        {
-            var sel = new JsonObject();
-            foreach (var g in itens.GroupBy(i => i.Pacote)) sel[g.Key] = new JsonArray(g.Select(i => (JsonNode)JsonValue.Create(i.Id)!).ToArray());
-            var r = await Servico.Muda("aplicar", new { itens = sel }, (t, d) => Dispatcher.UIThread.Post(() =>
-            {
-                if (t == "etapa") { passo.Text = Primeira(d.S("texto")); if (painel.Children.Count > 4) painel.Children.RemoveAt(4); }   // permissão dada: a dica sai
-                else if (t == "pacote") passo.Text = $"{Primeira(d.S("titulo"))} ({Num(d.D("n"))} de {Num(d.D("de"))})";
-                else if (t == "progresso" && d.D("de") is double de && de > 0) { barra.IsIndeterminate = false; barra.Maximum = de; barra.Value = d.D("n") ?? 0; item.Text = d.S("item"); }
-            }));
-            await MostraResultado(r);
-        }
-        catch (ErroDoMotor e) when (e.Codigo == "precisa_aceite") { j.FechaCaixa(); Abre("aviso:otimizar"); }
-        catch (Exception e)
-        {
-            MostraErro(e, depois: "Nada foi marcado como feito. O que chegou a mudar antes do erro volta pela tela Desfazer.");
-        }
-        finally { Trabalho.Termina(); }
-    }
-
-    async Task MostraResultado(JsonNode? r)
-    {
-        var j = Janela.Atual!;
-        var corpo = new StackPanel { Spacing = 6 };
-        int feitos = 0, problemas = 0;
-        foreach (var p in r.A("pacotes"))
-        {
-            int f = (int)(p.D("feitos") ?? 0); feitos += f;
-            var erros = p.A("erros").Select(x => x.ToString()).ToList();
-            var avisos = p.A("avisos").Select(x => x.ToString()).ToList();
-            var nao = p.A("nao_ficou").Select(x => x.ToString()).ToList();
-            problemas += erros.Count + nao.Count;
-            var bloco = new StackPanel { Spacing = 3 };
-            // uma linha por área: o nome e, alinhado à direita, quantas mudaram (fácil de bater o olho numa lista longa)
-            bloco.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = {
-                T(Primeira(p.S("titulo")), null, Tema.Osso, 15),
-                T(f == 0 ? "nada mudou" : $"{f} {(f == 1 ? "mudança" : "mudanças")}", null, f == 0 ? Tema.Apagado : Tema.Verde, 14).Com(t => { t.FontFamily = Tema.Mono; Grid.SetColumn(t, 1); }) } });
-            foreach (var x in erros.Take(4)) bloco.Children.Add(T("erro: " + x, null, Tema.Vermelho, 13, true));
-            foreach (var x in nao.Take(4)) bloco.Children.Add(T("não ficou (conferido no Windows): " + x, null, Tema.Ambar, 13, true));
-            foreach (var x in avisos.Take(3)) bloco.Children.Add(T("aviso: " + x, "rotulo", tamanho: 13, quebra: true));
-            if (p.D("liberado") is double lib && lib > 0) bloco.Children.Add(T($"liberou {Num(lib / 1073741824.0, 1)} GB", null, Tema.Verde, 13));
-            // medido antes e depois de cada item, neste PC (o mesmo que fica em "provas")
-            if (p.S("medido") != "") bloco.Children.Add(T("Medido agora: " + p.S("medido") + ".", "rotulo", tamanho: 13, quebra: true));
-            corpo.Children.Add(bloco);
-        }
-        string titulo = problemas == 0 ? $"Pronto: {feitos} {(feitos == 1 ? "mudança feita e conferida" : "mudanças feitas e conferidas")}" : $"Feito, com {problemas} {(problemas == 1 ? "ponto" : "pontos")} para olhar";
-        corpo.Children.Insert(0, T(problemas == 0 ? "Cada ajuste foi lido de volta no Windows depois de aplicado." : "O resto ficou como pedido; os pontos abaixo dizem o que não ficou e por quê.", "rotulo", quebra: true).Com(t => t.Margin = new Thickness(0, 0, 0, 8)));
-        var manter = r.A("perguntar_manter").Select(x => x.ToString()).ToList();
-        if (manter.Count > 0) { await PerguntaManter(manter, titulo, corpo); return; }
-        j.MostraCaixa(Janela.Caixa(titulo, corpo, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0),
-            Children = { Botao("Ver o Desfazer", false, () => { j.FechaCaixa(); Abre("desfazer"); }), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); }) } }), true);
-    }
-
-    /// <summary>Como a troca de resolução do Windows: depois de mudança de risco, "está tudo funcionando?"; sem resposta em 90 s, desfaz.</summary>
-    async Task PerguntaManter(List<string> pacotes, string titulo, Control corpo)
-    {
-        var j = Janela.Atual!;
-        int resta = 90;
-        var conta = T("", null, Tema.Ambar, 14, true);
-        var tcs = new TaskCompletionSource<bool>();
-        var rel = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        void Texto() => conta.Text = $"Olhe o PC por um instante (tela, som, internet, o jogo abrindo). Se não responder em {resta} s, o Katharos desfaz sozinho.";
-        Texto();
-        rel.Tick += (_, _) => { if (--resta <= 0) tcs.TrySetResult(false); else Texto(); };
-        rel.Start();
-        var p = new StackPanel { Spacing = 14, Children = { corpo, T("Está tudo funcionando?", "forte", tamanho: 17), conta } };
-        j.MostraCaixa(Janela.Caixa(titulo, p, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0),
-            Children = { Botao("Desfazer agora", false, () => tcs.TrySetResult(false)), Botao("Manter", true, () => tcs.TrySetResult(true)) } }));
-        bool manter = await tcs.Task;
-        rel.Stop();
-        if (manter) { j.FechaCaixa(); await Recarrega(); return; }
-        j.MostraCaixa(Janela.Caixa("Desfazendo", Andamento("Voltando " + string.Join(", ", pacotes) + " ao que era antes").painel));
-        Trabalho.Comeca("Desfazendo…");
-        try
-        {
-            var r = await Servico.Muda("desfazer", new { pacotes });
-            bool ok = r.A("pacotes").All(x => x.B("ok"));
-            j.MostraCaixa(Janela.Caixa(ok ? "Desfeito" : "Desfeito em parte", T(ok ? "Voltou ao que era antes." : "Algo não voltou: abra o Desfazer para ver.", "sub"), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
-        }
-        catch (Exception e) { MostraErro(e, "Não deu para desfazer", "As mudanças continuam aplicadas. Tente de novo pela tela Desfazer."); }
-        finally { Trabalho.Termina(); }
+        var itens = VaoMudar().Select(i => new Escolhido(i.Pacote, areas.First(a => a.J.S("nome") == i.Pacote).J.S("titulo"), i.Id, i.J.S("titulo"), i.J.B("sem_volta"))).ToList();
+        await Aplicacao.Aplica(itens, () => _ = Recarrega(), Abre);
     }
 
     static string Primeira(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];

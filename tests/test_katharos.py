@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import importlib.util
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -17,6 +18,9 @@ sys.argv = ['katharos']
 spec = importlib.util.spec_from_file_location('katharos', RAIZ / 'programa' / 'katharos.py')
 k = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(k)
+# nenhum teste grava na pasta de verdade (~/.katharos): o cache do "já está assim" e o perfil vão para uma pasta temporária
+import tempfile as _tf
+k.CASA = Path(_tf.mkdtemp(prefix='katharos-teste-'))
 
 
 class _Mudo:
@@ -538,6 +542,64 @@ class TestJaFeito(unittest.TestCase):
         with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps') as r:
             k.confere_itens(ctx, [a, b], 'x')
             r.assert_not_called()   # a mesma sessão não confere duas vezes
+
+    def _item(self, i):
+        return k.Item(i, i.upper(), 'x', nivel=1, ps=f"Set-Valor 'HKCU:\\X' '{i}' 1")
+
+    def test_ja_feito_fica_no_disco_e_vale_na_proxima_abertura(self):
+        """Fechar e abrir de novo (outra sessão, sem ctx.ja) não confere de novo o que tem menos de 24 h."""
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'WINDOWS', True), \
+             mock.patch.object(k, 'build_atual', return_value='26200.1'):
+            s = k.Saida(); s.dados = {'ja:a': True, 'ja:b': False}
+            with mock.patch.object(k, 'roda_ps', return_value=s):
+                k.confere_itens(mock.Mock(t=mock.Mock(), mult=1.0, ja=None), [self._item('a'), self._item('b')], 'x', max_idade_h=24)
+            a, b = self._item('a'), self._item('b')
+            with mock.patch.object(k, 'roda_ps') as r:
+                k.confere_itens(mock.Mock(t=mock.Mock(), mult=1.0, ja=None), [a, b], 'x', max_idade_h=24)
+                r.assert_not_called()
+            self.assertIs(a.ja, True); self.assertIs(b.ja, False)
+            # a CLI (max_idade_h=0) confere de novo; só o que foi conferido nesta mesma sessão não roda
+            with mock.patch.object(k, 'roda_ps', return_value=s) as r:
+                k.confere_itens(mock.Mock(t=mock.Mock(), mult=1.0, ja=None), [self._item('a')], 'x')
+                r.assert_called_once()
+
+    def test_ja_feito_vence_com_o_tempo_com_o_windows_novo_e_ao_aplicar(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'WINDOWS', True):
+            s = k.Saida(); s.dados = {'ja:a': True, 'ja:b': True}
+            nova = lambda: mock.Mock(t=mock.Mock(), mult=1.0, ja=None)
+            with mock.patch.object(k, 'build_atual', return_value='26200.1'):
+                with mock.patch.object(k, 'roda_ps', return_value=s):
+                    k.confere_itens(nova(), [self._item('a'), self._item('b')], 'x', max_idade_h=24)
+                with mock.patch.object(k.time, 'time', return_value=k.time.time() + 25 * 3600), mock.patch.object(k, 'roda_ps', return_value=s) as r:
+                    k.confere_itens(nova(), [self._item('a')], 'x', max_idade_h=24)
+                    r.assert_called_once()   # mais de 24 h: confere de novo
+                # so_guardado mostra mesmo velho e nunca roda nada
+                a = self._item('a')
+                with mock.patch.object(k, 'roda_ps') as r:
+                    k.confere_itens(nova(), [a], 'x', so_guardado=True)
+                    r.assert_not_called()
+                self.assertIs(a.ja, True)
+                k.invalida_cache_ja('x', ['a'])
+                self.assertNotIn(('x', 'a'), k.le_cache_ja())
+                self.assertIn(('x', 'b'), k.le_cache_ja(), 'aplicar um item não apaga os outros')
+            with mock.patch.object(k, 'build_atual', return_value='26200.2'):
+                self.assertEqual(k.le_cache_ja(), {}, 'atualização do Windows: tudo é conferido de novo')
+
+    def test_aplicar_de_verdade_invalida_o_ja_feito(self):
+        it = self._item('a')
+        pac = mock.Mock(nome='x')
+        with mock.patch.object(k, 'invalida_cache_ja') as inv, mock.patch.object(k, 'roda_ps', return_value=k.Saida()):
+            try:
+                k.executa_itens(mock.Mock(t=mock.Mock(), mult=1.0), pac, [it])
+            except Exception:
+                pass
+            inv.assert_called_with('x', ['a'])
+        with mock.patch.object(k, 'invalida_cache_ja') as inv, mock.patch.object(k, 'roda_ps', return_value=k.Saida()):
+            try:
+                k.executa_itens(mock.Mock(t=mock.Mock(), mult=1.0), pac, [it], teste=True)
+            except Exception:
+                pass
+            inv.assert_not_called()
 
     def test_inicializacao_ignora_programa_que_saiu_e_marca_dupla(self):
         self.assertIn('existe', k.INICIO_PS)

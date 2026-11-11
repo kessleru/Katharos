@@ -27,18 +27,62 @@ public static class Servico
         try { if (comum == null) { var c = await MotorComum.Abre(); c.Caiu += _ => { if (comum == c) comum = null; }; comum = c; } m = comum; }
         finally { abrindoComum.Release(); }
         var r = await m.Pede(metodo, p, evento);
-        lock (guardados) guardados[Chave(metodo, p)] = r?.DeepClone();
+        Guarda(metodo, p, r);
         return r;
     }
 
-    // a última resposta de cada leitura: a tela abre na hora com ela e troca quando a resposta nova chega (sem "carregando" a cada visita)
+    // A última resposta de cada leitura: a tela abre na hora com ela e troca quando a resposta nova chega (sem "carregando" a cada
+    // visita). As leituras de tela vão também para o disco (~/.katharos/cache/janela): na próxima abertura do Katharos, mesmo depois de
+    // reiniciar o PC, a primeira tela já aparece com dado. O que é pergunta (perguntar) ou muda a cada segundo (agora) não vai.
     static readonly Dictionary<string, JsonNode?> guardados = new();
+    static readonly HashSet<string> vaoParaODisco = new() { "inicio", "raiox_guardado", "historico", "sessoes", "sugestoes", "itens", "aplicado", "config_ler", "linha_de_base" };
     static string Chave(string metodo, object? p) => metodo + System.Text.Json.JsonSerializer.Serialize(p);
+    public static string PastaCache => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "cache", "janela");
+    static string ArqDe(string chave) => Path.Combine(PastaCache, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(chave)))[..24].ToLowerInvariant() + ".json");
+
     public static JsonNode? Guardado(string metodo, object? p = null)
     {
         if (Exemplo) return null;
-        lock (guardados) return guardados.TryGetValue(Chave(metodo, p), out var r) ? r?.DeepClone() : null;
+        string ch = Chave(metodo, p);
+        lock (guardados) if (guardados.TryGetValue(ch, out var r)) return r?.DeepClone();
+        if (!vaoParaODisco.Contains(metodo)) return null;
+        try
+        {
+            var arq = ArqDe(ch);
+            if (!File.Exists(arq)) return null;
+            var d = JsonNode.Parse(File.ReadAllText(arq));
+            // de outra versão do Katharos o formato pode ter mudado: melhor esperar a resposta nova
+            if (d.S("versao") != Versao || d?["dados"] is not JsonNode dados) return null;
+            lock (guardados) guardados.TryAdd(ch, dados.DeepClone());
+            return dados;
+        }
+        catch (Exception e) { Registro.Escreve("guardado: " + e.Message); return null; }
     }
+
+    /// <summary>Guarda uma resposta como se tivesse vindo do motor (a Conferência junta as áreas conferidas na lista do Otimizar).</summary>
+    public static void Guarda(string metodo, object? p, JsonNode? r)
+    {
+        if (Exemplo) return;
+        string ch = Chave(metodo, p);
+        lock (guardados) guardados[ch] = r?.DeepClone();
+        // a conferência de uma área só fica na memória: quem guarda a lista inteira é o Otimizar, já com as áreas juntas
+        if (r == null || !vaoParaODisco.Contains(metodo) || ch.Contains("\"conferir\":true")) return;
+        var copia = new JsonObject { ["versao"] = Versao, ["dados"] = r.DeepClone() }.ToJsonString();
+        // gravado fora da linha da tela, num arquivo temporário trocado de uma vez (quem lê nunca vê meio arquivo)
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                Directory.CreateDirectory(PastaCache);
+                var arq = ArqDe(ch); var tmp = arq + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+                File.WriteAllText(tmp, copia);
+                File.Move(tmp, arq, true);
+            }
+            catch (Exception e) { Registro.Escreve("guardar: " + e.Message); }
+        });
+    }
+
+    static string Versao => typeof(Servico).Assembly.GetName().Version?.ToString() ?? "";
 
     /// <summary>Muda o PC: abre o motor elevado na primeira vez (o Windows pergunta se pode).</summary>
     public static async Task<JsonNode?> Muda(string metodo, object? p = null, Action<string, JsonNode?>? evento = null)
@@ -90,7 +134,7 @@ public static class DadosDeExemplo
         "inicio" => JsonNode.Parse("""
             {"raiox": {"quando": "2026-11-10T09:12:00", "nota": 72, "total": 3, "achados": [
                {"titulo": "Driver da placa de vídeo de março", "impacto": 3, "evidencia": "NVIDIA 551.86. O novo corrige travadas em jogos DirectX 12.", "faz": "Baixe pelo app da NVIDIA ou pelo site.", "comando": "atualizar"},
-               {"titulo": "11 programas abrem junto com o Windows", "impacto": 2, "evidencia": "O PC leva 41 s para ficar pronto; sem eles, uns 25 s.", "faz": "", "comando": "inicializacao"},
+               {"titulo": "Muita coisa abrindo com o Windows", "impacto": 2, "evidencia": "11 itens abrem com o Windows; 5 dá para desligar: Microsoft Teams, Spotify, Steam, Discord, Epic Games Launcher.", "faz": "", "comando": "inicializacao", "categoria": "inicialização"},
                {"titulo": "Memória em canal único", "impacto": 1, "evidencia": "Um pente de 16 GB. Dois de 8 GB rendem até 15 % mais em jogos.", "faz": "", "comando": ""}]},
              "pc": {"disco_livre_gb": 182, "disco_total_gb": 476},
              "temperatura": {"cpu": 47, "cpu_fonte": "MSI Afterburner", "gpu": 44, "gpu_fonte": "driver de vídeo"},
@@ -115,14 +159,15 @@ public static class DadosDeExemplo
         "historico" => Historico(),
         "config_ler" => Carrega("exemplo-config.json"),
         "raiox_guardado" => JsonNode.Parse("""
-            {"quando": "2026-11-10T09:12:00", "nota": 72,
+            {"quando": "2026-11-10T09:12:00", "nota": 74, "nota_raiox": 72,
              "pesa": [{"titulo": "Driver da placa de vídeo de março", "pontos": 14}, {"titulo": "11 programas abrem junto com o Windows", "pontos": 6}],
              "pc": {"modelo": "ASUS TUF Gaming A15", "windows": "Windows 11 25H2 Pro", "cpu": "AMD Ryzen 7 7735HS · 8 núcleos", "ram": "16 GB DDR5 · 1 pente", "disco": "NVMe 512 GB · 182 GB livres", "video": "NVIDIA GeForce RTX 4060 Laptop"},
              "achados": [
-               {"titulo": "Driver da placa de vídeo de março", "impacto": 3, "evidencia": "NVIDIA 551.86, de março. O novo corrige travadas em jogos DirectX 12.", "faz": "Baixe pelo app da NVIDIA ou em nvidia.com/drivers.", "comando": "atualizar"},
-               {"titulo": "11 programas abrem junto com o Windows", "impacto": 2, "evidencia": "O PC leva 41 s para ficar pronto; sem eles, uns 25 s.", "faz": "Tire o que você não usa logo ao ligar.", "comando": "inicializacao"},
-               {"titulo": "Memória em canal único", "impacto": 1, "evidencia": "Um pente de 16 GB. Dois de 8 GB rendem até 15 % mais em jogos.", "faz": "Ao comprar memória, prefira dois pentes iguais.", "comando": ""},
-               {"titulo": "Telemetria, anúncios e IA do Windows", "impacto": 0, "evidencia": "Ligados por padrão em toda instalação.", "faz": "Desligar por políticas oficiais (reversível).", "comando": "privacidade"}],
+               {"titulo": "Driver da placa de vídeo de março", "impacto": 3, "evidencia": "NVIDIA 551.86, de março. O novo corrige travadas em jogos DirectX 12.", "faz": "Baixe pelo app da NVIDIA ou em nvidia.com/drivers.", "comando": "atualizar", "categoria": "saúde"},
+               {"titulo": "Muita coisa abrindo com o Windows", "impacto": 2, "evidencia": "11 itens abrem com o Windows; 5 dá para desligar: Microsoft Teams, Spotify, Steam, Discord, Epic Games Launcher.", "faz": "Tire o que você não usa logo ao ligar.", "comando": "inicializacao", "categoria": "inicialização"},
+               {"titulo": "Memória em canal único", "impacto": 1, "evidencia": "Um pente de 16 GB. Dois de 8 GB rendem até 15 % mais em jogos.", "faz": "Ao comprar memória, prefira dois pentes iguais.", "comando": "", "categoria": "memória"},
+               {"titulo": "Telemetria, anúncios e IA do Windows", "impacto": 0, "evidencia": "Ligados por padrão em toda instalação.", "faz": "Desligar por políticas oficiais (reversível).", "comando": "privacidade", "categoria": "segurança"},
+               {"titulo": "Arquivos temporários ocupando 14 GB", "impacto": 1, "evidencia": "Cache de atualização e temporários.", "faz": "", "comando": "limpar", "categoria": "disco", "resolvido": "aplicado em 10/11 21:40, depois deste raio-x"}],
              "motor": {"ainda_nao_sei": false, "achados": [{"titulo": "CPU freando nos jogos", "vi": "em 14 sessões de jogo (21,5 h), CPU freando em 31 % do tempo", "confianca": "alta", "fonte": "sessões do segundo plano", "tipo": "limite"}]}}
             """),
 
@@ -136,7 +181,10 @@ public static class DadosDeExemplo
                             "explicacao": {"vi": "Em 14 sessões de jogo (21,5 h), a CPU rodou abaixo de 75 % da velocidade em 31 % do tempo.", "faria": "plano de desempenho na tomada; na bateria continua economizando."},
                             "previsao": {"texto": "a CPU deixa de frear com carga"}, "risco": "mais consumo de energia na tomada", "desfazer": "katharos desfazer energia"},
                            {"id": "inicializacao-lenta", "titulo": "Tirar 3 programas da inicialização", "porque": "Nos últimos 14 dias o PC levou 41 s em média para ficar pronto; Teams, OneDrive e Steam somam 14 s.", "comando": "inicializacao", "confianca": "média", "tipo": "acao",
-                            "previsao": {"texto": "boot uns 14 s mais rápido"}, "risco": "baixo: o programa continua instalado", "desfazer": "katharos desfazer inicializacao"}],
+                            "previsao": {"texto": "boot uns 14 s mais rápido"}, "risco": "baixo: o programa continua instalado", "desfazer": "katharos desfazer inicializacao"},
+                           {"id": "saude:kp41", "titulo": "O PC desligou sem avisar", "porque": "3 ocorrências em 30 dias (última vez em 09/11 22:14). Confira temperatura, a fonte e o cabo de energia.", "comando": "medir", "confianca": "alta", "tipo": "leitura",
+                            "certeza": "aconteceu", "causa": "a investigar", "evidencia": "3 ocorrências em 30 dias (última vez em 09/11 22:14)", "faz": "Confira temperatura, a fonte e o cabo de energia. Se for notebook, veja o carregador e a bateria.",
+                            "explica": "O Windows foi desligado sem passar pelo desligamento normal: queda de energia, fonte, superaquecimento ou travamento seguido de reset no botão."}],
              "linha_do_tempo": [{"id": "jogos", "titulo": "Itens de jogo", "quando": "2026-11-02T20:10", "previsto": "1% mais lento melhor", "veredito": "como previsto", "cor": "verde", "antes": 61, "depois": 74, "un": "FPS", "respondido": "sim"},
                                 {"id": "servicos", "titulo": "Serviços que este PC não usa", "quando": "2026-10-28T19:00", "previsto": "menos RAM em uso", "veredito": "sem diferença", "cor": "cinza", "antes": 6.6, "depois": 6.5, "un": "GB"}]}
             """),
@@ -165,6 +213,7 @@ public static class DadosDeExemplo
                         {"titulo": "Carregando para sempre", "texto": "o motor avisa que está pronto antes do preparo, e a janela desiste de um motor mudo com \"tentar de novo\"."}]}]}
             """),
         "linha_de_base" => JsonNode.Parse("""{"metricas": {"cpu": {"jogo": {"p10": 22, "p90": 58, "dias": 12}}, "ram": {"jogo": {"p10": 52, "p90": 66, "dias": 12}}, "temp_cpu": {"jogo": {"p10": 61, "p90": 78, "dias": 12}}, "disco": {"jogo": {"p10": 1, "p90": 12, "dias": 12}}}}"""),
+        "memoria_programas" => MemoriaProgramas(),
         "memoria" => JsonNode.Parse("""{"contagens": {"minutos": 41230, "horas": 0, "sessoes": 14, "resultados": 3}, "desde": "2026-09-30T18:02:00", "bytes": 9400000}"""),
         "perguntar" => JsonNode.Parse("""
             {"resposta": "O que segura os seus jogos: economia de energia. O que eu vi: CPU freando em 31 % do tempo nas sessões de jogo. Plano de energia de desempenho na tomada.",
@@ -172,12 +221,39 @@ public static class DadosDeExemplo
             """),
         "aplicado" => JsonNode.Parse("""
             {"ponto": "2026-11-08T21:38:00", "pacotes": [
-              {"pacote": "privacidade", "titulo": "privacidade", "quando": "2026-11-08T21:40", "itens": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r"], "desfaz": true},
+              {"pacote": "inicializacao", "titulo": "inicialização", "quando": "2026-11-09T20:02", "itens": ["ini:Adobe Creative Cloud", "ini:Cortana"], "por_item": ["ini:Adobe Creative Cloud", "ini:Cortana"], "so_pacote": 0,
+               "titulos": {"ini:Adobe Creative Cloud": "Adobe Creative Cloud", "ini:Cortana": "Cortana"}, "desfaz": true},
+              {"pacote": "servicos", "titulo": "serviços", "quando": "2026-11-08T21:50", "itens": ["xbox-save", "fax", "mapas", "telefonia"], "por_item": ["xbox-save", "fax", "mapas", "telefonia"], "so_pacote": 0,
+               "titulos": {"xbox-save": "Salvamento de jogos do Xbox", "fax": "Fax", "mapas": "Gerenciador de mapas baixados", "telefonia": "Telefonia"}, "desfaz": true},
+              {"pacote": "privacidade", "titulo": "privacidade", "quando": "2026-11-08T21:40", "itens": ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r"], "por_item": [], "so_pacote": 18, "desfaz": true},
               {"pacote": "jogos", "titulo": "jogos", "quando": "2026-11-02T20:10", "itens": ["a","b","c","d","e","f","g"], "desfaz": true},
               {"pacote": "apps", "titulo": "apps da Loja", "quando": "2026-11-02T20:05", "itens": ["a","b","c","d"], "desfaz": false}]}
             """),
         _ => null,
     };
+
+    static JsonNode MemoriaProgramas()
+    {
+        var r = new Random(3);
+        JsonArray Horas(double base_) => new(Enumerable.Range(0, 24).Select(h => (JsonNode?)(h is >= 2 and <= 7 ? null : JsonValue.Create(Math.Round(base_ * (0.7 + r.NextDouble() * 0.5))))).ToArray());
+        JsonObject P(string proc, string nome, string classe, string oque, string faz, double agora, double media, double pico, params string[] acoes) => new()
+        {
+            ["processo"] = proc, ["nome"] = nome, ["classe"] = classe, ["o_que_e"] = oque, ["faz"] = faz, ["acoes"] = new JsonArray(acoes.Select(a => (JsonNode)JsonValue.Create(a)!).ToArray()),
+            ["agora_mb"] = agora, ["media_24h_mb"] = media, ["pico_24h_mb"] = pico, ["media_7d_mb"] = media * 0.95, ["pico_7d_mb"] = pico * 1.1, ["horas"] = Horas(media), ["leituras"] = 8400,
+        };
+        return new JsonObject
+        {
+            ["programas"] = new JsonArray(
+                P("chrome", "Google Chrome", "conhecido", "o navegador do Google, com as abas e extensões", "feche abas e veja as extensões", 3120, 2650, 4410, "fechar", "desinstalar"),
+                P("Teams", "Microsoft Teams", "conhecido", "chat e reuniões da Microsoft", "tire da inicialização se não usa todo dia", 980, 910, 1240, "inicializacao", "fechar", "desinstalar"),
+                P("svchost", "svchost", "protegido", "serviços do Windows agrupados", "faz parte do Windows ou da proteção: o Katharos nunca mexe", 1410, 1380, 1520),
+                P("Discord", "Discord", "conhecido", "chat de voz", "tire da inicialização se não usa todo dia", 640, 590, 820, "inicializacao", "fechar", "desinstalar"),
+                P("MsMpEng", "MsMpEng", "protegido", "o antivírus do Windows (Defender) verificando arquivos", "faz parte do Windows ou da proteção: o Katharos nunca mexe", 310, 280, 650),
+                P("xyzhelper", "xyzhelper", "desconhecido", "não conheço este programa", "", 220, 210, 240)),
+            ["pressao"] = new JsonObject { ["nivel"] = "apertada", ["texto"] = "Apertada: ainda dá conta, mas abrir mais um programa pesado já começa a engasgar.", ["commit_pct"] = 84.0, ["comprimida_gb"] = 1.2, ["comprimida_pct"] = 7.5 },
+            ["desde"] = DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd") + "T08:00", ["ram_total_gb"] = 16, ["dias"] = 6.4,
+        };
+    }
 
     static JsonNode Sessoes()
     {

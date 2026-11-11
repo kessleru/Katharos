@@ -318,8 +318,13 @@ def r_saude(ev):
     for x in (ev.get('saude') or {}).get('problemas', [])[:8]:
         if x['gravidade'] not in conf or not x.get('comando'):
             continue
-        out.append(_sug('saude:' + x['id'], x['titulo'], f'{x["evidencia"]}. {x["faz"]}', x['comando'], conf[x['gravidade']], x['explica'], '',
-                        {'alta': 5, 'média': 3, 'baixa': 1}[x['gravidade']], 0, tipo='acao'))
+        # o que é certo é o fato (o Windows registrou); a causa é provável, ou só se descobre investigando. A "confiança" que ordena a fila
+        # vem da gravidade, mas a tela mostra as duas coisas separadas ("aconteceu" e "causa provável"), nunca "confiança alta" na causa
+        so_ler = x['comando'].split(' ')[0] not in PACOTES
+        s = _sug('saude:' + x['id'], x['titulo'], f'{x["evidencia"]}. {x["faz"]}', x['comando'], conf[x['gravidade']], x['explica'], '',
+                 {'alta': 5, 'média': 3, 'baixa': 1}[x['gravidade']], 0, tipo='leitura' if so_ler else 'acao')
+        s.update({'certeza': 'aconteceu', 'causa': 'a investigar' if so_ler else 'provável', 'evidencia': x['evidencia'], 'faz': x['faz'], 'explica': x['explica']})
+        out.append(s)
     return out
 
 

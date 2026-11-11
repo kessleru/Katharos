@@ -275,6 +275,15 @@ namespace KatharosApp
         [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int estado);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool DestroyIcon(IntPtr h);
         [DllImport("kernel32.dll")] public static extern ulong GetTickCount64();
+        [StructLayout(LayoutKind.Sequential)] struct ULTIMA_ENTRADA { public uint cbSize; public uint dwTime; }
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] static extern bool GetLastInputInfo(ref ULTIMA_ENTRADA u);
+        // há quanto tempo ninguém mexe no teclado ou no mouse (só lê o relógio da última entrada; não vê o que foi digitado)
+        public static double OciosoSegundos()
+        {
+            var u = new ULTIMA_ENTRADA(); u.cbSize = (uint)Marshal.SizeOf(typeof(ULTIMA_ENTRADA));
+            if (!GetLastInputInfo(ref u)) return 0;
+            return Math.Max(0, ((uint)Environment.TickCount - u.dwTime) / 1000.0);
+        }
         // tempo de CPU do PRÓPRIO Katharos.exe: GetCurrentProcess devolve o pseudo-identificador de si mesmo (-1), nunca o de outro processo
         [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
         [DllImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
@@ -899,7 +908,7 @@ namespace KatharosApp
             if (agora >= proxProc && !pesada)
             {
                 pesada = Espacar; proxProc = agora.AddSeconds(5);
-                if (lista.Ok) LeProcessos();
+                if (lista.Ok) { LeProcessos(); try { JuntaRam(); } catch (Exception e) { Falha("ram por programa", e); } }
                 if (!lista.Ok)
                 {
                     LeNomes();
@@ -944,17 +953,49 @@ namespace KatharosApp
             if (!lista.Ok || l.Count == 0) { if (lista.Ok) lista.Ok = false; Falha("processos (chamada direta)", new Exception("sem dados; usando o contador do Windows")); return; }
             var nomes = new Dictionary<int, string>(l.Count); var vistos = new HashSet<string>(); var sess = new Dictionary<int, int>(l.Count);
             double sis = 0, conta = 0; var manut = new List<string>(); var top = new List<KeyValuePair<string, double>>();
+            var ram = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in l)
             {
                 nomes[p.Pid] = p.Nome; sess[p.Pid] = p.Sessao;
                 string n = p.Nome.ToLowerInvariant(); vistos.Add(n);
                 if (p.Pid == 0) continue;
+                // RAM por programa: o Chrome com as abas (todos os chrome.exe) vira um só
+                double ja; ram.TryGetValue(p.Nome, out ja); ram[p.Nome] = ja + p.Privada;
                 if (p.Sessao > 0) conta += p.Privada; else sis += p.Privada;
                 if (p.Cpu >= 3 && Array.IndexOf(MANUTENCAO, n) >= 0 && !manut.Contains(p.Nome)) manut.Add(p.Nome);
                 if (p.Cpu >= 1) top.Add(new KeyValuePair<string, double>(p.Nome, p.Cpu));
             }
             Nomes = nomes; NomesVistos = vistos; Sessoes = sess;
             Contexto(sis, conta, manut, top);
+            ramPorPrograma = ram;   // a mesma linha de leitura grava e lê: sem trava
+        }
+
+        // a última RAM por programa (de 10 em 10 s) e o pico do minuto; uma linha por minuto em ram.jsonl, com os 15 maiores
+        Dictionary<string, double> ramPorPrograma, ramPicoMinuto = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        DateTime proxRam = DateTime.Now.AddMinutes(1);
+        void JuntaRam()
+        {
+            var r = ramPorPrograma;
+            if (r == null) return;
+            foreach (var kv in r) { double v; if (!ramPicoMinuto.TryGetValue(kv.Key, out v) || kv.Value > v) ramPicoMinuto[kv.Key] = kv.Value; }
+            if (DateTime.Now < proxRam) return;
+            proxRam = DateTime.Now.AddMinutes(1);
+            var l = new List<KeyValuePair<string, double>>(ramPicoMinuto);
+            l.Sort(delegate (KeyValuePair<string, double> x, KeyValuePair<string, double> y) { return y.Value.CompareTo(x.Value); });
+            var top = new List<object>();
+            foreach (var kv in l) { if (top.Count >= 15) break; top.Add(new object[] { kv.Key, Math.Round(kv.Value / 1048576.0, 0) }); }
+            var d = new Dictionary<string, object>();
+            d["t"] = K.Iso(DateTime.Now); d["p"] = top;
+            // pressão de verdade: o quanto da memória total (RAM + arquivo de paginação) está prometido, e a memória comprimida
+            try
+            {
+                var m = new Nat.MEMSTAT();
+                if (Nat.GlobalMemoryStatusEx(m) && m.ullTotalPageFile > 0) d["commit_pct"] = Math.Round(100.0 * (m.ullTotalPageFile - m.ullAvailPageFile) / m.ullTotalPageFile, 1);
+            }
+            catch { }
+            double comp; if (r.TryGetValue("Memory Compression", out comp)) d["comprimida_mb"] = Math.Round(comp / 1048576.0, 0);
+            ramPicoMinuto = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            Motor.Acrescenta("ram.jsonl", new JavaScriptSerializer().Serialize(d));
         }
 
         void Contexto(double sis, double conta, List<string> manut, List<KeyValuePair<string, double>> top)
@@ -1544,7 +1585,7 @@ namespace KatharosApp
         {
             DateTime agora = DateTime.Now;
             if (agora >= proxCfg) { proxCfg = agora.AddSeconds(30); Cfg = Config.Le(); }
-            if (agora >= proxRotacao) { proxRotacao = agora.AddHours(6); Rotaciona("minutos.jsonl", 14); Rotaciona("sessoes.jsonl", 400); }
+            if (agora >= proxRotacao) { proxRotacao = agora.AddHours(6); Rotaciona("minutos.jsonl", 14); Rotaciona("ram.jsonl", 8); Rotaciona("sessoes.jsonl", 400); }
             if (agora >= proxPausa) { proxPausa = agora.AddSeconds(5); Pausado = LeituraPausada(); }
             CuidaEnergia();   // vale mesmo com a leitura pausada: é a pessoa que pediu
             if (agora >= proxEu) { proxEu = agora.AddSeconds(10); MedeEu(agora); }
@@ -1730,7 +1771,7 @@ namespace KatharosApp
             minuto = null;
         }
 
-        static void Acrescenta(string nome, string linha)
+        internal static void Acrescenta(string nome, string linha)
         {
             try { Directory.CreateDirectory(K.CASA); File.AppendAllText(K.Arq(nome), linha + "\n", new UTF8Encoding(false)); }
             catch (Exception e) { Log.Escreve(nome + ": " + e.Message); }
@@ -2305,6 +2346,7 @@ namespace KatharosApp
         IntPtr iconeAtual = IntPtr.Zero; string estadoIcone = "";
         readonly Dictionary<string, DateTime> avisado = new Dictionary<string, DateTime>();
         DateTime proxPropostas = DateTime.Now.AddMinutes(2);
+        DateTime proxConferir = DateTime.Now.AddMinutes(15);
         Thread fio;
 
         public Bandeja(bool mostrar)
@@ -2565,6 +2607,14 @@ namespace KatharosApp
             {
                 if (ses == null) Pensa("reserva de 6 h");
                 else proxPropostas = DateTime.Now.AddMinutes(10);
+            }
+            // com o PC parado (10 min sem mexer, sem jogo, CPU baixa), confere o "já está assim" que venceu: a janela abre com o dado fresco.
+            // Roda escondido, com prioridade baixa e em modo teste (nada muda); uma vez a cada 20 h no máximo
+            if (DateTime.Now >= proxConferir && !motor.Pausado && ses == null && a != null && a.Cpu < 25 && Nat.OciosoSegundos() >= 600)
+            {
+                proxConferir = DateTime.Now.AddHours(20);
+                Log.Escreve("conferindo o já feito com o PC parado");
+                Abridor.Escondido(motor.Cfg, "conferir --agendada --sem-cor");
             }
         }
 

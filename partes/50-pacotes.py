@@ -612,7 +612,8 @@ def itens_inicializacao(ctx):
         if q:
             porque = f'{q[0]}: {q[1]}'
         itens.append(Item('ini:' + nome, nome, f'{porque[0].upper() + porque[1:]}. ({onde}: {corta_esq(caminho_curto(exe), 60)})',
-                          ganho, 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota))
+                          ganho, 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota,
+                          dados={'exe': exe, 'onde': onde, 'boot_s': round(imp[0], 1) if imp and imp[0] > 0 else None, 'nome': nome}))
     itens.sort(key=lambda i: (i.nivel == 0, i.nivel, -impactos.get(i.titulo, 0.0), i.titulo.lower()))
     return itens
 

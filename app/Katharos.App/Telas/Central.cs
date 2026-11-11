@@ -36,7 +36,7 @@ public class Sugestoes : Tela
         Control? propostas = null;
         if (props.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("O que eu faria", "Da que mais rende para a que menos. Aplicar abre a área em Otimizar, já marcada, para você conferir item por item.") } };
+            var p = new StackPanel { Children = { Subtitulo("O que eu faria", "Da que mais rende para a que menos. \"Aplicar esta correção\" mostra só os itens dela, para você conferir antes.") } };
             foreach (var x in props) p.Children.Add(Proposta(x));
             propostas = S(p);
         }
@@ -84,14 +84,17 @@ public class Sugestoes : Tela
         var bt = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         bt.Children.Add(Botao("Agora não", false, async () => { await Servico.Le("dispensar", new { id }); await Recarrega(); }).Com(b => ToolTip.SetTip(b, "Esconde por 30 dias.")));
         bt.Children.Add(Botao("Não me importa", false, async () => { await Servico.Le("responder", new { id, resposta = "nao-importa" }); await Recarrega(); }).Com(b => ToolTip.SetTip(b, "Não proponho mais isto.")));
-        if (cmd != "") bt.Children.Add(Botao(x.S("tipo") == "acao" && !Leitura(area) ? "Aplicar" : "Ver", true, () => Abre(TelaDo(cmd))));
+        bt.Children.Add(Detalhe.Botoes(x, Abre, "Central"));
         var texto = new List<string> { exp.S("vi", x.S("porque")) };
         if (exp.S("faria") != "") texto.Add("O que eu faria: " + exp.S("faria"));
         var prev = x["previsao"];
         if (prev.S("texto") != "") texto.Add("O que espero: " + prev.S("texto") + ".");
         if (x.S("risco") != "") texto.Add("Risco: " + x.S("risco") + ".");
         if (x.S("desfazer") != "") texto.Add("Como desfazer: " + ComoDesfazer(x.S("desfazer")) + ".");
-        return Linha(x.S("titulo"), string.Join("\n", texto), Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado), bt);
+        // o que é certo (o Windows registrou) separado do que é provável (a causa): nunca "confiança alta" numa causa que só se investiga
+        var selo = x.S("certeza") != "" ? Etiqueta("aconteceu · causa " + x.S("causa", "provável"), Tema.Ambar)
+                                         : Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado);
+        return Linha(x.S("titulo"), string.Join("\n", texto), selo, bt);
     }
 
     Control Resultado(JsonNode r)
@@ -138,7 +141,13 @@ public class Sugestoes : Tela
                     foreach (var c in cmds)
                     {
                         string area = c.S("area"), tipo = c.S("tipo");
-                        bts.Children.Add(Botao(Primeira(c.S("titulo")), false, () => Abre(tipo == "item" ? "otimizar:" + area : TelaDo(c.S("id")))).Com(b => b.Margin = new Thickness(0, 0, 8, 8)));
+                        string destino = tipo == "item" ? "otimizar:" + area : Rotas.Tela(c.S("id")) ?? "";
+                        var cc = c; 
+                        bts.Children.Add(Botao(Primeira(c.S("titulo")), false, () =>
+                        {
+                            if (destino != "") Abre(destino);
+                            else { Detalhe.Prepara(new JsonObject { ["titulo"] = cc.S("titulo"), ["comando"] = cc.S("id"), ["origem"] = "Pergunte ao Katharos" }, "resolver"); Abre("detalhe"); }
+                        }).Com(b => b.Margin = new Thickness(0, 0, 8, 8)));
                     }
                     resposta.Children.Add(bts);
                 }
@@ -150,15 +159,7 @@ public class Sugestoes : Tela
         return S(new StackPanel { Margin = new Thickness(32, 22, 32, 26), Children = { T("Pergunte ao Katharos", "forte"), T("Responde com o que ele mediu neste PC. Nada sai do computador.", "rotulo").Com(t => t.Margin = new Thickness(0, 2, 0, 10)), linha, resposta } });
     }
 
-    static bool Leitura(string area) => area is "raiox" or "memoria" or "painel" or "saude" or "travadas" or "segundo-plano" or "";
-    public static string TelaDo(string cmd)
-    {
-        string a = cmd.Split(' ')[0];
-        return a switch
-        {
-            "desfazer" => "desfazer", "segundo-plano" => "aovivo", "raiox" or "saude" or "memoria" or "travadas" => "raiox", "painel" => "historico",
-            "turbo" => "otimizar", "" => "sugestoes", _ => "otimizar:" + a,
-        };
-    }
+    /// <summary>Mantido para quem ainda chama: o destino de um comando (sem tela própria, o Detalhe).</summary>
+    public static string TelaDo(string cmd) => Rotas.Tela(cmd) ?? "sugestoes";
     static string Primeira(string s) => string.IsNullOrEmpty(s) ? s : Maiuscula(s);
 }

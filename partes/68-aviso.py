@@ -28,7 +28,7 @@ AVISO_PONTOS = [
 ]
 
 # Comandos que só leem ou que protegem (desfazer nunca pode ficar atrás de um aviso): não pedem o aceite.
-SEM_ACEITE = {'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
+SEM_ACEITE = {'conferir', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
               'benchmark', 'verificar', 'config', 'desfazer', 'socorro', 'retomar', 'restaurar', 'amostrar', 'manutencao', 'travadas'}
 
 

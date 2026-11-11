@@ -16,12 +16,12 @@
    "vazio": "",
    "itens": [
     {
-     "id": "teams",
+     "id": "ini:Microsoft Teams",
      "pacote": "inicializacao",
-     "titulo": "tirar o Teams da inicialização",
-     "explica": "Ele abre sozinho ao ligar e fica rodando escondido.",
-     "ganho": "o PC fica pronto uns 4 s antes",
-     "custo": "abre quando você clicar nele",
+     "titulo": "Microsoft Teams",
+     "explica": "Programa de chat e reuniões da Microsoft: abre sozinho e fica escondido. (registro: C:\\Users\\ana\\AppData\\Local\\Microsoft\\Teams\\Update.exe)",
+     "ganho": "o Windows mediu ~4,1 s de atraso no boot (média de 9 boots) e sobra RAM",
+     "custo": "não abre sozinho; abra pelo menu quando quiser",
      "nivel": 1,
      "marcado": true,
      "ja": null,
@@ -30,32 +30,22 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": {
+      "exe": "C:\\Users\\ana\\AppData\\Local\\Microsoft\\Teams\\Update.exe",
+      "onde": "registro",
+      "boot_s": 4.1,
+      "nome": "Microsoft Teams"
+     }
     },
     {
-     "id": "onedrive",
+     "id": "ini:Spotify",
      "pacote": "inicializacao",
-     "titulo": "tirar o OneDrive da inicialização",
-     "explica": "Sincroniza as pastas assim que o Windows liga.",
-     "ganho": "uns 2 s ao ligar",
-     "custo": "para de sincronizar até você abrir",
-     "nivel": 1,
-     "marcado": true,
-     "ja": null,
-     "alerta": "para de sincronizar até você abrir",
-     "nota": "",
-     "sem_volta": false,
-     "grupo": null,
-     "conflita": [],
-     "recorrente": false
-    },
-    {
-     "id": "spotify",
-     "pacote": "inicializacao",
-     "titulo": "tirar o Spotify da inicialização",
-     "explica": "Abre minimizado ao ligar.",
-     "ganho": "uns 3 s ao ligar e 200 MB de RAM",
-     "custo": "abre quando você clicar nele",
+     "titulo": "Spotify",
+     "explica": "Player de música: abre minimizado ao ligar. (registro: C:\\Users\\ana\\AppData\\Roaming\\Spotify\\Spotify.exe)",
+     "ganho": "o Windows mediu ~2,8 s de atraso no boot (média de 9 boots) e sobra RAM",
+     "custo": "não abre sozinho; abra pelo menu quando quiser",
      "nivel": 1,
      "marcado": true,
      "ja": null,
@@ -64,16 +54,23 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": {
+      "exe": "C:\\Users\\ana\\AppData\\Roaming\\Spotify\\Spotify.exe",
+      "onde": "registro",
+      "boot_s": 2.8,
+      "nome": "Spotify"
+     }
     },
     {
-     "id": "steam",
+     "id": "ini:Steam",
      "pacote": "inicializacao",
-     "titulo": "atrasar o Steam em 30 s",
-     "explica": "O Windows termina de ligar antes de ele começar a atualizar jogos.",
-     "ganho": "o PC fica pronto antes",
-     "custo": "o Steam aparece 30 s depois",
-     "nivel": 1,
+     "titulo": "Steam",
+     "explica": "Loja de jogos: começa a atualizar os jogos assim que liga. (registro: C:\\Program Files (x86)\\Steam\\steam.exe)",
+     "ganho": "o Windows mediu ~3,4 s de atraso no boot (média de 9 boots) e sobra RAM",
+     "custo": "não abre sozinho; abra pelo menu quando quiser",
+     "nivel": 2,
      "marcado": true,
      "ja": null,
      "alerta": "",
@@ -81,26 +78,89 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": {
+      "exe": "C:\\Program Files (x86)\\Steam\\steam.exe",
+      "onde": "registro",
+      "boot_s": 3.4,
+      "nome": "Steam"
+     }
     },
     {
-     "id": "fastboot",
+     "id": "ini:Discord",
      "pacote": "inicializacao",
-     "titulo": "desligar a inicialização rápida",
-     "explica": "Reinício limpo; menos erro de driver depois de atualizar.",
-     "ganho": "menos erro de driver",
-     "custo": "liga uns segundos mais devagar",
-     "nivel": 1,
+     "titulo": "Discord",
+     "explica": "Chat de voz: abre e se atualiza ao ligar. (registro: C:\\Users\\ana\\AppData\\Local\\Discord\\Update.exe)",
+     "ganho": "o Windows mediu ~2,2 s de atraso no boot (média de 9 boots) e sobra RAM",
+     "custo": "não abre sozinho; abra pelo menu quando quiser",
+     "nivel": 2,
      "marcado": true,
-     "ja": true,
+     "ja": null,
      "alerta": "",
      "nota": "",
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": {
+      "exe": "C:\\Users\\ana\\AppData\\Local\\Discord\\Update.exe",
+      "onde": "registro",
+      "boot_s": 2.2,
+      "nome": "Discord"
+     }
+    },
+    {
+     "id": "ini:Epic Games Launcher",
+     "pacote": "inicializacao",
+     "titulo": "Epic Games Launcher",
+     "explica": "Loja de jogos da Epic. (pasta Inicializar: C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe)",
+     "ganho": "liga mais rápido e sobra RAM",
+     "custo": "não abre sozinho; abra pelo menu quando quiser",
+     "nivel": 2,
+     "marcado": false,
+     "ja": null,
+     "alerta": "",
+     "nota": "",
+     "sem_volta": false,
+     "grupo": null,
+     "conflita": [],
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": {
+      "exe": "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+      "onde": "pasta Inicializar",
+      "boot_s": null,
+      "nome": "Epic Games Launcher"
+     }
+    },
+    {
+     "id": "ini:OneDrive",
+     "pacote": "inicializacao",
+     "titulo": "OneDrive",
+     "explica": "Sincroniza as suas pastas com a nuvem. (registro: C:\\Users\\ana\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe)",
+     "ganho": "o Windows mediu ~1,6 s de atraso no boot (média de 9 boots) e sobra RAM",
+     "custo": "não abre sozinho; abra pelo menu quando quiser",
+     "nivel": 0,
+     "marcado": false,
+     "ja": null,
+     "alerta": "",
+     "nota": "sua pasta do OneDrive tem arquivos: sem ele abrindo, eles param de sincronizar",
+     "sem_volta": false,
+     "grupo": null,
+     "conflita": [],
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": {
+      "exe": "C:\\Users\\ana\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe",
+      "onde": "registro",
+      "boot_s": 1.6,
+      "nome": "OneDrive"
+     }
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "programas",
@@ -110,7 +170,8 @@
    "reversivel": false,
    "recorrente": false,
    "vazio": "",
-   "itens": []
+   "itens": [],
+   "faltam": 0
   },
   {
    "nome": "apps",
@@ -120,7 +181,8 @@
    "reversivel": false,
    "recorrente": false,
    "vazio": "",
-   "itens": []
+   "itens": [],
+   "faltam": 0
   },
   {
    "nome": "ia",
@@ -146,7 +208,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "recall",
@@ -163,7 +227,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "copilot-app",
@@ -180,7 +246,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "recall-recurso",
@@ -197,7 +265,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "paint",
@@ -214,7 +284,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "notepad",
@@ -231,7 +303,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "edge-ia",
@@ -248,7 +322,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "office-ia",
@@ -265,7 +341,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "digitacao",
@@ -282,7 +360,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "ia-servico",
@@ -299,9 +379,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "servicos",
@@ -327,7 +410,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "fax",
@@ -344,7 +429,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "impressao",
@@ -361,7 +448,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "empresa",
@@ -378,7 +467,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "telefonia",
@@ -395,7 +486,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "hotspot",
@@ -412,7 +505,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "controle-pais",
@@ -429,7 +524,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "atualizadores",
@@ -446,7 +543,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "fabricante",
@@ -463,7 +562,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "orfaos",
@@ -480,7 +581,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "busca",
@@ -497,7 +600,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "nahimic",
@@ -514,7 +619,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sob-demanda",
@@ -531,7 +638,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "svchost",
@@ -548,7 +657,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "rdp",
@@ -565,7 +676,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "winrm",
@@ -582,7 +695,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "ssh",
@@ -599,7 +714,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "smartcard",
@@ -616,7 +733,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sensores",
@@ -633,7 +752,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "scanner",
@@ -650,7 +771,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "biometria",
@@ -667,7 +790,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "compat",
@@ -684,7 +809,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "xbox",
@@ -701,9 +828,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "privacidade",
@@ -729,7 +859,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "telemetria-svc",
@@ -746,7 +878,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "telemetria-tarefas",
@@ -763,7 +897,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "anuncios",
@@ -780,7 +916,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "atividades",
@@ -797,7 +935,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "cortana",
@@ -814,7 +954,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "anuncios-config",
@@ -831,7 +973,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "seguranca",
@@ -848,7 +992,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "edge-fundo",
@@ -865,7 +1011,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "office-telemetria",
@@ -882,7 +1030,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "busca-web",
@@ -899,7 +1049,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "widgets",
@@ -916,7 +1068,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "segundo-plano",
@@ -933,7 +1087,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "erros",
@@ -950,7 +1106,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "autologgers",
@@ -967,7 +1125,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "nuvem-clipboard",
@@ -984,7 +1144,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "encontrar",
@@ -1001,7 +1163,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "segundo-plano-forte",
@@ -1018,7 +1182,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "localizacao",
@@ -1035,9 +1201,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "visual",
@@ -1063,7 +1232,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "extensoes",
@@ -1080,7 +1251,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "efeitos",
@@ -1097,7 +1270,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "animacoes",
@@ -1114,7 +1289,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "barra",
@@ -1131,7 +1308,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "este-pc",
@@ -1148,7 +1327,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "menu-classico",
@@ -1165,7 +1346,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sem-espera-inicio",
@@ -1182,7 +1365,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "desligar-rapido",
@@ -1199,7 +1384,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dump-pequeno",
@@ -1216,7 +1403,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sacudir",
@@ -1233,7 +1422,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "inicio-win11",
@@ -1250,7 +1441,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "arrastar",
@@ -1267,7 +1460,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "icones",
@@ -1284,7 +1479,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "fundo-preto",
@@ -1301,7 +1498,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "atalhos-rapidos",
@@ -1318,7 +1517,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "recomendados",
@@ -1335,7 +1536,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "transparencia",
@@ -1352,9 +1555,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "jogos",
@@ -1380,7 +1586,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "directx-jogos",
@@ -1397,7 +1605,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "gamedvr",
@@ -1414,7 +1624,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "mouse",
@@ -1431,7 +1643,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "aderencia",
@@ -1448,7 +1662,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "mmcss",
@@ -1465,7 +1681,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "teclado",
@@ -1482,7 +1700,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "timer",
@@ -1499,7 +1719,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "rede-jogos",
@@ -1516,7 +1738,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "hags",
@@ -1533,7 +1757,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "primeiro-plano",
@@ -1550,7 +1776,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "fse",
@@ -1567,7 +1795,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "mpo",
@@ -1584,9 +1814,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "energia",
@@ -1616,7 +1849,9 @@
       "cpu-100",
       "throttling"
      ],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "disco",
@@ -1633,7 +1868,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "desempenho",
@@ -1650,7 +1887,9 @@
      "sem_volta": false,
      "grupo": "plano",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "usb",
@@ -1667,7 +1906,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "cpu-100",
@@ -1684,7 +1925,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "aspm",
@@ -1701,7 +1944,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "throttling",
@@ -1718,7 +1963,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "rede-energia",
@@ -1735,14 +1982,17 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
    ],
    "recomendado": {
     "motivo": "em 14 sessões de jogo, a CPU rodou abaixo de 75 % da velocidade em 31 % do tempo",
     "titulo": "Plano de energia de desempenho na tomada",
     "confianca": "alta"
-   }
+   },
+   "faltam": 0
   },
   {
    "nome": "reparar",
@@ -1768,7 +2018,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sfc",
@@ -1785,7 +2037,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "chkdsk",
@@ -1802,7 +2056,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns",
@@ -1819,7 +2075,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "wmi",
@@ -1836,7 +2094,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "rede-reset",
@@ -1853,7 +2113,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "wu-reset",
@@ -1870,7 +2132,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "loja",
@@ -1887,7 +2151,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "icones",
@@ -1904,7 +2170,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "menu",
@@ -1921,9 +2189,12 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "atualizar",
@@ -1949,7 +2220,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "windows",
@@ -1966,7 +2239,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "drivers",
@@ -1983,7 +2258,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "winget",
@@ -2000,7 +2277,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "loja",
@@ -2017,9 +2296,12 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "limpar",
@@ -2045,7 +2327,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "wu",
@@ -2062,7 +2346,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "do",
@@ -2079,7 +2365,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "erros",
@@ -2096,7 +2384,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "miniaturas",
@@ -2113,7 +2403,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "logs",
@@ -2130,7 +2422,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "navegadores",
@@ -2147,7 +2441,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "shaders",
@@ -2164,7 +2460,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "instaladores",
@@ -2181,7 +2479,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dev",
@@ -2198,7 +2498,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "cleanmgr",
@@ -2215,7 +2517,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "windowsold",
@@ -2232,7 +2536,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "componentes",
@@ -2249,7 +2555,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "resetbase",
@@ -2266,7 +2574,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "reservado",
@@ -2283,7 +2593,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "lixeira",
@@ -2300,9 +2612,12 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "disco",
@@ -2328,7 +2643,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "trim",
@@ -2345,7 +2662,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sensor",
@@ -2362,7 +2681,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "unidade",
@@ -2379,7 +2700,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": true
+     "recorrente": true,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "defender-leve",
@@ -2396,7 +2719,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "tarefas",
@@ -2413,7 +2738,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "lastaccess",
@@ -2430,7 +2757,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "atrasados",
@@ -2447,7 +2776,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "onedrive",
@@ -2464,7 +2795,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "ntfs",
@@ -2481,9 +2814,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "navegador",
@@ -2509,7 +2845,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "chrome",
@@ -2526,7 +2864,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "edge",
@@ -2543,7 +2883,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "brave",
@@ -2560,9 +2902,12 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "interface",
@@ -2588,7 +2933,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "edge-atalhos",
@@ -2605,7 +2952,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "este-pc",
@@ -2622,7 +2971,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "limpa",
@@ -2639,9 +2990,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": true
+     "recorrente": true,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "rede",
@@ -2667,7 +3021,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-teste",
@@ -2684,7 +3040,9 @@
      "sem_volta": true,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "autotuning",
@@ -2701,7 +3059,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-cloudflare",
@@ -2718,7 +3078,9 @@
      "sem_volta": false,
      "grupo": "dns",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-google",
@@ -2735,7 +3097,9 @@
      "sem_volta": false,
      "grupo": "dns",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-quad9",
@@ -2752,7 +3116,9 @@
      "sem_volta": false,
      "grupo": "dns",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-adguard",
@@ -2769,7 +3135,9 @@
      "sem_volta": false,
      "grupo": "dns",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-cloudflare-familia",
@@ -2786,7 +3154,9 @@
      "sem_volta": false,
      "grupo": "dns",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "dns-auto",
@@ -2803,9 +3173,12 @@
      "sem_volta": false,
      "grupo": "dns",
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   },
   {
    "nome": "ajustes",
@@ -2831,7 +3204,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "caminhos",
@@ -2848,7 +3223,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "sem-reinicio-auto",
@@ -2865,7 +3242,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "esquerda",
@@ -2882,7 +3261,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "segundos",
@@ -2899,7 +3280,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "escuro",
@@ -2916,7 +3299,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "ocultos",
@@ -2933,7 +3318,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "numlock",
@@ -2950,7 +3337,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "historico-clip",
@@ -2967,7 +3356,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "compacto",
@@ -2984,7 +3375,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "adiar-recursos",
@@ -3001,7 +3394,9 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     },
     {
      "id": "caixas",
@@ -3018,9 +3413,12 @@
      "sem_volta": false,
      "grupo": null,
      "conflita": [],
-     "recorrente": false
+     "recorrente": false,
+     "ja_idade_h": 2.5,
+     "dados": null
     }
-   ]
+   ],
+   "faltam": 0
   }
  ]
 }

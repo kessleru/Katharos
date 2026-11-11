@@ -43,12 +43,18 @@ public static class Ui
     }
 
     /// <summary>Um subtítulo de bloco ("O que o raio-x achou").</summary>
-    public static Control Subtitulo(string texto, string? explica = null)
+    public static Control Subtitulo(string texto, string? explica = null, string? icone = null)
     {
-        var p = new StackPanel { Spacing = 4, Margin = new Thickness(32, 22, 32, 12) };
+        var p = new StackPanel { Spacing = 4 };
         p.Children.Add(T(texto, "forte"));
         if (explica != null) p.Children.Add(T(explica, "rotulo", quebra: true));
-        return p;
+        if (icone == null) { p.Margin = new Thickness(32, 22, 32, 12); return p; }
+        // com ícone: o desenho num quadrado de contorno, à esquerda do título (ajuda a achar a seção sem ler)
+        var ic = new Border { Width = 34, Height = 34, BorderBrush = Tema.LinhaForte, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(2),
+                              Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Top, Child = Icones.De(icone, 18, Tema.Ambar).Com(i => { i.HorizontalAlignment = HorizontalAlignment.Center; i.VerticalAlignment = VerticalAlignment.Center; }) };
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(32, 22, 32, 12), Children = { ic } };
+        Grid.SetColumn(p, 1); g.Children.Add(p);
+        return g;
     }
 
     public static Control Numero(string rotulo, string valor, string unidade, string contexto, IBrush corContexto, Control? extra = null)
@@ -199,17 +205,69 @@ public static class Ui
     };
 
     /// <summary>Uma linha de lista: etiqueta à esquerda (opcional), título e explicação, ação à direita.</summary>
-    public static Control Linha(string titulo, string? explica, Border? etiqueta = null, Control? direita = null)
+    public static Control Linha(string titulo, string? explica, Border? etiqueta = null, Control? direita = null, string? icone = null)
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions(etiqueta != null ? "136,*,Auto" : "*,Auto") };
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions((icone != null ? "Auto," : "") + (etiqueta != null ? "112,*,Auto" : "*,Auto")) };
         int c = 0;
-        if (etiqueta != null) { etiqueta.VerticalAlignment = VerticalAlignment.Top; etiqueta.Margin = new Thickness(0, 2, 0, 0); g.Children.Add(etiqueta); c = 1; }
+        if (icone != null) { g.Children.Add(Icones.De(icone, 18, Tema.Apagado).Com(i => { i.VerticalAlignment = VerticalAlignment.Top; i.Margin = new Thickness(0, 2, 16, 0); })); c = 1; }
+        if (etiqueta != null) { etiqueta.VerticalAlignment = VerticalAlignment.Top; etiqueta.Margin = new Thickness(0, 2, 0, 0); Grid.SetColumn(etiqueta, c); g.Children.Add(etiqueta); c++; }
         var meio = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         meio.Children.Add(T(titulo, null, Tema.Osso, 15, true).Com(t => t.FontWeight = FontWeight.SemiBold));
         if (!string.IsNullOrWhiteSpace(explica)) meio.Children.Add(T(explica!, "rotulo", tamanho: 13.5, quebra: true));
         Grid.SetColumn(meio, c); g.Children.Add(meio);
         if (direita != null) { direita.Margin = new Thickness(16, 0, 0, 0); direita.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(direita, c + 1); g.Children.Add(direita); }
         return new Border { Padding = new Thickness(32, 16), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Child = g };
+    }
+
+    /// <summary>Um botão discreto, em texto âmbar sublinhado ao passar o mouse: para a ação secundária ("Entender", "Ler de novo").</summary>
+    public static Button Link(string texto, Action acao)
+    {
+        var b = new Button { Content = texto, Classes = { "link" } };
+        b.Click += (_, _) => acao();
+        return b;
+    }
+
+    /// <summary>O marcador de lista do Katharos: um quadradinho âmbar (o mesmo acento das marcas "+" e das etiquetas).</summary>
+    public static Border Marcador(IBrush? cor = null) => new()
+    {
+        Width = 6, Height = 6, Background = cor ?? Tema.Ambar, CornerRadius = new CornerRadius(1),
+        VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 12, 0),
+    };
+
+    /// <summary>Um item de lista: o marcador e o conteúdo (texto ou qualquer controle), alinhados pela primeira linha.</summary>
+    public static Control Item(Control conteudo, IBrush? cor = null)
+    {
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        g.Children.Add(Marcador(cor));
+        Grid.SetColumn(conteudo, 1); g.Children.Add(conteudo);
+        return g;
+    }
+
+    public static Control Item(string texto, IBrush? cor = null, string? titulo = null)
+    {
+        var t = T("", "sub", quebra: true);
+        t.Inlines = new Avalonia.Controls.Documents.InlineCollection();
+        if (!string.IsNullOrEmpty(titulo)) t.Inlines.Add(new Avalonia.Controls.Documents.Run(titulo + ": ") { Foreground = Tema.Osso, FontWeight = FontWeight.SemiBold });
+        t.Inlines.Add(new Avalonia.Controls.Documents.Run(texto));
+        return Item(t, cor);
+    }
+
+    /// <summary>Um passo numerado: o número num quadrado âmbar, o título e o texto embaixo, e uma ação opcional.</summary>
+    public static Control Passo(int n, string titulo, string? texto = null, Control? acao = null)
+    {
+        var num = new Border
+        {
+            Width = 26, Height = 26, BorderBrush = Tema.Ambar, BorderThickness = new Thickness(1), Background = Tema.AmbarFraco, CornerRadius = new CornerRadius(2),
+            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0),
+            Child = T(n.ToString(), null, Tema.Ambar, 13).Com(t => { t.FontFamily = Tema.Mono; t.HorizontalAlignment = HorizontalAlignment.Center; t.VerticalAlignment = VerticalAlignment.Center; }),
+        };
+        var meio = new StackPanel { Spacing = 3 };
+        meio.Children.Add(T(titulo, null, Tema.Osso, 15, true).Com(t => t.FontWeight = FontWeight.SemiBold));
+        if (!string.IsNullOrWhiteSpace(texto)) meio.Children.Add(T(texto!, "rotulo", tamanho: 13.5, quebra: true));
+        if (acao != null) { acao.HorizontalAlignment = HorizontalAlignment.Left; acao.Margin = new Thickness(0, 8, 0, 0); meio.Children.Add(acao); }
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Children = { num } };
+        Grid.SetColumn(meio, 1); g.Children.Add(meio);
+        return g;
     }
 
     /// <summary>Estado vazio: diz o que falta e o que fazer, com a ação.</summary>

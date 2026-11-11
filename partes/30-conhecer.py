@@ -367,6 +367,7 @@ def perfil_pc(ctx, forca=False):
     ctx.mult = fator_hardware(p)
     if p is not PERFIL_VAZIO:
         rel_pc(p)
+        guarda_perfil(p)
         cw = compat_windows(p)
         if (cw['antigo_demais'] or cw['server']) and ctx.args is not None and getattr(ctx.args, 'modo', None) != 'seguro':
             ctx.args.modo = 'seguro'
@@ -378,6 +379,36 @@ def perfil_pc(ctx, forca=False):
             ctx.t.aviso('Não reconheci esta versão do Windows (só conheço Windows 10 e 11). Por segurança, '
                         'só vão marcados os itens do modo seguro, e você pode ver cada item antes de confirmar.')
     return p
+
+
+def _arq_perfil():
+    return CASA / 'cache' / 'perfil.json'
+
+
+def guarda_perfil(p):
+    """O perfil medido vai para o disco: a janela abre a lista de itens na hora, sem medir o PC de novo a cada abertura."""
+    try:
+        arq = _arq_perfil()
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        tmp = arq.with_name(f'perfil.{os.getpid()}.tmp')
+        tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO, 't': round(time.time()), 'perfil': p}, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, arq)
+    except OSError as e:
+        LOG.escreve(f'perfil: não gravou: {e!r}')
+
+
+def perfil_guardado(max_idade_h=None):
+    """(perfil, idade em horas) do disco, se for deste Windows e desta versão (e mais novo que max_idade_h, se dado); senão (None, None)."""
+    try:
+        d = json.loads(_arq_perfil().read_text(encoding='utf-8'))
+        idade = (time.time() - float(d['t'])) / 3600
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, None
+    if d.get('build') != build_atual() or d.get('versao') != VERSAO or not isinstance(d.get('perfil'), dict):
+        return None, None
+    if max_idade_h is not None and idade > max_idade_h:
+        return None, None
+    return d['perfil'], idade
 
 
 PERFIL_VAZIO = {'so': {'win11': False, 'build': 0, 'nome': '', 'versao': '', 'edicao': ''},
@@ -838,9 +869,13 @@ def analisa(p, m, d):
         A.append(Achado(2, ['disco', 'tudo'], 'Windows.old ocupando espaço', f'{gb(w)} da versão anterior do Windows.',
                         'Pode sair se você não pretende voltar à versão anterior.', 'limpar'))
     n_ini = len(ini)
-    if n_ini > 8:
-        A.append(Achado(3 if n_ini > 14 else 2, ['boot', 'lento', 'tudo'], 'Muita coisa abrindo com o Windows',
-                        f'{n_ini} itens na inicialização: ' + ', '.join(i.get('nome', '') for i in ini[:6]) + ('…' if n_ini > 6 else ''),
+    # conta só o que o Otimizar oferece para desligar (a mesma régua da lista de itens): antivírus, drivers e o que é do Windows
+    # abrem sempre e não fazem o achado prometer algo que a tela seguinte não mostra
+    tiraveis = [i for i in ini if _classe_inicio(str(i.get('nome') or ''), str(i.get('cmd') or ''))[0] is not None]
+    n_tir = len(tiraveis)
+    if n_ini > 8 and n_tir >= 3:
+        A.append(Achado(3 if n_tir > 10 else 2, ['boot', 'lento', 'tudo'], 'Muita coisa abrindo com o Windows',
+                        f'{n_ini} itens abrem com o Windows; {n_tir} dá para desligar: ' + ', '.join(i.get('nome', '') for i in tiraveis[:6]) + ('…' if n_tir > 6 else ''),
                         'Desligar o que não precisa abrir sozinho (o Gerenciador de Tarefas usa o mesmo mecanismo).', 'inicializacao'))
     boots = [b for b in lista(d.get('boot_tempos')) if isinstance(b, (int, float))]
     if boots and boots[0] > 60:
@@ -1134,12 +1169,34 @@ def ja_aplicados():
         return set()
 
 
+CATEGORIAS = ('segurança', 'inicialização', 'memória', 'disco', 'jogos', 'saúde', 'geral')
+
+
+def categoria_achado(titulo, comando, queixas=()):
+    """Em que parte do diagnóstico o achado entra (o raio-x agrupa por estas). Raio-x antigo, sem as queixas guardadas, usa o comando e o título."""
+    q, cmd, t = set(queixas or ()), str(comando or '').split(' ')[0], str(titulo or '').lower()
+    if 'seguranca' in q or cmd in ('seguranca', 'privacidade') or re.search(r'defender|ameaça|suspeit|bitlocker|segurança', t):
+        return 'segurança'
+    if cmd == 'inicializacao' or 'boot' in q or re.search(r'inicializa|boot|abrindo com o windows', t):
+        return 'inicialização'
+    if cmd == 'memoria' or re.search(r'\bram\b|memória', t):
+        return 'memória'
+    if cmd in ('limpar', 'disco') or 'disco' in q or re.search(r'disco|espaço|ssd|\bhd\b', t):
+        return 'disco'
+    if cmd == 'jogos' or 'jogos' in q:
+        return 'jogos'
+    if cmd in ('atualizar', 'reparar', 'medir', 'travadas') or re.search(r'driver|bios|firmware|tela azul|desligou|erro', t):
+        return 'saúde'
+    return 'geral'
+
+
 def raiox_dados(p, m, d, achados, queixas):
     """O raio-x como dados para o relatório único (tudo o que veio do PC é limpo lá, ao gravar)."""
     saude = d.get('saude') or {}
     return {
         'nota': nota_pc(achados), 'queixas': list(queixas),
-        'achados': [{'titulo': a.titulo, 'impacto': a.impacto, 'evidencia': a.evidencia, 'faz': a.faz, 'comando': a.comando}
+        'achados': [{'titulo': a.titulo, 'impacto': a.impacto, 'evidencia': a.evidencia, 'faz': a.faz, 'comando': a.comando,
+                     'categoria': categoria_achado(a.titulo, a.comando, a.queixas)}
                     for a in sorted(achados, key=lambda a: (-a.impacto, a.titulo))],
         'medidas': {k: m.get(k) for k, *_ in LINHAS_MEDIDA},
         'inicializacao': [f'{i.get("nome")} ({i.get("onde")})' for i in lista(d.get('inicializacao'))],

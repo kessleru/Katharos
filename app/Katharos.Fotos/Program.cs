@@ -47,7 +47,10 @@ j.Show();
 var espera = new Dictionary<string, string> {
     ["inicio"] = "Próximo passo", ["raiox"] = "O que o acompanhamento viu", ["otimizar:servicos"] = "recomendado", ["aovivo"] = "Placa de vídeo",
     ["jogos"] = "Por jogo", ["sugestoes"] = "Diagnóstico", ["historico"] = "Fora do normal", ["desfazer"] = "Aplicado neste PC",
-    ["config"] = "Memória do PC", ["aviso"] = "Li o aviso", ["enviar"] = "1. O que mandar" };
+    ["config"] = "Memória do PC", ["aviso"] = "Li o aviso", ["enviar"] = "1. O que mandar",
+    ["inicializacao"] = "Abrem agora", ["memoria"] = "Quem usa", ["detalhe"] = "Como investigar" };
+// o detalhe abre com um achado só de leitura (o desligamento): nunca leva ao Otimizar
+Katharos.App.Telas.Detalhe.Prepara(System.Text.Json.Nodes.JsonNode.Parse("""{"titulo": "O PC desligou sem avisar", "comando": "medir", "tipo": "leitura", "certeza": "aconteceu", "causa": "a investigar", "evidencia": "3 ocorrências em 30 dias (última vez em 09/11 22:14)", "explica": "O Windows foi desligado sem passar pelo desligamento normal: queda de energia, fonte, superaquecimento ou travamento seguido de reset no botão.", "origem": "Central"}"""));
 int falhas = 0;
 foreach (var tela in espera.Keys)
 {

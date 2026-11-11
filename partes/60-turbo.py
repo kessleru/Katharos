@@ -777,18 +777,49 @@ def ferramenta_agendar(ctx, args):
 
 # ─────────────── restaurar e desfazer ───────────────
 
-def desfaz_pacote(ctx, nome, teste=False):
+def itens_desfaziveis(nome):
+    """{id: quantas mudanças} dos itens do pacote que podem voltar sozinhos, e quantas mudanças só voltam com o pacote inteiro
+    (gravadas antes da 4.2.1, sem o item anotado)."""
+    arq = dir_backup() / nome / 'mudancas.jsonl'
+    por, sem = {}, 0
+    try:
+        linhas = arq.read_text(encoding='utf-8-sig').splitlines()
+    except OSError:
+        return {}, 0
+    for l in linhas:
+        try:
+            o = json.loads(l)
+        except ValueError:
+            continue
+        if isinstance(o, dict) and o.get('item'):
+            por[str(o['item'])] = por.get(str(o['item']), 0) + 1
+        else:
+            sem += 1
+    return por, sem
+
+
+def desfaz_pacote(ctx, nome, teste=False, itens=None):
+    """Volta o pacote inteiro, ou só os itens pedidos (itens=[id, ...]): cada mudança guardada sabe de qual item veio."""
     t = ctx.t
+    if not teste:
+        invalida_cache_ja(nome)
     bk = dir_backup() / nome
     if not (bk / 'mudancas.jsonl').exists():
         t.nota(f'  {nome}: nada guardado para desfazer.')
         return 0
-    s = roda_ps(t, '', f'desfazer-{nome}', minutos=10, pacote=nome, teste=teste, desfaz=True)
+    corpo = ('$script:ITENS_DESFAZER = @(' + ', '.join(psq(str(i)) for i in itens) + ')') if itens else ''
+    s = roda_ps(t, corpo, f'desfazer-{nome}', minutos=10, pacote=nome, teste=teste, desfaz=True)
     if not teste:
         e = estado()
-        if nome in e.get('pacotes', {}):
-            e['pacotes'][nome]['revertido'] = True
-            e['pacotes'][nome]['revertido_em'] = agora_iso()
+        reg = e.get('pacotes', {}).get(nome)
+        restam = s.dados.get('desfazer:restam')
+        if reg is not None:
+            if itens and restam:
+                reg['itens'] = [i for i in (reg.get('itens') or []) if i not in set(itens)]
+                reg.setdefault('desfeitos', []).append({'quando': agora_iso(), 'itens': list(itens)})
+            else:
+                reg['revertido'] = True
+                reg['revertido_em'] = agora_iso()
         salva_estado(e)
     return 0 if s.ok else 1
 

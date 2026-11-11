@@ -462,6 +462,8 @@ function _BkGuarda([string]$Chave, [hashtable]$Obj) {
     if ($script:_BkMem.ContainsKey($Chave)) { return }
     New-Item -ItemType Directory -Force -Path $BK | Out-Null
     $Obj['k'] = $Chave
+    # de qual item veio: o desfazer pode voltar um item só (o primeiro item que mexeu numa chave é o dono dela)
+    if ($script:ITEM) { $Obj['item'] = [string]$script:ITEM }
     Add-Content -LiteralPath (Join-Path $BK 'mudancas.jsonl') -Value (ConvertTo-Json -InputObject $Obj -Compress -Depth 4) -Encoding UTF8
     $script:_BkMem[$Chave] = $true
 }
@@ -750,8 +752,14 @@ if (-not (Test-Path -LiteralPath $f)) { Aviso 'nada guardado para desfazer neste
 $linhas = @(Get-Content -LiteralPath $f -Encoding UTF8 | Where-Object { $_ })
 [array]::Reverse($linhas)
 $n = 0; $ruins = 0
+# desfazer só alguns itens: $ITENS_DESFAZER vem antes deste trecho. Linha sem "item" (gravada antes da 4.2.1) só volta com o pacote inteiro
+$filtro = $null
+if ($null -ne $script:ITENS_DESFAZER) { $filtro = @{}; foreach ($x in @($script:ITENS_DESFAZER)) { $filtro[[string]$x] = $true } }
+$ficam = New-Object System.Collections.Generic.List[string]; $foram = New-Object System.Collections.Generic.List[string]
 foreach ($l in $linhas) {
-    try { $o = ConvertFrom-Json $l } catch { $ruins++; continue }
+    try { $o = ConvertFrom-Json $l } catch { $ruins++; if ($filtro) { $ficam.Add($l) }; continue }
+    if ($filtro -and -not ($o.item -and $filtro.ContainsKey([string]$o.item))) { $ficam.Add($l); continue }
+    $foram.Add($l)
     if ($TESTE) { Plano ("voltar {0}: {1}{2}" -f $o.t, $o.n, $o.de); continue }
     try {
         switch ($o.t) {
@@ -787,7 +795,16 @@ foreach ($l in $linhas) {
 }
 if ($ruins) { Aviso ("{0} linha(s) do registro de mudancas estavam ilegiveis e nao puderam voltar (o arquivo foi guardado)" -f $ruins) }
 if (-not $TESTE) {
-    Rename-Item -LiteralPath $f -NewName ("mudancas-desfeito-{0:yyyyMMdd-HHmmss}.jsonl" -f (Get-Date))
+    $nomeDesfeito = "mudancas-desfeito-{0:yyyyMMdd-HHmmss}.jsonl" -f (Get-Date)
+    if ($filtro -and $ficam.Count -gt 0) {
+        # o que voltou vai para o arquivo de desfeitos; o resto continua guardado, na ordem original
+        $a = $foram.ToArray(); [array]::Reverse($a); Set-Content -LiteralPath (Join-Path $BK $nomeDesfeito) -Value $a -Encoding UTF8
+        $b = $ficam.ToArray(); [array]::Reverse($b); Set-Content -LiteralPath $f -Value $b -Encoding UTF8
+        Dado 'desfazer:restam' $ficam.Count
+    } else {
+        Rename-Item -LiteralPath $f -NewName $nomeDesfeito
+        Dado 'desfazer:restam' 0
+    }
     Feito ("{0} mudancas voltaram ao estado de antes" -f $n)
 }
 '''
@@ -940,7 +957,7 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
     cabeca = (f"$env:OTM_TESTE = '{'1' if teste else '0'}'\n$env:OTM_CASA = {psq(CASA)}\n$env:OTM_MULT = '{mult:.2f}'\n"
               f"$env:OTM_BK = {psq(bk)}\n")
     with open(arq, 'w', encoding='utf-8-sig', newline='\r\n') as f:  # BOM: o PowerShell 5.1 lê como UTF-8
-        f.write(cabeca + PRELUDIO_PS + '\n' + RETRATO_PS + '\n' + (DESFAZ_PS if desfaz else corpo) + '\n')
+        f.write(cabeca + PRELUDIO_PS + '\n' + RETRATO_PS + '\n' + ((corpo + '\n' + DESFAZ_PS) if desfaz else corpo) + '\n')
     ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
     LOG.escreve(f'--- {rotulo} (limite {minutos * mult:.0f} min{", teste" if teste else ""})')
     inicio = time.time()

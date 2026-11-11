@@ -108,6 +108,13 @@ CATALOGO_PROVEDORES = {
 }
 ERROS_SERVICO = {7000: 'não iniciou', 7001: 'depende de outro serviço que falhou', 7009: 'demorou demais para iniciar', 7011: 'não respondeu a tempo',
                  7023: 'terminou com erro', 7024: 'terminou com erro específico', 7031: 'terminou sem avisar', 7034: 'terminou sem avisar'}
+# serviços de programas que falham "de propósito" quando o programa está fechado: não é defeito do PC. Só baixa (nunca some): se o PC
+# também trava ou cai, vale olhar.
+SERVICOS_QUE_SO_SOBEM_COM_O_PROGRAMA = (
+    (r'ryzen\s*master', 'O AMD Ryzen Master instala um driver que só sobe com o programa aberto. Com ele instalado e fechado, o Windows '
+                        'registra que o driver não iniciou a cada boot: é comum e não afeta o PC.',
+     'Só vale olhar se o PC também trava ou desliga sozinho. Se você não usa o Ryzen Master, desinstalar tira o aviso.'),
+)
 CODIGOS_DISPOSITIVO = {10: 'o dispositivo não consegue iniciar', 28: 'faltam os drivers', 31: 'o Windows não consegue carregar o driver', 43: 'o Windows parou o dispositivo por ele ter reportado problemas',
                        45: 'o dispositivo não está conectado', 24: 'o dispositivo foi removido ou não funciona direito', 12: 'não há recursos livres suficientes', 37: 'o driver falhou ao iniciar'}
 
@@ -155,6 +162,9 @@ def explica_grupo(g):
         return _prob(base_id, 'erro', 'alta', f'Tela azul registrada: {nome}', freq(), f'Causa mais comum para este código: {causa}.',
                      'Atualize os drivers (vídeo primeiro); se for memória, rode o Diagnóstico de Memória do Windows.', 'raiox', n)
     if p == 'service control manager' and i in ERROS_SERVICO and arg:
+        for padrao, ex, faz in SERVICOS_QUE_SO_SOBEM_COM_O_PROGRAMA:
+            if re.search(padrao, arg, re.I):
+                return _prob(base_id, 'erro', 'baixa', f'O serviço "{arg}" {ERROS_SERVICO[i]}', freq(), ex, faz, '', n)
         gr = 'média' if n >= 3 else 'baixa'
         return _prob(base_id, 'erro', gr, f'O serviço "{arg}" {ERROS_SERVICO[i]}', freq(), 'Serviço do Windows ou de um programa falhando. Se for de um programa que você não usa mais, é resto de instalação.',
                      'Se o programa é seu e ainda é usado, atualize ou reinstale. Se não, o pacote de serviços pode desativá-lo.', 'servicos', n)

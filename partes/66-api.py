@@ -201,14 +201,90 @@ def _segundo_plano():
             'cpu_pct': sp.get('cpu_pct'), 'ram_mb': sp.get('ram_mb'), 'intervalo_s': (a or {}).get('intervalo_s')}
 
 
+def _iso_ts(iso):
+    try:
+        return datetime.fromisoformat(str(iso)).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
+    """O achado ainda vale agora? Um achado é uma foto do momento do raio-x; o PC muda depois (a pessoa aplica, desliga um programa à
+    mão, o Katharos confere de novo). Devolve None (vale como está), {'resolvido': texto} (não é mais coisa a fazer) ou
+    {'evidencia': texto} (vale, com o número de agora).
+    Regras: área conferida depois do raio-x e sem nada faltando = resolvido; aplicada depois do raio-x = resolvido (a pessoa agiu; o
+    Otimizar diz o que sobrou); inicialização conferida depois = a contagem de agora, a mesma que o Otimizar mostra."""
+    cmd = str(a.get('comando') or '').split(' ')[0]
+    if cmd not in PACOTES:
+        return None
+    t_rx = _iso_ts(quando_raiox) or 0
+    areas = le_areas_conferidas() if areas is None else areas
+    aplicados = {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()} if aplicados is None else aplicados
+    ar = areas.get(cmd)
+    if ar and ar['t'] > t_rx and not ar.get('sem_leitura'):
+        quando = datetime.fromtimestamp(ar['t']).strftime('%d/%m %H:%M')
+        if ar.get('falta', 0) == 0:
+            return {'resolvido': f'conferido em {quando}: já está assim neste PC'}
+        if cmd == 'inicializacao':
+            n = ar['falta']
+            nomes = ', '.join(ar.get('titulos') or [])
+            return {'evidencia': f'{pl(n, "programa que dá para desligar ainda abre", "programas que dá para desligar ainda abrem")} com o Windows '
+                                 f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.'}
+    if aplicados.get(cmd, 0) > t_rx:
+        quando = datetime.fromtimestamp(aplicados[cmd]).strftime('%d/%m %H:%M')
+        return {'resolvido': f'aplicado em {quando}, depois deste raio-x'}
+    return None
+
+
+def concilia_achados(achados, quando_raiox):
+    """Os achados com a situação de agora: os resolvidos ganham "resolvido" (o raio-x mostra apagado; o Início não mostra), e a
+    evidência que mudou é trocada pela de agora."""
+    areas, aplicados = le_areas_conferidas(), {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()}
+    out = []
+    for a in achados:
+        a = dict(a)
+        a.setdefault('categoria', categoria_achado(a.get('titulo'), a.get('comando')))
+        sit = situacao_achado(a, quando_raiox, areas, aplicados)
+        if sit and 'evidencia' in sit:
+            a['evidencia_raiox'], a['evidencia'] = a.get('evidencia'), sit['evidencia']
+        elif sit:
+            a['resolvido'] = sit['resolvido']
+        out.append(a)
+    return out
+
+
+def propostas_que_valem(d):
+    """As propostas da central menos as que já foram feitas depois de pensadas (mesma régua dos achados: área conferida sem nada
+    faltando, ou aplicada depois). A central pensa de tempos em tempos; entre uma vez e outra, a pessoa pode ter resolvido."""
+    areas, aplicados = le_areas_conferidas(), {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()}
+    out = []
+    for x in d.get('propostas') or []:
+        sit = situacao_achado(x, d.get('quando'), areas, aplicados) if isinstance(x, dict) else None
+        if sit and 'resolvido' in sit:
+            continue
+        out.append(x)
+    return out
+
+
+def nota_conciliada(achados, nota_raiox):
+    """A nota sem o que já foi resolvido depois do raio-x (mesma conta do raio-x: 100 menos o peso de cada achado)."""
+    if nota_raiox is None or not any(a.get('resolvido') for a in achados):
+        return nota_raiox
+    return max(5, min(100, 100 - sum(PESO_NOTA.get(a.get('impacto'), 0) for a in achados if not a.get('resolvido'))))
+
+
 @metodo_api('inicio')
 def api_inicio(ctx, p, ev):
     """O que a tela Início mostra, só com o que já está guardado (abre na hora; nada roda)."""
     quando, rx, pc = _raiox_guardado()
     a = le_agora(max_idade_s=60)
-    achados = [x for x in (rx.get('achados') or []) if (x.get('impacto') or 0) > 0]
+    # só o que ainda vale agora: o Início nunca sugere o que o Otimizar vai dizer que já está feito
+    todos = concilia_achados(rx.get('achados') or [], quando)
+    achados = [x for x in todos if (x.get('impacto') or 0) > 0 and not x.get('resolvido')]
+    resolvidos = sum(1 for x in todos if x.get('resolvido') and (x.get('impacto') or 0) > 0)
     return {
-        'raiox': {'quando': quando, 'nota': rx.get('nota'), 'achados': achados[:5], 'total': len(achados)} if quando else None,
+        'raiox': {'quando': quando, 'nota': nota_conciliada(todos, rx.get('nota')), 'nota_raiox': rx.get('nota'), 'resolvidos': resolvidos,
+                  'achados': achados[:5], 'total': len(achados)} if quando else None,
         'pc': pc or None,
         'temperatura': ({'cpu': a.get('temp_cpu'), 'cpu_fonte': a.get('temp_cpu_fonte'), 'gpu': a.get('temp_gpu'),
                          'gpu_fonte': a.get('temp_gpu_fonte')} if a else None),
@@ -223,7 +299,7 @@ def api_inicio(ctx, p, ev):
 def frase_do_motor(rx=None):
     """I16: a frase principal do Início sai do motor: o que mais pesa, a ação que mais rende, a previsão e como desfazer."""
     d = le_json(CASA / 'propostas.json', {}) or {}
-    props = [x for x in d.get('propostas') or [] if x.get('tipo') == 'acao' and x.get('comando')]
+    props = [x for x in propostas_que_valem(d) if x.get('tipo') == 'acao' and x.get('comando')]
     diags = d.get('diagnosticos') or []
     # o motor só toma a frente do Início quando concluiu algo com medida (diagnóstico ou proposta de confiança alta); ligar o
     # acompanhamento e o que o raio-x já mostra continuam com o próximo passo de sempre
@@ -290,8 +366,11 @@ def api_raiox_guardado(ctx, p, ev):
         return None
     d = dict(rx)
     d['quando'] = quando
-    d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in (rx.get('achados') or [])
-                        if PESO_NOTA.get(a.get('impacto'), 0)), key=lambda x: -x['pontos'])[:3]
+    d['achados'] = concilia_achados(rx.get('achados') or [], quando)
+    d['nota_raiox'] = rx.get('nota')
+    d['nota'] = nota_conciliada(d['achados'], rx.get('nota'))
+    d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in d['achados']
+                        if PESO_NOTA.get(a.get('impacto'), 0) and not a.get('resolvido')), key=lambda x: -x['pontos'])[:3]
     d['pc'] = _pc_curto(pc)
     pz = le_json(CASA / 'propostas.json', {}) or {}
     d['motor'] = {'achados': [a for a in pz.get('achados') or [] if a.get('tipo') != 'contexto'][:8],
@@ -300,22 +379,50 @@ def api_raiox_guardado(ctx, p, ev):
 
 
 def _item_api(it, pac):
+    t = getattr(it, 'ja_t', None)
     return {'id': it.id, 'pacote': pac, 'titulo': it.titulo, 'explica': it.explica, 'ganho': it.ganho, 'custo': it.custo,
             'nivel': it.nivel, 'marcado': bool(it.marcado), 'ja': it.ja, 'alerta': it.alerta or '', 'nota': it.nota or '',
-            'sem_volta': not it.reverte, 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente)}
+            'sem_volta': not it.reverte, 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente),
+            'ja_idade_h': round((time.time() - t) / 3600, 2) if t else None,
+            # o que a tela precisa além do texto (inicialização: o programa, onde está e o atraso medido no boot); só valores simples
+            'dados': {k: v for k, v in it.dados.items() if isinstance(v, (str, int, float, bool)) or v is None} if isinstance(it.dados, dict) else None}
+
+
+def _precisa_conferir(it, max_h):
+    """Item que entra no "já está assim" e não tem leitura ou tem leitura velha."""
+    if not (it.definitivo and getattr(it, 'pacote', '') not in PACOTES_RECORRENTES):
+        return False
+    t = getattr(it, 'ja_t', None)
+    return t is None or time.time() - t > max_h * 3600
 
 
 @metodo_api('itens')
 def api_itens(ctx, p, ev):
-    """As áreas e os itens deste PC, marcados pelo modo, com o "já está assim" conferido na hora se pedir (conferir: true; leva alguns
-    segundos por área, em modo teste: nada muda)."""
+    """As áreas e os itens deste PC, marcados pelo modo, com o "já está assim".
+    Sem "conferir": devolve na hora o que está guardado em disco (mesmo velho, com ja_idade_h), sem rodar nada. Cada área diz quantos
+    itens ainda faltam conferir ("faltam"), para a janela conferir depois, em segundo plano, uma área por vez.
+    Com "conferir": true, confere (modo teste: nada muda) só o que não tem leitura ou tem mais de max_idade_h horas (padrão 24).
+    "forcar": ["pacote", ...] joga fora o que está guardado desses pacotes antes (botão "ler de novo", depois de aplicar ou desfazer)."""
     modo = p.get('modo') or config('modo')
     if modo not in MODOS:
         raise ErroApi('pedido_invalido', 'modo: ' + ', '.join(MODOS))
+    conferir = bool(p.get('conferir'))
+    try:
+        max_h = float(p.get('max_idade_h', CACHE_JA_VALIDADE_H))
+    except (TypeError, ValueError):
+        raise ErroApi('pedido_invalido', 'max_idade_h: número de horas')
+    for nome in (p.get('forcar') or []):
+        if nome in PACOTES:
+            invalida_cache_ja(nome, ctx=ctx)
     if ctx.perfil is None:
         if WINDOWS:
-            ev('etapa', {'texto': 'lendo o PC'})
-            ctx.perfil = perfil_pc(ctx)
+            # o perfil guardado serve para mostrar a lista; para conferir, só se tiver menos de um dia (o que o PC tem muda pouco)
+            guardado, _ = perfil_guardado(max_h if conferir else None)
+            if guardado:
+                ctx.perfil, ctx.mult = guardado, fator_hardware(guardado)
+            else:
+                ev('etapa', {'texto': 'lendo o PC'})
+                ctx.perfil = perfil_pc(ctx)
         else:   # fora do Windows (testes e site): o PC modelo, com tudo
             ctx.perfil = json.loads(json.dumps(PC_MODELO))
     pedidas = p.get('areas') or [n for n in ORDEM_TURBO if n in PACOTES] + [n for n in PACOTES if n not in ORDEM_TURBO]
@@ -331,14 +438,33 @@ def api_itens(ctx, p, ev):
         its, _ = aplica_protegidos(nome, its)
         aplica_alertas(nome, its)
         marca_por_modo(its, modo)
-        if p.get('conferir') and WINDOWS:
+        confere_itens(ctx, its, nome, so_guardado=True)
+        if conferir and WINDOWS and any(_precisa_conferir(x, max_h) for x in its):
             ev('etapa', {'texto': f'conferindo {pac.titulo}', 'n': i + 1, 'de': len(pedidas)})
-            confere_itens(ctx, its, nome)
+            confere_itens(ctx, its, nome, max_idade_h=max_h)
+        if conferir and WINDOWS:
+            marca_area_conferida(nome, its)
         out.append({'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
                     'recomendado': recomendadas.get(nome),
                     'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
+                    'faltam': sum(_precisa_conferir(x, max_h) for x in its),
                     'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]})
-    return {'modo': modo, 'modos': list(MODOS), 'areas': out}
+    return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out)}
+
+
+def ferramenta_conferir(ctx, args):
+    """O segundo plano chama com o PC parado: confere só o que venceu (mais de 20 h), para a janela abrir com o dado fresco. Modo teste:
+    nada muda no PC."""
+    if not WINDOWS:
+        ctx.t.erro('só funciona no Windows.')
+        return 1
+    try:
+        r = api_itens(ctx, {'conferir': True, 'max_idade_h': 20}, lambda *a: None)
+    except Exception as e:
+        LOG.escreve(f'conferir: {e!r}')
+        return 1
+    LOG.escreve(f'conferir: pronto, {r.get("faltam", 0)} itens sem leitura')
+    return 0
 
 
 def areas_recomendadas():
@@ -363,7 +489,9 @@ def api_aplicado(ctx, p, ev):
     out = []
     for dt, nome, titulo in reversed(pacotes_aplicados_dt()):
         reg = (e.get('pacotes') or {}).get(nome) or {}
+        por, sem = itens_desfaziveis(nome)
         out.append({'pacote': nome, 'titulo': titulo, 'quando': dt.isoformat(timespec='minutes'), 'itens': reg.get('itens') or [],
+                    'por_item': sorted(por), 'so_pacote': sem, 'titulos': reg.get('titulos') or {},
                     'desfaz': PACOTES[nome].reversivel})
     return {'pacotes': out, 'ponto': e.get('ultimo_ponto')}
 
@@ -373,7 +501,7 @@ def api_sugestoes(ctx, p, ev):
     """As propostas da central de inteligência, com o número que as justifica, e o que ela previu e aconteceu."""
     exporta_propostas(ctx)
     d = le_json(CASA / 'propostas.json', {}) or {}
-    return {'quando': d.get('quando'), 'propostas': d.get('propostas') or [], 'resultados': d.get('resultados') or [],
+    return {'quando': d.get('quando'), 'propostas': propostas_que_valem(d), 'resultados': d.get('resultados') or [],
             'diagnosticos': d.get('diagnosticos') or [], 'achados': d.get('achados') or [], 'linha_do_tempo': linha_do_tempo_propostas()}
 
 
@@ -633,17 +761,22 @@ def api_aplicar(ctx, p, ev):
 
 @metodo_api('desfazer', muda=True)
 def api_desfazer(ctx, p, ev):
-    """Volta pacotes aplicados (o mesmo backup do desfazer da CLI). {"pacotes": ["servicos", ...]}."""
+    """Volta pacotes aplicados (o mesmo backup do desfazer da CLI). {"pacotes": ["servicos", ...]} volta o pacote inteiro;
+    {"itens": {"servicos": ["id", ...]}} volta só esses itens (o resto continua aplicado)."""
     nomes = p.get('pacotes')
+    so_itens = p.get('itens')
+    if so_itens is not None:
+        so_itens = _selecao(p)
+        nomes = list(so_itens)
     if not isinstance(nomes, list) or not nomes or not all(n in PACOTES for n in nomes):
-        raise ErroApi('pedido_invalido', '{"pacotes": ["nome", ...]} com pacotes que existem')
+        raise ErroApi('pedido_invalido', '{"pacotes": ["nome", ...]} ou {"itens": {"pacote": ["id", ...]}} com pacotes que existem')
 
     def faz():
         res = []
         for k, n in enumerate(nomes):
             ev('pacote', {'nome': n, 'titulo': PACOTES[n].titulo, 'n': k + 1, 'de': len(nomes)})
             tem = WINDOWS and (dir_backup() / n / 'mudancas.jsonl').exists()
-            cod = desfaz_pacote(ctx, n) if tem else 0
+            cod = desfaz_pacote(ctx, n, itens=(so_itens or {}).get(n)) if tem else 0
             # "ok" só quando havia o que voltar e o desfazer terminou sem erro; "nada" quando não havia backup deste pacote
             res.append({'pacote': n, 'titulo': PACOTES[n].titulo, 'ok': bool(tem and cod == 0), 'nada': not tem})
         try:

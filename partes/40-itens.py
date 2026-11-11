@@ -25,6 +25,7 @@ class Item:
         self.recorrente = recorrente  # ação que se repete (limpar, otimizar): nunca conta como "já feito", porque o PC volta a precisar
         self.marcado = False
         self.ja = None   # conferido antes de aplicar: True já está assim, False falta, None não entra na conta
+        self.ja_t = None  # quando o "ja" foi conferido (segundos desde 1970)
 
     @property
     def definitivo(self):
@@ -118,31 +119,170 @@ def _detalhe_item(t, it):
         t.paragrafo('não volta com o "desfazer" (reinstale se precisar)', 8, 'apagado')
 
 
-def confere_itens(ctx, itens, pacote_=None):
-    """Antes de aplicar: roda os itens em modo teste (nada muda) e marca em cada um it.ja = True (o PC já está assim),
-    False (ainda falta) ou None (não entra na conta: itens de Python, que rodam sozinhos, ações que se repetem, ou que deram erro).
-    Guarda em ctx.ja para não conferir duas vezes na mesma sessão."""
-    cache = getattr(ctx, 'ja', None)
-    if cache is None:
-        cache = ctx.ja = {}
+# ───── o "já está assim" guardado em disco ─────
+# Conferir roda PowerShell em todos os itens e leva dezenas de segundos num PC lento. O resultado fica em ~/.katharos/cache/itens.json e vale
+# até: aplicar ou desfazer (apaga só os itens mexidos), o Windows atualizar (o build muda), outra versão do Katharos ou ficar velho demais.
+# O motor comum e o de administrador são processos diferentes: o arquivo é o que os mantém de acordo.
+CACHE_JA_VALIDADE_H = 24
+
+
+def _arq_cache_ja():
+    return CASA / 'cache' / 'itens.json'
+
+
+def build_atual():
+    """Build e revisão do Windows (26200.7171), lidos do registro: barato, roda a cada abertura. '' fora do Windows."""
+    if not WINDOWS:
+        return ''
+    try:
+        import winreg
+    except ImportError:
+        return ''
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows NT\CurrentVersion') as k:
+            b = winreg.QueryValueEx(k, 'CurrentBuildNumber')[0]
+            try:
+                r = winreg.QueryValueEx(k, 'UBR')[0]
+            except OSError:
+                r = 0
+        return f'{b}.{r}'
+    except OSError:
+        return ''
+
+
+def le_cache_ja():
+    """{(pacote, id): (ja, quando)} do disco, só se for deste Windows (build) e desta versão do Katharos; senão vazio."""
+    try:
+        d = json.loads(_arq_cache_ja().read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(d, dict) or d.get('build') != build_atual() or d.get('versao') != VERSAO:
+        return {}
+    out = {}
+    for k, v in (d.get('itens') or {}).items():
+        if isinstance(k, str) and '/' in k and isinstance(v, dict) and isinstance(v.get('t'), (int, float)):
+            pac, iid = k.split('/', 1)
+            ja = v.get('ja')
+            out[(pac, iid)] = (ja if isinstance(ja, bool) else None, float(v['t']))
+    return out
+
+
+def muda_cache_ja(novos=None, apaga=None):
+    """Junta resultados novos {(pacote, id): (ja, quando)} e apaga entradas (lista de (pacote, id) ou (pacote, None) para o pacote
+    inteiro). Grava num arquivo temporário e troca de uma vez: quem lê ao mesmo tempo vê o antigo ou o novo, nunca metade."""
+    atual = le_cache_ja()
+    for pac, iid in (apaga or []):
+        for ch in [c for c in atual if c[0] == pac and (iid is None or c[1] == iid)]:
+            del atual[ch]
+    atual.update(novos or {})
+    arq = _arq_cache_ja()
+    try:
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        tmp = arq.with_name(f'itens.{os.getpid()}.tmp')
+        tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO,
+                                   'itens': {f'{p}/{i}': {'ja': ja, 't': round(t)} for (p, i), (ja, t) in atual.items()}},
+                                  ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, arq)
+    except OSError as e:
+        LOG.escreve(f'cache do já feito: não gravou: {e!r}')
+
+
+def invalida_cache_ja(pacote, ids=None, ctx=None):
+    """Depois de aplicar ou desfazer: esses itens precisam ser conferidos de novo (no disco e na memória desta sessão)."""
+    muda_cache_ja(apaga=[(pacote, i) for i in ids] if ids else [(pacote, None)])
+    esquece_area(pacote)
+    mem = getattr(ctx or _CTX_ATUAL, 'ja', None)
+    if isinstance(mem, dict):
+        for ch in [c for c in mem if c[0] == pacote and (not ids or c[1] in ids)]:
+            del mem[ch]
+
+
+# Por área: quando foi conferida por último e quanto ainda falta. É o que deixa o Início, o raio-x e a central de acordo com o Otimizar:
+# um achado de uma área conferida depois dele, sem nada faltando, não aparece mais como coisa a fazer.
+def _arq_areas():
+    return CASA / 'cache' / 'areas.json'
+
+
+def le_areas_conferidas():
+    d = le_json(_arq_areas(), {}) or {}
+    if not isinstance(d, dict) or d.get('build') != build_atual() or d.get('versao') != VERSAO:
+        return {}
+    return {k: v for k, v in (d.get('areas') or {}).items() if isinstance(v, dict) and isinstance(v.get('t'), (int, float))}
+
+
+def _grava_areas(areas):
+    try:
+        grava_json(_arq_areas(), {'build': build_atual(), 'versao': VERSAO, 'areas': areas})
+    except OSError as e:
+        LOG.escreve(f'áreas conferidas: não gravou: {e!r}')
+
+
+def marca_area_conferida(nome, itens):
+    """Depois de conferir uma área inteira: quantos itens que ficam gravados no Windows ainda faltam, e quais."""
+    defs = [i for i in itens if i.definitivo and nome not in PACOTES_RECORRENTES]
+    falta = [i for i in defs if i.ja is False]
+    sem_leitura = [i for i in defs if i.ja is None]
+    areas = le_areas_conferidas()
+    areas[nome] = {'t': round(time.time()), 'falta': len(falta), 'total': len(defs), 'sem_leitura': len(sem_leitura),
+                   'titulos': [i.titulo for i in falta[:8]]}
+    _grava_areas(areas)
+
+
+def esquece_area(nome):
+    areas = le_areas_conferidas()
+    if areas.pop(nome, None) is not None:
+        _grava_areas(areas)
+
+
+_CTX_ATUAL = None   # o ctx desta sessão (só para limpar o cache da memória junto com o do disco)
+
+
+def _confere_ps(ctx, itens):
+    """Roda os itens em modo teste (nada muda) e devolve {id: True/False/None}."""
+    corpo = '\n'.join('$__p = $script:PLANOS; $__e = $false\ntry {\n' + i.ps + '\n} catch { $__e = $true }\n'
+                      'Dado ' + psq('ja:' + i.id) + ' $(if ($__e) { $null } else { $script:PLANOS -eq $__p })' for i in itens)
+    s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(itens) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
+    return {i.id: (v if isinstance(v := s.dados.get('ja:' + i.id), bool) else None) for i in itens}
+
+
+def confere_itens(ctx, itens, pacote_=None, max_idade_h=0, so_guardado=False):
+    """Marca em cada item it.ja = True (o PC já está assim), False (ainda falta) ou None (não entra na conta: itens de Python, que rodam
+    sozinhos, ações que se repetem, ou que deram erro), e it.ja_t = quando foi conferido.
+    O que já foi conferido nesta sessão não roda de novo. O que está no disco vale se tiver até max_idade_h horas (0: confere tudo de
+    novo, como a CLI faz). so_guardado: não roda nada, só devolve o que está guardado (mesmo velho; a janela mostra na hora e confere
+    depois)."""
+    global _CTX_ATUAL
+    _CTX_ATUAL = ctx
+    sessao = getattr(ctx, 'ja', None)
+    if sessao is None:
+        sessao = ctx.ja = {}
+    disco = le_cache_ja()
+    agora = time.time()
     vs = []
     for i in itens:
         chave = (pacote_ or getattr(i, 'pacote', None) or '', i.id)
-        if chave in cache:
-            i.ja = cache[chave]
+        i.ja, i.ja_t = None, None
+        if not (i.definitivo and chave[0] not in PACOTES_RECORRENTES):
             continue
-        i.ja = None
-        if i.definitivo and chave[0] not in PACOTES_RECORRENTES:
-            vs.append((chave, i))
+        # conferido nesta sessão: não roda de novo (até 1 h, ou o limite pedido; a janela pode ficar aberta por dias)
+        if chave in sessao and (so_guardado or agora - sessao[chave][1] <= max(max_idade_h, 1) * 3600):
+            i.ja, i.ja_t = sessao[chave]
+            continue
+        if chave in disco:
+            i.ja, i.ja_t = disco[chave]
+            if so_guardado or (max_idade_h > 0 and agora - i.ja_t <= max_idade_h * 3600):
+                continue
+        elif so_guardado:
+            continue
+        vs.append((chave, i))
     if not WINDOWS or not vs:
         return
-    corpo = '\n'.join('$__p = $script:PLANOS; $__e = $false\ntry {\n' + i.ps + '\n} catch { $__e = $true }\n'
-                      'Dado ' + psq('ja:' + i.id) + ' $(if ($__e) { $null } else { $script:PLANOS -eq $__p })' for _, i in vs)
-    s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(vs) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
+    res = _confere_ps(ctx, [i for _, i in vs])
+    novos = {}
     for chave, i in vs:
-        v = s.dados.get('ja:' + i.id)
-        i.ja = v if isinstance(v, bool) else None
-        cache[chave] = i.ja
+        i.ja, i.ja_t = res.get(i.id), agora
+        sessao[chave] = novos[chave] = (i.ja, agora)
+    muda_cache_ja(novos)
 
 
 def _linha_item(t, it, i):
@@ -311,8 +451,9 @@ def _envolve(it, prova=None):
     # prova=N: depois do item sai um retrato (espaço, RAM, processos, serviços) para a prova de ganho item por item
     fim = f"if (-not $TESTE) {{ Dado 'prova:{prova}' (Retrato ($script:MUDOU - $__a)) }}\n" if prova is not None else ''
     return ('Diz "secao" ' + psq(it.titulo) + '\n'
-            '$__a = $script:MUDOU; $__p = $script:PLANOS\n'
+            '$__a = $script:MUDOU; $__p = $script:PLANOS; $script:ITEM = ' + psq(it.id) + '\n'
             'try {\n' + it.ps + '\n} catch { Aviso (' + psq(it.titulo + ': ') + ' + $_.Exception.Message) }\n'
+            '$script:ITEM = $null\n'
             'if ($TESTE) { if ($script:PLANOS -eq $__p) { Diz "nada" "ja esta assim" } }\n'
             'elseif ($script:MUDOU -gt $__a) { Feito ("feito ({0} {1})" -f ($script:MUDOU - $__a), $(if (($script:MUDOU - $__a) -eq 1) { "mudanca" } else { "mudancas" })) }\n'
             'else { Diz "nada" "ja estava assim" }\n' + fim)
@@ -347,6 +488,8 @@ def executa_itens(ctx, pac, itens, teste=False):
     """Roda os itens escolhidos. Os de PowerShell leves vão juntos num processo; os longos, sozinhos.
     Devolve (feitos, avisos, erros)."""
     t = ctx.t
+    if not teste and itens:   # o "já está assim" destes itens precisa ser conferido de novo
+        invalida_cache_ja(pac.nome, [i.id for i in itens])
     blocos, atual = [], []
     for it in itens:
         if it.py or it.sozinho:
@@ -428,8 +571,13 @@ def executa_itens(ctx, pac, itens, teste=False):
         e.pop('em_andamento', None)
         pacs = e.setdefault('pacotes', {})
         reg = pacs.get(pac.nome) or {}
+        if reg.get('revertido'):   # o que foi desfeito antes não conta como aplicado de novo
+            reg = {}
         ids = set(reg.get('itens', [])) | {i.id for i in itens}
-        pacs[pac.nome] = {'quando': agora_iso(), 'itens': sorted(ids), 'revertido': False}
+        # o nome de cada item, para o Desfazer listar item por item sem ler o PC de novo
+        titulos = {k: v for k, v in (reg.get('titulos') or {}).items() if k in ids}
+        titulos.update({i.id: i.titulo for i in itens})
+        pacs[pac.nome] = {'quando': agora_iso(), 'itens': sorted(ids), 'titulos': titulos, 'revertido': False}
         salva_estado(e)
         rel_eventos([ev for ev in eventos if ev['feitos'] or ev['avisos'] or ev['erros']])
         try:

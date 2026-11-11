@@ -4,7 +4,12 @@
              x:Class="Katharos.App.App"
              RequestedThemeVariant="Dark">
   <Application.Styles>
-    <FluentTheme />
+    <!-- o acento do Windows (interruptores, caixas de marcar, foco) é o âmbar do Katharos, nunca o azul padrão -->
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#e2a85c" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
 
     <!-- texto -->
     <Style Selector="TextBlock">
@@ -85,6 +90,18 @@
     </Style>
 
     <!-- navegação lateral: nomes legíveis, área de clique grande, a tela atual marcada com a barra âmbar e o texto claro -->
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="Foreground" Value="#e2a85c" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#efe9de" />
+    </Style>
     <Style Selector="Button.nav">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{x:Static k:Tema.Texto}" />

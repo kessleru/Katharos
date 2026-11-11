@@ -25,7 +25,15 @@ public partial class Janela : Window
     {
         AvaloniaXamlLoader.Load(this);
         Atual = this;
-        foreach (var b in Botoes()) b.Click += Navega;
+        foreach (var b in Botoes())
+        {
+            b.Click += Navega;
+            // ícone à esquerda de cada item do menu (acha sem ler); o texto continua o mesmo
+            string icone = (string?)b.Tag switch { "inicio" => "inicio", "raiox" => "raiox", "otimizar" => "otimizar", "aovivo" => "aovivo", "memoria" => "memoria", "sugestoes" => "central",
+                                                   "historico" => "historico", "desfazer" => "desfazer", "enviar" => "enviar", "config" => "config", _ => "info" };
+            if (b.Content is string texto)
+                b.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { Icones.De(icone, 16, Tema.Apagado), new TextBlock { Text = texto, VerticalAlignment = VerticalAlignment.Center } } };
+        }
         this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.2.0";
         relogio.Tick += async (_, _) =>
         {
@@ -79,12 +87,18 @@ public partial class Janela : Window
             "desfazer" => new Desfazer(),
             "config" => new Configuracoes(),
             "aviso" => new Aviso(arg),
+            "detalhe" => new Detalhe(),
+            "inicializacao" => new Inicializacao(),
+            "memoria" => new Memoria(),
             "enviar" => new Enviar(arg),
             _ => new Inicio(),
         };
         c.Pede += Mostra;
         this.FindControl<ContentControl>("Tela")!.Content = c;
-        foreach (var b in Botoes()) b.Classes.Set("ativo", (string?)b.Tag == (tela == "aviso" ? "otimizar" : tela));
+        Movimento.Entra(c);
+        // telas que se abrem de dentro de outra acendem o item do menu de onde vieram
+        string menu = tela switch { "aviso" or "inicializacao" => "otimizar", "detalhe" or "jogos" => "inicio", _ => tela };
+        foreach (var b in Botoes()) b.Classes.Set("ativo", (string?)b.Tag == menu);
     }
 
     /// <summary>O estado do acompanhamento, lido do arquivo que o segundo plano grava (nunca o que foi pedido: o que está acontecendo).</summary>
@@ -117,14 +131,7 @@ public partial class Janela : Window
             var p = new StackPanel { Spacing = 8 };
             p.Children.Add(T(v.S("versao") + " · " + v.S("data"), "rotulo"));
             if (v.S("resumo") != "") p.Children.Add(T(v.S("resumo"), "sub", quebra: true));
-            foreach (var i in v.A("itens"))
-            {
-                var t = T("", "sub", quebra: true);
-                t.Inlines = new InlineCollection();
-                if (i.S("titulo") != "") t.Inlines.Add(new Run(i.S("titulo") + ": ") { Foreground = Tema.Osso, FontWeight = FontWeight.SemiBold });
-                t.Inlines.Add(new Run(i.S("texto")));
-                p.Children.Add(t);
-            }
+            foreach (var i in v.A("itens")) p.Children.Add(Item(i.S("texto"), titulo: i.S("titulo")));
             corpo.Children.Add(p);
         }
         var ok = Botao("Entendi", true, FechaCaixa);

@@ -1510,6 +1510,8 @@ function _BkGuarda([string]$Chave, [hashtable]$Obj) {
     if ($script:_BkMem.ContainsKey($Chave)) { return }
     New-Item -ItemType Directory -Force -Path $BK | Out-Null
     $Obj['k'] = $Chave
+    # de qual item veio: o desfazer pode voltar um item só (o primeiro item que mexeu numa chave é o dono dela)
+    if ($script:ITEM) { $Obj['item'] = [string]$script:ITEM }
     Add-Content -LiteralPath (Join-Path $BK 'mudancas.jsonl') -Value (ConvertTo-Json -InputObject $Obj -Compress -Depth 4) -Encoding UTF8
     $script:_BkMem[$Chave] = $true
 }
@@ -1798,8 +1800,14 @@ if (-not (Test-Path -LiteralPath $f)) { Aviso 'nada guardado para desfazer neste
 $linhas = @(Get-Content -LiteralPath $f -Encoding UTF8 | Where-Object { $_ })
 [array]::Reverse($linhas)
 $n = 0; $ruins = 0
+# desfazer só alguns itens: $ITENS_DESFAZER vem antes deste trecho. Linha sem "item" (gravada antes da 4.2.1) só volta com o pacote inteiro
+$filtro = $null
+if ($null -ne $script:ITENS_DESFAZER) { $filtro = @{}; foreach ($x in @($script:ITENS_DESFAZER)) { $filtro[[string]$x] = $true } }
+$ficam = New-Object System.Collections.Generic.List[string]; $foram = New-Object System.Collections.Generic.List[string]
 foreach ($l in $linhas) {
-    try { $o = ConvertFrom-Json $l } catch { $ruins++; continue }
+    try { $o = ConvertFrom-Json $l } catch { $ruins++; if ($filtro) { $ficam.Add($l) }; continue }
+    if ($filtro -and -not ($o.item -and $filtro.ContainsKey([string]$o.item))) { $ficam.Add($l); continue }
+    $foram.Add($l)
     if ($TESTE) { Plano ("voltar {0}: {1}{2}" -f $o.t, $o.n, $o.de); continue }
     try {
         switch ($o.t) {
@@ -1835,7 +1843,16 @@ foreach ($l in $linhas) {
 }
 if ($ruins) { Aviso ("{0} linha(s) do registro de mudancas estavam ilegiveis e nao puderam voltar (o arquivo foi guardado)" -f $ruins) }
 if (-not $TESTE) {
-    Rename-Item -LiteralPath $f -NewName ("mudancas-desfeito-{0:yyyyMMdd-HHmmss}.jsonl" -f (Get-Date))
+    $nomeDesfeito = "mudancas-desfeito-{0:yyyyMMdd-HHmmss}.jsonl" -f (Get-Date)
+    if ($filtro -and $ficam.Count -gt 0) {
+        # o que voltou vai para o arquivo de desfeitos; o resto continua guardado, na ordem original
+        $a = $foram.ToArray(); [array]::Reverse($a); Set-Content -LiteralPath (Join-Path $BK $nomeDesfeito) -Value $a -Encoding UTF8
+        $b = $ficam.ToArray(); [array]::Reverse($b); Set-Content -LiteralPath $f -Value $b -Encoding UTF8
+        Dado 'desfazer:restam' $ficam.Count
+    } else {
+        Rename-Item -LiteralPath $f -NewName $nomeDesfeito
+        Dado 'desfazer:restam' 0
+    }
     Feito ("{0} mudancas voltaram ao estado de antes" -f $n)
 }
 '''
@@ -1988,7 +2005,7 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
     cabeca = (f"$env:OTM_TESTE = '{'1' if teste else '0'}'\n$env:OTM_CASA = {psq(CASA)}\n$env:OTM_MULT = '{mult:.2f}'\n"
               f"$env:OTM_BK = {psq(bk)}\n")
     with open(arq, 'w', encoding='utf-8-sig', newline='\r\n') as f:  # BOM: o PowerShell 5.1 lê como UTF-8
-        f.write(cabeca + PRELUDIO_PS + '\n' + RETRATO_PS + '\n' + (DESFAZ_PS if desfaz else corpo) + '\n')
+        f.write(cabeca + PRELUDIO_PS + '\n' + RETRATO_PS + '\n' + ((corpo + '\n' + DESFAZ_PS) if desfaz else corpo) + '\n')
     ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
     LOG.escreve(f'--- {rotulo} (limite {minutos * mult:.0f} min{", teste" if teste else ""})')
     inicio = time.time()
@@ -2746,6 +2763,7 @@ def perfil_pc(ctx, forca=False):
     ctx.mult = fator_hardware(p)
     if p is not PERFIL_VAZIO:
         rel_pc(p)
+        guarda_perfil(p)
         cw = compat_windows(p)
         if (cw['antigo_demais'] or cw['server']) and ctx.args is not None and getattr(ctx.args, 'modo', None) != 'seguro':
             ctx.args.modo = 'seguro'
@@ -2757,6 +2775,36 @@ def perfil_pc(ctx, forca=False):
             ctx.t.aviso('Não reconheci esta versão do Windows (só conheço Windows 10 e 11). Por segurança, '
                         'só vão marcados os itens do modo seguro, e você pode ver cada item antes de confirmar.')
     return p
+
+
+def _arq_perfil():
+    return CASA / 'cache' / 'perfil.json'
+
+
+def guarda_perfil(p):
+    """O perfil medido vai para o disco: a janela abre a lista de itens na hora, sem medir o PC de novo a cada abertura."""
+    try:
+        arq = _arq_perfil()
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        tmp = arq.with_name(f'perfil.{os.getpid()}.tmp')
+        tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO, 't': round(time.time()), 'perfil': p}, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, arq)
+    except OSError as e:
+        LOG.escreve(f'perfil: não gravou: {e!r}')
+
+
+def perfil_guardado(max_idade_h=None):
+    """(perfil, idade em horas) do disco, se for deste Windows e desta versão (e mais novo que max_idade_h, se dado); senão (None, None)."""
+    try:
+        d = json.loads(_arq_perfil().read_text(encoding='utf-8'))
+        idade = (time.time() - float(d['t'])) / 3600
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, None
+    if d.get('build') != build_atual() or d.get('versao') != VERSAO or not isinstance(d.get('perfil'), dict):
+        return None, None
+    if max_idade_h is not None and idade > max_idade_h:
+        return None, None
+    return d['perfil'], idade
 
 
 PERFIL_VAZIO = {'so': {'win11': False, 'build': 0, 'nome': '', 'versao': '', 'edicao': ''},
@@ -3217,9 +3265,13 @@ def analisa(p, m, d):
         A.append(Achado(2, ['disco', 'tudo'], 'Windows.old ocupando espaço', f'{gb(w)} da versão anterior do Windows.',
                         'Pode sair se você não pretende voltar à versão anterior.', 'limpar'))
     n_ini = len(ini)
-    if n_ini > 8:
-        A.append(Achado(3 if n_ini > 14 else 2, ['boot', 'lento', 'tudo'], 'Muita coisa abrindo com o Windows',
-                        f'{n_ini} itens na inicialização: ' + ', '.join(i.get('nome', '') for i in ini[:6]) + ('…' if n_ini > 6 else ''),
+    # conta só o que o Otimizar oferece para desligar (a mesma régua da lista de itens): antivírus, drivers e o que é do Windows
+    # abrem sempre e não fazem o achado prometer algo que a tela seguinte não mostra
+    tiraveis = [i for i in ini if _classe_inicio(str(i.get('nome') or ''), str(i.get('cmd') or ''))[0] is not None]
+    n_tir = len(tiraveis)
+    if n_ini > 8 and n_tir >= 3:
+        A.append(Achado(3 if n_tir > 10 else 2, ['boot', 'lento', 'tudo'], 'Muita coisa abrindo com o Windows',
+                        f'{n_ini} itens abrem com o Windows; {n_tir} dá para desligar: ' + ', '.join(i.get('nome', '') for i in tiraveis[:6]) + ('…' if n_tir > 6 else ''),
                         'Desligar o que não precisa abrir sozinho (o Gerenciador de Tarefas usa o mesmo mecanismo).', 'inicializacao'))
     boots = [b for b in lista(d.get('boot_tempos')) if isinstance(b, (int, float))]
     if boots and boots[0] > 60:
@@ -3513,12 +3565,34 @@ def ja_aplicados():
         return set()
 
 
+CATEGORIAS = ('segurança', 'inicialização', 'memória', 'disco', 'jogos', 'saúde', 'geral')
+
+
+def categoria_achado(titulo, comando, queixas=()):
+    """Em que parte do diagnóstico o achado entra (o raio-x agrupa por estas). Raio-x antigo, sem as queixas guardadas, usa o comando e o título."""
+    q, cmd, t = set(queixas or ()), str(comando or '').split(' ')[0], str(titulo or '').lower()
+    if 'seguranca' in q or cmd in ('seguranca', 'privacidade') or re.search(r'defender|ameaça|suspeit|bitlocker|segurança', t):
+        return 'segurança'
+    if cmd == 'inicializacao' or 'boot' in q or re.search(r'inicializa|boot|abrindo com o windows', t):
+        return 'inicialização'
+    if cmd == 'memoria' or re.search(r'\bram\b|memória', t):
+        return 'memória'
+    if cmd in ('limpar', 'disco') or 'disco' in q or re.search(r'disco|espaço|ssd|\bhd\b', t):
+        return 'disco'
+    if cmd == 'jogos' or 'jogos' in q:
+        return 'jogos'
+    if cmd in ('atualizar', 'reparar', 'medir', 'travadas') or re.search(r'driver|bios|firmware|tela azul|desligou|erro', t):
+        return 'saúde'
+    return 'geral'
+
+
 def raiox_dados(p, m, d, achados, queixas):
     """O raio-x como dados para o relatório único (tudo o que veio do PC é limpo lá, ao gravar)."""
     saude = d.get('saude') or {}
     return {
         'nota': nota_pc(achados), 'queixas': list(queixas),
-        'achados': [{'titulo': a.titulo, 'impacto': a.impacto, 'evidencia': a.evidencia, 'faz': a.faz, 'comando': a.comando}
+        'achados': [{'titulo': a.titulo, 'impacto': a.impacto, 'evidencia': a.evidencia, 'faz': a.faz, 'comando': a.comando,
+                     'categoria': categoria_achado(a.titulo, a.comando, a.queixas)}
                     for a in sorted(achados, key=lambda a: (-a.impacto, a.titulo))],
         'medidas': {k: m.get(k) for k, *_ in LINHAS_MEDIDA},
         'inicializacao': [f'{i.get("nome")} ({i.get("onde")})' for i in lista(d.get('inicializacao'))],
@@ -4113,6 +4187,7 @@ class Item:
         self.recorrente = recorrente  # ação que se repete (limpar, otimizar): nunca conta como "já feito", porque o PC volta a precisar
         self.marcado = False
         self.ja = None   # conferido antes de aplicar: True já está assim, False falta, None não entra na conta
+        self.ja_t = None  # quando o "ja" foi conferido (segundos desde 1970)
 
     @property
     def definitivo(self):
@@ -4206,31 +4281,170 @@ def _detalhe_item(t, it):
         t.paragrafo('não volta com o "desfazer" (reinstale se precisar)', 8, 'apagado')
 
 
-def confere_itens(ctx, itens, pacote_=None):
-    """Antes de aplicar: roda os itens em modo teste (nada muda) e marca em cada um it.ja = True (o PC já está assim),
-    False (ainda falta) ou None (não entra na conta: itens de Python, que rodam sozinhos, ações que se repetem, ou que deram erro).
-    Guarda em ctx.ja para não conferir duas vezes na mesma sessão."""
-    cache = getattr(ctx, 'ja', None)
-    if cache is None:
-        cache = ctx.ja = {}
+# ───── o "já está assim" guardado em disco ─────
+# Conferir roda PowerShell em todos os itens e leva dezenas de segundos num PC lento. O resultado fica em ~/.katharos/cache/itens.json e vale
+# até: aplicar ou desfazer (apaga só os itens mexidos), o Windows atualizar (o build muda), outra versão do Katharos ou ficar velho demais.
+# O motor comum e o de administrador são processos diferentes: o arquivo é o que os mantém de acordo.
+CACHE_JA_VALIDADE_H = 24
+
+
+def _arq_cache_ja():
+    return CASA / 'cache' / 'itens.json'
+
+
+def build_atual():
+    """Build e revisão do Windows (26200.7171), lidos do registro: barato, roda a cada abertura. '' fora do Windows."""
+    if not WINDOWS:
+        return ''
+    try:
+        import winreg
+    except ImportError:
+        return ''
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows NT\CurrentVersion') as k:
+            b = winreg.QueryValueEx(k, 'CurrentBuildNumber')[0]
+            try:
+                r = winreg.QueryValueEx(k, 'UBR')[0]
+            except OSError:
+                r = 0
+        return f'{b}.{r}'
+    except OSError:
+        return ''
+
+
+def le_cache_ja():
+    """{(pacote, id): (ja, quando)} do disco, só se for deste Windows (build) e desta versão do Katharos; senão vazio."""
+    try:
+        d = json.loads(_arq_cache_ja().read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(d, dict) or d.get('build') != build_atual() or d.get('versao') != VERSAO:
+        return {}
+    out = {}
+    for k, v in (d.get('itens') or {}).items():
+        if isinstance(k, str) and '/' in k and isinstance(v, dict) and isinstance(v.get('t'), (int, float)):
+            pac, iid = k.split('/', 1)
+            ja = v.get('ja')
+            out[(pac, iid)] = (ja if isinstance(ja, bool) else None, float(v['t']))
+    return out
+
+
+def muda_cache_ja(novos=None, apaga=None):
+    """Junta resultados novos {(pacote, id): (ja, quando)} e apaga entradas (lista de (pacote, id) ou (pacote, None) para o pacote
+    inteiro). Grava num arquivo temporário e troca de uma vez: quem lê ao mesmo tempo vê o antigo ou o novo, nunca metade."""
+    atual = le_cache_ja()
+    for pac, iid in (apaga or []):
+        for ch in [c for c in atual if c[0] == pac and (iid is None or c[1] == iid)]:
+            del atual[ch]
+    atual.update(novos or {})
+    arq = _arq_cache_ja()
+    try:
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        tmp = arq.with_name(f'itens.{os.getpid()}.tmp')
+        tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO,
+                                   'itens': {f'{p}/{i}': {'ja': ja, 't': round(t)} for (p, i), (ja, t) in atual.items()}},
+                                  ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, arq)
+    except OSError as e:
+        LOG.escreve(f'cache do já feito: não gravou: {e!r}')
+
+
+def invalida_cache_ja(pacote, ids=None, ctx=None):
+    """Depois de aplicar ou desfazer: esses itens precisam ser conferidos de novo (no disco e na memória desta sessão)."""
+    muda_cache_ja(apaga=[(pacote, i) for i in ids] if ids else [(pacote, None)])
+    esquece_area(pacote)
+    mem = getattr(ctx or _CTX_ATUAL, 'ja', None)
+    if isinstance(mem, dict):
+        for ch in [c for c in mem if c[0] == pacote and (not ids or c[1] in ids)]:
+            del mem[ch]
+
+
+# Por área: quando foi conferida por último e quanto ainda falta. É o que deixa o Início, o raio-x e a central de acordo com o Otimizar:
+# um achado de uma área conferida depois dele, sem nada faltando, não aparece mais como coisa a fazer.
+def _arq_areas():
+    return CASA / 'cache' / 'areas.json'
+
+
+def le_areas_conferidas():
+    d = le_json(_arq_areas(), {}) or {}
+    if not isinstance(d, dict) or d.get('build') != build_atual() or d.get('versao') != VERSAO:
+        return {}
+    return {k: v for k, v in (d.get('areas') or {}).items() if isinstance(v, dict) and isinstance(v.get('t'), (int, float))}
+
+
+def _grava_areas(areas):
+    try:
+        grava_json(_arq_areas(), {'build': build_atual(), 'versao': VERSAO, 'areas': areas})
+    except OSError as e:
+        LOG.escreve(f'áreas conferidas: não gravou: {e!r}')
+
+
+def marca_area_conferida(nome, itens):
+    """Depois de conferir uma área inteira: quantos itens que ficam gravados no Windows ainda faltam, e quais."""
+    defs = [i for i in itens if i.definitivo and nome not in PACOTES_RECORRENTES]
+    falta = [i for i in defs if i.ja is False]
+    sem_leitura = [i for i in defs if i.ja is None]
+    areas = le_areas_conferidas()
+    areas[nome] = {'t': round(time.time()), 'falta': len(falta), 'total': len(defs), 'sem_leitura': len(sem_leitura),
+                   'titulos': [i.titulo for i in falta[:8]]}
+    _grava_areas(areas)
+
+
+def esquece_area(nome):
+    areas = le_areas_conferidas()
+    if areas.pop(nome, None) is not None:
+        _grava_areas(areas)
+
+
+_CTX_ATUAL = None   # o ctx desta sessão (só para limpar o cache da memória junto com o do disco)
+
+
+def _confere_ps(ctx, itens):
+    """Roda os itens em modo teste (nada muda) e devolve {id: True/False/None}."""
+    corpo = '\n'.join('$__p = $script:PLANOS; $__e = $false\ntry {\n' + i.ps + '\n} catch { $__e = $true }\n'
+                      'Dado ' + psq('ja:' + i.id) + ' $(if ($__e) { $null } else { $script:PLANOS -eq $__p })' for i in itens)
+    s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(itens) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
+    return {i.id: (v if isinstance(v := s.dados.get('ja:' + i.id), bool) else None) for i in itens}
+
+
+def confere_itens(ctx, itens, pacote_=None, max_idade_h=0, so_guardado=False):
+    """Marca em cada item it.ja = True (o PC já está assim), False (ainda falta) ou None (não entra na conta: itens de Python, que rodam
+    sozinhos, ações que se repetem, ou que deram erro), e it.ja_t = quando foi conferido.
+    O que já foi conferido nesta sessão não roda de novo. O que está no disco vale se tiver até max_idade_h horas (0: confere tudo de
+    novo, como a CLI faz). so_guardado: não roda nada, só devolve o que está guardado (mesmo velho; a janela mostra na hora e confere
+    depois)."""
+    global _CTX_ATUAL
+    _CTX_ATUAL = ctx
+    sessao = getattr(ctx, 'ja', None)
+    if sessao is None:
+        sessao = ctx.ja = {}
+    disco = le_cache_ja()
+    agora = time.time()
     vs = []
     for i in itens:
         chave = (pacote_ or getattr(i, 'pacote', None) or '', i.id)
-        if chave in cache:
-            i.ja = cache[chave]
+        i.ja, i.ja_t = None, None
+        if not (i.definitivo and chave[0] not in PACOTES_RECORRENTES):
             continue
-        i.ja = None
-        if i.definitivo and chave[0] not in PACOTES_RECORRENTES:
-            vs.append((chave, i))
+        # conferido nesta sessão: não roda de novo (até 1 h, ou o limite pedido; a janela pode ficar aberta por dias)
+        if chave in sessao and (so_guardado or agora - sessao[chave][1] <= max(max_idade_h, 1) * 3600):
+            i.ja, i.ja_t = sessao[chave]
+            continue
+        if chave in disco:
+            i.ja, i.ja_t = disco[chave]
+            if so_guardado or (max_idade_h > 0 and agora - i.ja_t <= max_idade_h * 3600):
+                continue
+        elif so_guardado:
+            continue
+        vs.append((chave, i))
     if not WINDOWS or not vs:
         return
-    corpo = '\n'.join('$__p = $script:PLANOS; $__e = $false\ntry {\n' + i.ps + '\n} catch { $__e = $true }\n'
-                      'Dado ' + psq('ja:' + i.id) + ' $(if ($__e) { $null } else { $script:PLANOS -eq $__p })' for _, i in vs)
-    s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(vs) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
+    res = _confere_ps(ctx, [i for _, i in vs])
+    novos = {}
     for chave, i in vs:
-        v = s.dados.get('ja:' + i.id)
-        i.ja = v if isinstance(v, bool) else None
-        cache[chave] = i.ja
+        i.ja, i.ja_t = res.get(i.id), agora
+        sessao[chave] = novos[chave] = (i.ja, agora)
+    muda_cache_ja(novos)
 
 
 def _linha_item(t, it, i):
@@ -4399,8 +4613,9 @@ def _envolve(it, prova=None):
     # prova=N: depois do item sai um retrato (espaço, RAM, processos, serviços) para a prova de ganho item por item
     fim = f"if (-not $TESTE) {{ Dado 'prova:{prova}' (Retrato ($script:MUDOU - $__a)) }}\n" if prova is not None else ''
     return ('Diz "secao" ' + psq(it.titulo) + '\n'
-            '$__a = $script:MUDOU; $__p = $script:PLANOS\n'
+            '$__a = $script:MUDOU; $__p = $script:PLANOS; $script:ITEM = ' + psq(it.id) + '\n'
             'try {\n' + it.ps + '\n} catch { Aviso (' + psq(it.titulo + ': ') + ' + $_.Exception.Message) }\n'
+            '$script:ITEM = $null\n'
             'if ($TESTE) { if ($script:PLANOS -eq $__p) { Diz "nada" "ja esta assim" } }\n'
             'elseif ($script:MUDOU -gt $__a) { Feito ("feito ({0} {1})" -f ($script:MUDOU - $__a), $(if (($script:MUDOU - $__a) -eq 1) { "mudanca" } else { "mudancas" })) }\n'
             'else { Diz "nada" "ja estava assim" }\n' + fim)
@@ -4435,6 +4650,8 @@ def executa_itens(ctx, pac, itens, teste=False):
     """Roda os itens escolhidos. Os de PowerShell leves vão juntos num processo; os longos, sozinhos.
     Devolve (feitos, avisos, erros)."""
     t = ctx.t
+    if not teste and itens:   # o "já está assim" destes itens precisa ser conferido de novo
+        invalida_cache_ja(pac.nome, [i.id for i in itens])
     blocos, atual = [], []
     for it in itens:
         if it.py or it.sozinho:
@@ -4516,8 +4733,13 @@ def executa_itens(ctx, pac, itens, teste=False):
         e.pop('em_andamento', None)
         pacs = e.setdefault('pacotes', {})
         reg = pacs.get(pac.nome) or {}
+        if reg.get('revertido'):   # o que foi desfeito antes não conta como aplicado de novo
+            reg = {}
         ids = set(reg.get('itens', [])) | {i.id for i in itens}
-        pacs[pac.nome] = {'quando': agora_iso(), 'itens': sorted(ids), 'revertido': False}
+        # o nome de cada item, para o Desfazer listar item por item sem ler o PC de novo
+        titulos = {k: v for k, v in (reg.get('titulos') or {}).items() if k in ids}
+        titulos.update({i.id: i.titulo for i in itens})
+        pacs[pac.nome] = {'quando': agora_iso(), 'itens': sorted(ids), 'titulos': titulos, 'revertido': False}
         salva_estado(e)
         rel_eventos([ev for ev in eventos if ev['feitos'] or ev['avisos'] or ev['erros']])
         try:
@@ -5772,7 +5994,8 @@ def itens_inicializacao(ctx):
         if q:
             porque = f'{q[0]}: {q[1]}'
         itens.append(Item('ini:' + nome, nome, f'{porque[0].upper() + porque[1:]}. ({onde}: {corta_esq(caminho_curto(exe), 60)})',
-                          ganho, 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota))
+                          ganho, 'não abre sozinho; abra pelo menu quando quiser', nivel, ps, nota=nota,
+                          dados={'exe': exe, 'onde': onde, 'boot_s': round(imp[0], 1) if imp and imp[0] > 0 else None, 'nome': nome}))
     itens.sort(key=lambda i: (i.nivel == 0, i.nivel, -impactos.get(i.titulo, 0.0), i.titulo.lower()))
     return itens
 
@@ -9681,18 +9904,49 @@ def ferramenta_agendar(ctx, args):
 
 # ─────────────── restaurar e desfazer ───────────────
 
-def desfaz_pacote(ctx, nome, teste=False):
+def itens_desfaziveis(nome):
+    """{id: quantas mudanças} dos itens do pacote que podem voltar sozinhos, e quantas mudanças só voltam com o pacote inteiro
+    (gravadas antes da 4.2.1, sem o item anotado)."""
+    arq = dir_backup() / nome / 'mudancas.jsonl'
+    por, sem = {}, 0
+    try:
+        linhas = arq.read_text(encoding='utf-8-sig').splitlines()
+    except OSError:
+        return {}, 0
+    for l in linhas:
+        try:
+            o = json.loads(l)
+        except ValueError:
+            continue
+        if isinstance(o, dict) and o.get('item'):
+            por[str(o['item'])] = por.get(str(o['item']), 0) + 1
+        else:
+            sem += 1
+    return por, sem
+
+
+def desfaz_pacote(ctx, nome, teste=False, itens=None):
+    """Volta o pacote inteiro, ou só os itens pedidos (itens=[id, ...]): cada mudança guardada sabe de qual item veio."""
     t = ctx.t
+    if not teste:
+        invalida_cache_ja(nome)
     bk = dir_backup() / nome
     if not (bk / 'mudancas.jsonl').exists():
         t.nota(f'  {nome}: nada guardado para desfazer.')
         return 0
-    s = roda_ps(t, '', f'desfazer-{nome}', minutos=10, pacote=nome, teste=teste, desfaz=True)
+    corpo = ('$script:ITENS_DESFAZER = @(' + ', '.join(psq(str(i)) for i in itens) + ')') if itens else ''
+    s = roda_ps(t, corpo, f'desfazer-{nome}', minutos=10, pacote=nome, teste=teste, desfaz=True)
     if not teste:
         e = estado()
-        if nome in e.get('pacotes', {}):
-            e['pacotes'][nome]['revertido'] = True
-            e['pacotes'][nome]['revertido_em'] = agora_iso()
+        reg = e.get('pacotes', {}).get(nome)
+        restam = s.dados.get('desfazer:restam')
+        if reg is not None:
+            if itens and restam:
+                reg['itens'] = [i for i in (reg.get('itens') or []) if i not in set(itens)]
+                reg.setdefault('desfeitos', []).append({'quando': agora_iso(), 'itens': list(itens)})
+            else:
+                reg['revertido'] = True
+                reg['revertido_em'] = agora_iso()
         salva_estado(e)
     return 0 if s.ok else 1
 
@@ -13230,8 +13484,13 @@ def r_saude(ev):
     for x in (ev.get('saude') or {}).get('problemas', [])[:8]:
         if x['gravidade'] not in conf or not x.get('comando'):
             continue
-        out.append(_sug('saude:' + x['id'], x['titulo'], f'{x["evidencia"]}. {x["faz"]}', x['comando'], conf[x['gravidade']], x['explica'], '',
-                        {'alta': 5, 'média': 3, 'baixa': 1}[x['gravidade']], 0, tipo='acao'))
+        # o que é certo é o fato (o Windows registrou); a causa é provável, ou só se descobre investigando. A "confiança" que ordena a fila
+        # vem da gravidade, mas a tela mostra as duas coisas separadas ("aconteceu" e "causa provável"), nunca "confiança alta" na causa
+        so_ler = x['comando'].split(' ')[0] not in PACOTES
+        s = _sug('saude:' + x['id'], x['titulo'], f'{x["evidencia"]}. {x["faz"]}', x['comando'], conf[x['gravidade']], x['explica'], '',
+                 {'alta': 5, 'média': 3, 'baixa': 1}[x['gravidade']], 0, tipo='leitura' if so_ler else 'acao')
+        s.update({'certeza': 'aconteceu', 'causa': 'a investigar' if so_ler else 'provável', 'evidencia': x['evidencia'], 'faz': x['faz'], 'explica': x['explica']})
+        out.append(s)
     return out
 
 
@@ -14676,14 +14935,90 @@ def _segundo_plano():
             'cpu_pct': sp.get('cpu_pct'), 'ram_mb': sp.get('ram_mb'), 'intervalo_s': (a or {}).get('intervalo_s')}
 
 
+def _iso_ts(iso):
+    try:
+        return datetime.fromisoformat(str(iso)).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
+    """O achado ainda vale agora? Um achado é uma foto do momento do raio-x; o PC muda depois (a pessoa aplica, desliga um programa à
+    mão, o Katharos confere de novo). Devolve None (vale como está), {'resolvido': texto} (não é mais coisa a fazer) ou
+    {'evidencia': texto} (vale, com o número de agora).
+    Regras: área conferida depois do raio-x e sem nada faltando = resolvido; aplicada depois do raio-x = resolvido (a pessoa agiu; o
+    Otimizar diz o que sobrou); inicialização conferida depois = a contagem de agora, a mesma que o Otimizar mostra."""
+    cmd = str(a.get('comando') or '').split(' ')[0]
+    if cmd not in PACOTES:
+        return None
+    t_rx = _iso_ts(quando_raiox) or 0
+    areas = le_areas_conferidas() if areas is None else areas
+    aplicados = {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()} if aplicados is None else aplicados
+    ar = areas.get(cmd)
+    if ar and ar['t'] > t_rx and not ar.get('sem_leitura'):
+        quando = datetime.fromtimestamp(ar['t']).strftime('%d/%m %H:%M')
+        if ar.get('falta', 0) == 0:
+            return {'resolvido': f'conferido em {quando}: já está assim neste PC'}
+        if cmd == 'inicializacao':
+            n = ar['falta']
+            nomes = ', '.join(ar.get('titulos') or [])
+            return {'evidencia': f'{pl(n, "programa que dá para desligar ainda abre", "programas que dá para desligar ainda abrem")} com o Windows '
+                                 f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.'}
+    if aplicados.get(cmd, 0) > t_rx:
+        quando = datetime.fromtimestamp(aplicados[cmd]).strftime('%d/%m %H:%M')
+        return {'resolvido': f'aplicado em {quando}, depois deste raio-x'}
+    return None
+
+
+def concilia_achados(achados, quando_raiox):
+    """Os achados com a situação de agora: os resolvidos ganham "resolvido" (o raio-x mostra apagado; o Início não mostra), e a
+    evidência que mudou é trocada pela de agora."""
+    areas, aplicados = le_areas_conferidas(), {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()}
+    out = []
+    for a in achados:
+        a = dict(a)
+        a.setdefault('categoria', categoria_achado(a.get('titulo'), a.get('comando')))
+        sit = situacao_achado(a, quando_raiox, areas, aplicados)
+        if sit and 'evidencia' in sit:
+            a['evidencia_raiox'], a['evidencia'] = a.get('evidencia'), sit['evidencia']
+        elif sit:
+            a['resolvido'] = sit['resolvido']
+        out.append(a)
+    return out
+
+
+def propostas_que_valem(d):
+    """As propostas da central menos as que já foram feitas depois de pensadas (mesma régua dos achados: área conferida sem nada
+    faltando, ou aplicada depois). A central pensa de tempos em tempos; entre uma vez e outra, a pessoa pode ter resolvido."""
+    areas, aplicados = le_areas_conferidas(), {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()}
+    out = []
+    for x in d.get('propostas') or []:
+        sit = situacao_achado(x, d.get('quando'), areas, aplicados) if isinstance(x, dict) else None
+        if sit and 'resolvido' in sit:
+            continue
+        out.append(x)
+    return out
+
+
+def nota_conciliada(achados, nota_raiox):
+    """A nota sem o que já foi resolvido depois do raio-x (mesma conta do raio-x: 100 menos o peso de cada achado)."""
+    if nota_raiox is None or not any(a.get('resolvido') for a in achados):
+        return nota_raiox
+    return max(5, min(100, 100 - sum(PESO_NOTA.get(a.get('impacto'), 0) for a in achados if not a.get('resolvido'))))
+
+
 @metodo_api('inicio')
 def api_inicio(ctx, p, ev):
     """O que a tela Início mostra, só com o que já está guardado (abre na hora; nada roda)."""
     quando, rx, pc = _raiox_guardado()
     a = le_agora(max_idade_s=60)
-    achados = [x for x in (rx.get('achados') or []) if (x.get('impacto') or 0) > 0]
+    # só o que ainda vale agora: o Início nunca sugere o que o Otimizar vai dizer que já está feito
+    todos = concilia_achados(rx.get('achados') or [], quando)
+    achados = [x for x in todos if (x.get('impacto') or 0) > 0 and not x.get('resolvido')]
+    resolvidos = sum(1 for x in todos if x.get('resolvido') and (x.get('impacto') or 0) > 0)
     return {
-        'raiox': {'quando': quando, 'nota': rx.get('nota'), 'achados': achados[:5], 'total': len(achados)} if quando else None,
+        'raiox': {'quando': quando, 'nota': nota_conciliada(todos, rx.get('nota')), 'nota_raiox': rx.get('nota'), 'resolvidos': resolvidos,
+                  'achados': achados[:5], 'total': len(achados)} if quando else None,
         'pc': pc or None,
         'temperatura': ({'cpu': a.get('temp_cpu'), 'cpu_fonte': a.get('temp_cpu_fonte'), 'gpu': a.get('temp_gpu'),
                          'gpu_fonte': a.get('temp_gpu_fonte')} if a else None),
@@ -14698,7 +15033,7 @@ def api_inicio(ctx, p, ev):
 def frase_do_motor(rx=None):
     """I16: a frase principal do Início sai do motor: o que mais pesa, a ação que mais rende, a previsão e como desfazer."""
     d = le_json(CASA / 'propostas.json', {}) or {}
-    props = [x for x in d.get('propostas') or [] if x.get('tipo') == 'acao' and x.get('comando')]
+    props = [x for x in propostas_que_valem(d) if x.get('tipo') == 'acao' and x.get('comando')]
     diags = d.get('diagnosticos') or []
     # o motor só toma a frente do Início quando concluiu algo com medida (diagnóstico ou proposta de confiança alta); ligar o
     # acompanhamento e o que o raio-x já mostra continuam com o próximo passo de sempre
@@ -14765,8 +15100,11 @@ def api_raiox_guardado(ctx, p, ev):
         return None
     d = dict(rx)
     d['quando'] = quando
-    d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in (rx.get('achados') or [])
-                        if PESO_NOTA.get(a.get('impacto'), 0)), key=lambda x: -x['pontos'])[:3]
+    d['achados'] = concilia_achados(rx.get('achados') or [], quando)
+    d['nota_raiox'] = rx.get('nota')
+    d['nota'] = nota_conciliada(d['achados'], rx.get('nota'))
+    d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in d['achados']
+                        if PESO_NOTA.get(a.get('impacto'), 0) and not a.get('resolvido')), key=lambda x: -x['pontos'])[:3]
     d['pc'] = _pc_curto(pc)
     pz = le_json(CASA / 'propostas.json', {}) or {}
     d['motor'] = {'achados': [a for a in pz.get('achados') or [] if a.get('tipo') != 'contexto'][:8],
@@ -14775,22 +15113,50 @@ def api_raiox_guardado(ctx, p, ev):
 
 
 def _item_api(it, pac):
+    t = getattr(it, 'ja_t', None)
     return {'id': it.id, 'pacote': pac, 'titulo': it.titulo, 'explica': it.explica, 'ganho': it.ganho, 'custo': it.custo,
             'nivel': it.nivel, 'marcado': bool(it.marcado), 'ja': it.ja, 'alerta': it.alerta or '', 'nota': it.nota or '',
-            'sem_volta': not it.reverte, 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente)}
+            'sem_volta': not it.reverte, 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente),
+            'ja_idade_h': round((time.time() - t) / 3600, 2) if t else None,
+            # o que a tela precisa além do texto (inicialização: o programa, onde está e o atraso medido no boot); só valores simples
+            'dados': {k: v for k, v in it.dados.items() if isinstance(v, (str, int, float, bool)) or v is None} if isinstance(it.dados, dict) else None}
+
+
+def _precisa_conferir(it, max_h):
+    """Item que entra no "já está assim" e não tem leitura ou tem leitura velha."""
+    if not (it.definitivo and getattr(it, 'pacote', '') not in PACOTES_RECORRENTES):
+        return False
+    t = getattr(it, 'ja_t', None)
+    return t is None or time.time() - t > max_h * 3600
 
 
 @metodo_api('itens')
 def api_itens(ctx, p, ev):
-    """As áreas e os itens deste PC, marcados pelo modo, com o "já está assim" conferido na hora se pedir (conferir: true; leva alguns
-    segundos por área, em modo teste: nada muda)."""
+    """As áreas e os itens deste PC, marcados pelo modo, com o "já está assim".
+    Sem "conferir": devolve na hora o que está guardado em disco (mesmo velho, com ja_idade_h), sem rodar nada. Cada área diz quantos
+    itens ainda faltam conferir ("faltam"), para a janela conferir depois, em segundo plano, uma área por vez.
+    Com "conferir": true, confere (modo teste: nada muda) só o que não tem leitura ou tem mais de max_idade_h horas (padrão 24).
+    "forcar": ["pacote", ...] joga fora o que está guardado desses pacotes antes (botão "ler de novo", depois de aplicar ou desfazer)."""
     modo = p.get('modo') or config('modo')
     if modo not in MODOS:
         raise ErroApi('pedido_invalido', 'modo: ' + ', '.join(MODOS))
+    conferir = bool(p.get('conferir'))
+    try:
+        max_h = float(p.get('max_idade_h', CACHE_JA_VALIDADE_H))
+    except (TypeError, ValueError):
+        raise ErroApi('pedido_invalido', 'max_idade_h: número de horas')
+    for nome in (p.get('forcar') or []):
+        if nome in PACOTES:
+            invalida_cache_ja(nome, ctx=ctx)
     if ctx.perfil is None:
         if WINDOWS:
-            ev('etapa', {'texto': 'lendo o PC'})
-            ctx.perfil = perfil_pc(ctx)
+            # o perfil guardado serve para mostrar a lista; para conferir, só se tiver menos de um dia (o que o PC tem muda pouco)
+            guardado, _ = perfil_guardado(max_h if conferir else None)
+            if guardado:
+                ctx.perfil, ctx.mult = guardado, fator_hardware(guardado)
+            else:
+                ev('etapa', {'texto': 'lendo o PC'})
+                ctx.perfil = perfil_pc(ctx)
         else:   # fora do Windows (testes e site): o PC modelo, com tudo
             ctx.perfil = json.loads(json.dumps(PC_MODELO))
     pedidas = p.get('areas') or [n for n in ORDEM_TURBO if n in PACOTES] + [n for n in PACOTES if n not in ORDEM_TURBO]
@@ -14806,14 +15172,33 @@ def api_itens(ctx, p, ev):
         its, _ = aplica_protegidos(nome, its)
         aplica_alertas(nome, its)
         marca_por_modo(its, modo)
-        if p.get('conferir') and WINDOWS:
+        confere_itens(ctx, its, nome, so_guardado=True)
+        if conferir and WINDOWS and any(_precisa_conferir(x, max_h) for x in its):
             ev('etapa', {'texto': f'conferindo {pac.titulo}', 'n': i + 1, 'de': len(pedidas)})
-            confere_itens(ctx, its, nome)
+            confere_itens(ctx, its, nome, max_idade_h=max_h)
+        if conferir and WINDOWS:
+            marca_area_conferida(nome, its)
         out.append({'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
                     'recomendado': recomendadas.get(nome),
                     'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
+                    'faltam': sum(_precisa_conferir(x, max_h) for x in its),
                     'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]})
-    return {'modo': modo, 'modos': list(MODOS), 'areas': out}
+    return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out)}
+
+
+def ferramenta_conferir(ctx, args):
+    """O segundo plano chama com o PC parado: confere só o que venceu (mais de 20 h), para a janela abrir com o dado fresco. Modo teste:
+    nada muda no PC."""
+    if not WINDOWS:
+        ctx.t.erro('só funciona no Windows.')
+        return 1
+    try:
+        r = api_itens(ctx, {'conferir': True, 'max_idade_h': 20}, lambda *a: None)
+    except Exception as e:
+        LOG.escreve(f'conferir: {e!r}')
+        return 1
+    LOG.escreve(f'conferir: pronto, {r.get("faltam", 0)} itens sem leitura')
+    return 0
 
 
 def areas_recomendadas():
@@ -14838,7 +15223,9 @@ def api_aplicado(ctx, p, ev):
     out = []
     for dt, nome, titulo in reversed(pacotes_aplicados_dt()):
         reg = (e.get('pacotes') or {}).get(nome) or {}
+        por, sem = itens_desfaziveis(nome)
         out.append({'pacote': nome, 'titulo': titulo, 'quando': dt.isoformat(timespec='minutes'), 'itens': reg.get('itens') or [],
+                    'por_item': sorted(por), 'so_pacote': sem, 'titulos': reg.get('titulos') or {},
                     'desfaz': PACOTES[nome].reversivel})
     return {'pacotes': out, 'ponto': e.get('ultimo_ponto')}
 
@@ -14848,7 +15235,7 @@ def api_sugestoes(ctx, p, ev):
     """As propostas da central de inteligência, com o número que as justifica, e o que ela previu e aconteceu."""
     exporta_propostas(ctx)
     d = le_json(CASA / 'propostas.json', {}) or {}
-    return {'quando': d.get('quando'), 'propostas': d.get('propostas') or [], 'resultados': d.get('resultados') or [],
+    return {'quando': d.get('quando'), 'propostas': propostas_que_valem(d), 'resultados': d.get('resultados') or [],
             'diagnosticos': d.get('diagnosticos') or [], 'achados': d.get('achados') or [], 'linha_do_tempo': linha_do_tempo_propostas()}
 
 
@@ -15108,17 +15495,22 @@ def api_aplicar(ctx, p, ev):
 
 @metodo_api('desfazer', muda=True)
 def api_desfazer(ctx, p, ev):
-    """Volta pacotes aplicados (o mesmo backup do desfazer da CLI). {"pacotes": ["servicos", ...]}."""
+    """Volta pacotes aplicados (o mesmo backup do desfazer da CLI). {"pacotes": ["servicos", ...]} volta o pacote inteiro;
+    {"itens": {"servicos": ["id", ...]}} volta só esses itens (o resto continua aplicado)."""
     nomes = p.get('pacotes')
+    so_itens = p.get('itens')
+    if so_itens is not None:
+        so_itens = _selecao(p)
+        nomes = list(so_itens)
     if not isinstance(nomes, list) or not nomes or not all(n in PACOTES for n in nomes):
-        raise ErroApi('pedido_invalido', '{"pacotes": ["nome", ...]} com pacotes que existem')
+        raise ErroApi('pedido_invalido', '{"pacotes": ["nome", ...]} ou {"itens": {"pacote": ["id", ...]}} com pacotes que existem')
 
     def faz():
         res = []
         for k, n in enumerate(nomes):
             ev('pacote', {'nome': n, 'titulo': PACOTES[n].titulo, 'n': k + 1, 'de': len(nomes)})
             tem = WINDOWS and (dir_backup() / n / 'mudancas.jsonl').exists()
-            cod = desfaz_pacote(ctx, n) if tem else 0
+            cod = desfaz_pacote(ctx, n, itens=(so_itens or {}).get(n)) if tem else 0
             # "ok" só quando havia o que voltar e o desfazer terminou sem erro; "nada" quando não havia backup deste pacote
             res.append({'pacote': n, 'titulo': PACOTES[n].titulo, 'ok': bool(tem and cod == 0), 'nada': not tem})
         try:
@@ -15691,6 +16083,129 @@ def api_envio_registrar(ctx, p, ev):
     e['envios'] = envios
     salva_estado(e)
     return {'envios': list(reversed(envios))[:30]}
+# ═══════════════════════════════ RAM por programa (tela Memória) ═══════════════════════════════
+# O segundo plano grava, a cada minuto, os 15 programas que mais usam RAM (ram.jsonl: memória privada somada por nome, o Chrome com
+# as abas vira um só), o quanto da memória total está prometido (commit) e a memória comprimida. Aqui isso vira: quem usa agora, a média
+# e o pico em 24 h e em 7 dias, um minigráfico, se a RAM está cheia de verdade e o que dá para fazer com cada um (com cuidado).
+
+def _le_ram(dias=7, agora=None):
+    """[(datetime, {nome: MB}, commit_pct, comprimida_mb)] dos últimos dias, do mais velho para o mais novo."""
+    agora = agora or datetime.now()
+    corte = agora - timedelta(days=dias)
+    out = []
+    try:
+        linhas = (CASA / 'ram.jsonl').read_text(encoding='utf-8', errors='replace').splitlines()
+    except OSError:
+        return out
+    for l in linhas:
+        try:
+            d = json.loads(l)
+            t = datetime.fromisoformat(str(d['t'])[:19])
+        except (ValueError, KeyError, TypeError):
+            continue
+        if t < corte:
+            continue
+        progs = {}
+        for x in d.get('p') or []:
+            if isinstance(x, list) and len(x) == 2 and isinstance(x[1], (int, float)):
+                progs[str(x[0])] = float(x[1])
+        out.append((t, progs, d.get('commit_pct'), d.get('comprimida_mb')))
+    return out
+
+
+def _nome_amigavel(n):
+    """'o Google Chrome' (do dicionário) vira 'Google Chrome'; sem dicionário, o nome do processo."""
+    q = quem_e(n)
+    if q:
+        s = re.sub(r'^(o|a|os|as|um|uma)\s+', '', q[0].strip(), flags=re.I)
+        # descrição longa ("o navegador do Google, com as abas") não serve de nome: fica o do processo
+        if len(s) <= 32 and ',' not in s:
+            return s[0].upper() + s[1:]
+    return n
+
+
+def classe_programa(n):
+    """('protegido' | 'conhecido' | 'desconhecido', o que é, o que fazer). Protegido: Windows, drivers, proteção, anti-cheat e o próprio
+    Katharos: aparece, mas sem nenhuma ação. Desconhecido: "não conheço este programa", sem palpite."""
+    base = str(n or '').lower()
+    base = base[:-4] if base.endswith('.exe') else base
+    q = quem_e(base)
+    if not pode_sugerir_fechar(base) or base in ANTICHEAT_PROCESSOS or (q and q[1] == _NORMAL):
+        return 'protegido', (q[0] if q else 'parte do Windows'), 'faz parte do Windows ou da proteção: o Katharos nunca mexe'
+    if q:
+        return 'conhecido', q[0], q[1]
+    return 'desconhecido', 'não conheço este programa', ''
+
+
+def pressao_ram(linhas, total_gb=None):
+    """A RAM está cheia de verdade? Olha a última meia hora: memória prometida (commit) e comprimida. "Alto" sozinho não é alarme: o
+    Windows usa RAM livre de cache de propósito."""
+    ult = linhas[-30:]
+    commits = sorted(c for _, _, c, _ in ult if isinstance(c, (int, float)))
+    comps = sorted(c for _, _, _, c in ult if isinstance(c, (int, float)))
+    if not commits:
+        return {'nivel': 'sem_dado', 'texto': 'Ainda sem medida: com o acompanhamento ligado, em alguns minutos aparece aqui.'}
+    commit = commits[len(commits) // 2]
+    comp = comps[len(comps) // 2] if comps else None
+    comp_pct = (comp / 1024 / total_gb * 100) if comp and total_gb else None
+    if commit >= 90 or (comp_pct or 0) >= 15:
+        nivel, texto = 'cheia', 'Cheia de verdade: o Windows já está comprimindo memória e usando o disco no lugar da RAM. É aí que tudo engasga.'
+    elif commit >= 80:
+        nivel, texto = 'apertada', 'Apertada: ainda dá conta, mas abrir mais um programa pesado já começa a engasgar.'
+    else:
+        nivel, texto = 'folgada', 'Folgada: mesmo com o número alto, sobra memória. O Windows usa a RAM livre de cache de propósito.'
+    return {'nivel': nivel, 'texto': texto, 'commit_pct': round(commit, 1), 'comprimida_gb': round(comp / 1024, 2) if comp else None,
+            'comprimida_pct': round(comp_pct, 1) if comp_pct is not None else None}
+
+
+@metodo_api('memoria_programas')
+def api_memoria_programas(ctx, p, ev):
+    """Quem usa a RAM: um item por programa, com agora, média e pico em 24 h e 7 dias, o minigráfico das últimas 24 h (uma média por
+    hora; hora sem leitura fica sem ponto, nunca zero), a classe (protegido, conhecido, desconhecido) e as ações seguras."""
+    agora = datetime.now()
+    linhas = _le_ram(7, agora)
+    total = None
+    a = le_agora(max_idade_s=120)
+    if isinstance(a, dict):
+        total = a.get('ram_total_gb')
+    if not total and ctx.perfil:
+        total = pf(ctx.perfil, 'ram.total', None)
+    if not linhas:
+        return {'programas': [], 'pressao': pressao_ram([], total), 'desde': None, 'ram_total_gb': total}
+    dia = agora - timedelta(hours=24)
+    ultima_t, ultima, _, _ = linhas[-1]
+    nomes = set()
+    for _, progs, _, _ in linhas:
+        nomes |= set(progs)
+    progs_out = []
+    for n in nomes:
+        v7 = [progs.get(n) for _, progs, _, _ in linhas]
+        v24 = [progs.get(n) for t, progs, _, _ in linhas if t >= dia]
+        tem7 = [x for x in v7 if x is not None]
+        tem24 = [x for x in v24 if x is not None]
+        horas = []
+        for h in range(24):
+            ini, fim = dia + timedelta(hours=h), dia + timedelta(hours=h + 1)
+            vs = [progs[n] for t, progs, _, _ in linhas if ini <= t < fim and n in progs]
+            horas.append(round(sum(vs) / len(vs)) if vs else None)
+        classe, oque, faz = classe_programa(n)
+        acoes = []
+        if classe == 'conhecido':
+            q = quem_e(n)
+            if q and (q[2] == 'inicializacao' or q[1] == _INI):
+                acoes.append('inicializacao')
+            acoes += ['fechar', 'desinstalar']
+        progs_out.append({
+            'processo': n, 'nome': _nome_amigavel(n), 'classe': classe, 'o_que_e': oque, 'faz': faz, 'acoes': acoes,
+            # "agora" é a última leitura (se o programa ainda estava entre os 15 maiores nela)
+            'agora_mb': ultima.get(n) if (agora - ultima_t).total_seconds() < 600 else None,
+            'media_24h_mb': round(sum(tem24) / len(tem24)) if tem24 else None, 'pico_24h_mb': max(tem24) if tem24 else None,
+            'media_7d_mb': round(sum(tem7) / len(tem7)) if tem7 else None, 'pico_7d_mb': max(tem7) if tem7 else None,
+            'horas': horas, 'leituras': len(tem7),
+        })
+    progs_out.sort(key=lambda x: -((x['agora_mb'] or 0) * 2 + (x['media_24h_mb'] or 0)))
+    return {'programas': progs_out[:25], 'pressao': pressao_ram(linhas, total), 'desde': linhas[0][0].isoformat(timespec='minutes'),
+            'ultima': ultima_t.isoformat(timespec='minutes'), 'ram_total_gb': total, 'dias': round((ultima_t - linhas[0][0]).total_seconds() / 86400, 1)}
 # ─────────────── saúde do Windows: erros dos logs, drivers e o que o Windows precisa ───────────────
 # Coleta só leitura (Visualizador de Eventos, drivers instalados, estado do Windows) → catálogo de causas conhecidas → problemas
 # explicados, com o que fazer. Regras: (1) só explica o que está no catálogo; o resto aparece como "sem explicação catalogada",
@@ -15801,6 +16316,13 @@ CATALOGO_PROVEDORES = {
 }
 ERROS_SERVICO = {7000: 'não iniciou', 7001: 'depende de outro serviço que falhou', 7009: 'demorou demais para iniciar', 7011: 'não respondeu a tempo',
                  7023: 'terminou com erro', 7024: 'terminou com erro específico', 7031: 'terminou sem avisar', 7034: 'terminou sem avisar'}
+# serviços de programas que falham "de propósito" quando o programa está fechado: não é defeito do PC. Só baixa (nunca some): se o PC
+# também trava ou cai, vale olhar.
+SERVICOS_QUE_SO_SOBEM_COM_O_PROGRAMA = (
+    (r'ryzen\s*master', 'O AMD Ryzen Master instala um driver que só sobe com o programa aberto. Com ele instalado e fechado, o Windows '
+                        'registra que o driver não iniciou a cada boot: é comum e não afeta o PC.',
+     'Só vale olhar se o PC também trava ou desliga sozinho. Se você não usa o Ryzen Master, desinstalar tira o aviso.'),
+)
 CODIGOS_DISPOSITIVO = {10: 'o dispositivo não consegue iniciar', 28: 'faltam os drivers', 31: 'o Windows não consegue carregar o driver', 43: 'o Windows parou o dispositivo por ele ter reportado problemas',
                        45: 'o dispositivo não está conectado', 24: 'o dispositivo foi removido ou não funciona direito', 12: 'não há recursos livres suficientes', 37: 'o driver falhou ao iniciar'}
 
@@ -15848,6 +16370,9 @@ def explica_grupo(g):
         return _prob(base_id, 'erro', 'alta', f'Tela azul registrada: {nome}', freq(), f'Causa mais comum para este código: {causa}.',
                      'Atualize os drivers (vídeo primeiro); se for memória, rode o Diagnóstico de Memória do Windows.', 'raiox', n)
     if p == 'service control manager' and i in ERROS_SERVICO and arg:
+        for padrao, ex, faz in SERVICOS_QUE_SO_SOBEM_COM_O_PROGRAMA:
+            if re.search(padrao, arg, re.I):
+                return _prob(base_id, 'erro', 'baixa', f'O serviço "{arg}" {ERROS_SERVICO[i]}', freq(), ex, faz, '', n)
         gr = 'média' if n >= 3 else 'baixa'
         return _prob(base_id, 'erro', gr, f'O serviço "{arg}" {ERROS_SERVICO[i]}', freq(), 'Serviço do Windows ou de um programa falhando. Se for de um programa que você não usa mais, é resto de instalação.',
                      'Se o programa é seu e ainda é usado, atualize ou reinstale. Se não, o pacote de serviços pode desativá-lo.', 'servicos', n)
@@ -16597,7 +17122,7 @@ AVISO_PONTOS = [
 ]
 
 # Comandos que só leem ou que protegem (desfazer nunca pode ficar atrás de um aviso): não pedem o aceite.
-SEM_ACEITE = {'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
+SEM_ACEITE = {'conferir', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'ajuda', 'raiox', 'painel', 'saude', 'conselheiro', 'tendencia', 'estado', 'relatorio', 'cartao',
               'benchmark', 'verificar', 'config', 'desfazer', 'socorro', 'retomar', 'restaurar', 'amostrar', 'manutencao', 'travadas'}
 
 
@@ -17405,7 +17930,8 @@ COMANDOS = {cmd: (desc, f) for _, _, itens in GRUPOS for cmd, desc, f in itens}
 COMANDOS['manutencao'] = ('a manutenção em si (a tarefa agendada chama)', 'ferramenta_manutencao')
 COMANDOS['bandeja'] = ('o ícone do Katharos perto do relógio (o mesmo que segundo-plano)', 'ferramenta_segundo_plano')
 COMANDOS['amostrar'] = ('uma leitura leve do sistema (a tarefa de 15 min chama)', 'ferramenta_amostrar')
-SEM_ESTADO = {'travadas', 'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
+COMANDOS['conferir'] = ('confere o "já está assim" que venceu, sem mudar nada (o segundo plano chama com o PC parado)', 'ferramenta_conferir')
+SEM_ESTADO = {'conferir', 'travadas', 'aplicado', 'bandeja', 'segundo-plano', 'aovivo', 'autenticidade', 'versoes', 'provas', 'buscar', 'aviso', 'amostrar', 'saude', 'conselheiro', 'painel', 'tendencia', 'ajuda', 'config', 'estado', 'desfazer', 'socorro', 'retomar', 'restaurar', 'relatorio', 'cartao', 'benchmark'}
 
 
 # comandos depois dos quais o motor de inteligência pensa de novo (evento "aplicou" ou "desfez")
@@ -17566,6 +18092,8 @@ def monta_parser():
     c.add_argument('valor', nargs='?', help='valor novo (vazio volta ao padrão)')
     m = sub.add_parser('manutencao', parents=[depois], help='a manutenção em si (a tarefa agendada chama)')
     m.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
+    cf = sub.add_parser('conferir', parents=[depois], help='confere o "já está assim" que venceu (mais de 20 h), em modo teste: nada muda')
+    cf.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
     am = sub.add_parser('amostrar', parents=[depois], help='uma leitura leve do sistema, somada ao histórico por hora (a tarefa de 15 min chama)')
     am.add_argument('--agendada', action='store_true', help=argparse.SUPPRESS)
     bj = sub.add_parser('bandeja', parents=[depois], help='o ícone do Katharos perto do relógio, com a última leitura e atalhos')
@@ -17809,7 +18337,7 @@ def main(argv=None):
     if tela:
         cru = cru[1:]
         argv = cru
-    if primeiro and not tela and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar'):
+    if primeiro and not tela and primeiro not in COMANDOS and primeiro not in ('manutencao', 'amostrar', 'conferir'):
         perto = comando_parecido(primeiro)
         if perto:
             print(f'katharos: "{primeiro}" não é um comando. Você quis dizer "{perto}"?  (katharos ajuda mostra o essencial)')
@@ -17831,10 +18359,10 @@ def main(argv=None):
     AVISOS_INICIO.clear()
     globals()['AVISO_VIVO'] = t.aviso
     try:   # versão nova rodando pela primeira vez: reconhece os dados da anterior, converte e atualiza as cópias
-        confere_versao(t, silencioso=bool(getattr(args, 'agendada', False)) or args.comando in ('amostrar', 'manutencao'))
+        confere_versao(t, silencioso=bool(getattr(args, 'agendada', False)) or args.comando in ('amostrar', 'manutencao', 'conferir'))
     except Exception as e:
         LOG.escreve(f'conferência de versão falhou: {e!r}')
-    if not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao'):
+    if not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'conferir'):
         try:   # automático e sem rede: avisa só se o SHA256SUMS.txt que veio junto não bate com este arquivo
             confere_na_abertura(t)
         except Exception as e:
@@ -17847,7 +18375,7 @@ def main(argv=None):
         elif not args.sim:   # sem terminal, quem usa --sim já está escolhendo seguir sem perguntar
             t.aviso('Leia o aviso de uso antes (katharos aviso) e aceite no menu, ou use --sim para seguir sem perguntar.')
             return 1
-    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'segundo-plano', 'bandeja') and not args.teste \
+    if WINDOWS and not getattr(args, 'agendada', False) and args.comando not in ('amostrar', 'manutencao', 'conferir', 'segundo-plano', 'bandeja') and not args.teste \
             and not getattr(args, 'exportar', False):
         try:   # quem tinha o acompanhamento contínuo passa para o Katharos.exe; quem já usa, fica com a config atualizada
             migra_segundo_plano(ctx)

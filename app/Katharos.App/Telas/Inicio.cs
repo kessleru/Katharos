@@ -13,10 +13,16 @@ public class Inicio : Tela
         var cab = Cabecalho("Início", "Como está o seu PC e o que fazer agora.");
         // a última leitura aparece na hora; a nova troca quando chegar (só se mudou)
         var g = Servico.Guardado("inicio");
+        jogos = Servico.Guardado("sessoes", new { dias = 30 });
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo o que já está guardado").secao);
         var d = await Servico.Le("inicio");
+        try { jogos = await Servico.Le("sessoes", new { dias = 30 }); } catch (Exception e) { Registro.Escreve("início: sessões: " + e.Message); }
         if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
+        else if (jogosDesenhados != jogos?.ToJsonString()) Desenha(cab, d);
     }
+
+    JsonNode? jogos;
+    string? jogosDesenhados;
 
     void Desenha(Control cab, JsonNode? d)
     {
@@ -35,8 +41,9 @@ public class Inicio : Tela
                 ? Proximo("Nada urgente", "O último raio-x não achou problema. Se quiser ir além, escolha um modo para otimizar.",
                           Botao("Otimizar", true, () => Abre("otimizar")))
                 : Proximo(achados.Count == 1 ? "Resolver 1 coisa que o raio-x achou" : $"Resolver {achados.Count} coisas que o raio-x achou",
-                          graves > 0 ? $"{(graves == 1 ? "Uma é grave" : graves + " são graves")}: {achados[0].S("titulo")}." : "Nenhuma é grave.",
-                          Botao("Ver o que fazer", true, () => Abre("raiox")), Botao("Fazer o raio-x de novo", false, () => Abre("raiox")));
+                          (graves > 0 ? $"{(graves == 1 ? "Uma é grave" : graves + " são graves")}: {achados[0].S("titulo")}." : "Nenhuma é grave.")
+                          + (rx.D("resolvidos") is double rs && rs > 0 ? $" {(rs == 1 ? "Uma já foi resolvida" : Num(rs) + " já foram resolvidas")} desde o raio-x." : ""),
+                          Botao("Ver o diagnóstico", true, () => Abre("raiox")));
         }
 
         // I16: quando o motor já concluiu algo, a frase principal e a ação que mais rende vêm dele (com a previsão e como desfazer)
@@ -48,20 +55,20 @@ public class Inicio : Tela
             var txt = new List<string> { Primeira(acao.S("porque")) };
             if (acao.S("previsao") != "") txt.Add("O que eu faria: " + acao.S("previsao"));
             if (acao.S("desfazer") != "") txt.Add("Para voltar: " + ComoDesfazer(acao.S("desfazer")) + ".");
-            passo = Proximo(motor.S("frase"), string.Join(" ", txt),
-                            Botao(acao.S("area") != "" ? "Aplicar" : "Ver", true, () => Abre(Sugestoes.TelaDo(cmd))), Botao("Por que isso?", false, () => Abre("sugestoes")));
+            passo = Proximo(motor.S("frase"), string.Join(" ", txt), Detalhe.Botoes(acao, Abre, "Central", primario: true));
         }
         // 2.13: primeira abertura guiada, em três passos (o raio-x só lê; mudar vem depois e sempre item por item)
         if (d.B("primeira_vez")) passo = PrimeirosPassos(d?["pc"].B("notebook") == true);
 
-        double? nota = rx.D("nota");
+        double? nota = rx.D("nota"), notaRx = rx.D("nota_raiox");
         var t = d?["temperatura"];
         double? tc = t.D("cpu");
         var pc = d?["pc"];
         double? livre = pc.D("disco_livre_gb"), total = pc.D("disco_total_gb");
         var numeros = S(Celulas(
             Numero("Nota do PC", nota.HasValue ? Num(nota) : "-", "de 100",
-                   nota == null ? "faça o raio-x para ter a nota" : (nota >= 80 ? "bem cuidado" : nota >= 55 ? "dá para melhorar" : "precisa de atenção") + " · raio-x " + Quando(rx.S("quando")),
+                   nota == null ? "faça o raio-x para ter a nota" : (nota >= 80 ? "bem cuidado" : nota >= 55 ? "dá para melhorar" : "precisa de atenção")
+                       + (notaRx is double nr && nr != nota ? $" · era {Num(nr)} no raio-x" : " · raio-x " + Quando(rx.S("quando"))),
                    nota == null ? Tema.Apagado : nota >= 80 ? Tema.Verde : nota >= 55 ? Tema.Ambar : Tema.Vermelho),
             Numero("Temperatura da CPU", tc.HasValue ? Num(tc) : "-", "°C",
                    tc == null ? "sem leitura: abra o MSI Afterburner ou o HWiNFO" : (tc >= 90 ? "quente" : tc >= 80 ? "morna" : "normal") + " · lida do " + t.S("cpu_fonte"),
@@ -70,17 +77,23 @@ public class Inicio : Tela
                    livre == null ? "aparece depois do raio-x" : livre < 15 ? "quase cheio" : livre < 40 ? "apertado" : "folgado",
                    livre == null ? Tema.Apagado : livre < 15 ? Tema.Vermelho : livre < 40 ? Tema.Ambar : Tema.Verde)));
 
+        // as três coisas que mais importam agora (o motor já tirou as resolvidas depois do raio-x); o diagnóstico completo fica no Raio-x
         Control? lista = null;
         if (rx != null && rx.A("achados").Any())
         {
-            var p = new StackPanel { Children = { Subtitulo("O que o raio-x achou") } };
-            foreach (var a in rx.A("achados").Take(5))
+            var p = new StackPanel { Children = { Subtitulo("O mais importante agora", null, "alerta") } };
+            foreach (var a in rx.A("achados").Take(3))
             {
                 var (g, cor) = Gravidade((int)(a.D("impacto") ?? 0));
-                p.Children.Add(Linha(a.S("titulo"), a.S("evidencia"), Etiqueta(g, cor), Botao(AcaoDoAchado(a.S("comando")), false, () => Abre(TelaDoComando(a.S("comando"))))));
+                p.Children.Add(Linha(a.S("titulo"), a.S("evidencia"), Etiqueta(g, cor), Detalhe.Botoes(a, Abre, "Início"), Icones.DaCategoria(Rotas.Categoria(a.S("categoria"), a.S("titulo"), a.S("comando")))));
             }
+            if (rx.D("total") is double tot && tot > 3)
+                p.Children.Add(new Border { Padding = new Avalonia.Thickness(32, 12, 32, 16), BorderBrush = Tema.Linha, BorderThickness = new Avalonia.Thickness(0, 1, 0, 0),
+                    Child = Botao($"Ver as outras {Num(tot - 3)} no Raio-x", false, () => Abre("raiox")).Com(b => b.HorizontalAlignment = HorizontalAlignment.Left) });
             lista = S(p);
         }
+        jogosDesenhados = jogos?.ToJsonString();
+        var secJogos = SecaoJogos(jogos);
 
         var um = d?["ultima_mudanca"];
         Control? ultima = um == null ? null : S(new Grid
@@ -110,7 +123,7 @@ public class Inicio : Tela
                                                                      T("Mande um relatório, a sua opinião ou os dois. Você vê tudo antes de sair.", "rotulo") } },
                          Botao("Enviar relatório", false, () => Abre("enviar")).Com(b => Grid.SetColumn(b, 1)) },
         });
-        Monta(cab, versao, passo, numeros, lista, ultima, enviar);
+        Monta(cab, versao, passo, numeros, lista, secJogos, ultima, enviar);
     }
 
     Control PrimeirosPassos(bool notebook)
@@ -138,7 +151,7 @@ public class Inicio : Tela
         return S(p);
     }
 
-    static Control Proximo(string titulo, string texto, params Button[] botoes)
+    static Control Proximo(string titulo, string texto, params Control[] botoes)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 28) };
         g.Children.Add(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21), T(texto, "sub").Com(x => { x.MaxWidth = 600; x.HorizontalAlignment = HorizontalAlignment.Left; }) } });
@@ -150,11 +163,20 @@ public class Inicio : Tela
 
     static string Primeira(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
 
-    // o comando do achado (o mesmo da CLI) vira o nome da ação e a tela que resolve
-    static string AcaoDoAchado(string comando) => comando switch
+    /// <summary>Jogos, dentro do Início: as últimas sessões, o que limitou o jogo e o caminho para os detalhes.</summary>
+    Control? SecaoJogos(JsonNode? j)
     {
-        "" => "Entender", "inicializacao" => "Escolher quais abrem", "atualizar" => "Ver como atualizar", "limpar" => "Limpar",
-        "segundo-plano" => "Ligar o acompanhamento", _ => "Resolver",
-    };
-    static string TelaDoComando(string comando) => comando switch { "" => "raiox", "segundo-plano" => "aovivo", "desfazer" => "desfazer", _ => "otimizar" };
+        var ses = j.A("sessoes").OrderByDescending(x => x.S("inicio")).Take(3).ToList();
+        if (ses.Count == 0) return null;
+        var p = new StackPanel { Children = { Subtitulo("Jogos", "Últimas sessões medidas", "jogos") } };
+        static string Limite(string x) => x switch { "gpu" => "placa de vídeo no limite", "cpu" => "processador segurando", "ram" => "memória cheia", "disco" => "disco", "" => "sem limite claro", _ => x };
+        foreach (var x in ses)
+        {
+            string fps = x.D("fps_med") is double f ? $"{Num(f)} FPS médio" + (x.D("fps_1low") is double l ? $", {Num(l)} no 1% mais lento" : "") : "sem FPS medido";
+            p.Children.Add(Linha($"{x.S("jogo")} · {Quando(x.S("inicio"))}", $"{Num(x.D("min"))} min · {fps} · o que limitou: {Limite(x.S("principal"))}"));
+        }
+        p.Children.Add(new Border { Padding = new Avalonia.Thickness(32, 12, 32, 16), BorderBrush = Tema.Linha, BorderThickness = new Avalonia.Thickness(0, 1, 0, 0),
+            Child = Botao("Ver por jogo e antes e depois", false, () => Abre("jogos")).Com(b => b.HorizontalAlignment = HorizontalAlignment.Left) });
+        return S(p);
+    }
 }

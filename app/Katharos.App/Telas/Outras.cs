@@ -88,25 +88,31 @@ public class Jogos : Tela
     };
 }
 
-/// <summary>Desfazer: cada mudança aplicada, com quando e quantos itens, e a volta a um clique (com confirmação).</summary>
+/// <summary>
+/// Desfazer: cada área aplicada abre a lista dos seus itens, com caixa de marcar: "Desfazer marcados" volta só esses (o resto continua
+/// aplicado) e "Desfazer tudo" volta a área inteira. Mudanças gravadas antes da 4.2.1 não sabem de qual item vieram: essas só voltam com
+/// a área inteira, e a tela diz isso.
+/// </summary>
 public class Desfazer : Tela
 {
+    readonly HashSet<string> abertas = new();
+
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Desfazer", "Tudo o que o Katharos mudou guarda o valor de antes. Escolha o que voltar.");
-        Monta(cab, Carregando("Lendo o que foi aplicado").secao);
+        var cab = Cabecalho("Desfazer", "Tudo o que o Katharos mudou guarda o valor de antes. Volte uma área inteira ou só alguns itens.");
+        var g = Servico.Guardado("aplicado");
+        if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo o que foi aplicado").secao);
         var d = await Servico.Le("aplicado");
+        if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
+    }
+
+    void Desenha(Control cab, JsonNode? d)
+    {
         var ps = d.A("pacotes").ToList();
         if (ps.Count == 0) { Monta(cab, Vazio("Nada para desfazer", "Nenhuma mudança do Katharos está aplicada neste PC.")); return; }
-        var lista = new StackPanel { Children = { Subtitulo("Aplicado neste PC", "Do mais novo para o mais antigo.") } };
-        foreach (var p in ps)
-        {
-            string nome = p.S("pacote"), titulo = p.S("titulo");
-            int n = p.A("itens").Count();
-            var acao = p.B("desfaz") ? Botao("Desfazer", false, async () => await Volta(new[] { nome }, titulo)) : null;
-            lista.Children.Add(Linha($"{Maiuscula(titulo)}: {n} {(n == 1 ? "item" : "itens")}", $"aplicado {Quando(p.S("quando"))}" + (p.B("desfaz") ? "" : " · remoções não voltam por aqui"), null, acao));
-        }
-        var tudo = Botao("Desfazer tudo", false, async () => await Volta(ps.Where(p => p.B("desfaz")).Select(p => p.S("pacote")).ToArray(), "tudo"));
+        var lista = new StackPanel { Children = { Subtitulo("Aplicado neste PC", "Do mais novo para o mais antigo.", "desfazer") } };
+        foreach (var p in ps) lista.Children.Add(Area(p));
+        var tudo = Botao("Desfazer tudo", false, async () => await Volta(ps.Where(p => p.B("desfaz")).Select(p => p.S("pacote")).ToArray(), null, "tudo"));
         var ponto = d.S("ponto");
         var rodape = S(new Grid
         {
@@ -116,18 +122,75 @@ public class Desfazer : Tela
         Monta(cab, S(lista), rodape);
     }
 
-    async Task Volta(string[] pacotes, string titulo)
+    Control Area(JsonNode p)
+    {
+        string nome = p.S("pacote"), titulo = p.S("titulo");
+        var ids = p.A("itens").Select(x => x.ToString()).ToList();
+        var porItem = p.A("por_item").Select(x => x.ToString()).ToHashSet();
+        int soPacote = (int)(p.D("so_pacote") ?? 0);
+        var titulos = p?["titulos"] as JsonObject;
+        bool desfaz = p.B("desfaz");
+        bool aberta = abertas.Contains(nome);
+        var seta = T(aberta ? "−" : "+", null, Tema.Apagado).Com(t => t.FontFamily = Tema.Mono);
+        var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("24,*,Auto") };
+        topo.Children.Add(seta);
+        topo.Children.Add(new StackPanel { Spacing = 2, Children = {
+            T($"{Maiuscula(titulo)}", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold),
+            T($"{ids.Count} {(ids.Count == 1 ? "item" : "itens")} · aplicado {Quando(p.S("quando"))}" + (desfaz ? "" : " · remoções não voltam por aqui"), "rotulo") } }.Com(x => Grid.SetColumn(x, 1)));
+        var cabBt = new Button { Content = topo, Background = Brushes.Transparent, CornerRadius = new CornerRadius(0), Padding = new Thickness(32, 15), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        var corpo = new StackPanel { IsVisible = aberta, Spacing = 6, Margin = new Thickness(56, 4, 32, 16) };
+        var caixas = new List<(CheckBox c, string id)>();
+        var marcados = Botao("Desfazer marcados", false, async () => await Volta(new[] { nome }, caixas.Where(x => x.c.IsChecked == true).Select(x => x.id).ToArray(), titulo));
+        marcados.IsEnabled = false;
+        foreach (var id in ids)
+        {
+            string nomeItem = titulos?[id]?.ToString() ?? Legivel(id);
+            bool sozinho = porItem.Contains(id);
+            var c = new CheckBox { Content = new StackPanel { Spacing = 1, Children = {
+                    T(Maiuscula(nomeItem), null, Tema.Osso, 14, true),
+                    T(sozinho ? "volta sozinho" : "só volta com a área inteira (aplicado antes da 4.2.1)", null, sozinho ? Tema.Apagado : Tema.Ambar, 12.5, true) } },
+                IsEnabled = desfaz && sozinho };
+            c.IsCheckedChanged += (_, _) => { int n = caixas.Count(x => x.c.IsChecked == true); marcados.Content = n == 0 ? "Desfazer marcados" : $"Desfazer {n} {(n == 1 ? "item" : "itens")}"; marcados.IsEnabled = n > 0; };
+            caixas.Add((c, id));
+            corpo.Children.Add(c);
+        }
+        if (soPacote > 0 && porItem.Count == 0)
+            corpo.Children.Insert(0, Item("Esta área foi aplicada antes da 4.2.1: as mudanças não sabem de qual item vieram, então voltam juntas.", Tema.Ambar));
+        if (desfaz)
+            corpo.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 10, 0, 0), Children = {
+                marcados, Botao($"Desfazer {Maiuscula(titulo)} inteiro", false, async () => await Volta(new[] { nome }, null, titulo)) } });
+        cabBt.Click += (_, _) =>
+        {
+            bool ab = !corpo.IsVisible; corpo.IsVisible = ab; seta.Text = ab ? "−" : "+";
+            if (ab) { abertas.Add(nome); Movimento.Entra(corpo, 4); } else abertas.Remove(nome);
+        };
+        return new StackPanel { Children = { cabBt, corpo } };
+    }
+
+    // "ini:Steam" → "Steam"; "svc-xbox" → "svc xbox" (só quando o nome do item não foi guardado)
+    static string Legivel(string id) => id.Contains(':') ? id[(id.IndexOf(':') + 1)..] : id.Replace('-', ' ');
+
+    async Task Volta(string[] pacotes, string[]? itens, string titulo)
     {
         var j = Janela.Atual!;
-        if (pacotes.Length == 0) return;
-        if (!await j.Confirma(titulo == "tudo" ? "Desfazer tudo?" : $"Desfazer {titulo}?",
-                T("Os ajustes voltam ao valor de antes. O Windows vai pedir permissão de administrador.", "sub"), "Desfazer")) return;
+        if (pacotes.Length == 0 || (itens != null && itens.Length == 0)) return;
+        string pergunta = titulo == "tudo" ? "Desfazer tudo?" : itens != null ? $"Desfazer {itens.Length} {(itens.Length == 1 ? "item" : "itens")} de {titulo}?" : $"Desfazer {titulo} inteiro?";
+        string explica = itens != null ? "Só esses voltam ao valor de antes; o resto da área continua aplicado. O Windows vai pedir permissão de administrador."
+                                       : "Os ajustes voltam ao valor de antes. O Windows vai pedir permissão de administrador.";
+        if (!await j.Confirma(pergunta, T(explica, "sub", quebra: true), "Desfazer")) return;
         j.MostraCaixa(Janela.Caixa("Desfazendo", Andamento("Esperando a permissão de administrador do Windows",
             "Se o pedido do Windows não aparecer na frente, ele pode estar piscando na barra de tarefas. Depois disso, os ajustes voltam ao que eram antes.").painel));
         Trabalho.Comeca("Desfazendo…");
         try
         {
-            var r = await Servico.Muda("desfazer", new { pacotes });
+            JsonNode? r;
+            if (itens != null)
+            {
+                var sel = new JsonObject { [pacotes[0]] = new JsonArray(itens.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray()) };
+                r = await Servico.Muda("desfazer", new { itens = sel });
+            }
+            else r = await Servico.Muda("desfazer", new { pacotes });
+            Conferencia.Pede(pacotes, frente: true, forcar: true);
             var falhas = r.A("pacotes").Where(x => !x.B("ok") && !x.B("nada")).Select(x => x.S("titulo")).ToList();
             j.MostraCaixa(Janela.Caixa(falhas.Count == 0 ? "Desfeito" : "Desfeito em parte",
                 T(falhas.Count == 0 ? "Voltou ao que era antes." : "Não voltou: " + string.Join(", ", falhas) + ". O detalhe está no relatório do Katharos.", "sub"),
