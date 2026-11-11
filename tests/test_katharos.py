@@ -1626,6 +1626,26 @@ class TestRaioxInteligente(unittest.TestCase):
         self.assertEqual(k.nota_pc(a), 100)
         self.assertEqual(k.pesa_na_nota(a), [])
 
+    def test_tarefa_do_proprio_katharos_nao_e_suspeita(self):
+        pw = 'C:\\Users\\a\\AppData\\Local\\Katharos\\current\\python\\pythonw.exe'
+        nossa = {'tarefa': '\\Katharos - amostra leve', 'exe': pw, 'args': '"C:\\Users\\a\\.katharos\\katharos.py" amostrar', 'sha': 'ab12', 'assinado': False}
+        with mock.patch.object(k, 'hashes_do_katharos', lambda: frozenset({'ab12'})):
+            self.assertNotIn('Tarefas agendadas suspeitas', self.titulos(dados={'tarefas_suspeitas': [nossa]}))
+            # o mesmo nome com outro executável continua suspeito: o hash é o que vale, não o nome
+            falsa = dict(nossa, sha='ff00')
+            self.assertIn('Tarefas agendadas suspeitas', self.titulos(dados={'tarefas_suspeitas': [falsa]}))
+            # o nosso Python rodando outra coisa também não passa
+            outro = dict(nossa, args='C:\\x\\malware.py')
+            self.assertIn('Tarefas agendadas suspeitas', self.titulos(dados={'tarefas_suspeitas': [outro]}))
+
+    def test_tarefa_assinada_vira_confira_sem_tirar_ponto(self):
+        upd = {'tarefa': '\\Atualizador X', 'exe': 'C:\\Users\\a\\AppData\\Local\\X\\upd.exe', 'sha': 'cc', 'assinado': True, 'empresa': 'X Ltda'}
+        with mock.patch.object(k, 'hashes_do_katharos', lambda: frozenset()):
+            a = self.analisa(dados={'tarefas_suspeitas': [upd]})
+        self.assertEqual([x.titulo for x in a], ['Tarefas agendadas para conferir'])
+        self.assertEqual(a[0].impacto, 0)
+        self.assertIn('X Ltda', a[0].evidencia)
+
     def test_memoria_no_limite_pelo_commit(self):
         a = self.analisa(medidas={'commit_pct': 94, 'ram_disponivel': 0.6}, dados={'top_ram': [{'n': 'chrome', 'mb': 5200}]})
         m = [x for x in a if x.titulo == 'Memória no limite'][0]

@@ -16,6 +16,7 @@ Visual: Kessleru (kterm 2.0.0, embutido abaixo). Dados em ~/.katharos.
 
 import argparse
 import ctypes
+import functools
 import hashlib
 import json
 import queue
@@ -3021,7 +3022,13 @@ foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object
         if ($rep -match '^PT(\d+)M$' -and [int]$Matches[1] -le 15) { $curta = $true }
         if ($rep -match '^PT\d+S$') { $curta = $true }
         if ($exe -match '\\AppData\\|\\Temp\\|\\Users\\Public\\' -and $exe -match '\.(exe|bat|cmd|vbs|js|ps1|scr)$') {
-            $suspeitas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe; repete = $rep; curta = $curta }
+            # hash e assinatura só destes poucos: o motor tira as tarefas do próprio Katharos pelo SHA-256 e baixa os assinados para "confira"
+            $sha = Tenta { (Get-FileHash -LiteralPath $exe -Algorithm SHA256 -ErrorAction Stop).Hash.ToLower() } $null
+            $sig = Tenta { Get-AuthenticodeSignature -LiteralPath $exe -ErrorAction Stop } $null
+            $assinado = [bool]($sig -and $sig.Status -eq 'Valid')
+            $empresa = $null
+            if ($assinado -and $sig.SignerCertificate) { $empresa = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) }
+            $suspeitas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe; args = [string]$ac.Arguments; repete = $rep; curta = $curta; sha = $sha; assinado = $assinado; empresa = $empresa }
         }
         if ($exe -match '^[A-Za-z]:\\' -and $exe -match '\.exe$' -and $tk.TaskPath -notmatch '^\\Microsoft\\' -and -not (Test-Path -LiteralPath $exe)) {
             $orfas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe }
@@ -3130,6 +3137,37 @@ class Achado:
     def __init__(self, impacto, queixas, titulo, evidencia, faz='', comando=''):
         self.impacto, self.queixas, self.titulo = impacto, set(queixas), titulo
         self.evidencia, self.faz, self.comando = evidencia, faz, comando
+
+
+def _sha_ou_nada(caminho):
+    try:
+        return sha256_de(caminho) if caminho and Path(caminho).is_file() else None
+    except OSError:
+        return None
+
+
+@functools.lru_cache(maxsize=1)
+def hashes_do_katharos():
+    """SHA-256 dos executáveis que o próprio Katharos põe nas tarefas dele: o Python que roda este motor (python.exe e pythonw.exe da mesma
+    pasta, que no instalado fica em %LOCALAPPDATA%\\Katharos) e o Katharos.exe. Conferir pelo hash, e não pelo nome, impede que uma tarefa
+    qualquer se chame "Katharos - ..." para escapar do aviso."""
+    py = Path(sys.executable)
+    cands = [py, py.with_name('python.exe'), py.with_name('pythonw.exe'), CASA / EXE_NOME,
+             Path(__file__).resolve().parent.parent / EXE_NOME]
+    return frozenset(h for h in (_sha_ou_nada(c) for c in cands) if h)
+
+
+def eh_tarefa_do_katharos(x, proprios):
+    """Tarefa criada pelo Katharos: nome "Katharos - ...", executável com o mesmo SHA-256 de um dos nossos e, se for o Python, rodando o katharos.py."""
+    nome = str(x.get('tarefa') or '').rsplit('\\', 1)[-1]
+    if not nome.startswith('Katharos - '):
+        return False
+    if not x.get('sha') or str(x['sha']).lower() not in proprios:
+        return False
+    exe = str(x.get('exe') or '').replace('\\', '/').rsplit('/', 1)[-1].lower()
+    if exe.startswith('python'):
+        return 'katharos.py' in str(x.get('args') or '').lower()
+    return exe == EXE_NOME.lower()
 
 
 def analisa(p, m, d):
@@ -3359,11 +3397,20 @@ def analisa(p, m, d):
                         'O dispositivo "System Firmware" está com erro (quase sempre por causa do BitLocker).',
                         'Atualize a BIOS pelo site do fabricante. Antes, suspenda o BitLocker você mesmo: '
                         'manage-bde -protectors -disable C: -RebootCount 3'))
-    susp = lista(d.get('tarefas_suspeitas'))
-    if susp:
-        A.append(Achado(3 if any(x.get('curta') for x in susp) else 2, ['tudo', 'lento'], 'Tarefas agendadas suspeitas',
-                        ', '.join(f'{x.get("tarefa")} → {x.get("exe")}' + (' (repete a cada poucos minutos)' if x.get('curta') else '') for x in susp[:3]),
-                        'Programa rodando de AppData/Temp é padrão comum de malware. Confira cada um e faça uma verificação completa no Defender.'))
+    proprios = hashes_do_katharos()
+    susp = [x for x in lista(d.get('tarefas_suspeitas')) if not eh_tarefa_do_katharos(x, proprios)]
+    sem_assinatura = [x for x in susp if not x.get('assinado')]
+    assinadas = [x for x in susp if x.get('assinado')]
+    if sem_assinatura:
+        A.append(Achado(3 if any(x.get('curta') for x in sem_assinatura) else 2, ['tudo', 'lento'], 'Tarefas agendadas suspeitas',
+                        ', '.join(f'{x.get("tarefa")} → {x.get("exe")}' + (' (repete a cada poucos minutos)' if x.get('curta') else '') for x in sem_assinatura[:3]),
+                        'Programa sem assinatura digital rodando de AppData/Temp é padrão comum de malware. Confira cada um e faça uma verificação completa no Defender.'))
+    if assinadas:
+        # assinatura válida não prova que é bom, mas tira o "suspeita": vira um aviso que não tira ponto
+        A.append(Achado(0, ['tudo'], 'Tarefas agendadas para conferir',
+                        ', '.join(f'{x.get("tarefa")} → {x.get("exe")} (assinado por {x.get("empresa") or "empresa não identificada"})' for x in assinadas[:3]),
+                        'Rodam de AppData, mas o programa tem assinatura digital válida: costuma ser o atualizador de algo que você instalou. '
+                        'Se não reconhecer, desative a tarefa no Agendador de Tarefas.'))
     ame = d.get('ameacas') or {}
     if ame.get('qtd'):
         A.append(Achado(2, ['tudo'], 'O Defender encontrou ameaças', f'{ame["qtd"]} nos últimos 60 dias.',
