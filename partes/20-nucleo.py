@@ -76,7 +76,10 @@ def le_json(arq, padrao):
     arq = Path(arq)
     try:
         with open(arq, encoding='utf-8-sig') as f:
-            return json.load(f)
+            dado = json.load(f)
+        if isinstance(padrao, (dict, list)) and not isinstance(dado, type(padrao)):
+            raise ValueError('JSON de outro tipo')   # '[]', 'null' ou um número onde devia haver um objeto: tratado como ilegível (guarda a cópia)
+        return dado
     except FileNotFoundError:
         return padrao
     except ValueError:

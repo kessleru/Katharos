@@ -2119,6 +2119,27 @@ class TestPerguntarRodada2(unittest.TestCase):
         self.assertLessEqual(len(r['pergunta']), 500)
 
 
+class TestLeJsonTipoErrado(unittest.TestCase):
+    def test_json_de_outro_tipo_vira_o_padrao_e_guarda_a_copia(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            for conteudo, padrao in (('[]', {}), ('null', {}), ('42', {}), ('{"a": 1}', [])):
+                arq = Path(d) / 'x.json'
+                arq.write_text(conteudo, encoding='utf-8')
+                self.assertEqual(k.le_json(arq, padrao), padrao)
+                self.assertFalse(arq.exists())
+                self.assertTrue(list(Path(d).glob('x.json.corrompido-*')))
+                for c in Path(d).glob('x.json.corrompido-*'):
+                    c.unlink()
+
+    def test_json_do_tipo_certo_continua_igual(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            arq = Path(d) / 'y.json'
+            arq.write_text('{"a": [1, 2]}', encoding='utf-8')
+            self.assertEqual(k.le_json(arq, {}), {'a': [1, 2]})
+
+
 if __name__ == '__main__':
     unittest.main()
 
