@@ -4094,3 +4094,26 @@ class TestLogica431(unittest.TestCase):
         with mock.patch.object(k, 'inicio_desligaveis', return_value=8):
             self.assertEqual(k.d_inicio({})[0]['sintomas'], ['inicio_muitos'])
 
+    def test_raiox_em_paralelo_cobre_todas_as_secoes(self):
+        """Toda seção do DIAG_PS entra num grupo (senão um achado sumiria calado) e cada grupo é um script completo."""
+        secs = set(k._secoes_diag())
+        usadas = set(k._GRUPOS_AMOSTRA) | {n for g in k._GRUPOS_DIAG for n in g}
+        self.assertEqual(secs - usadas, set())
+        self.assertEqual(usadas - secs, set())
+        amostra, grupos = k.ps_dos_grupos()
+        for rot, ps in [amostra] + grupos:
+            self.assertIn('$dias60', ps, rot)
+            self.assertTrue(ps.startswith(k.INICIO_PS), rot)
+
+    def test_raiox_em_paralelo_junta_os_dados(self):
+        def falso(t, ps, rot, **kw):
+            s = k.Saida(); s.dados = {rot: True}
+            return s
+        etapas = []
+        with mock.patch.object(k, 'roda_ps', side_effect=falso), mock.patch.object(k, 'mede', return_value={'cpu': 3}), \
+             mock.patch.object(k, 'perfil_pc', return_value={'so': {}}):
+            perf, m, d = k.raiox_paralelo(mock.Mock(mult=1.0), lambda *a: etapas.append(a))
+        self.assertEqual(set(d), {'raiox-amostra', 'raiox-1', 'raiox-2', 'raiox-3', 'raiox-4'})
+        self.assertEqual(m, {'cpu': 3})
+        self.assertEqual(etapas[-1][1], etapas[-1][2], 'a última etapa fecha a conta (n de n)')
+

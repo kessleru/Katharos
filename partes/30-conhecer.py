@@ -510,11 +510,82 @@ def fator_hardware(p):
     return m
 
 
-def mede(ctx, rotulo='medindo'):
+# ───── raio-x em paralelo ─────
+# O raio-x lia tudo num PowerShell só, uma seção depois da outra (1 a 3 minutos). As seções não dependem umas das outras (só da data de
+# 60 dias atrás), então rodam em grupos ao mesmo tempo, cada um no seu processo. A amostra de CPU por processo e as medidas em repouso
+# vão primeiro e juntas, sem o resto rodando: senão o próprio raio-x apareceria como "CPU ocupada com o PC parado".
+_GRUPOS_AMOSTRA = ('processos que mais gastam', 'quem chama o WMI')
+_GRUPOS_DIAG = (('inicializacao', 'boot', 'servicos de terceiros', 'restos de programas'), ('tarefas agendadas',), ('saude',),
+                ('espaco em disco', 'programas instalados'))
+
+
+def _secoes_diag():
+    """{nome: texto} das seções do DIAG_PS (cada uma começa com Vivo 'nome')."""
+    corpo = DIAG_PS[len(INICIO_PS):]
+    out = {}
+    for sec in re.split(r"(?m)^(?=Vivo ')", corpo):
+        m = re.match(r"Vivo '([^']*)'", sec)
+        if m:
+            out[m.group(1)] = sec
+    return out
+
+
+def ps_dos_grupos():
+    """[(rótulo, script)] da amostra e dos grupos do diagnóstico. Toda seção do DIAG_PS entra em algum grupo (o teste confere)."""
+    secs = _secoes_diag()
+    base = INICIO_PS + "\n$dias60 = (Get-Date).AddDays(-60)\n"
+    amostra = ('raiox-amostra', base + ''.join(secs[n] for n in _GRUPOS_AMOSTRA if n in secs))
+    grupos = [(f'raiox-{i + 1}', base + ''.join(secs[n] for n in g if n in secs)) for i, g in enumerate(_GRUPOS_DIAG)]
+    return amostra, grupos
+
+
+def raiox_paralelo(ctx, ev=None):
+    """(perfil, medidas, dados) do raio-x. Fase 1: medidas em repouso + amostra dos processos, juntas e leves. Fase 2: o perfil e os grupos
+    do diagnóstico, todos ao mesmo tempo. ev(texto, n, de) diz o que terminou (a tela anda só com etapa real)."""
+    from concurrent.futures import ThreadPoolExecutor
+    amostra, grupos = ps_dos_grupos()
+    feitos = [0]
+    total = 2 + len(grupos) + 1
+    trava = threading.Lock()
+
+    def avisa(texto):
+        with trava:
+            feitos[0] += 1
+            if ev:
+                ev(texto, feitos[0], total)
+
+    def roda(rot, ps, minutos):
+        s = roda_ps(ctx.t, ps, rot, minutos=minutos, mostra=False, mult=getattr(ctx, 'mult', 1.0) or 1.0)
+        return s
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_med = ex.submit(lambda: mede(ctx, 'medidas em repouso', progresso=False))
+        f_am = ex.submit(roda, amostra[0], amostra[1], 3)
+        m = f_med.result(); avisa('medido o PC em repouso')
+        s_am = f_am.result(); avisa('vistos os processos que mais gastam')
+    dados = dict(s_am.dados)
+    nomes = {'raiox-1': 'inicialização e boot', 'raiox-2': 'tarefas agendadas', 'raiox-3': 'saúde do Windows', 'raiox-4': 'espaço e programas'}
+    with ThreadPoolExecutor(max_workers=len(grupos) + 1) as ex:
+        f_perf = ex.submit(lambda: perfil_pc(ctx, forca=True))
+        fs = {ex.submit(roda, rot, ps, 6): rot for rot, ps in grupos}
+        for f in fs:
+            try:
+                dados.update(f.result().dados)
+            except Exception as e:   # um grupo que falhou não derruba o raio-x: o que ele leria só fica sem achado
+                LOG.escreve(f'raio-x {fs[f]}: {e!r}')
+            avisa('lido: ' + nomes.get(fs[f], fs[f]))
+        perf = f_perf.result(); avisa('lido o hardware')
+    return perf, m, dados
+
+
+def mede(ctx, rotulo='medindo', progresso=True):
     if not WINDOWS:
         return {}
-    with Progresso(ctx.t, None, rotulo) as pr:
-        s = roda_ps(ctx.t, MEDIDAS_PS, 'medidas', minutos=2, mostra=False, pr=pr)
+    if progresso:
+        with Progresso(ctx.t, None, rotulo) as pr:
+            s = roda_ps(ctx.t, MEDIDAS_PS, 'medidas', minutos=2, mostra=False, pr=pr)
+    else:   # dentro do raio-x em paralelo: quem desenha o andamento é ele
+        s = roda_ps(ctx.t, MEDIDAS_PS, 'medidas', minutos=2, mostra=False)
     m = s.dados.get('medidas') or {}
     try:
         completa_temperaturas(m)
@@ -1250,11 +1321,8 @@ def ferramenta_raiox(ctx, args):
         return 1
     queixas = pergunta_queixas(t, args)
     t.titulo('medindo')
-    p = perfil_pc(ctx, forca=True)
-    m = mede(ctx, 'medidas em repouso')
-    with Progresso(t, None, 'analisando tudo') as pr:
-        s = roda_ps(t, DIAG_PS, 'raiox', minutos=8, mostra=False, pr=pr, mult=ctx.mult)
-    d = s.dados
+    with Progresso(t, None, 'lendo tudo em paralelo') as pr:
+        p, m, d = raiox_paralelo(ctx, lambda texto, n, de: pr.avanca(f'{texto} ({n} de {de})'))
     salva_medida(m, 'raiox')
     achados = analisa(p, m, d)
     ctx.achados = achados

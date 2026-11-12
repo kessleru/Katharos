@@ -340,17 +340,13 @@ def api_raiox(ctx, p, ev):
     """Roda o raio-x (só lê; leva 1 a 3 minutos) e devolve o mesmo que o terminal mostra, em dados."""
     if not WINDOWS:
         raise ErroApi('so_windows', 'o raio-x só roda no Windows')
-    ev('etapa', {'texto': 'lendo o PC', 'n': 1, 'de': 3})
-    perf = perfil_pc(ctx, forca=True)
-    m = mede(ctx, 'medidas em repouso')
-    ev('etapa', {'texto': 'analisando', 'n': 2, 'de': 3})
-    s = roda_ps(ctx.t, DIAG_PS, 'raiox', minutos=8, mostra=False, mult=ctx.mult)
+    ev('etapa', {'texto': 'medindo o PC em repouso', 'n': 0, 'de': 7})
+    perf, m, lidos = raiox_paralelo(ctx, lambda texto, n, de: ev('etapa', {'texto': texto, 'n': n, 'de': de}))
     salva_medida(m, 'raiox')
-    achados = analisa(perf, m, s.dados)
+    achados = analisa(perf, m, lidos)
     ctx.achados = achados
     queixas = [q for q in (p.get('queixas') or ['tudo']) if q in dict(QUEIXAS) or q == 'tudo']
-    ev('etapa', {'texto': 'pronto', 'n': 3, 'de': 3})
-    dados = raiox_dados(perf, m, s.dados, achados, queixas)
+    dados = raiox_dados(perf, m, lidos, achados, queixas)
     rel_secao('raiox', dados)
     rel_pc(perf)
     dados['quando'] = agora_iso()
@@ -443,12 +439,11 @@ def api_itens(ctx, p, ev):
                 ctx.perfil = perfil_pc(ctx)
         else:   # fora do Windows (testes e site): o PC modelo, com tudo
             ctx.perfil = json.loads(json.dumps(PC_MODELO))
-    pedidas = p.get('areas') or [n for n in ORDEM_TURBO if n in PACOTES] + [n for n in PACOTES if n not in ORDEM_TURBO]
+    pedidas = [n for n in (p.get('areas') or [n for n in ORDEM_TURBO if n in PACOTES] + [n for n in PACOTES if n not in ORDEM_TURBO]) if n in PACOTES]
     recomendadas = areas_recomendadas()
-    out = []
-    for i, nome in enumerate(pedidas):
-        if nome not in PACOTES:
-            continue
+    # 1) monta as áreas (rápido: só Python, nada roda no PC)
+    areas = []
+    for nome in pedidas:
         pac = PACOTES[nome]
         its = [x for x in (pac.itens(ctx) or []) if x]
         for x in its:
@@ -457,22 +452,50 @@ def api_itens(ctx, p, ev):
         aplica_alertas(nome, its)
         marca_por_modo(its, modo)
         confere_itens(ctx, its, nome, so_guardado=True)
-        if conferir and WINDOWS and any(_precisa_conferir(x, max_h) for x in its):
-            ev('etapa', {'texto': f'conferindo {pac.titulo}', 'n': i + 1, 'de': len(pedidas)})
-            confere_itens(ctx, its, nome, max_idade_h=max_h)
-        if conferir and WINDOWS:
-            marca_area_conferida(nome, its)
+        areas.append((nome, pac, its))
+
+    def entrada(nome, pac, its):
         # quantas mudanças cada modo faria aqui (marcados pelo modo e ainda não feitos): a janela mostra no botão de cada modo
         por_modo = {}
         for m in MODOS:
             marca_por_modo(its, m)
             por_modo[m] = sum(1 for x in its if x.marcado and x.ja is not True)
         marca_por_modo(its, modo)
-        out.append({'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
-                    'recomendado': recomendadas.get(nome),
-                    'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
-                    'faltam': sum(_precisa_conferir(x, max_h) for x in its), 'por_modo': por_modo,
-                    'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]})
+        return {'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
+                'recomendado': recomendadas.get(nome),
+                'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
+                'faltam': sum(_precisa_conferir(x, max_h) for x in its), 'por_modo': por_modo,
+                'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]}
+
+    # 2) confere as que precisam, várias ao mesmo tempo (cada área no seu PowerShell, as grandes em pedaços; o total de PowerShell juntos
+    #    é limitado pelos núcleos do PC).
+    # Cada uma que termina vai na hora para a janela (evento "area"): a tela troca só aquela, sem esperar as outras.
+    if conferir and WINDOWS:
+        precisam = [(n, pac, its) for n, pac, its in areas if any(_precisa_conferir(x, max_h) for x in its)]
+        prontas = [0]
+        trava = threading.Lock()
+
+        def confere(n, pac, its):
+            confere_itens(ctx, its, n, max_idade_h=max_h)
+            marca_area_conferida(n, its)
+            with trava:
+                prontas[0] += 1
+                ev('etapa', {'texto': f'conferido: {pac.titulo}', 'n': prontas[0], 'de': len(precisam)})
+                ev('area', entrada(n, pac, its))
+
+        if precisam:
+            from concurrent.futures import ThreadPoolExecutor
+            ev('etapa', {'texto': 'conferindo ' + ', '.join(pac.titulo for _, pac, _ in precisam[:3]) + ('…' if len(precisam) > 3 else ''), 'n': 0, 'de': len(precisam)})
+            with ThreadPoolExecutor(max_workers=max(1, min(8, len(precisam)))) as ex:   # quem limita os PowerShell é _VAGAS_PS
+                for f in [ex.submit(confere, n, pac, its) for n, pac, its in precisam]:
+                    try:
+                        f.result()
+                    except Exception as e:   # uma área que falhou não segura as outras
+                        LOG.escreve(f'conferir: {e!r}')
+        for n, pac, its in areas:
+            if (n, pac, its) not in precisam:
+                marca_area_conferida(n, its)
+    out = [entrada(n, pac, its) for n, pac, its in areas]
     return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out),
             'por_modo': {m: sum(a['por_modo'][m] for a in out) for m in MODOS}}
 

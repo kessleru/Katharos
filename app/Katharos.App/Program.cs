@@ -35,6 +35,17 @@ static class Program
         }
         // erro que derruba o aplicativo (raro: as telas já tratam os seus) fica no registro, para saber o que houve
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Registro.Escreve("o aplicativo fechou por um erro: " + e.ExceptionObject);
+        // o segundo plano (que pode estar rodando de outra pasta) lê daqui onde está a janela, para nunca abrir o Katharos de terminal
+        try
+        {
+            if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "python")))
+            {
+                var casa = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos");
+                Directory.CreateDirectory(casa);
+                File.WriteAllText(Path.Combine(casa, "janela.txt"), Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Katharos.exe"));
+            }
+        }
+        catch (Exception e) { Registro.Escreve("janela.txt: " + e.Message); }
         try { MontaApp().StartWithClassicDesktopLifetime(args); }
         catch (Exception e) { Registro.Escreve("o aplicativo fechou por um erro: " + e); throw; }
         GC.KeepAlive(unica);

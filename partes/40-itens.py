@@ -167,9 +167,17 @@ def le_cache_ja():
     return out
 
 
+_TRAVA_CACHE = threading.Lock()   # várias áreas conferidas ao mesmo tempo gravam no mesmo arquivo: uma de cada vez
+
+
 def muda_cache_ja(novos=None, apaga=None):
     """Junta resultados novos {(pacote, id): (ja, quando)} e apaga entradas (lista de (pacote, id) ou (pacote, None) para o pacote
     inteiro). Grava num arquivo temporário e troca de uma vez: quem lê ao mesmo tempo vê o antigo ou o novo, nunca metade."""
+    with _TRAVA_CACHE:
+        _muda_cache_ja(novos, apaga)
+
+
+def _muda_cache_ja(novos, apaga):
     atual = le_cache_ja()
     for pac, iid in (apaga or []):
         for ch in [c for c in atual if c[0] == pac and (iid is None or c[1] == iid)]:
@@ -178,7 +186,7 @@ def muda_cache_ja(novos=None, apaga=None):
     arq = _arq_cache_ja()
     try:
         arq.parent.mkdir(parents=True, exist_ok=True)
-        tmp = arq.with_name(f'itens.{os.getpid()}.tmp')
+        tmp = arq.with_name(f'itens.{os.getpid()}.{threading.get_ident()}.tmp')
         tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO,
                                    'itens': {f'{p}/{i}': {'ja': ja, 't': round(t)} for (p, i), (ja, t) in atual.items()}},
                                   ensure_ascii=False), encoding='utf-8')
@@ -219,6 +227,11 @@ def _grava_areas(areas):
 
 def marca_area_conferida(nome, itens):
     """Depois de conferir uma área inteira: quantos itens que ficam gravados no Windows ainda faltam, e quais."""
+    with _TRAVA_CACHE:
+        _marca_area_conferida(nome, itens)
+
+
+def _marca_area_conferida(nome, itens):
     defs = [i for i in itens if i.definitivo and nome not in PACOTES_RECORRENTES]
     falta = [i for i in defs if i.ja is False]
     sem_leitura = [i for i in defs if i.ja is None]
@@ -229,6 +242,11 @@ def marca_area_conferida(nome, itens):
 
 
 def esquece_area(nome):
+    with _TRAVA_CACHE:
+        _esquece_area(nome)
+
+
+def _esquece_area(nome):
     areas = le_areas_conferidas()
     if areas.pop(nome, None) is not None:
         _grava_areas(areas)
@@ -251,11 +269,32 @@ def inicio_desligaveis():
 _CTX_ATUAL = None   # o ctx desta sessão (só para limpar o cache da memória junto com o do disco)
 
 
+# Quantos PowerShell de conferência rodam juntos no PC inteiro (áreas e pedaços de áreas dividem a mesma vaga). Cada um ocupa perto de
+# um núcleo por um ou dois segundos; deixar um núcleo livre mantém a janela e o que a pessoa estiver fazendo sem engasgar.
+_VAGAS_PS = threading.BoundedSemaphore(max(2, min(8, (os.cpu_count() or 2) - 1)))
+_PEDACO = 8   # itens por PowerShell: abrir um PowerShell custa meio segundo, então pedaços pequenos demais perdem para o custo de abrir
+
+
 def _confere_ps(ctx, itens):
-    """Roda os itens em modo teste (nada muda) e devolve {id: True/False/None}."""
+    """Roda os itens em modo teste (nada muda) e devolve {id: True/False/None}. Mais de _PEDACO itens: divide em pedaços que rodam
+    ao mesmo tempo (os serviços, com 20 e tantos itens, levavam o tempo de todos somados)."""
+    if len(itens) > _PEDACO:
+        from concurrent.futures import ThreadPoolExecutor
+        n = -(-len(itens) // _PEDACO)
+        pedacos = [itens[i::n] for i in range(n)]   # intercalado: os itens pesados (no começo de cada área) se espalham
+        out = {}
+        with ThreadPoolExecutor(max_workers=n) as ex:
+            for r in ex.map(lambda pd: _confere_um_ps(ctx, pd), pedacos):
+                out.update(r)
+        return out
+    return _confere_um_ps(ctx, itens)
+
+
+def _confere_um_ps(ctx, itens):
     corpo = '\n'.join('$__p = $script:PLANOS; $__e = $false\ntry {\n' + i.ps + '\n} catch { $__e = $true }\n'
                       'Dado ' + psq('ja:' + i.id) + ' $(if ($__e) { $null } else { $script:PLANOS -eq $__p })' for i in itens)
-    s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(itens) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
+    with _VAGAS_PS:
+        s = roda_ps(ctx.t, corpo, 'confere', minutos=max(2, len(itens) // 3), teste=True, mostra=False, mult=getattr(ctx, 'mult', 1.0))
     return {i.id: (v if isinstance(v := s.dados.get('ja:' + i.id), bool) else None) for i in itens}
 
 
@@ -295,7 +334,9 @@ def confere_itens(ctx, itens, pacote_=None, max_idade_h=0, so_guardado=False):
     novos = {}
     for chave, i in vs:
         i.ja, i.ja_t = res.get(i.id), agora
-        sessao[chave] = novos[chave] = (i.ja, agora)
+        novos[chave] = (i.ja, agora)
+    with _TRAVA_CACHE:
+        sessao.update(novos)
     muda_cache_ja(novos)
 
 

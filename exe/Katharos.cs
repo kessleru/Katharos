@@ -1856,6 +1856,91 @@ namespace KatharosApp
         public static Color DoNivel(int n) { return n >= 2 ? Vermelho : n == 1 ? Ambar : Verde; }
     }
 
+    /// <summary>
+    /// O ícone perto do relógio, desenhado no tamanho exato da bandeja (a gravura do cavaleiro vira borrão em 16 px): o elmo do cavaleiro
+    /// num quadrado escuro. Jogando, o mesmo elmo em âmbar, com o contorno âmbar; atenção e grave ganham um ponto no canto; pausado fica
+    /// apagado. Montado como um .ico de 32 bits com transparência de verdade (o GetHicon de antes estragava as bordas).
+    /// </summary>
+    static class IconeBandeja
+    {
+        public static Icon Faz(string estado, int px)
+        {
+            if (px < 16) px = 16;
+            using (var bmp = new Bitmap(px, px, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            {
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.Clear(Color.Transparent);
+                    float k = px / 16f;
+                    bool jogo = estado == "jogo", pausa = estado == "pausa";
+                    Color elmo = jogo ? Cor.Ambar : pausa ? Cor.Apagado : Cor.Osso;
+                    using (var fundo = Arredondado(new RectangleF(0.5f * k, 0.5f * k, 15f * k, 15f * k), 3.2f * k))
+                    {
+                        using (var b = new SolidBrush(Cor.Fundo)) g.FillPath(b, fundo);
+                        using (var c = new Pen(jogo ? Cor.Ambar : Cor.LinhaForte, Math.Max(1f, k))) g.DrawPath(c, fundo);
+                    }
+                    // o elmo: um balde de topo arredondado, com três pontas de coroa, a viseira e a fresta do meio
+                    using (var corpo = new GraphicsPath())
+                    {
+                        corpo.AddLines(new[] { P(4.2f, 5.6f, k), P(4.6f, 4.0f, k), P(6.0f, 3.6f, k), P(10.0f, 3.6f, k), P(11.4f, 4.0f, k), P(11.8f, 5.6f, k),
+                                               P(12.2f, 12.0f, k), P(11.4f, 12.8f, k), P(4.6f, 12.8f, k), P(3.8f, 12.0f, k) });
+                        corpo.CloseFigure();
+                        using (var b = new SolidBrush(elmo)) g.FillPath(b, corpo);
+                    }
+                    using (var b = new SolidBrush(elmo))
+                        foreach (var x in new[] { 5.6f, 8f, 10.4f })
+                            g.FillPolygon(b, new[] { P(x - 0.9f, 3.9f, k), P(x, x == 8f ? 1.6f : 2.2f, k), P(x + 0.9f, 3.9f, k) });
+                    using (var b = new SolidBrush(Cor.Fundo))
+                    {
+                        g.FillRectangle(b, 4.9f * k, 6.6f * k, 6.2f * k, Math.Max(1.2f, 1.3f * k));
+                        g.FillRectangle(b, 7.45f * k, 8.9f * k, Math.Max(1f, 1.1f * k), 3.0f * k);
+                    }
+                    if (estado == "atencao" || estado == "grave")
+                    {
+                        float r = 3.1f * k; var c = new PointF(13f * k, 13f * k);
+                        using (var b = new SolidBrush(Cor.Fundo)) g.FillEllipse(b, c.X - r - k, c.Y - r - k, 2 * (r + k), 2 * (r + k));
+                        using (var b = new SolidBrush(estado == "grave" ? Cor.Vermelho : Cor.Ambar)) g.FillEllipse(b, c.X - r, c.Y - r, 2 * r, 2 * r);
+                    }
+                }
+                return DeBitmap(bmp);
+            }
+        }
+
+        static PointF P(float x, float y, float k) { return new PointF(x * k, y * k); }
+
+        static GraphicsPath Arredondado(RectangleF r, float raio)
+        {
+            var p = new GraphicsPath(); float d = raio * 2;
+            p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure(); return p;
+        }
+
+        /// <summary>Um .ico de um quadro só, 32 bits (BGRA, de baixo para cima) com a máscara AND toda zerada: o Windows usa o alfa.</summary>
+        static Icon DeBitmap(Bitmap bmp)
+        {
+            int w = bmp.Width, h = bmp.Height, linhaMasc = ((w + 31) / 32) * 4;
+            var px = new byte[w * h * 4];
+            var dados = bmp.LockBits(new Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try { for (int y = 0; y < h; y++) Marshal.Copy(dados.Scan0 + y * dados.Stride, px, (h - 1 - y) * w * 4, w * 4); }
+            finally { bmp.UnlockBits(dados); }
+            int tamDib = 40 + px.Length + linhaMasc * h;
+            using (var ms = new MemoryStream())
+            using (var e = new BinaryWriter(ms))
+            {
+                e.Write((short)0); e.Write((short)1); e.Write((short)1);
+                e.Write((byte)(w >= 256 ? 0 : w)); e.Write((byte)(h >= 256 ? 0 : h)); e.Write((byte)0); e.Write((byte)0);
+                e.Write((short)1); e.Write((short)32); e.Write(tamDib); e.Write(22);
+                e.Write(40); e.Write(w); e.Write(h * 2); e.Write((short)1); e.Write((short)32); e.Write(0); e.Write(px.Length + linhaMasc * h);
+                e.Write(0); e.Write(0); e.Write(0); e.Write(0);
+                e.Write(px); e.Write(new byte[linhaMasc * h]);
+                e.Flush(); ms.Position = 0;
+                return new Icon(ms, w, h);
+            }
+        }
+    }
+
     class Tabela : ProfessionalColorTable
     {
         public override Color ToolStripDropDownBackground { get { return Cor.Painel; } }
@@ -2356,7 +2441,8 @@ namespace KatharosApp
             marcaPequena = new Icon(marca, SystemInformation.SmallIconSize);
             painel = new PainelAoVivo(motor, Abre, marca);
             MontaMenu();
-            ni.Icon = marcaPequena; ni.Text = "Katharos"; ni.ContextMenuStrip = menu; ni.Visible = true;
+            try { iconeFeito = IconeBandeja.Faz("", SystemInformation.SmallIconSize.Width); ni.Icon = iconeFeito; } catch { ni.Icon = marcaPequena; }
+            ni.Text = "Katharos"; ni.ContextMenuStrip = menu; ni.Visible = true;
             ni.MouseUp += delegate (object o, MouseEventArgs e) { if (e.Button == MouseButtons.Left) AlternaPainel(); };
             // clicar no aviso abre o Katharos com janelas na tela certa (ou o terminal, na versão de terminal)
             ni.BalloonTipClicked += delegate { AbreJanela("aovivo"); };
@@ -2521,27 +2607,55 @@ namespace KatharosApp
                 Abridor.Escondido(motor.Cfg, "conselheiro --resposta " + K.Q(args[1]) + " " + args[2] + " --sem-cor");
                 return;
             }
+            // com a versão de janelas instalada, nada abre o terminal: o comando vira a tela que faz a mesma coisa
+            if (Janela() != null) { AbreJanela(TelaDoComando(args.Length > 0 ? args[0] : "")); return; }
             Abridor.Abre(args);
+        }
+
+        static string TelaDoComando(string c)
+        {
+            switch (c)
+            {
+                case "raiox": case "saude": case "medir": return "raiox";
+                case "aovivo": case "segundo-plano": case "painel": return "aovivo";
+                case "tendencia": case "historico": return "historico";
+                case "conselheiro": case "sugestoes": return "sugestoes";
+                case "desfazer": return "desfazer";
+                case "jogos": return "jogos";
+                case "memoria": return "memoria";
+                case "inicializacao": return "inicializacao";
+                case "turbo": case "escolher": case "otimizar": return "otimizar";
+                case "": return "inicio";
+                default: return "otimizar:" + c;   // as áreas (servicos, privacidade, limpar...) abrem no Otimizar, já na área
+            }
         }
 
         /// <summary>O Katharos com janelas, quando este segundo plano veio com ele (instalado: app\Katharos.exe e app\motor\Katharos.exe).</summary>
         static string Janela()
         {
-            try
-            {
-                string pasta = Path.GetDirectoryName(Path.GetDirectoryName(Application.ExecutablePath));
-                string app = Path.Combine(pasta, "Katharos.exe");
-                return File.Exists(app) && Directory.Exists(Path.Combine(pasta, "python")) && !string.Equals(app, Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) ? app : null;
-            }
-            catch { return null; }
+            // 1) ao lado (app\motor\Katharos.exe → app\Katharos.exe); 2) onde a janela disse que está (ela grava ao abrir); 3) a instalação
+            // padrão. Sem isso, o segundo plano copiado para ~/.katharos (pelo motor) não achava a janela e abria o Katharos de terminal
+            // em quem tinha instalado a versão com janelas (aconteceu depois de atualizar)
+            var cands = new List<string>();
+            try { cands.Add(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Application.ExecutablePath)), "Katharos.exe")); } catch { }
+            try { string j = K.Arq("janela.txt"); if (File.Exists(j)) cands.Add(File.ReadAllText(j).Trim()); } catch { }
+            try { cands.Add(Path.Combine(Path.Combine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Katharos"), "current"), "Katharos.exe")); } catch { }
+            foreach (var app in cands)
+                try
+                {
+                    if (string.IsNullOrEmpty(app) || !File.Exists(app) || string.Equals(app, Application.ExecutablePath, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (Directory.Exists(Path.Combine(Path.GetDirectoryName(app), "python"))) return app;
+                }
+                catch { }
+            return null;
         }
 
         void AbreJanela(string tela)
         {
             string app = Janela();
-            if (app == null) { Abre(new string[0]); return; }
+            if (app == null) { Abridor.Abre(new string[0]); return; }
             try { Process.Start(new ProcessStartInfo(app, "--tela " + tela) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(app) }); }
-            catch (Exception e) { Log.Escreve("abrir a janela: " + e.Message); Abre(new string[0]); }
+            catch (Exception e) { Log.Escreve("abrir a janela: " + e.Message); Abridor.Abre(new string[0]); }
         }
 
         DateTime proxSair = DateTime.MinValue;
@@ -2630,30 +2744,13 @@ namespace KatharosApp
             if (est == estadoIcone) return;
             estadoIcone = est;
             Icon novo;
-            if (est == "") novo = marcaPequena;
-            else
-            {
-                Color c = est == "grave" ? Cor.Vermelho : est == "atencao" ? Cor.Ambar : est == "jogo" ? Cor.Verde : Cor.Apagado;
-                var sz = SystemInformation.SmallIconSize;
-                using (var bmp = marcaPequena.ToBitmap())
-                using (var g = Graphics.FromImage(bmp))
-                {
-                    g.SmoothingMode = SmoothingMode.AntiAlias;
-                    float d = sz.Width * 0.46f;
-                    var r = new RectangleF(sz.Width - d - 0.5f, sz.Height - d - 0.5f, d, d);
-                    using (var b = new SolidBrush(Cor.Fundo)) g.FillEllipse(b, RectangleF.Inflate(r, 1.2f, 1.2f));
-                    using (var b = new SolidBrush(c)) g.FillEllipse(b, r);
-                    IntPtr h = bmp.GetHicon();
-                    novo = Icon.FromHandle(h);
-                    ni.Icon = novo;
-                    if (iconeAtual != IntPtr.Zero) Nat.DestroyIcon(iconeAtual);
-                    iconeAtual = h;
-                    return;
-                }
-            }
+            try { novo = IconeBandeja.Faz(est, SystemInformation.SmallIconSize.Width); }
+            catch (Exception e) { Log.Escreve("ícone: " + e.Message); novo = marcaPequena; }
             ni.Icon = novo;
-            if (iconeAtual != IntPtr.Zero) { Nat.DestroyIcon(iconeAtual); iconeAtual = IntPtr.Zero; }
+            if (iconeFeito != null && !ReferenceEquals(iconeFeito, marcaPequena)) iconeFeito.Dispose();
+            iconeFeito = ReferenceEquals(novo, marcaPequena) ? null : novo;
         }
+        Icon iconeFeito;
 
         void Sai() { Sai(true); }
 
@@ -2664,7 +2761,7 @@ namespace KatharosApp
             Log.Escreve("segundo plano desligado");
             motor.Para();
             ni.Visible = false; ni.Dispose();
-            if (iconeAtual != IntPtr.Zero) Nat.DestroyIcon(iconeAtual);
+            if (iconeFeito != null) iconeFeito.Dispose();
             ExitThread();
         }
     }

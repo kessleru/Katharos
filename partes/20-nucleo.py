@@ -866,8 +866,9 @@ class _Filho:
         self.fila = queue.Queue()
         self.fora = WINDOWS and dentro_de_pacote()
         if not self.fora:
-            # sem console (pythonw, tarefa agendada): sem esta marca o PowerShell abriria uma janela, que poderia tirar um jogo da tela cheia
-            sem_janela = 0x08000000 if WINDOWS and not ctypes.windll.kernel32.GetConsoleWindow() else 0
+            # o PowerShell nunca ganha janela: toda a saída vem pelo cano, e uma janela piscando (pior com vários rodando juntos, como no
+            # raio-x e na conferência em paralelo) tira um jogo da tela cheia e parece vírus
+            sem_janela = 0x08000000 if WINDOWS else 0
             self.p = subprocess.Popen([ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(arq)],
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=sem_janela, env=env_ps())
             self.pid = self.p.pid
@@ -1039,7 +1040,7 @@ def roda_exe(cmd, minutos, pr=None, mult=1.0, saida_arq=None):
     LOG.escreve('--- ' + subprocess.list2cmdline([str(c) for c in cmd]))
     try:
         # no Windows, as ferramentas pesadas (DISM, sfc, chkdsk) rodam com prioridade abaixo do normal: o PC continua usável
-        flags = getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0) if WINDOWS else 0
+        flags = (getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0) | 0x08000000) if WINDOWS else 0   # e sem janela: a saída vem pelo cano
         p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                              creationflags=flags)
     except OSError as e:

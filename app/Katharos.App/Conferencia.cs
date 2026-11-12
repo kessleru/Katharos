@@ -21,14 +21,15 @@ public static class Conferencia
     static bool rodando;
     static int feitas, total;
     static string? atual;
+    static readonly HashSet<string> emCurso = new();
     public static DateTime? UltimaVez { get; private set; }
     public static string? Erro { get; private set; }
 
     public static bool Rodando => rodando;
-    public static bool NaFila(string area) => atual == area || fila.Contains(area);
+    public static bool NaFila(string area) => emCurso.Contains(area) || fila.Contains(area);
 
     /// <summary>"Conferindo serviços · 2 de 9", ou "" quando parado.</summary>
-    public static string Texto => rodando && atual != null ? $"Conferindo {Nomes.GetValueOrDefault(atual, atual)} · {Math.Min(feitas + 1, total)} de {total}" : "";
+    public static string Texto => rodando ? $"Conferindo {(atual != null ? Nomes.GetValueOrDefault(atual, atual) : "")}{(emCurso.Count > 1 ? $" e mais {emCurso.Count - 1}" : "")} · {Math.Min(feitas, total)} de {total} prontas" : "";
 
     /// <summary>Os títulos das áreas (o Otimizar preenche quando lê a lista), só para o texto de andamento.</summary>
     public static readonly Dictionary<string, string> Nomes = new();
@@ -43,7 +44,7 @@ public static class Conferencia
         foreach (var a in frente ? areas.Reverse() : areas)
         {
             if (forcar) forcadas.Add(a);
-            if (a == atual && !forcar) continue;
+            if (emCurso.Contains(a) && !forcar) continue;
             if (fila.Contains(a)) { if (!frente) continue; fila.Remove(a); total--; }
             if (frente) fila.AddFirst(a); else fila.AddLast(a);
             total++;
@@ -57,32 +58,52 @@ public static class Conferencia
         rodando = true; Erro = null;
         try
         {
+            // tudo o que está na fila vai num pedido só: o motor confere várias áreas ao mesmo tempo (e as grandes em pedaços) e manda
+            // cada uma assim que termina (evento "area"). O que chegar na fila enquanto isso vai no próximo pedido.
             while (fila.Count > 0)
             {
-                atual = fila.First!.Value; fila.RemoveFirst();
-                bool forca = forcadas.Remove(atual);
+                var lote = fila.ToList(); fila.Clear();
+                var forca = lote.Where(forcadas.Contains).ToArray();
+                foreach (var a in forca) forcadas.Remove(a);
+                emCurso.Clear(); foreach (var a in lote) emCurso.Add(a);
+                atual = lote[0];
                 Mudou?.Invoke();
                 try
                 {
                     // o modo não muda o "já está assim" (só o que vem marcado), e quem ouve só usa o "ja": um modo fixo basta
-                    var d = await Servico.Le("itens", new { modo = "seguro", conferir = true, areas = new[] { atual }, forcar = forca ? new[] { atual } : Array.Empty<string>() });
-                    var area = (d?["areas"] as JsonArray)?.FirstOrDefault();
-                    if (area != null) { var nome = atual; Dispatcher.UIThread.Post(() => AreaPronta?.Invoke(nome, area)); }
+                    var d = await Servico.Le("itens", new { modo = "seguro", conferir = true, areas = lote, forcar = forca }, (t, dd) =>
+                    {
+                        if (t == "area" && dd != null)
+                        {
+                            var nome = dd.S("nome"); var copia = dd.DeepClone();
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                emCurso.Remove(nome); feitas++;
+                                atual = emCurso.FirstOrDefault();
+                                AreaPronta?.Invoke(nome, copia);
+                                Mudou?.Invoke();
+                            });
+                        }
+                    });
+                    // área que não precisava conferir não manda evento: avisa com a resposta
+                    foreach (var area in d.A("areas"))
+                    {
+                        var nome = area.S("nome"); var copia = area.DeepClone();
+                        Dispatcher.UIThread.Post(() => { if (emCurso.Remove(nome)) { feitas++; AreaPronta?.Invoke(nome, copia); } });
+                    }
                 }
                 catch (Exception e)
                 {
-                    // uma área que falhou não segura as outras; o erro aparece na linha de andamento e vai para o registro
+                    // um lote que falhou não segura os próximos; o erro aparece na linha de andamento e vai para o registro
                     Erro = e.Message;
-                    Registro.Escreve($"conferência de {atual}: {e.Message}");
+                    Registro.Escreve($"conferência de {string.Join(", ", lote)}: {e.Message}");
                 }
-                feitas++;
             }
             UltimaVez = DateTime.Now;
         }
         finally
         {
-            rodando = false; atual = null; feitas = 0; total = 0;
-            Dispatcher.UIThread.Post(() => Mudou?.Invoke());
+            Dispatcher.UIThread.Post(() => { rodando = false; atual = null; feitas = 0; total = 0; emCurso.Clear(); Mudou?.Invoke(); });
         }
     }
 }
