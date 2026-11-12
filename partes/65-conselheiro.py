@@ -96,9 +96,11 @@ def r_jogos_gargalo(ev):
                         'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', conf,
                         'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao',
                         previsao=prev('cpu', lim['cpu'] / 3)))
-        out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
-                        'fica disputando ela durante o jogo.', 'inicializacao', {'alta': 'média'}.get(conf, 'baixa'), 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0,
-                        previsao=prev('cpu', lim['cpu'] / 4)))
+        n_ini = inicio_desligaveis()
+        if n_ini is not None and n_ini >= 3:
+            out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
+                            'fica disputando ela durante o jogo.', 'inicializacao', {'alta': 'média'}.get(conf, 'baixa'), 'menos processos em segundo plano',
+                            'nenhum: você escolhe cada um', 3, 0, previsao=prev('cpu', lim['cpu'] / 4)))
     if lim.get('freio', 0) >= REGRAS_MOTOR['central_freio']:
         out.append(_sug('jogo-freio', 'A CPU freia durante os jogos',
                         base + f'com carga, ela rodou abaixo de 75 % da frequência normal em {br(lim["freio"], 0)} % do tempo'
@@ -172,6 +174,12 @@ def r_boot(ev):
     if 'boot_s' not in ach:
         return []
     extra = ' Também subiu a quantidade de programas na inicialização.' if 'inicializacao' in ach else ''
+    n = inicio_desligaveis()
+    if n is not None and n < 3:
+        # quase nada abre com o Windows: a causa do boot lento é outra (serviço, driver, disco); o raio-x mostra quem mais atrasou
+        return [_sug('boot', 'Ver o que deixou o boot mais lento', ach['boot_s'][0].upper() + ach['boot_s'][1:] + '. Só '
+                     + pl(n, 'programa que dá para desligar abre', 'programas que dá para desligar abrem') + ' com o Windows, então a causa é outra.',
+                     'raiox', 'média', 'o raio-x lista quem mais atrasou o boot, medido pelo Windows', 'nenhum: só leitura', 3, 0, 'boot_s')]
     return [_sug('boot', 'Rever o que abre junto com o Windows', ach['boot_s'][0].upper() + ach['boot_s'][1:] + '.' + extra, 'inicializacao',
                  'alta' if 'inicializacao' in ach else 'média', 'o próprio Windows mede quanto cada programa atrasa o boot e o item mostra esse número',
                  'baixo: o programa continua instalado e você reabre quando quiser', 4, 1, 'boot_s')]

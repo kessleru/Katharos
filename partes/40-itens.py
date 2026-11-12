@@ -234,6 +234,20 @@ def esquece_area(nome):
         _grava_areas(areas)
 
 
+def inicio_desligaveis():
+    """Quantos programas que o Katharos oferece desligar abrem com o Windows agora: da última conferência da área (até 3 dias) ou
+    do último raio-x. None quando não sabe (aí ninguém afirma que é "muito")."""
+    ar = le_areas_conferidas().get('inicializacao')
+    if ar and time.time() - ar['t'] < 3 * 86400 and not ar.get('sem_leitura'):
+        return int(ar.get('falta') or 0)
+    try:
+        rx = ((rel_carrega().get('secoes') or {}).get('raiox') or {}).get('dados') or {}
+    except Exception:
+        return None
+    n = rx.get('inicio_desligaveis')
+    return int(n) if isinstance(n, (int, float)) else None
+
+
 _CTX_ATUAL = None   # o ctx desta sessão (só para limpar o cache da memória junto com o do disco)
 
 

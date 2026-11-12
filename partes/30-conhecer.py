@@ -810,16 +810,22 @@ def hashes_do_katharos():
 
 
 def eh_tarefa_do_katharos(x, proprios):
-    """Tarefa criada pelo Katharos: nome "Katharos - ...", executável com o mesmo SHA-256 de um dos nossos e, se for o Python, rodando o katharos.py."""
+    """Tarefa criada pelo Katharos: nome "Katharos - ..." e, além do nome (que qualquer um pode copiar), uma prova:
+    o executável é um dos nossos (mesmo SHA-256), ou é o Katharos.exe, ou é um Python com assinatura válida da Python Software
+    Foundation rodando um katharos.py. O último caso cobre a tarefa criada por uma versão antiga, com o Python que estava instalado
+    na época (que fica em AppData e por isso caía na regra)."""
     nome = str(x.get('tarefa') or '').rsplit('\\', 1)[-1]
     if not nome.startswith('Katharos - '):
         return False
-    if not x.get('sha') or str(x['sha']).lower() not in proprios:
-        return False
     exe = str(x.get('exe') or '').replace('\\', '/').rsplit('/', 1)[-1].lower()
-    if exe.startswith('python'):
-        return 'katharos.py' in str(x.get('args') or '').lower()
-    return exe == EXE_NOME.lower()
+    args = str(x.get('args') or '').lower()
+    roda_o_nosso = 'katharos.py' in args
+    if x.get('sha') and str(x['sha']).lower() in proprios:
+        return roda_o_nosso if exe.startswith('python') else True
+    if exe == EXE_NOME.lower() and 'katharos' in str(x.get('exe') or '').lower():
+        return True
+    empresa = str(x.get('empresa') or '').lower()
+    return exe.startswith('python') and roda_o_nosso and bool(x.get('assinado')) and 'python software foundation' in empresa
 
 
 def analisa(p, m, d):
@@ -843,11 +849,11 @@ def analisa(p, m, d):
     if ram_t and ram_t <= 4.5:
         A.append(Achado(3, ['lento', 'tudo', 'jogos'], 'Pouca memória RAM',
                         f'{gb(ram_t)} instalados; o Windows sozinho usa perto de 3 GB.',
-                        'Aumentar para 8 GB ou mais. Enquanto isso: menos coisas na inicialização e em segundo plano.', 'inicializacao'))
+                        'Aumentar para 8 GB ou mais. Enquanto isso: menos coisas na inicialização e em segundo plano.', 'memoria'))
     elif ram_t and ram_u / ram_t > 0.7:
         A.append(Achado(2, ['lento', 'tudo', 'jogos'], 'RAM quase cheia em repouso',
                         f'{gb(ram_u)} de {gb(ram_t)} em uso com o PC parado ({br(100 * ram_u / ram_t, 0)}%).',
-                        'Tirar programas da inicialização e serviços de fabricante; se continuar alto, mais RAM.', 'inicializacao'))
+                        'Ver quem usa a memória: o que você não precisa aberto sai da inicialização; se continuar alto, mais RAM.', 'memoria'))
     slots, ocup = pf(p, 'ram.slots', 0) or 0, pf(p, 'ram.ocupados', 0) or 0
     if slots > ocup and ocup == 1:
         A.append(Achado(1, ['jogos', 'lento', 'tudo'], 'Memória em canal único',
@@ -873,10 +879,17 @@ def analisa(p, m, d):
     # abrem sempre e não fazem o achado prometer algo que a tela seguinte não mostra
     tiraveis = [i for i in ini if _classe_inicio(str(i.get('nome') or ''), str(i.get('cmd') or ''))[0] is not None]
     n_tir = len(tiraveis)
-    if n_ini > 8 and n_tir >= 3:
-        A.append(Achado(3 if n_tir > 10 else 2, ['boot', 'lento', 'tudo'], 'Muita coisa abrindo com o Windows',
-                        f'{n_ini} itens abrem com o Windows; {n_tir} dá para desligar: ' + ', '.join(i.get('nome', '') for i in tiraveis[:6]) + ('…' if n_tir > 6 else ''),
-                        'Desligar o que não precisa abrir sozinho (o Gerenciador de Tarefas usa o mesmo mecanismo).', 'inicializacao'))
+    # Quantos programas é "muito"? Um PC comum tem de 5 a 10 abrindo sozinhos; até 5 que dá para desligar é normal e não vira achado.
+    # Nunca é grave: abrir com o Windows atrasa o boot e ocupa memória, mas não quebra nada. O atraso medido pelo Windows pesa mais
+    # que a contagem: 6 programas que somam 20 s merecem atenção; 8 que somam 2 s, só uma dica.
+    atraso = {str(b.get('nome') or '').lower(): float(b.get('s') or 0) for b in lista(d.get('boot')) if isinstance(b, dict)}
+    soma_s = sum(v for nome, v in atraso.items() if any(nome and nome in str(i.get('nome') or '').lower() for i in tiraveis))
+    if n_tir >= 6:
+        imp = 2 if (n_tir >= 12 or soma_s >= 15) else 1
+        A.append(Achado(imp, ['boot', 'lento', 'tudo'], 'Muitos programas abrindo com o Windows',
+                        f'{n_tir} programas que dá para desligar abrem sozinhos' + (f' (atrasam uns {br(soma_s, 0)} s no boot)' if soma_s >= 1 else '')
+                        + ': ' + ', '.join(i.get('nome', '') for i in tiraveis[:5]) + ('…' if n_tir > 5 else '') + '.',
+                        'Desligue o que você não usa logo ao ligar. O programa continua instalado e abre normalmente quando você quiser.', 'inicializacao'))
     boots = [b for b in lista(d.get('boot_tempos')) if isinstance(b, (int, float))]
     if boots and boots[0] > 60:
         culpados = ', '.join(f'{b.get("nome")} {br(b.get("s"), 1)} s' for b in lista(d.get('boot'))[:3])
@@ -919,7 +932,7 @@ def analisa(p, m, d):
     elif (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
         A.append(Achado(2, ['lento', 'tudo'], 'Windows buscando memória no disco',
                         f'{br(m["paginas_s"], 0)} páginas por segundo lidas do arquivo de paginação, com só {gb(m["ram_disponivel"])} disponíveis.',
-                        'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'inicializacao'))
+                        'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'memoria'))
     ativo = m.get('disco_ativo')
     if ativo is not None and ativo >= 50:
         io = lista(d.get('top_io'))
@@ -1147,12 +1160,31 @@ def analisa(p, m, d):
     return A
 
 
-PESO_NOTA = {3: 14, 2: 6, 1: 2, 0: 0}   # quanto cada achado tira da nota; os informativos (0) não tiram nada
+PESO_NOTA = {3: 15, 2: 7, 1: 2, 0: 0}   # quanto cada achado tira da nota; os informativos (0) não tiram nada
+# Teto por categoria: vários problemas do mesmo tipo contam como um problema grande, não como vários (seis caches acumulados não
+# deixam o PC seis vezes pior). Segurança e saúde podem tirar mais, porque são o que de fato estraga o PC ou os dados.
+TETO_CATEGORIA = {'segurança': 30, 'saúde': 30, 'disco': 20, 'memória': 20, 'inicialização': 10, 'jogos': 15, 'geral': 15}
+
+
+def _imp_cat(a):
+    """(impacto, categoria) de um Achado ou de um achado em dicionário (o guardado do raio-x)."""
+    if isinstance(a, dict):
+        return a.get('impacto') or 0, a.get('categoria') or categoria_achado(a.get('titulo'), a.get('comando'))
+    return a.impacto or 0, categoria_achado(a.titulo, a.comando, a.queixas)
+
+
+def pontos_por_categoria(achados):
+    """{categoria: pontos que tira}, já com o teto de cada categoria."""
+    soma = {}
+    for a in achados:
+        imp, cat = _imp_cat(a)
+        soma[cat] = soma.get(cat, 0) + PESO_NOTA.get(imp, 0)
+    return {c: min(v, TETO_CATEGORIA.get(c, 15)) for c, v in soma.items() if v}
 
 
 def nota_pc(achados):
-    pontos = 100 - sum(PESO_NOTA.get(a.impacto, 0) for a in achados)
-    return max(5, min(100, pontos))
+    """100 menos o que cada categoria tira (com teto). Um achado grave sozinho deixa 85; dois graves de categorias diferentes, 70."""
+    return max(5, min(100, 100 - sum(pontos_por_categoria(achados).values())))
 
 
 def pesa_na_nota(achados, limite=3):
@@ -1200,6 +1232,7 @@ def raiox_dados(p, m, d, achados, queixas):
                     for a in sorted(achados, key=lambda a: (-a.impacto, a.titulo))],
         'medidas': {k: m.get(k) for k, *_ in LINHAS_MEDIDA},
         'inicializacao': [f'{i.get("nome")} ({i.get("onde")})' for i in lista(d.get('inicializacao'))],
+        'inicio_desligaveis': sum(1 for i in lista(d.get('inicializacao')) if _classe_inicio(str(i.get('nome') or ''), str(i.get('cmd') or ''))[0] is not None),
         'boot': [f'{b.get("tipo")}: {b.get("nome")}, {br(b.get("s"), 1)} s em média ({b.get("vezes")}x)' for b in lista(d.get('boot'))],
         'top': [[x.get('n'), f'{br(x.get("cpu"), 1)}%', f'{x.get("mb")} MB'] for x in lista(d.get('top_ram'))],
         'nao_reconhecidos': [str(x.get('n')) for x in lista(d.get('top_cpu')) + lista(d.get('top_ram')) if not quem_e(x.get('n')) and not x.get('desc')][:12],

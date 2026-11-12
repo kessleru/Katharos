@@ -93,6 +93,17 @@ def d_tendencia(ev):
 
 
 @detector
+def d_inicio(ev):
+    """Muitos programas que dá para desligar abrindo com o Windows (6 ou mais, a mesma régua do raio-x). Sem isso, o diagnóstico de boot
+    lento não culpa a inicialização: com 3 programas, a causa é outra."""
+    n = inicio_desligaveis()
+    if n is None or n < 6:
+        return []
+    return [_achado('inicio-muitos', 'contagem', 'Muitos programas abrindo com o Windows', f'{n} programas que dá para desligar abrem sozinhos',
+                    ['inicio_muitos'], 'alta', 'conferência da inicialização', 'repouso', {'n': n}, gravidade=1)]
+
+
+@detector
 def d_piora_pos_mudanca(ev):
     """Depois de uma mudança, algo piorou além da oscilação (e não vinha piorando antes)."""
     out = []
@@ -190,7 +201,7 @@ CAUSAS = [
      'descarta': [], 'acao': 'raiox', 'faria': 'ver no raio-x quem gasta a CPU', 'previsao': None, 'risco': 'nenhum: só leitura'},
     {'id': 'repouso-ram', 'problema': 'pc', 'nome': 'RAM ocupada fora dos jogos', 'precisa': ['ram_acima'], 'confirma': {'ram_acima': 3, 'ram_subindo': 2},
      'descarta': [], 'acao': 'memoria', 'faria': 'ver quem ocupa a memória', 'previsao': None, 'risco': 'nenhum: só leitura'},
-    {'id': 'boot', 'problema': 'pc', 'nome': 'programas demais ao ligar', 'precisa': ['boot_lento'], 'confirma': {'boot_lento': 2, 'inicializacao_cresceu': 3},
+    {'id': 'boot', 'problema': 'pc', 'nome': 'programas demais ao ligar', 'precisa': ['boot_lento', 'inicio_muitos'], 'confirma': {'boot_lento': 2, 'inicializacao_cresceu': 3},
      'descarta': [], 'acao': 'inicializacao', 'faria': 'tirar da inicialização o que pesa (o Windows mede quanto cada um atrasa)',
      'previsao': {'chave': 'boot_s', 'texto': 'boot mais rápido'}, 'risco': 'baixo: o programa continua instalado'},
     {'id': 'estabilidade', 'problema': 'pc', 'nome': 'instabilidade do Windows', 'precisa': ['tela_azul'], 'confirma': {'tela_azul': 3, 'driver_erro': 2},
@@ -201,7 +212,7 @@ _NOME_SINTOMA = {'calor': 'calor acima do seguro', 'freio': 'CPU freando', 'cpu_
                  'ram_cheia': 'RAM cheia', 'vram_cheia': 'memória de vídeo cheia', 'disco_cheio': 'disco ocupado', 'bateria': 'na bateria',
                  'travadas': 'travadas', 'sem_limite': 'travadas sem nenhum limite', 'dpc_alto': 'DPC alto', 'driver_erro': 'erro de driver',
                  'pagefile_hd': 'paginação num HD', 'tela_azul': 'tela azul', 'cpu_acima': 'CPU acima do normal', 'ram_acima': 'RAM acima do normal',
-                 'boot_lento': 'boot mais lento', 'inicializacao_cresceu': 'mais programas na inicialização', 'ram_subindo': 'RAM subindo',
+                 'boot_lento': 'boot mais lento', 'inicializacao_cresceu': 'mais programas na inicialização', 'inicio_muitos': 'muitos programas abrindo com o Windows', 'ram_subindo': 'RAM subindo',
                  'calor_repouso': 'temperatura subindo', 'driver_culpado': 'driver medido no teste', 'disco_erro': 'erro de disco', 'repouso': 'fora dos jogos'}
 
 

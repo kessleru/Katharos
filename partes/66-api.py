@@ -215,9 +215,17 @@ def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
     Regras: área conferida depois do raio-x e sem nada faltando = resolvido; aplicada depois do raio-x = resolvido (a pessoa agiu; o
     Otimizar diz o que sobrou); inicialização conferida depois = a contagem de agora, a mesma que o Otimizar mostra."""
     cmd = str(a.get('comando') or '').split(' ')[0]
+    t_rx = _iso_ts(quando_raiox) or 0
+    # raio-x de antes da 4.3.0 marcava as tarefas do próprio Katharos (rodam de AppData): tira essas da evidência
+    if a.get('titulo') == 'Tarefas agendadas suspeitas':
+        partes = [x.strip() for x in str(a.get('evidencia') or '').split(', ') if x.strip()]
+        outras = [x for x in partes if not x.lstrip('\\').startswith('Katharos - ')]
+        if partes and not outras:
+            return {'resolvido': 'eram as tarefas do próprio Katharos (o raio-x antigo não as reconhecia)'}
+        if len(outras) < len(partes):
+            return {'evidencia': ', '.join(outras)}
     if cmd not in PACOTES:
         return None
-    t_rx = _iso_ts(quando_raiox) or 0
     areas = le_areas_conferidas() if areas is None else areas
     aplicados = {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()} if aplicados is None else aplicados
     ar = areas.get(cmd)
@@ -227,9 +235,12 @@ def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
             return {'resolvido': f'conferido em {quando}: já está assim neste PC'}
         if cmd == 'inicializacao':
             n = ar['falta']
+            # a mesma régua do raio-x: até 5 que dá para desligar é normal num PC comum
+            if n < 6:
+                return {'resolvido': f'conferido em {quando}: {pl(n, "programa que dá para desligar abre", "programas que dá para desligar abrem")} com o Windows, o que é normal'}
             nomes = ', '.join(ar.get('titulos') or [])
             return {'evidencia': f'{pl(n, "programa que dá para desligar ainda abre", "programas que dá para desligar ainda abrem")} com o Windows '
-                                 f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.'}
+                                 f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.', 'impacto': 2 if n >= 12 else 1}
     if aplicados.get(cmd, 0) > t_rx:
         quando = datetime.fromtimestamp(aplicados[cmd]).strftime('%d/%m %H:%M')
         return {'resolvido': f'aplicado em {quando}, depois deste raio-x'}
@@ -245,8 +256,14 @@ def concilia_achados(achados, quando_raiox):
         a = dict(a)
         a.setdefault('categoria', categoria_achado(a.get('titulo'), a.get('comando')))
         sit = situacao_achado(a, quando_raiox, areas, aplicados)
+        # raio-x de antes da 4.3.0: "Muita coisa abrindo" contava até antivírus e drivers e podia ser "grave". Abrir com o Windows nunca é
+        # grave; sem conferência nova, fica no máximo como dica
+        if a.get('titulo') == 'Muita coisa abrindo com o Windows':
+            a['titulo'], a['impacto'] = 'Muitos programas abrindo com o Windows', min(a.get('impacto') or 0, 1)
         if sit and 'evidencia' in sit:
             a['evidencia_raiox'], a['evidencia'] = a.get('evidencia'), sit['evidencia']
+            if 'impacto' in sit:
+                a['impacto'] = sit['impacto']
         elif sit:
             a['resolvido'] = sit['resolvido']
         out.append(a)
@@ -266,11 +283,9 @@ def propostas_que_valem(d):
     return out
 
 
-def nota_conciliada(achados, nota_raiox):
-    """A nota sem o que já foi resolvido depois do raio-x (mesma conta do raio-x: 100 menos o peso de cada achado)."""
-    if nota_raiox is None or not any(a.get('resolvido') for a in achados):
-        return nota_raiox
-    return max(5, min(100, 100 - sum(PESO_NOTA.get(a.get('impacto'), 0) for a in achados if not a.get('resolvido'))))
+def nota_conciliada(achados, nota_raiox=None):
+    """A nota de agora: a mesma conta do raio-x (nota_pc), só com o que ainda vale. nota_raiox fica para compatibilidade."""
+    return nota_pc([a for a in achados if not a.get('resolvido')]) if achados or nota_raiox is not None else nota_raiox
 
 
 @metodo_api('inicio')
@@ -283,7 +298,7 @@ def api_inicio(ctx, p, ev):
     achados = [x for x in todos if (x.get('impacto') or 0) > 0 and not x.get('resolvido')]
     resolvidos = sum(1 for x in todos if x.get('resolvido') and (x.get('impacto') or 0) > 0)
     return {
-        'raiox': {'quando': quando, 'nota': nota_conciliada(todos, rx.get('nota')), 'nota_raiox': rx.get('nota'), 'resolvidos': resolvidos,
+        'raiox': {'quando': quando, 'nota': nota_conciliada(todos, rx.get('nota')), 'nota_raiox': nota_pc(todos) if todos else rx.get('nota'), 'resolvidos': resolvidos,
                   'achados': achados[:5], 'total': len(achados)} if quando else None,
         'pc': pc or None,
         'temperatura': ({'cpu': a.get('temp_cpu'), 'cpu_fonte': a.get('temp_cpu_fonte'), 'gpu': a.get('temp_gpu'),
@@ -340,6 +355,7 @@ def api_raiox(ctx, p, ev):
     rel_pc(perf)
     dados['quando'] = agora_iso()
     dados['pesa'] = [{'titulo': ti, 'pontos': pt} for ti, pt in pesa_na_nota(achados)]
+    dados['categorias'] = pontos_por_categoria(achados)
     dados['pc'] = {'modelo': f'{pf(perf, "pc.fabricante", "")} {pf(perf, "pc.modelo", "")}'.strip(), 'notebook': bool(pf(perf, 'pc.notebook')),
                    'windows': nome_windows(compat_windows(perf)), 'cpu': texto_cpu(perf), 'ram': texto_ram(perf),
                    'disco': texto_disco(perf), 'video': texto_video(perf)}
@@ -367,10 +383,12 @@ def api_raiox_guardado(ctx, p, ev):
     d = dict(rx)
     d['quando'] = quando
     d['achados'] = concilia_achados(rx.get('achados') or [], quando)
-    d['nota_raiox'] = rx.get('nota')
+    d['nota_raiox'] = nota_pc(d['achados']) if d['achados'] else rx.get('nota')
     d['nota'] = nota_conciliada(d['achados'], rx.get('nota'))
     d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in d['achados']
                         if PESO_NOTA.get(a.get('impacto'), 0) and not a.get('resolvido')), key=lambda x: -x['pontos'])[:3]
+    # quanto cada categoria tira (com o teto): a tela mostra isso no cabeçalho de cada uma, igual à conta da nota
+    d['categorias'] = pontos_por_categoria([a for a in d['achados'] if not a.get('resolvido')])
     d['pc'] = _pc_curto(pc)
     pz = le_json(CASA / 'propostas.json', {}) or {}
     d['motor'] = {'achados': [a for a in pz.get('achados') or [] if a.get('tipo') != 'contexto'][:8],
@@ -444,12 +462,19 @@ def api_itens(ctx, p, ev):
             confere_itens(ctx, its, nome, max_idade_h=max_h)
         if conferir and WINDOWS:
             marca_area_conferida(nome, its)
+        # quantas mudanças cada modo faria aqui (marcados pelo modo e ainda não feitos): a janela mostra no botão de cada modo
+        por_modo = {}
+        for m in MODOS:
+            marca_por_modo(its, m)
+            por_modo[m] = sum(1 for x in its if x.marcado and x.ja is not True)
+        marca_por_modo(its, modo)
         out.append({'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
                     'recomendado': recomendadas.get(nome),
                     'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
-                    'faltam': sum(_precisa_conferir(x, max_h) for x in its),
+                    'faltam': sum(_precisa_conferir(x, max_h) for x in its), 'por_modo': por_modo,
                     'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]})
-    return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out)}
+    return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out),
+            'por_modo': {m: sum(a['por_modo'][m] for a in out) for m in MODOS}}
 
 
 def ferramenta_conferir(ctx, args):

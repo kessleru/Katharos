@@ -3208,16 +3208,22 @@ def hashes_do_katharos():
 
 
 def eh_tarefa_do_katharos(x, proprios):
-    """Tarefa criada pelo Katharos: nome "Katharos - ...", executável com o mesmo SHA-256 de um dos nossos e, se for o Python, rodando o katharos.py."""
+    """Tarefa criada pelo Katharos: nome "Katharos - ..." e, além do nome (que qualquer um pode copiar), uma prova:
+    o executável é um dos nossos (mesmo SHA-256), ou é o Katharos.exe, ou é um Python com assinatura válida da Python Software
+    Foundation rodando um katharos.py. O último caso cobre a tarefa criada por uma versão antiga, com o Python que estava instalado
+    na época (que fica em AppData e por isso caía na regra)."""
     nome = str(x.get('tarefa') or '').rsplit('\\', 1)[-1]
     if not nome.startswith('Katharos - '):
         return False
-    if not x.get('sha') or str(x['sha']).lower() not in proprios:
-        return False
     exe = str(x.get('exe') or '').replace('\\', '/').rsplit('/', 1)[-1].lower()
-    if exe.startswith('python'):
-        return 'katharos.py' in str(x.get('args') or '').lower()
-    return exe == EXE_NOME.lower()
+    args = str(x.get('args') or '').lower()
+    roda_o_nosso = 'katharos.py' in args
+    if x.get('sha') and str(x['sha']).lower() in proprios:
+        return roda_o_nosso if exe.startswith('python') else True
+    if exe == EXE_NOME.lower() and 'katharos' in str(x.get('exe') or '').lower():
+        return True
+    empresa = str(x.get('empresa') or '').lower()
+    return exe.startswith('python') and roda_o_nosso and bool(x.get('assinado')) and 'python software foundation' in empresa
 
 
 def analisa(p, m, d):
@@ -3241,11 +3247,11 @@ def analisa(p, m, d):
     if ram_t and ram_t <= 4.5:
         A.append(Achado(3, ['lento', 'tudo', 'jogos'], 'Pouca memória RAM',
                         f'{gb(ram_t)} instalados; o Windows sozinho usa perto de 3 GB.',
-                        'Aumentar para 8 GB ou mais. Enquanto isso: menos coisas na inicialização e em segundo plano.', 'inicializacao'))
+                        'Aumentar para 8 GB ou mais. Enquanto isso: menos coisas na inicialização e em segundo plano.', 'memoria'))
     elif ram_t and ram_u / ram_t > 0.7:
         A.append(Achado(2, ['lento', 'tudo', 'jogos'], 'RAM quase cheia em repouso',
                         f'{gb(ram_u)} de {gb(ram_t)} em uso com o PC parado ({br(100 * ram_u / ram_t, 0)}%).',
-                        'Tirar programas da inicialização e serviços de fabricante; se continuar alto, mais RAM.', 'inicializacao'))
+                        'Ver quem usa a memória: o que você não precisa aberto sai da inicialização; se continuar alto, mais RAM.', 'memoria'))
     slots, ocup = pf(p, 'ram.slots', 0) or 0, pf(p, 'ram.ocupados', 0) or 0
     if slots > ocup and ocup == 1:
         A.append(Achado(1, ['jogos', 'lento', 'tudo'], 'Memória em canal único',
@@ -3271,10 +3277,17 @@ def analisa(p, m, d):
     # abrem sempre e não fazem o achado prometer algo que a tela seguinte não mostra
     tiraveis = [i for i in ini if _classe_inicio(str(i.get('nome') or ''), str(i.get('cmd') or ''))[0] is not None]
     n_tir = len(tiraveis)
-    if n_ini > 8 and n_tir >= 3:
-        A.append(Achado(3 if n_tir > 10 else 2, ['boot', 'lento', 'tudo'], 'Muita coisa abrindo com o Windows',
-                        f'{n_ini} itens abrem com o Windows; {n_tir} dá para desligar: ' + ', '.join(i.get('nome', '') for i in tiraveis[:6]) + ('…' if n_tir > 6 else ''),
-                        'Desligar o que não precisa abrir sozinho (o Gerenciador de Tarefas usa o mesmo mecanismo).', 'inicializacao'))
+    # Quantos programas é "muito"? Um PC comum tem de 5 a 10 abrindo sozinhos; até 5 que dá para desligar é normal e não vira achado.
+    # Nunca é grave: abrir com o Windows atrasa o boot e ocupa memória, mas não quebra nada. O atraso medido pelo Windows pesa mais
+    # que a contagem: 6 programas que somam 20 s merecem atenção; 8 que somam 2 s, só uma dica.
+    atraso = {str(b.get('nome') or '').lower(): float(b.get('s') or 0) for b in lista(d.get('boot')) if isinstance(b, dict)}
+    soma_s = sum(v for nome, v in atraso.items() if any(nome and nome in str(i.get('nome') or '').lower() for i in tiraveis))
+    if n_tir >= 6:
+        imp = 2 if (n_tir >= 12 or soma_s >= 15) else 1
+        A.append(Achado(imp, ['boot', 'lento', 'tudo'], 'Muitos programas abrindo com o Windows',
+                        f'{n_tir} programas que dá para desligar abrem sozinhos' + (f' (atrasam uns {br(soma_s, 0)} s no boot)' if soma_s >= 1 else '')
+                        + ': ' + ', '.join(i.get('nome', '') for i in tiraveis[:5]) + ('…' if n_tir > 5 else '') + '.',
+                        'Desligue o que você não usa logo ao ligar. O programa continua instalado e abre normalmente quando você quiser.', 'inicializacao'))
     boots = [b for b in lista(d.get('boot_tempos')) if isinstance(b, (int, float))]
     if boots and boots[0] > 60:
         culpados = ', '.join(f'{b.get("nome")} {br(b.get("s"), 1)} s' for b in lista(d.get('boot'))[:3])
@@ -3317,7 +3330,7 @@ def analisa(p, m, d):
     elif (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
         A.append(Achado(2, ['lento', 'tudo'], 'Windows buscando memória no disco',
                         f'{br(m["paginas_s"], 0)} páginas por segundo lidas do arquivo de paginação, com só {gb(m["ram_disponivel"])} disponíveis.',
-                        'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'inicializacao'))
+                        'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'memoria'))
     ativo = m.get('disco_ativo')
     if ativo is not None and ativo >= 50:
         io = lista(d.get('top_io'))
@@ -3545,12 +3558,31 @@ def analisa(p, m, d):
     return A
 
 
-PESO_NOTA = {3: 14, 2: 6, 1: 2, 0: 0}   # quanto cada achado tira da nota; os informativos (0) não tiram nada
+PESO_NOTA = {3: 15, 2: 7, 1: 2, 0: 0}   # quanto cada achado tira da nota; os informativos (0) não tiram nada
+# Teto por categoria: vários problemas do mesmo tipo contam como um problema grande, não como vários (seis caches acumulados não
+# deixam o PC seis vezes pior). Segurança e saúde podem tirar mais, porque são o que de fato estraga o PC ou os dados.
+TETO_CATEGORIA = {'segurança': 30, 'saúde': 30, 'disco': 20, 'memória': 20, 'inicialização': 10, 'jogos': 15, 'geral': 15}
+
+
+def _imp_cat(a):
+    """(impacto, categoria) de um Achado ou de um achado em dicionário (o guardado do raio-x)."""
+    if isinstance(a, dict):
+        return a.get('impacto') or 0, a.get('categoria') or categoria_achado(a.get('titulo'), a.get('comando'))
+    return a.impacto or 0, categoria_achado(a.titulo, a.comando, a.queixas)
+
+
+def pontos_por_categoria(achados):
+    """{categoria: pontos que tira}, já com o teto de cada categoria."""
+    soma = {}
+    for a in achados:
+        imp, cat = _imp_cat(a)
+        soma[cat] = soma.get(cat, 0) + PESO_NOTA.get(imp, 0)
+    return {c: min(v, TETO_CATEGORIA.get(c, 15)) for c, v in soma.items() if v}
 
 
 def nota_pc(achados):
-    pontos = 100 - sum(PESO_NOTA.get(a.impacto, 0) for a in achados)
-    return max(5, min(100, pontos))
+    """100 menos o que cada categoria tira (com teto). Um achado grave sozinho deixa 85; dois graves de categorias diferentes, 70."""
+    return max(5, min(100, 100 - sum(pontos_por_categoria(achados).values())))
 
 
 def pesa_na_nota(achados, limite=3):
@@ -3598,6 +3630,7 @@ def raiox_dados(p, m, d, achados, queixas):
                     for a in sorted(achados, key=lambda a: (-a.impacto, a.titulo))],
         'medidas': {k: m.get(k) for k, *_ in LINHAS_MEDIDA},
         'inicializacao': [f'{i.get("nome")} ({i.get("onde")})' for i in lista(d.get('inicializacao'))],
+        'inicio_desligaveis': sum(1 for i in lista(d.get('inicializacao')) if _classe_inicio(str(i.get('nome') or ''), str(i.get('cmd') or ''))[0] is not None),
         'boot': [f'{b.get("tipo")}: {b.get("nome")}, {br(b.get("s"), 1)} s em média ({b.get("vezes")}x)' for b in lista(d.get('boot'))],
         'top': [[x.get('n'), f'{br(x.get("cpu"), 1)}%', f'{x.get("mb")} MB'] for x in lista(d.get('top_ram'))],
         'nao_reconhecidos': [str(x.get('n')) for x in lista(d.get('top_cpu')) + lista(d.get('top_ram')) if not quem_e(x.get('n')) and not x.get('desc')][:12],
@@ -4396,6 +4429,20 @@ def esquece_area(nome):
     areas = le_areas_conferidas()
     if areas.pop(nome, None) is not None:
         _grava_areas(areas)
+
+
+def inicio_desligaveis():
+    """Quantos programas que o Katharos oferece desligar abrem com o Windows agora: da última conferência da área (até 3 dias) ou
+    do último raio-x. None quando não sabe (aí ninguém afirma que é "muito")."""
+    ar = le_areas_conferidas().get('inicializacao')
+    if ar and time.time() - ar['t'] < 3 * 86400 and not ar.get('sem_leitura'):
+        return int(ar.get('falta') or 0)
+    try:
+        rx = ((rel_carrega().get('secoes') or {}).get('raiox') or {}).get('dados') or {}
+    except Exception:
+        return None
+    n = rx.get('inicio_desligaveis')
+    return int(n) if isinstance(n, (int, float)) else None
 
 
 _CTX_ATUAL = None   # o ctx desta sessão (só para limpar o cache da memória junto com o do disco)
@@ -13264,9 +13311,11 @@ def r_jogos_gargalo(ev):
                         'Menos coisa rodando junto e a CPU no máximo de energia (turbo no modo extremo) dão FPS de verdade aqui.', 'turbo', conf,
                         'menos serviços e programas disputando a CPU; plano de energia no máximo', 'mais consumo de energia', 4, 1, tipo='acao',
                         previsao=prev('cpu', lim['cpu'] / 3)))
-        out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
-                        'fica disputando ela durante o jogo.', 'inicializacao', {'alta': 'média'}.get(conf, 'baixa'), 'menos processos em segundo plano', 'nenhum: você escolhe cada um', 3, 0,
-                        previsao=prev('cpu', lim['cpu'] / 4)))
+        n_ini = inicio_desligaveis()
+        if n_ini is not None and n_ini >= 3:
+            out.append(_sug('jogo-cpu-inicio', 'Tirar da inicialização o que pesa durante o jogo', base + 'a CPU foi o limite. Cada programa que abre com o Windows '
+                            'fica disputando ela durante o jogo.', 'inicializacao', {'alta': 'média'}.get(conf, 'baixa'), 'menos processos em segundo plano',
+                            'nenhum: você escolhe cada um', 3, 0, previsao=prev('cpu', lim['cpu'] / 4)))
     if lim.get('freio', 0) >= REGRAS_MOTOR['central_freio']:
         out.append(_sug('jogo-freio', 'A CPU freia durante os jogos',
                         base + f'com carga, ela rodou abaixo de 75 % da frequência normal em {br(lim["freio"], 0)} % do tempo'
@@ -13340,6 +13389,12 @@ def r_boot(ev):
     if 'boot_s' not in ach:
         return []
     extra = ' Também subiu a quantidade de programas na inicialização.' if 'inicializacao' in ach else ''
+    n = inicio_desligaveis()
+    if n is not None and n < 3:
+        # quase nada abre com o Windows: a causa do boot lento é outra (serviço, driver, disco); o raio-x mostra quem mais atrasou
+        return [_sug('boot', 'Ver o que deixou o boot mais lento', ach['boot_s'][0].upper() + ach['boot_s'][1:] + '. Só '
+                     + pl(n, 'programa que dá para desligar abre', 'programas que dá para desligar abrem') + ' com o Windows, então a causa é outra.',
+                     'raiox', 'média', 'o raio-x lista quem mais atrasou o boot, medido pelo Windows', 'nenhum: só leitura', 3, 0, 'boot_s')]
     return [_sug('boot', 'Rever o que abre junto com o Windows', ach['boot_s'][0].upper() + ach['boot_s'][1:] + '.' + extra, 'inicializacao',
                  'alta' if 'inicializacao' in ach else 'média', 'o próprio Windows mede quanto cada programa atrasa o boot e o item mostra esse número',
                  'baixo: o programa continua instalado e você reabre quando quiser', 4, 1, 'boot_s')]
@@ -13793,6 +13848,17 @@ def d_tendencia(ev):
 
 
 @detector
+def d_inicio(ev):
+    """Muitos programas que dá para desligar abrindo com o Windows (6 ou mais, a mesma régua do raio-x). Sem isso, o diagnóstico de boot
+    lento não culpa a inicialização: com 3 programas, a causa é outra."""
+    n = inicio_desligaveis()
+    if n is None or n < 6:
+        return []
+    return [_achado('inicio-muitos', 'contagem', 'Muitos programas abrindo com o Windows', f'{n} programas que dá para desligar abrem sozinhos',
+                    ['inicio_muitos'], 'alta', 'conferência da inicialização', 'repouso', {'n': n}, gravidade=1)]
+
+
+@detector
 def d_piora_pos_mudanca(ev):
     """Depois de uma mudança, algo piorou além da oscilação (e não vinha piorando antes)."""
     out = []
@@ -13890,7 +13956,7 @@ CAUSAS = [
      'descarta': [], 'acao': 'raiox', 'faria': 'ver no raio-x quem gasta a CPU', 'previsao': None, 'risco': 'nenhum: só leitura'},
     {'id': 'repouso-ram', 'problema': 'pc', 'nome': 'RAM ocupada fora dos jogos', 'precisa': ['ram_acima'], 'confirma': {'ram_acima': 3, 'ram_subindo': 2},
      'descarta': [], 'acao': 'memoria', 'faria': 'ver quem ocupa a memória', 'previsao': None, 'risco': 'nenhum: só leitura'},
-    {'id': 'boot', 'problema': 'pc', 'nome': 'programas demais ao ligar', 'precisa': ['boot_lento'], 'confirma': {'boot_lento': 2, 'inicializacao_cresceu': 3},
+    {'id': 'boot', 'problema': 'pc', 'nome': 'programas demais ao ligar', 'precisa': ['boot_lento', 'inicio_muitos'], 'confirma': {'boot_lento': 2, 'inicializacao_cresceu': 3},
      'descarta': [], 'acao': 'inicializacao', 'faria': 'tirar da inicialização o que pesa (o Windows mede quanto cada um atrasa)',
      'previsao': {'chave': 'boot_s', 'texto': 'boot mais rápido'}, 'risco': 'baixo: o programa continua instalado'},
     {'id': 'estabilidade', 'problema': 'pc', 'nome': 'instabilidade do Windows', 'precisa': ['tela_azul'], 'confirma': {'tela_azul': 3, 'driver_erro': 2},
@@ -13901,7 +13967,7 @@ _NOME_SINTOMA = {'calor': 'calor acima do seguro', 'freio': 'CPU freando', 'cpu_
                  'ram_cheia': 'RAM cheia', 'vram_cheia': 'memória de vídeo cheia', 'disco_cheio': 'disco ocupado', 'bateria': 'na bateria',
                  'travadas': 'travadas', 'sem_limite': 'travadas sem nenhum limite', 'dpc_alto': 'DPC alto', 'driver_erro': 'erro de driver',
                  'pagefile_hd': 'paginação num HD', 'tela_azul': 'tela azul', 'cpu_acima': 'CPU acima do normal', 'ram_acima': 'RAM acima do normal',
-                 'boot_lento': 'boot mais lento', 'inicializacao_cresceu': 'mais programas na inicialização', 'ram_subindo': 'RAM subindo',
+                 'boot_lento': 'boot mais lento', 'inicializacao_cresceu': 'mais programas na inicialização', 'inicio_muitos': 'muitos programas abrindo com o Windows', 'ram_subindo': 'RAM subindo',
                  'calor_repouso': 'temperatura subindo', 'driver_culpado': 'driver medido no teste', 'disco_erro': 'erro de disco', 'repouso': 'fora dos jogos'}
 
 
@@ -14951,9 +15017,17 @@ def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
     Regras: área conferida depois do raio-x e sem nada faltando = resolvido; aplicada depois do raio-x = resolvido (a pessoa agiu; o
     Otimizar diz o que sobrou); inicialização conferida depois = a contagem de agora, a mesma que o Otimizar mostra."""
     cmd = str(a.get('comando') or '').split(' ')[0]
+    t_rx = _iso_ts(quando_raiox) or 0
+    # raio-x de antes da 4.3.0 marcava as tarefas do próprio Katharos (rodam de AppData): tira essas da evidência
+    if a.get('titulo') == 'Tarefas agendadas suspeitas':
+        partes = [x.strip() for x in str(a.get('evidencia') or '').split(', ') if x.strip()]
+        outras = [x for x in partes if not x.lstrip('\\').startswith('Katharos - ')]
+        if partes and not outras:
+            return {'resolvido': 'eram as tarefas do próprio Katharos (o raio-x antigo não as reconhecia)'}
+        if len(outras) < len(partes):
+            return {'evidencia': ', '.join(outras)}
     if cmd not in PACOTES:
         return None
-    t_rx = _iso_ts(quando_raiox) or 0
     areas = le_areas_conferidas() if areas is None else areas
     aplicados = {n: dt.timestamp() for dt, n, _ in pacotes_aplicados_dt()} if aplicados is None else aplicados
     ar = areas.get(cmd)
@@ -14963,9 +15037,12 @@ def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
             return {'resolvido': f'conferido em {quando}: já está assim neste PC'}
         if cmd == 'inicializacao':
             n = ar['falta']
+            # a mesma régua do raio-x: até 5 que dá para desligar é normal num PC comum
+            if n < 6:
+                return {'resolvido': f'conferido em {quando}: {pl(n, "programa que dá para desligar abre", "programas que dá para desligar abrem")} com o Windows, o que é normal'}
             nomes = ', '.join(ar.get('titulos') or [])
             return {'evidencia': f'{pl(n, "programa que dá para desligar ainda abre", "programas que dá para desligar ainda abrem")} com o Windows '
-                                 f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.'}
+                                 f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.', 'impacto': 2 if n >= 12 else 1}
     if aplicados.get(cmd, 0) > t_rx:
         quando = datetime.fromtimestamp(aplicados[cmd]).strftime('%d/%m %H:%M')
         return {'resolvido': f'aplicado em {quando}, depois deste raio-x'}
@@ -14981,8 +15058,14 @@ def concilia_achados(achados, quando_raiox):
         a = dict(a)
         a.setdefault('categoria', categoria_achado(a.get('titulo'), a.get('comando')))
         sit = situacao_achado(a, quando_raiox, areas, aplicados)
+        # raio-x de antes da 4.3.0: "Muita coisa abrindo" contava até antivírus e drivers e podia ser "grave". Abrir com o Windows nunca é
+        # grave; sem conferência nova, fica no máximo como dica
+        if a.get('titulo') == 'Muita coisa abrindo com o Windows':
+            a['titulo'], a['impacto'] = 'Muitos programas abrindo com o Windows', min(a.get('impacto') or 0, 1)
         if sit and 'evidencia' in sit:
             a['evidencia_raiox'], a['evidencia'] = a.get('evidencia'), sit['evidencia']
+            if 'impacto' in sit:
+                a['impacto'] = sit['impacto']
         elif sit:
             a['resolvido'] = sit['resolvido']
         out.append(a)
@@ -15002,11 +15085,9 @@ def propostas_que_valem(d):
     return out
 
 
-def nota_conciliada(achados, nota_raiox):
-    """A nota sem o que já foi resolvido depois do raio-x (mesma conta do raio-x: 100 menos o peso de cada achado)."""
-    if nota_raiox is None or not any(a.get('resolvido') for a in achados):
-        return nota_raiox
-    return max(5, min(100, 100 - sum(PESO_NOTA.get(a.get('impacto'), 0) for a in achados if not a.get('resolvido'))))
+def nota_conciliada(achados, nota_raiox=None):
+    """A nota de agora: a mesma conta do raio-x (nota_pc), só com o que ainda vale. nota_raiox fica para compatibilidade."""
+    return nota_pc([a for a in achados if not a.get('resolvido')]) if achados or nota_raiox is not None else nota_raiox
 
 
 @metodo_api('inicio')
@@ -15019,7 +15100,7 @@ def api_inicio(ctx, p, ev):
     achados = [x for x in todos if (x.get('impacto') or 0) > 0 and not x.get('resolvido')]
     resolvidos = sum(1 for x in todos if x.get('resolvido') and (x.get('impacto') or 0) > 0)
     return {
-        'raiox': {'quando': quando, 'nota': nota_conciliada(todos, rx.get('nota')), 'nota_raiox': rx.get('nota'), 'resolvidos': resolvidos,
+        'raiox': {'quando': quando, 'nota': nota_conciliada(todos, rx.get('nota')), 'nota_raiox': nota_pc(todos) if todos else rx.get('nota'), 'resolvidos': resolvidos,
                   'achados': achados[:5], 'total': len(achados)} if quando else None,
         'pc': pc or None,
         'temperatura': ({'cpu': a.get('temp_cpu'), 'cpu_fonte': a.get('temp_cpu_fonte'), 'gpu': a.get('temp_gpu'),
@@ -15076,6 +15157,7 @@ def api_raiox(ctx, p, ev):
     rel_pc(perf)
     dados['quando'] = agora_iso()
     dados['pesa'] = [{'titulo': ti, 'pontos': pt} for ti, pt in pesa_na_nota(achados)]
+    dados['categorias'] = pontos_por_categoria(achados)
     dados['pc'] = {'modelo': f'{pf(perf, "pc.fabricante", "")} {pf(perf, "pc.modelo", "")}'.strip(), 'notebook': bool(pf(perf, 'pc.notebook')),
                    'windows': nome_windows(compat_windows(perf)), 'cpu': texto_cpu(perf), 'ram': texto_ram(perf),
                    'disco': texto_disco(perf), 'video': texto_video(perf)}
@@ -15103,10 +15185,12 @@ def api_raiox_guardado(ctx, p, ev):
     d = dict(rx)
     d['quando'] = quando
     d['achados'] = concilia_achados(rx.get('achados') or [], quando)
-    d['nota_raiox'] = rx.get('nota')
+    d['nota_raiox'] = nota_pc(d['achados']) if d['achados'] else rx.get('nota')
     d['nota'] = nota_conciliada(d['achados'], rx.get('nota'))
     d['pesa'] = sorted(({'titulo': a.get('titulo'), 'pontos': PESO_NOTA.get(a.get('impacto'), 0)} for a in d['achados']
                         if PESO_NOTA.get(a.get('impacto'), 0) and not a.get('resolvido')), key=lambda x: -x['pontos'])[:3]
+    # quanto cada categoria tira (com o teto): a tela mostra isso no cabeçalho de cada uma, igual à conta da nota
+    d['categorias'] = pontos_por_categoria([a for a in d['achados'] if not a.get('resolvido')])
     d['pc'] = _pc_curto(pc)
     pz = le_json(CASA / 'propostas.json', {}) or {}
     d['motor'] = {'achados': [a for a in pz.get('achados') or [] if a.get('tipo') != 'contexto'][:8],
@@ -15180,12 +15264,19 @@ def api_itens(ctx, p, ev):
             confere_itens(ctx, its, nome, max_idade_h=max_h)
         if conferir and WINDOWS:
             marca_area_conferida(nome, its)
+        # quantas mudanças cada modo faria aqui (marcados pelo modo e ainda não feitos): a janela mostra no botão de cada modo
+        por_modo = {}
+        for m in MODOS:
+            marca_por_modo(its, m)
+            por_modo[m] = sum(1 for x in its if x.marcado and x.ja is not True)
+        marca_por_modo(its, modo)
         out.append({'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
                     'recomendado': recomendadas.get(nome),
                     'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',
-                    'faltam': sum(_precisa_conferir(x, max_h) for x in its),
+                    'faltam': sum(_precisa_conferir(x, max_h) for x in its), 'por_modo': por_modo,
                     'itens': [_item_api(x, nome) for x in ordem_de_tela(its)]})
-    return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out)}
+    return {'modo': modo, 'modos': list(MODOS), 'areas': out, 'faltam': sum(a['faltam'] for a in out),
+            'por_modo': {m: sum(a['por_modo'][m] for a in out) for m in MODOS}}
 
 
 def ferramenta_conferir(ctx, args):

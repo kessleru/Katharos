@@ -3920,15 +3920,19 @@ class TestPosTeste421(unittest.TestCase):
             d = k.api_inicio(mock.Mock(), {}, lambda *a: None)
         self.assertEqual([a['titulo'] for a in d['raiox']['achados']], ['Driver antigo'])
         self.assertEqual(d['raiox']['resolvidos'], 1)
-        self.assertEqual(d['raiox']['nota'], 100 - 14)
-        self.assertEqual(d['raiox']['nota_raiox'], 80)
+        self.assertEqual(d['raiox']['nota'], 100 - 15)
+        self.assertEqual(d['raiox']['nota_raiox'], 100 - 15 - 2)   # o título antigo cai para dica
 
     def test_inicializacao_conferida_mostra_a_contagem_de_agora(self):
         a = {'titulo': 'Muita coisa abrindo com o Windows', 'impacto': 2, 'evidencia': '15 itens', 'comando': 'inicializacao'}
         depois = datetime(2026, 11, 11, 10, 0).timestamp()
-        s = k.situacao_achado(a, '2026-11-10T09:00:00', {'inicializacao': {'t': depois, 'falta': 3, 'total': 8, 'titulos': ['Teams', 'Spotify', 'Steam']}}, {})
-        self.assertIn('3 programas que dá para desligar ainda abrem', s['evidencia'])
+        s = k.situacao_achado(a, '2026-11-10T09:00:00', {'inicializacao': {'t': depois, 'falta': 7, 'total': 9, 'titulos': ['Teams', 'Spotify', 'Steam']}}, {})
+        self.assertIn('7 programas que dá para desligar ainda abrem', s['evidencia'])
         self.assertIn('Teams, Spotify, Steam', s['evidencia'])
+        self.assertEqual(s['impacto'], 1)
+        # 3 programas é normal: não é mais coisa a fazer (pedido do dono: "3 programas não é muito")
+        s = k.situacao_achado(a, '2026-11-10T09:00:00', {'inicializacao': {'t': depois, 'falta': 3, 'total': 8}}, {})
+        self.assertIn('o que é normal', s['resolvido'])
         # conferida ANTES do raio-x não vale: o raio-x é mais novo
         antes = datetime(2026, 11, 9, 10, 0).timestamp()
         self.assertIsNone(k.situacao_achado(a, '2026-11-10T09:00:00', {'inicializacao': {'t': antes, 'falta': 0, 'total': 8}}, {}))
@@ -4016,3 +4020,77 @@ class TestPosTeste421(unittest.TestCase):
         s = k.r_saude(ev)[0]
         self.assertEqual(s['tipo'], 'leitura', 'achado só de leitura nunca ganha "Aplicar"')
         self.assertEqual((s['certeza'], s['causa']), ('aconteceu', 'a investigar'))
+
+
+class TestLogica431(unittest.TestCase):
+    """O teste da 4.3.0 no PC do dono: 3 programas na inicialização viravam "grave"; a tarefa "Katharos - segundo plano" (Python antigo
+    em AppData) aparecia como suspeita; a nota somava problemas do mesmo tipo sem limite."""
+
+    def _p(self):
+        return {'so': {'win11': True, 'build': 26200, 'edicao': 'Professional'}, 'pc': {}, 'ram': {'total': 16, 'usada': 6},
+                'disco': {'tipo': 'SSD', 'livre': 200, 'total': 500}, 'defender': {'tempo_real': True}, 'sistema': {'uptime_h': 5},
+                'memoria': {'pagefile_auto': True, 'compressao': True}, 'energia': {'plano': 'desempenho'}, 'tem': {}}
+
+    def _ini(self, n):
+        return [{'nome': f'App{i}', 'cmd': f'C:\\Users\\a\\AppData\\Local\\App{i}\\app{i}.exe'} for i in range(n)]
+
+    def _achados(self, d):
+        with mock.patch.object(k, 'ja_aplicados', lambda: set()), mock.patch.object(k.shutil, 'which', lambda x: None), \
+             mock.patch.object(k, 'hashes_do_katharos', lambda: frozenset()):
+            return k.analisa(self._p(), {}, d)
+
+    def test_poucos_programas_na_inicializacao_nao_sao_achado(self):
+        self.assertFalse([a for a in self._achados({'inicializacao': self._ini(3)}) if a.comando == 'inicializacao'])
+        self.assertFalse([a for a in self._achados({'inicializacao': self._ini(5)}) if a.comando == 'inicializacao'])
+
+    def test_inicializacao_nunca_e_grave(self):
+        for n in (6, 9, 20):
+            a = [a for a in self._achados({'inicializacao': self._ini(n)}) if a.comando == 'inicializacao']
+            self.assertEqual(len(a), 1, n)
+            self.assertLessEqual(a[0].impacto, 2)
+        self.assertEqual([a.impacto for a in self._achados({'inicializacao': self._ini(7)}) if a.comando == 'inicializacao'], [1])
+
+    def test_atraso_medido_pesa_mais_que_a_contagem(self):
+        d = {'inicializacao': self._ini(6), 'boot': [{'nome': 'App0', 's': 9}, {'nome': 'App1', 's': 8}]}
+        a = [a for a in self._achados(d) if a.comando == 'inicializacao'][0]
+        self.assertEqual(a.impacto, 2)
+        self.assertIn('17 s', a.evidencia)
+
+    def test_tarefa_do_katharos_com_python_antigo_nao_e_suspeita(self):
+        t = {'tarefa': '\\Katharos - segundo plano', 'exe': 'C:\\Users\\o\\AppData\\Local\\Programs\\Python\\Python312\\pythonw.exe',
+             'args': '"C:\\ProgramData\\Katharos\\katharos.py" manutencao --agendada', 'sha': 'zz', 'assinado': True, 'empresa': 'Python Software Foundation'}
+        tit = [a.titulo for a in self._achados({'tarefas_suspeitas': [t]})]
+        self.assertNotIn('Tarefas agendadas suspeitas', tit)
+        self.assertNotIn('Tarefas agendadas para conferir', tit)
+        # o mesmo Python rodando outro script, com o nome copiado: continua aparecendo
+        falsa = dict(t, args='C:\\x\\outro.py')
+        self.assertIn('Tarefas agendadas para conferir', [a.titulo for a in self._achados({'tarefas_suspeitas': [falsa]})])
+
+    def test_raiox_antigo_com_a_tarefa_do_katharos_vira_resolvido(self):
+        a = {'titulo': 'Tarefas agendadas suspeitas', 'impacto': 2, 'comando': '', 'evidencia': '\\Katharos - segundo plano → C:\\x\\pythonw.exe'}
+        self.assertIn('próprio Katharos', k.situacao_achado(a, '2026-11-10T09:00:00', {}, {})['resolvido'])
+        b = dict(a, evidencia='\\Katharos - segundo plano → C:\\x\\pythonw.exe, \\Updater → C:\\Temp\\u.exe')
+        self.assertEqual(k.situacao_achado(b, '2026-11-10T09:00:00', {}, {})['evidencia'], '\\Updater → C:\\Temp\\u.exe')
+
+    def test_raiox_antigo_de_inicializacao_cai_para_dica(self):
+        with mock.patch.object(k, 'le_areas_conferidas', return_value={}), mock.patch.object(k, 'pacotes_aplicados_dt', return_value=[]):
+            a = k.concilia_achados([{'titulo': 'Muita coisa abrindo com o Windows', 'impacto': 3, 'comando': 'inicializacao', 'evidencia': '15 itens'}], '2026-11-10T09:00:00')[0]
+        self.assertEqual(a['impacto'], 1)
+
+    def test_nota_tem_teto_por_categoria(self):
+        cinco_caches = [k.Achado(2, ['disco'], f'Cache {i}', 'x', 'y', 'limpar') for i in range(5)]
+        self.assertEqual(k.nota_pc(cinco_caches), 80, 'cinco problemas de disco tiram no máximo 20')
+        self.assertEqual(k.nota_pc([k.Achado(3, ['tudo'], 'Driver antigo', 'x', 'y', 'atualizar')]), 85)
+        self.assertEqual(k.nota_pc([]), 100)
+
+    def test_sugestao_de_inicializacao_so_com_o_que_desligar(self):
+        with mock.patch.object(k, 'inicio_desligaveis', return_value=2), \
+             mock.patch.object(k, '_achados_tendencia', return_value={'boot_s': 'o boot ficou 12 s mais lento'}):
+            s = k.r_boot({})
+        self.assertEqual(s[0]['comando'], 'raiox')
+        self.assertIn('a causa é outra', s[0]['porque'])
+        with mock.patch.object(k, 'inicio_desligaveis', return_value=2):
+            self.assertEqual(k.d_inicio({}), [])
+        with mock.patch.object(k, 'inicio_desligaveis', return_value=8):
+            self.assertEqual(k.d_inicio({})[0]['sintomas'], ['inicio_muitos'])
+

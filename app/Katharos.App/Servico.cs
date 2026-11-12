@@ -134,7 +134,7 @@ public static class DadosDeExemplo
         "inicio" => JsonNode.Parse("""
             {"raiox": {"quando": "2026-11-10T09:12:00", "nota": 72, "total": 3, "achados": [
                {"titulo": "Driver da placa de vídeo de março", "impacto": 3, "evidencia": "NVIDIA 551.86. O novo corrige travadas em jogos DirectX 12.", "faz": "Baixe pelo app da NVIDIA ou pelo site.", "comando": "atualizar"},
-               {"titulo": "Muita coisa abrindo com o Windows", "impacto": 2, "evidencia": "11 itens abrem com o Windows; 5 dá para desligar: Microsoft Teams, Spotify, Steam, Discord, Epic Games Launcher.", "faz": "", "comando": "inicializacao", "categoria": "inicialização"},
+               {"titulo": "Muitos programas abrindo com o Windows", "impacto": 1, "evidencia": "7 programas que dá para desligar abrem sozinhos (atrasam uns 14 s no boot): Microsoft Teams, Spotify, Steam, Discord, Epic Games Launcher…", "faz": "", "comando": "inicializacao", "categoria": "inicialização"},
                {"titulo": "Memória em canal único", "impacto": 1, "evidencia": "Um pente de 16 GB. Dois de 8 GB rendem até 15 % mais em jogos.", "faz": "", "comando": ""}]},
              "pc": {"disco_livre_gb": 182, "disco_total_gb": 476},
              "temperatura": {"cpu": 47, "cpu_fonte": "MSI Afterburner", "gpu": 44, "gpu_fonte": "driver de vídeo"},
@@ -164,7 +164,7 @@ public static class DadosDeExemplo
              "pc": {"modelo": "ASUS TUF Gaming A15", "windows": "Windows 11 25H2 Pro", "cpu": "AMD Ryzen 7 7735HS · 8 núcleos", "ram": "16 GB DDR5 · 1 pente", "disco": "NVMe 512 GB · 182 GB livres", "video": "NVIDIA GeForce RTX 4060 Laptop"},
              "achados": [
                {"titulo": "Driver da placa de vídeo de março", "impacto": 3, "evidencia": "NVIDIA 551.86, de março. O novo corrige travadas em jogos DirectX 12.", "faz": "Baixe pelo app da NVIDIA ou em nvidia.com/drivers.", "comando": "atualizar", "categoria": "saúde"},
-               {"titulo": "Muita coisa abrindo com o Windows", "impacto": 2, "evidencia": "11 itens abrem com o Windows; 5 dá para desligar: Microsoft Teams, Spotify, Steam, Discord, Epic Games Launcher.", "faz": "Tire o que você não usa logo ao ligar.", "comando": "inicializacao", "categoria": "inicialização"},
+               {"titulo": "Muitos programas abrindo com o Windows", "impacto": 1, "evidencia": "7 programas que dá para desligar abrem sozinhos (atrasam uns 14 s no boot): Microsoft Teams, Spotify, Steam, Discord, Epic Games Launcher…", "faz": "Tire o que você não usa logo ao ligar.", "comando": "inicializacao", "categoria": "inicialização"},
                {"titulo": "Memória em canal único", "impacto": 1, "evidencia": "Um pente de 16 GB. Dois de 8 GB rendem até 15 % mais em jogos.", "faz": "Ao comprar memória, prefira dois pentes iguais.", "comando": "", "categoria": "memória"},
                {"titulo": "Telemetria, anúncios e IA do Windows", "impacto": 0, "evidencia": "Ligados por padrão em toda instalação.", "faz": "Desligar por políticas oficiais (reversível).", "comando": "privacidade", "categoria": "segurança"},
                {"titulo": "Arquivos temporários ocupando 14 GB", "impacto": 1, "evidencia": "Cache de atualização e temporários.", "faz": "", "comando": "limpar", "categoria": "disco", "resolvido": "aplicado em 10/11 21:40, depois deste raio-x"}],
