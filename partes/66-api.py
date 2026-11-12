@@ -163,8 +163,8 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
                 canal.manda({'id': None, 'ok': False, 'erro': {'codigo': 'json_invalido', 'texto': 'a linha não é JSON'}})
                 continue
             if isinstance(pedido, dict) and pedido.get('metodo') == 'sair':
-                if pool:
-                    pool.shutdown(wait=True, cancel_futures=True)
+                if pool:   # responde tudo o que já chegou antes do "sair" (cancelar deixava pedido sem resposta)
+                    pool.shutdown(wait=True)
                 canal.manda({'id': pedido.get('id'), 'ok': True, 'dados': None})
                 break
             if pool:
