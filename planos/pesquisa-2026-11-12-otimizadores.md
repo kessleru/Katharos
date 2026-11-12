@@ -157,3 +157,76 @@ Em ordem. Os dois primeiros corrigem coisas que o Katharos já aplica.
 - [Debloat-Windows-10 (W4RH4WK)](https://github.com/W4RH4WK/Debloat-Windows-10)
 - [ISLC: ainda é necessário no 2004+? (fórum Wagnardsoft)](https://www.wagnardsoft.com/forums/viewtopic.php?p=7076)
 - Aviso do moderador do r/OptimizedGaming ("Avoid ANY tweak or optimization tools, even more so those closed source"): só o título foi lido; o Reddit bloqueou a página.
+
+---
+
+# Terceira rodada: o que a imprensa mediu, anti-cheat, processadores e golpes (12/11)
+
+## Debloat dá FPS? A imprensa mediu
+- **PC Games Hardware (Ancient Gameplays), Windows 11 normal contra "Nano 11" enxuto:** Ryzen 7 7800X3D, RX 9070, 1080p. **FPS médio igual, dentro da margem de medição.** A interface do enxuto respondia mais rápido. Conclusão deles: para jogos, não compensa.
+- **Gridinsoft (out/2026), riscos do debloat:** desinstalar o programa de ajuste não desfaz o que ele mudou; ponto de restauração não é backup; o AtlasOS só sai reinstalando o Windows; download de "versão" em vídeo, anúncio ou chat é outra cadeia de distribuição, mesmo com o nome certo.
+- **Para o Katharos:** confirma o caminho de não prometer FPS e de medir neste PC. Também confirma que desfazer item por item, com registro do valor de antes, é o diferencial que importa (o que a Gridinsoft diz faltar nos outros).
+
+## Segurança do Windows contra FPS: quanto custa de verdade
+- **Tom's Hardware (mar/2023), VBS ligado contra desligado:** Core i9-13900K e RTX 4090, 15 jogos. **Em média até 5 % menos com VBS** (cerca de 2 % em 4K), 10 % no Flight Simulator (15 % no 1% low), quase nada em vários jogos. Em PC menos extremo, "poucos pontos percentuais".
+- **Anti-cheat agora exige essa segurança:**
+  - **FACEIT (central de ajuda):** Windows 11 obrigatório desde **14/10/2026**. TPM 2.0, Secure Boot, VBS e IOMMU estão sendo exigidos "em ondas".
+  - **Riot Vanguard, modo sob demanda (Tom's Hardware, 25/06/2026):** exige Windows 11 25H2, Secure Boot, TPM 2.0, VBS, HVCI e IOMMU. Assim o driver só carrega quando o jogo abre. Cerca de 35 % dos jogadores já atendem. **Com VBS, a lista de bloqueio de drivers vulneráveis pode desligar driver antigo de periférico.**
+- **Para o Katharos:**
+  1. Nunca oferecer desligar VBS ou HVCI; quem joga FACEIT ou Valorant perderia o jogo.
+  2. **Ideia nova, só leitura: "Pronto para o anti-cheat"** no raio-x ou no Detalhe de jogos. Mostra Windows 11 25H2, TPM 2.0, Secure Boot, VBS, HVCI e IOMMU (ligado ou não), e o que falta para o FACEIT e para o Vanguard sob demanda. O que fica na BIOS vira passo a passo (o Katharos não mexe na BIOS).
+  3. O achado "Integridade de memória ligada" (sem ponto) ganha a frase: "custa de 0 a 5 % de FPS na maioria dos jogos; o FACEIT e o Valorant podem exigir ligada".
+
+## Ryzen X3D com dois CCDs precisa do Game Bar
+- No Ryzen 9 7900X3D, 7950X3D, 9900X3D e 9950X3D, o driver de chipset da AMD usa o **Xbox Game Bar para saber que um jogo abriu** e mandar o jogo para os núcleos com o cache extra (os outros "estacionam"). Guias de montadores (Evetech) mandam manter o Game Bar instalado e atualizado. Os fóruns da EA, da ASUS e da Bitsum têm casos de núcleos que não estacionam.
+- **Risco real no Katharos:** o item "app:Xbox" (pacote apps) remove o `XboxGamingOverlay` (o Game Bar). Hoje ele só deixa de vir marcado quando há jogos instalados. **Mudança:** com um Ryzen X3D de dois CCDs, "app:Xbox" fica nível 0 com o alerta "o seu processador usa o Game Bar para mandar o jogo aos núcleos certos". O "gamedvr" (só a gravação) pode continuar.
+- Do lado da Intel, o equivalente é o **Intel APO** (Application Optimization, 14ª geração e Core Ultra 200S, vem pelo Dynamic Tuning). **Ideia:** o raio-x pode dizer "o seu processador tem o APO; instale pelo site do fabricante da placa-mãe" (só aviso, sem programa de terceiros). A página da Corsair não abriu; falta confirmar a lista de processadores e jogos numa fonte da Intel antes de escrever o texto.
+
+## Golpes de "otimização" no Brasil
+- **Canaltech (02/02/2026), com dados da Flare via BleepingComputer:**
+  - Mods e "melhoradores de FPS" falsos do Roblox circulam no YouTube, em anúncios do Google e no Discord, e pedem para desligar o antivírus.
+  - São ladrões de senha (LummaStealer, RedLine, Vidar) que levam senhas do navegador, Discord e carteiras de cripto, e de lá chegam à conta bancária da família.
+  - Mais de 40 % das invasões chegam por arquivo de jogo.
+- **Reclame Aqui:** reclamações de serviços pagos de "otimização de FPS" (XD FPS, Bravo Technologies, TweaksBW) por propaganda enganosa, instabilidade depois do serviço e reembolso negado. Uma tem o título "perdi tudo do computador". As páginas não abriram; só os títulos foram lidos.
+- **Para o Katharos:**
+  1. O site e o aviso de uso podem dizer com todas as letras: "o Katharos nunca pede para desligar o antivírus".
+  2. O download só vem do GitHub, com SHA-256.
+  3. O raio-x já acusa "Tarefas agendadas suspeitas". Ele pode também procurar restos conhecidos de "packs" (tarefa ou serviço com nome de otimizador de FPS rodando de AppData). Fica para pensar, sem falso alarme.
+
+## Fontes da terceira rodada
+- [PCGH: Windows 11 Standard gegen Nano Debloat](https://www.pcgameshardware.de/Windows-Software-277633/News/Standard-gegen-Nano-Debloat-Gaming-Performance-1472429/)
+- [Gridinsoft: Windows 11 Debloat Tools, Safety, Rollback and Security Trade-Offs](https://blog.gridinsoft.com/windows-11-debloat-tools-safety/)
+- [Tom's Hardware: Default Windows VBS Setting Slows Games Up to 10%](https://www.tomshardware.com/news/windows-vbs-harms-performance-rtx-4090)
+- [FACEIT: Windows Security Requirements FAQ](https://support.faceit.com/hc/en-us/articles/23117181142556)
+- [Tom's Hardware: Riot Vanguard on-demand mode](https://www.tomshardware.com/video-games/pc-gaming/riot-vanguard-adds-an-on-demand-mode-that-stops-anti-cheat-loading-at-boot-on-secured-windows-11-pcs)
+- [Evetech: microstutter no Ryzen 9 9950X3D](https://evezone.evetech.co.za/build-lab/how-to-fix-microstutter-on-windows-11-with-a-ryzen-9-9950x3d-build) · [EA Forums: 9950X3D core parking](https://forums.ea.com/discussions/battlefield-6-technical-issues-en/9950x3d-core-parking/12741808) · [Bitsum: "Not Functional With Xbox Game Bar"](https://community.bitsum.com/forum/index.php?msg=31381)
+- [Canaltech: macete para melhorar Roblox pode limpar conta bancária](https://canaltech.com.br/seguranca/alerta-macete-para-melhorar-roblox-pode-limpar-conta-bancaria-dos-pais/)
+- Reclame Aqui: [XD FPS, propaganda enganosa](https://www.reclameaqui.com.br/xd-fps-tecnologia/propaganda-enganosa-e-falta-de-suporte-apos-compra-de-otimizacao-de-fps_k9BjE7Pml7eSwB5d/) · [Bravo Technologies, instabilidade](https://www.reclameaqui.com.br/bravo-technologies/servico-de-otimizacao-de-pc-causa-instabilidade-e-nao-cumpre-o-prometido-solicito-reembolso_z-lX504RVAb5mr9v/)
+
+## O que a própria Microsoft diz
+- **"Configurar um dispositivo para tempo real" (Windows IoT Enterprise):** é a página que os guias de "tunagem" citam para desligar SysMain, DPS, CPU idle e Windows Update. A própria página diz que **só serve para um aparelho e um programa feitos sob medida** (máquina industrial), não para PC de uso geral. A mesma lista desliga o **áudio do Windows (Audiosrv)** e o **Windows Update** (a Microsoft avisa que deixa o aparelho vulnerável). **Para o Katharos:** quando alguém perguntar "por que vocês não desligam SysMain e C-states, se a Microsoft recomenda?", a resposta tem fonte: é recomendação para máquina industrial, junto com tirar o som e as atualizações.
+- **"Otimizações para jogos em janela" (suporte da Microsoft, em pt-BR):** muda jogos **DirectX 10 e 11** em janela ou sem borda do modelo antigo de apresentação (blt) para o novo (flip). Isso reduz a latência do quadro e libera VRR e HDR automático. Não cita DirectX 12 (que já usa flip). Ligar o HDR automático liga isso junto; dá para desligar por jogo em Configurações > Sistema > Vídeo > Gráficos. **Confirma o item "directx-jogos" do Katharos.** Falta o texto dizer que vale para DX10 e DX11 e que um jogo com problema pode ser desligado sozinho, por jogo.
+
+Fontes: [Microsoft Learn: How to set up a device for real-time performance](https://learn.microsoft.com/en-us/windows/iot/iot-enterprise/soft-real-time/soft-real-time-device) · [Suporte Microsoft: Otimizações para jogos com janelas no Windows 11](https://support.microsoft.com/pt-BR/Windows/Hardware/Display-Graphics/optimizations-for-windowed-games-in-windows-11)
+
+---
+
+# Lista única do que fazer (junta as três rodadas)
+
+**Corrigir no que o Katharos já aplica (4.3.2):**
+1. "rede-jogos": tirar o `NetworkThrottlingIndex` desligado (piora a latência do driver de rede). Fica só o Nagle.
+2. "app:Xbox": nível 0 e alerta em Ryzen X3D de dois CCDs (o Game Bar manda o jogo aos núcleos com cache).
+3. Textos honestos: "mmcss" (a tarefa Games não é usada), "timer" (só vale se um programa pedir), "directx-jogos" (DX10 e DX11, dá para desligar por jogo), "Integridade de memória" (0 a 5 % e exigida por FACEIT e Valorant).
+4. Widgets: feito sem o pacote WebExperience; senão, remover o app ou abrir Configurações.
+
+**Novos, só leitura (4.4.0):**
+5. "Pronto para o anti-cheat": Windows 11 25H2, TPM 2.0, Secure Boot, VBS, HVCI e IOMMU, com o que falta para o FACEIT e o Vanguard sob demanda.
+6. Jogo registrado no GameConfigStore (Modo de Jogo funcionando).
+7. Modo de apresentação de cada sessão (PresentMon).
+8. Processador com Intel APO (só aviso, depois de confirmar numa fonte da Intel).
+
+**Novos itens (4.4.0):**
+9. WPBT desligado (2) · sem app de fabricante sozinho (1) · não abaixar o volume em chamadas (2) · Inicialização rápida (0) · hibernação em desktop (3) · permissões de apps (2).
+10. Pop-ups do Bing pelo IFEO, só depois de testar no Windows com o Defender.
+
+**Comunicação:** no site e no aviso, "o Katharos nunca pede para desligar o antivírus e não promete FPS: mede no seu PC".
