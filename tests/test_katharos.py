@@ -2981,11 +2981,13 @@ class TestApi(_CasaTemporaria):
         r = self.conversa('lixo', {'id': 2, 'metodo': 'nao-existe'}, {'id': 3, 'metodo': 'versao'}, {'id': 4, 'metodo': 'sair'},
                           {'id': 5, 'metodo': 'versao'})
         self.assertEqual(r[0], {'pronto': True, 'api': k.API_VERSAO, 'versao': k.VERSAO})
-        self.assertEqual(r[1]['erro']['codigo'], 'json_invalido')
-        self.assertEqual(r[2]['erro']['codigo'], 'metodo_desconhecido')
-        self.assertTrue(r[3]['ok'])
-        self.assertEqual(r[3]['dados']['versao'], k.VERSAO)
-        self.assertEqual(r[4], {'id': 4, 'ok': True, 'dados': None})
+        # os pedidos rodam em paralelo: a ordem das respostas pode mudar, o id diz de quem é cada uma
+        por_id = {x.get('id'): x for x in r[1:]}
+        self.assertEqual(por_id[None]['erro']['codigo'], 'json_invalido')
+        self.assertEqual(por_id[2]['erro']['codigo'], 'metodo_desconhecido')
+        self.assertTrue(por_id[3]['ok'])
+        self.assertEqual(por_id[3]['dados']['versao'], k.VERSAO)
+        self.assertEqual(r[-1], {'id': 4, 'ok': True, 'dados': None})   # "sair" espera os outros e responde por último
         self.assertEqual(len(r), 5)   # depois de "sair" nada é respondido
 
     def test_motor_avisa_pronto_antes_do_preparo_lento(self):
@@ -3039,7 +3041,7 @@ class TestApi(_CasaTemporaria):
         import io
         saida = io.StringIO()
         k.roda_api([], entrada=io.StringIO('{"id": 1, "metodo": "config_gravar", "params": {"chave": "modo", "valor": "extremo"}}\n{"id": 2, "metodo": "versao"}\n'),
-                   saida=saida, permitidos=k.METODOS_ELEVADOS)
+                   saida=saida, permitidos=k.METODOS_ELEVADOS, paralelo=False)
         r = [json.loads(l) for l in saida.getvalue().splitlines()]
         self.assertEqual(r[1]['erro']['codigo'], 'nao_permitido')
         self.assertTrue(r[2]['ok'])
@@ -4082,6 +4084,61 @@ class TestNotaCriterios431(TestRaioxInteligente):
         x = {'tarefa': '\\Atualiza', 'exe': 'C:\\Users\\a\\AppData\\x.exe', 'assinado': False, 'curta': True}
         a = [y for y in self.analisa(dados={'tarefas_suspeitas': [x]}) if y.titulo == 'Tarefas agendadas suspeitas'][0]
         self.assertEqual(a.impacto, 2)
+
+
+class TestPowerShellAberto432(unittest.TestCase):
+    """Leituras reaproveitam um PowerShell já aberto (abrir um custa 0,5 a 1,5 s); mudanças e o motor de administrador, nunca."""
+
+    class Falso:
+        def __init__(self, linhas):
+            import queue as q
+            self.fila, self.pid, self.mandados = q.Queue(), 1, []
+            for l in linhas:
+                self.fila.put(l)
+            self.p = mock.Mock(poll=lambda: None)
+
+        def roda(self, arq):
+            self.mandados.append(arq)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.k = _modulo_novo()   # o roda_ps de verdade (o desta suíte é trocado por um que não roda nada)
+
+    def roda(self, linhas, corpo="Dado 'a' 1", admin=False, pacote=None):
+        import tempfile
+        f = self.Falso(linhas)
+        tmp = Path(tempfile.mkdtemp())
+        k = self.k
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'eh_admin', lambda: admin), \
+             mock.patch.object(k, 'dentro_de_pacote', lambda: False), mock.patch.object(k, 'pasta', lambda n: tmp), \
+             mock.patch.object(k, 'pasta_protegida', lambda n: tmp), mock.patch.object(k, 'dir_backup', lambda: tmp), \
+             mock.patch.object(k, 'MedidorCPU', mock.Mock()), mock.patch.object(k.POOL_PS, 'pega', return_value=f) as pega, \
+             mock.patch.object(k.POOL_PS, 'devolve') as devolve, mock.patch.object(k, '_Filho', side_effect=OSError('novo')) as novo:
+            s = k.roda_ps(mock.Mock(), corpo, 'teste', mostra=False, pacote=pacote)
+        return s, pega, devolve, novo
+
+    def test_leitura_usa_o_aberto_e_devolve(self):
+        s, pega, devolve, novo = self.roda([b'@@dado|a|1\n', b'@@fim|0\n'])
+        self.assertEqual((s.codigo, s.dados), (0, {'a': 1}))
+        devolve.assert_called_once()
+        novo.assert_not_called()
+
+    def test_codigo_so_vale_com_exit_no_script(self):
+        self.assertEqual(self.roda([b'@@fim|1\n'], corpo='& cmd /c exit 1')[0].codigo, 0)
+        self.assertEqual(self.roda([b'@@fim|4\n'], corpo='if ($x) { exit 4 }')[0].codigo, 4)
+        self.assertEqual(self.roda([b'@@erro|x\n', b'@@fim|x1\n'], corpo="throw 'x'")[0].codigo, 1)
+
+    def test_morreu_no_meio_nao_volta_para_a_fila(self):
+        s, _, devolve, _ = self.roda([b'@@dado|a|1\n', None])
+        self.assertEqual(s.codigo, -1)
+        devolve.assert_not_called()
+
+    def test_mudanca_e_administrador_abrem_um_novo(self):
+        for kw in ({'admin': True}, {'pacote': 'servicos'}):
+            s, pega, _, novo = self.roda([], **kw)
+            pega.assert_not_called()
+            novo.assert_called_once()
+            self.assertEqual(s.codigo, 127)
 
 
 class TestBloqueados431(unittest.TestCase):

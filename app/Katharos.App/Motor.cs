@@ -160,12 +160,18 @@ public sealed class MotorComum : Conversa
     protected override TimeSpan SilencioDe(string metodo) => TimeSpan.FromSeconds(metodo == "raiox" ? 600 : metodo == "itens" ? 300 : 120);
     protected override void Derruba() { try { proc?.Kill(true); } catch { } }
 
+    const string Carregador = "import sys, importlib.util as u; p = sys.argv[1]; s = u.spec_from_file_location('katharos', p); "
+        + "m = u.module_from_spec(s); sys.modules['katharos'] = m; sys.argv = [p] + sys.argv[2:]; s.loader.exec_module(m); sys.exit(m.main())";
+
     public static async Task<MotorComum> Abre(CancellationToken ct = default)
     {
         var onde = OndeEsta.Acha() ?? throw new ErroDoMotor("sem_motor", "Não achei o Python e o katharos.py. Reinstale o Katharos.");
         var m = new MotorComum();
         var psi = new ProcessStartInfo(onde.python) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8 };
         psi.ArgumentList.Add("-X"); psi.ArgumentList.Add("utf8");
+        // importado como módulo (não "python katharos.py"): o Python guarda o katharos.py compilado em __pycache__ e não recompila
+        // o arquivo de 1 MB a cada abertura (de 0,2 a 0,8 s, conforme o PC). Sem poder gravar o cache, só compila como antes.
+        psi.ArgumentList.Add("-c"); psi.ArgumentList.Add(Carregador);
         psi.ArgumentList.Add(onde.motor); psi.ArgumentList.Add("api");
         psi.Environment["PYTHONIOENCODING"] = "utf-8";
         m.proc = Process.Start(psi) ?? throw new ErroDoMotor("sem_motor", "o Python não abriu");

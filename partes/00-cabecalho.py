@@ -15,6 +15,7 @@ Visual: Kessleru (kterm 2.0.0, embutido abaixo). Dados em ~/.katharos.
 """
 
 import argparse
+import base64
 import ctypes
 import functools
 import hashlib

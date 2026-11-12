@@ -15,6 +15,7 @@ Visual: Kessleru (kterm 2.0.0, embutido abaixo). Dados em ~/.katharos.
 """
 
 import argparse
+import base64
 import ctypes
 import functools
 import hashlib
@@ -1990,6 +1991,129 @@ class _Filho:
         return ctypes.c_long(cod.value).value
 
 
+# ───── PowerShell já aberto, reaproveitado nas leituras ─────
+# Abrir um powershell.exe custa de 0,5 a 1,5 s (mais com o antivírus olhando), e uma tela que lê o PC abria vários. As LEITURAS da
+# janela (motor comum, sem administrador, sem pacote de backup) usam um destes, já aberto: o script roda num escopo novo (& arquivo),
+# então variáveis e funções de um não passam para o outro; o que fica é só o que o PowerShell carregou (módulos, .NET), que é o ganho.
+# Mudanças no PC, o motor de administrador e o Python da Loja (MSIX) continuam com um PowerShell novo a cada vez.
+# Fecham sozinhos depois de 60 s parados; nunca mais que 4 parados.
+
+_LACO_PS = r"""
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch {}
+$__casa = (Get-Location).Path
+while ($true) {
+    $__l = [Console]::In.ReadLine()
+    if ($null -eq $__l -or $__l -eq 'sair') { break }
+    $global:LASTEXITCODE = 0
+    $__c = 0
+    try { & $__l; $__c = [int]$LASTEXITCODE } catch { [Console]::Out.WriteLine('@@erro|' + ($_.Exception.Message -replace '[\r\n]+', ' ')); $__c = 'x1' }
+    try { Set-Location -LiteralPath $__casa } catch {}
+    [Console]::Out.WriteLine('@@fim|' + $__c)
+    [Console]::Out.Flush()
+}
+"""
+
+
+class _PSAberto:
+    def __init__(self, ps):
+        sem_janela = 0x08000000 if WINDOWS else 0
+        # -EncodedCommand: o laço vai em base64 (UTF-16), sem depender de como a linha de comando trata aspas e quebras de linha
+        cod = base64.b64encode(_LACO_PS.encode('utf-16-le')).decode('ascii')
+        self.p = subprocess.Popen([ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', cod],
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=sem_janela, env=env_ps())
+        self.pid = self.p.pid
+        self.fila = queue.Queue()
+        self.parado_desde = time.time()
+        threading.Thread(target=self._le, daemon=True).start()
+
+    def _le(self):
+        for bruto in iter(self.p.stdout.readline, b''):
+            self.fila.put(bruto)
+        self.fila.put(None)
+
+    def vivo(self):
+        return self.p.poll() is None
+
+    def roda(self, arq):
+        self.p.stdin.write((str(arq) + '\n').encode('utf-8'))
+        self.p.stdin.flush()
+
+    def fecha(self):
+        try:
+            self.p.stdin.write(b'sair\n')
+            self.p.stdin.flush()
+            self.p.wait(timeout=3)
+        except Exception:
+            mata_arvore(self.pid)
+
+
+class _PoolPS:
+    MAXIMO_PARADOS = 4
+    PARADO_S = 60
+
+    def __init__(self):
+        self.parados = []
+        self.trava = threading.Lock()
+        self.vigia = None
+
+    def pega(self, ps):
+        with self.trava:
+            while self.parados:
+                w = self.parados.pop()
+                if w.vivo():
+                    return w
+        return _PSAberto(ps)
+
+    def devolve(self, w):
+        fecha = None
+        with self.trava:
+            if w.vivo() and len(self.parados) < self.MAXIMO_PARADOS:
+                w.parado_desde = time.time()
+                self.parados.append(w)
+                if self.vigia is None:
+                    self.vigia = threading.Thread(target=self._vigia, daemon=True)
+                    self.vigia.start()
+            else:
+                fecha = w
+        if fecha:
+            fecha.fecha()
+
+    def _vigia(self):
+        while True:
+            time.sleep(15)
+            with self.trava:
+                velhos = [w for w in self.parados if time.time() - w.parado_desde > self.PARADO_S]
+                self.parados = [w for w in self.parados if w not in velhos]
+            for w in velhos:
+                w.fecha()
+
+    def aquece(self, n=2):
+        """Deixa n abertos de antemão (a janela acabou de abrir: a primeira leitura não paga a abertura do PowerShell)."""
+        if not _usa_pool(eh_admin(), None, False):
+            return
+        ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+        for _ in range(n):
+            try:
+                self.devolve(_PSAberto(ps))
+            except (OSError, subprocess.SubprocessError, ValueError) as e:
+                LOG.escreve(f'PowerShell aberto: não aqueceu ({e!r})')
+                return
+
+    def fecha_todos(self):
+        with self.trava:
+            ws, self.parados = self.parados, []
+        for w in ws:
+            w.fecha()
+
+
+POOL_PS = _PoolPS()
+
+
+def _usa_pool(admin, pacote, desfaz):
+    return (WINDOWS and not admin and not pacote and not desfaz and not dentro_de_pacote()
+            and os.environ.get('KATHAROS_PS_NOVO') != '1')
+
+
 def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostra=True, pr=None, mult=1.0,
             desfaz=False, vigia_ocioso=False):
     """Roda um trecho de PowerShell num processo filho, com limite de tempo (vezes o fator do hardware).
@@ -2017,12 +2141,23 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
     ps = shutil.which('powershell.exe') or r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
     LOG.escreve(f'--- {rotulo} (limite {minutos * mult:.0f} min{", teste" if teste else ""})')
     inicio = time.time()
+    aberto = None
+    if _usa_pool(admin, pacote, desfaz):
+        try:
+            aberto = POOL_PS.pega(ps)
+            aberto.roda(arq)
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
+            LOG.escreve(f'  PowerShell aberto falhou ({e!r}); abrindo um novo')
+            aberto = None
     try:
-        filho = _Filho(ps, arq)
+        filho = aberto or _Filho(ps, arq)
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         s.codigo = 127
         s.erros.append(f'não abriu o PowerShell: {e}')
         return s
+    # -File devolve 0 sem "exit" no script; no aberto, $LASTEXITCODE pode vir de um programa que o script chamou: só vale com exit
+    tem_exit = bool(re.search(r'(?im)^\s*exit\b|;\s*exit\b|\{\s*exit\b', corpo))
+    terminou = False
     fila = filho.fila
     limite = inicio + minutos * mult * 60
     ultima_saida = time.time()
@@ -2041,6 +2176,11 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
             LOG.escreve(f'  {linha}')
             if linha.startswith('@@'):
                 tipo, _, txt = linha[2:].partition('|')
+                if tipo == 'fim' and aberto is not None:
+                    terminou = True
+                    # "x1": o script parou num erro (no -File daria 1); número: o exit do script, que só vale se ele tem exit
+                    s.codigo = 1 if txt.startswith('x') else (int(txt) if tem_exit and txt.strip().lstrip('-').isdigit() else 0)
+                    break
                 if tipo == 'dado':
                     chave, _, js = txt.partition('|')
                     try:
@@ -2069,7 +2209,16 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
                     break
             else:
                 ocioso_desde = None
-    if s.estourou:
+    if aberto is not None:
+        if s.estourou:
+            mata_arvore(aberto.pid)
+            s.codigo = -1
+            LOG.escreve(f'  TEMPO ESGOTADO: {rotulo}')
+        elif terminou:
+            POOL_PS.devolve(aberto)
+        else:   # o PowerShell aberto morreu no meio
+            s.codigo = aberto.p.poll() if aberto.p.poll() not in (None, 0) else -1
+    elif s.estourou:
         mata_arvore(filho.pid)
         s.codigo = -1
         LOG.escreve(f'  TEMPO ESGOTADO: {rotulo}')
@@ -15124,6 +15273,8 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
             return 0
         canal.manda({'pronto': True, 'api': API_VERSAO, 'versao': VERSAO})
         threading.Thread(target=preparo, daemon=True).start()
+        if paralelo:   # dois PowerShell já abertos para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
+            threading.Thread(target=lambda: POOL_PS.aquece(2), daemon=True).start()
         if not preparo_pronto.wait(20):
             LOG.escreve('api: o preparo passou de 20 s; atendendo os pedidos mesmo assim')
         # pedidos em paralelo: uma conferência longa ou o raio-x não seguram mais a leitura de outra tela (antes, abrir o Raio-x durante
@@ -15170,6 +15321,8 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
         return 0
     finally:
         sys.stdout = canal_real
+        if argv[:1] != ['--pipe']:   # os PowerShell abertos fecham junto (se o motor for morto, o cano fecha e eles saem sozinhos)
+            POOL_PS.fecha_todos()
 
 
 # ───────── métodos de leitura (não mudam nada) ─────────
@@ -17030,6 +17183,10 @@ NOVIDADES = [
    {
     "titulo": "Mais rápido",
     "texto": "o motor atende várias telas ao mesmo tempo. Abrir o Raio-x durante uma conferência não deixa mais a tela vazia, e toda tela mostra \"carregando\" em vez de ficar preta. O raio-x lê as partes do diagnóstico ao mesmo tempo."
+   },
+   {
+    "titulo": "Leituras quase instantâneas",
+    "texto": "as leituras da janela usam um PowerShell que já está aberto, em vez de abrir um novo a cada vez (abrir custava de meio segundo a um segundo e meio). Eles fecham sozinhos depois de um minuto parados. O motor também abre mais rápido: o programa fica guardado já compilado."
    },
    {
     "titulo": "Nota mais justa",

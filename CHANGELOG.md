@@ -23,6 +23,7 @@ Quando uma versão existe:
 Corrige o que o teste da 4.3.0 mostrou (no PC e nos relatórios enviados) e deixa a janela mais rápida e com menos texto.
 
 - **Mais rápido**: o motor atende várias telas ao mesmo tempo. Abrir o Raio-x durante uma conferência não deixa mais a tela vazia, e toda tela mostra "carregando" em vez de ficar preta. O raio-x lê as partes do diagnóstico ao mesmo tempo.
+- **Leituras quase instantâneas**: as leituras da janela usam um PowerShell que já está aberto, em vez de abrir um novo a cada vez (abrir custava de meio segundo a um segundo e meio). Eles fecham sozinhos depois de um minuto parados. O motor também abre mais rápido: o programa fica guardado já compilado.
 - **Nota mais justa**: poucos programas na inicialização não são mais "grave"; a tarefa do próprio Katharos não aparece como suspeita; cada tipo de problema tem um teto de pontos; cada achado vai para o grupo certo (driver é saúde, HD é disco). Com um jogo aberto, nada "em repouso" (CPU, RAM, disco, temperatura) entra na nota.
 - **Menos alarme falso**: tarefa sem assinatura é para conferir, nunca grave; o plano de energia trocado pelo próprio Katharos não vira achado; RAM só é "quase cheia" acima de 85 %.
 - **O que o Windows bloqueia**: item que o Windows não deixou gravar (como os widgets no Windows 11 25H2) aparece como "o Windows bloqueia" e não conta mais como "vai mudar".

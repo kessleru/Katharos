@@ -129,6 +129,8 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
             return 0
         canal.manda({'pronto': True, 'api': API_VERSAO, 'versao': VERSAO})
         threading.Thread(target=preparo, daemon=True).start()
+        if paralelo:   # dois PowerShell já abertos para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
+            threading.Thread(target=lambda: POOL_PS.aquece(2), daemon=True).start()
         if not preparo_pronto.wait(20):
             LOG.escreve('api: o preparo passou de 20 s; atendendo os pedidos mesmo assim')
         # pedidos em paralelo: uma conferência longa ou o raio-x não seguram mais a leitura de outra tela (antes, abrir o Raio-x durante
@@ -175,6 +177,8 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
         return 0
     finally:
         sys.stdout = canal_real
+        if argv[:1] != ['--pipe']:   # os PowerShell abertos fecham junto (se o motor for morto, o cano fecha e eles saem sozinhos)
+            POOL_PS.fecha_todos()
 
 
 # ───────── métodos de leitura (não mudam nada) ─────────
