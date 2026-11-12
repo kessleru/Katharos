@@ -2955,6 +2955,11 @@ class TestApi(_CasaTemporaria):
         r = self.conversa({'id': 1, 'metodo': metodo, 'params': params or {}})
         return [x for x in r if x.get('id') == 1 and 'evento' not in x][0]
 
+    def test_motor_elevado_atende_um_por_vez(self):
+        # o elevado conversa por um pipe só: ler e escrever junto trava no Windows (o CI da 4.3.1 parou aí)
+        import inspect
+        self.assertIn('paralelo=False', inspect.getsource(k.roda_api_elevada))
+
     def test_leitura_nao_espera_o_pedido_lento(self):
         # abrir o Raio-x durante uma conferência longa deixava a tela vazia: agora a leitura rápida responde antes da lenta
         import threading as th

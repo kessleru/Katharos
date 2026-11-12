@@ -15084,7 +15084,7 @@ _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_export
 _SOZINHOS = ('raiox',)
 
 
-def roda_api(argv, entrada=None, saida=None, permitidos=None):
+def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
     """katharos api              conversa por linhas (a interface usa assim)
        katharos api METODO [JSON] um pedido só, para testar no terminal"""
     if argv and argv[0] == '--pipe':   # motor elevado (ver roda_api_elevada)
@@ -15130,10 +15130,12 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
         # a conferência deixava a tela vazia até ela acabar). A resposta leva o id; a janela já casa pelo id, fora de ordem.
         # O que muda o PC continua um por vez, e o mesmo método pesado (raio-x) não roda duas vezes junto.
         from concurrent.futures import ThreadPoolExecutor
-        pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='api')
+        pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='api') if paralelo else None
         trava_muda, trava_escrita = threading.Lock(), threading.Lock()
         travas = {n: trava_escrita for n in _ESCREVEM}
         travas.update({n: threading.Lock() for n in _SOZINHOS})
+
+        # paralelo=False no motor elevado: um pipe só para ler e escrever; no Windows, escrever com uma leitura pendente trava
 
         def atende(pedido):
             nome = pedido.get('metodo') if isinstance(pedido, dict) else None
@@ -15154,12 +15156,17 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
                 canal.manda({'id': None, 'ok': False, 'erro': {'codigo': 'json_invalido', 'texto': 'a linha não é JSON'}})
                 continue
             if isinstance(pedido, dict) and pedido.get('metodo') == 'sair':
-                pool.shutdown(wait=True, cancel_futures=True)
+                if pool:
+                    pool.shutdown(wait=True, cancel_futures=True)
                 canal.manda({'id': pedido.get('id'), 'ok': True, 'dados': None})
                 break
-            pool.submit(atende, pedido)
+            if pool:
+                pool.submit(atende, pedido)
+            else:
+                atende(pedido)
         else:
-            pool.shutdown(wait=True)
+            if pool:
+                pool.shutdown(wait=True)
         return 0
     finally:
         sys.stdout = canal_real
@@ -15944,7 +15951,7 @@ def roda_api_elevada(nome, sid, senha):
         LOG.escreve('motor elevado: senha errada na conexão; fechando')
         canal.write(json.dumps({'id': None, 'ok': False, 'erro': {'codigo': 'senha', 'texto': 'senha da sessão errada'}}) + '\n')
         return 3
-    return roda_api([], entrada=linhas, saida=canal, permitidos=METODOS_ELEVADOS)
+    return roda_api([], entrada=linhas, saida=canal, permitidos=METODOS_ELEVADOS, paralelo=False)
 
 
 @metodo_api('novidades')
