@@ -20,7 +20,7 @@ public class Historico : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Histórico", "O seu PC ao longo do tempo e o que cada mudança fez de verdade.");
+        var cab = Cabecalho("Histórico", null);
         var g = Servico.Guardado("historico", new { dias = 60 });
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo as medidas").secao);
         var d = await Servico.Le("historico", new { dias = 60 });
@@ -66,7 +66,7 @@ public class Historico : Tela
         {
             var p = new StackPanel { Children = { Subtitulo("Mudando agora", null, "aovivo") } };
             foreach (var t in ts) p.Children.Add(Linha(Maiuscula(t) + ".", null, Etiqueta("atenção", Tema.Ambar)));
-            tend = S(p);
+            tend = G(p);
         }
 
         // período: 7, 30 ou 60 dias
@@ -113,7 +113,7 @@ public class Historico : Tela
         var an = d.A("anomalias").ToList();
         if (an.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Fora do normal", "O que o motor viu diferente do normal deste PC. Clique para ver o porquê.") } };
+            var p = new StackPanel { Children = { Subtitulo("Fora do normal", null, "alerta") } };
             foreach (var x in an)
             {
                 string vezes = (x.D("dias") ?? 1) > 1 ? $" · apareceu em {Num(x.D("dias"))} dias" : "";
@@ -121,7 +121,7 @@ public class Historico : Tela
                                          Content = T(Maiuscula(x.S("vi")) + ". Confiança " + x.S("confianca") + ".", "rotulo", quebra: true), Margin = new Thickness(32, 8) };
                 p.Children.Add(exp);
             }
-            anomalias = S(p);
+            anomalias = G(p);
         }
 
         // o efeito de cada mudança, medida por medida
@@ -129,7 +129,7 @@ public class Historico : Tela
         var es = d.A("efeitos").ToList();
         if (es.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("O que cada mudança fez", "Sete dias antes contra sete dias depois. Diferença que cabe na oscilação normal conta como sem diferença.") } };
+            var p = new StackPanel { Children = { Subtitulo("O que cada mudança fez", "7 dias antes contra 7 depois.", "grafico") } };
             foreach (var e in es)
             {
                 var linhas = e.A("medidas").Where(m => m.S("veredito") != "poucas medidas").Select(m =>
@@ -143,21 +143,21 @@ public class Historico : Tela
                 p.Children.Add(Linha($"{Maiuscula(titulo)}, {Quando(e.S("quando"))}",
                                      linhas.Count > 0 ? string.Join("\n", linhas) : "Poucas medidas antes e depois para dizer algo com certeza."));
             }
-            efeitos = S(p);
+            efeitos = G(p);
         }
         // nos jogos: o antes e depois de cada mudança (2c.7)
         Control? jogos = null;
         var js = d.A("jogos").ToList();
         if (js.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Nos jogos", "Sessões do mesmo jogo antes e depois de cada mudança; diferença menor que a variação normal conta como sem diferença.") } };
+            var p = new StackPanel { Children = { Subtitulo("Nos jogos", null, "jogos") } };
             foreach (var c in js)
             {
                 string v = c.S("veredito");
                 var cor = v.Contains("melhor") ? Tema.Verde : v.Contains("pior") ? Tema.Vermelho : Tema.Apagado;
                 p.Children.Add(Linha($"{c.S("jogo")} · {c.S("rotulo")}: {Num(c.D("antes"))} → {Num(c.D("depois"))} {c.S("un")}", $"depois de {c.S("nome_pacote")} ({Quando(c.S("quando"))})", Etiqueta(v == "" ? "?" : v, cor)));
             }
-            jogos = S(p);
+            jogos = G(p);
         }
         Monta(cab, tend, S(new StackPanel { Children = { per, grade, legenda } }), anomalias, efeitos, jogos);
     }
@@ -217,7 +217,7 @@ public class Historico : Tela
             legenda.Children.Add(chave2);
         };
         var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Children = { legenda, verTudo.Com(b => { Grid.SetColumn(b, 1); b.Margin = new Thickness(0, 0, 10, 0); }), comparar.Com(c => Grid.SetColumn(c, 2)) } };
-        var corpo = new StackPanel { Spacing = 12, Children = { topo, g, T("A roda do mouse aproxima e afasta; arrastar escolhe um trecho; clicar numa marca mostra o que foi aplicado. Esc fecha.", "rotulo", tamanho: 12.5) } };
+        var corpo = new StackPanel { Spacing = 12, Children = { topo, g, T("Roda: zoom · arrastar: trecho · Esc fecha", "rotulo", tamanho: 12.5) } };
         j.MostraCaixa(Janela.Caixa(Maiuscula(s.Rotulo), corpo, Botao("Fechar", true, j.FechaCaixa).Com(b => b.HorizontalAlignment = HorizontalAlignment.Right)), true);
     }
 }

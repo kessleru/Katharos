@@ -118,7 +118,22 @@ def confirma_tela():
         LOG.escreve(f'confirmar a tela: {ex!r}')
 
 
-def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
+def ocioso_s():
+    """Há quantos segundos ninguém mexe no mouse ou no teclado (0 fora do Windows ou se não der para ler)."""
+    if not WINDOWS:
+        return 0.0
+    try:
+        class _U(ctypes.Structure):
+            _fields_ = [('tam', ctypes.c_uint), ('quando', ctypes.c_uint)]
+        u = _U(8, 0)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(u)):
+            return 0.0
+        return max(0.0, ((ctypes.windll.kernel32.GetTickCount() & 0xFFFFFFFF) - u.quando) / 1000.0)
+    except Exception:
+        return 0.0
+
+
+def manter_ou_desfazer(ctx, args, nomes, segundos=180, desfaz_se_calar=True):
     """Como a troca de resolução do Windows: depois de mudar algo de risco, pergunta se está tudo bem. Se o PC ficar
     pior (tela preta, sem som, jogo que não abre), é só deixar o tempo passar ou apertar D."""
     t = ctx.t
@@ -129,6 +144,12 @@ def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
         nomes = [n for n in nomes if n in RISCO_ALTO]
     if not nomes:
         return
+    # aplicação longa termina com a pessoa longe (foi tomar água): o relógio só começa quando ela volta a mexer no PC. Se a mudança
+    # quebrou a tela, ela mexe no mouse para tentar e o relógio corre e desfaz
+    if desfaz_se_calar and ocioso_s() >= 60:
+        t.nota('  Esperando você voltar ao PC para perguntar (o tempo para desfazer sozinho só corre com você aqui).')
+        while ocioso_s() >= 60:
+            time.sleep(2)
     t.titulo('está tudo funcionando?')
     quem = ', '.join(PACOTES[n].titulo for n in nomes)
     t.paragrafo(f'Olhe o PC por um instante ({quem}). M = manter · D = desfazer agora. ' +

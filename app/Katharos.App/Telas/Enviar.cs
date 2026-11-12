@@ -34,7 +34,7 @@ public class Enviar : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Enviar relatório", "Mande o relatório do Katharos, a sua opinião, ou os dois. Ajuda a consertar erros e a saber o que funciona de verdade. Nada sai sem você ver antes.");
+        var cab = Cabecalho("Enviar relatório", "Nada sai sem você clicar.");
         Monta(cab, Carregando("Lendo").secao);
         var d = await Servico.Le("envio_secoes");
         if (primeira) { primeira = false; foreach (var s in d.A("secoes")) secoes.Add(s.S("id")); }
@@ -99,7 +99,7 @@ public class Enviar : Tela
         var pend = Envio.Pendentes();
         if (pend.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Esperando para enviar", "Não deu para mandar na hora (sem internet ou o servidor fora). Só sai quando você clicar.") } };
+            var p = new StackPanel { Children = { Subtitulo("Esperando para enviar", null, "tempo") } };
             foreach (var (arq, quando, t) in pend)
             {
                 var bts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = {
@@ -107,18 +107,18 @@ public class Enviar : Tela
                     Botao("Apagar", false, () => { Envio.Apaga(arq); _ = Recarrega(); }) } };
                 p.Children.Add(Linha(Nome(t), quando == default ? "" : "guardado " + Quando(quando.ToString("s")), null, bts));
             }
-            partes.Add(S(p));
+            partes.Add(G(p));
         }
         var env = d.A("envios").ToList();
         if (env.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Já enviados deste PC", "Guarde o código: com ele dá para pedir para apagar o envio.") } };
+            var p = new StackPanel { Children = { Subtitulo("Já enviados deste PC", "O código serve para pedir para apagar.", "enviar") } };
             foreach (var x in env.Take(10))
             {
                 string cod = x.S("codigo");
                 p.Children.Add(Linha(cod, $"{Nome(x.S("tipo"))} · {Quando(x.S("quando"))} · Katharos {x.S("versao")}", null, Botao("Copiar código", false, async () => await Copia(cod))));
             }
-            partes.Add(S(p));
+            partes.Add(G(p));
         }
         Monta(partes.ToArray());
     }
@@ -183,7 +183,7 @@ public class Enviar : Tela
             try { await Servico.Le("envio_registrar", new { codigo, tipo = t }); } catch (Exception e) { Registro.Escreve("registrar envio: " + e.Message); }
             var cod = new SelectableTextBlock { Text = codigo, FontFamily = Tema.Mono, FontSize = 26, Foreground = Tema.Ambar };
             var corpo = new StackPanel { Spacing = 10, Children = { T("Chegou. Obrigado: é com isso que o Katharos melhora.", "sub", quebra: true), cod,
-                T("Guarde o código. Com ele dá para pedir para apagar o envio. Ele também fica nesta tela.", "rotulo", quebra: true) } };
+                T("Com o código dá para pedir para apagar.", "rotulo", quebra: true) } };
             j.MostraCaixa(Janela.Caixa("Enviado", corpo, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0),
                 Children = { Botao("Copiar código", false, async () => await Copia(codigo)), Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); }) } }), true);
             if (pendente == null && t != "relatorio") { texto.Text = ""; nota = null; }

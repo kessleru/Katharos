@@ -1914,8 +1914,9 @@ class _Filho:
         self.fila = queue.Queue()
         self.fora = WINDOWS and dentro_de_pacote()
         if not self.fora:
-            # sem console (pythonw, tarefa agendada): sem esta marca o PowerShell abriria uma janela, que poderia tirar um jogo da tela cheia
-            sem_janela = 0x08000000 if WINDOWS and not ctypes.windll.kernel32.GetConsoleWindow() else 0
+            # o PowerShell nunca ganha janela: toda a saída vem pelo cano, e uma janela piscando (pior com vários rodando juntos, como no
+            # raio-x e na conferência em paralelo) tira um jogo da tela cheia e parece vírus
+            sem_janela = 0x08000000 if WINDOWS else 0
             self.p = subprocess.Popen([ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(arq)],
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=sem_janela, env=env_ps())
             self.pid = self.p.pid
@@ -2087,7 +2088,7 @@ def roda_exe(cmd, minutos, pr=None, mult=1.0, saida_arq=None):
     LOG.escreve('--- ' + subprocess.list2cmdline([str(c) for c in cmd]))
     try:
         # no Windows, as ferramentas pesadas (DISM, sfc, chkdsk) rodam com prioridade abaixo do normal: o PC continua usável
-        flags = getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0) if WINDOWS else 0
+        flags = (getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0) | 0x08000000) if WINDOWS else 0   # e sem janela: a saída vem pelo cano
         p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                              creationflags=flags)
     except OSError as e:
@@ -7865,7 +7866,22 @@ def confirma_tela():
         LOG.escreve(f'confirmar a tela: {ex!r}')
 
 
-def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
+def ocioso_s():
+    """Há quantos segundos ninguém mexe no mouse ou no teclado (0 fora do Windows ou se não der para ler)."""
+    if not WINDOWS:
+        return 0.0
+    try:
+        class _U(ctypes.Structure):
+            _fields_ = [('tam', ctypes.c_uint), ('quando', ctypes.c_uint)]
+        u = _U(8, 0)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(u)):
+            return 0.0
+        return max(0.0, ((ctypes.windll.kernel32.GetTickCount() & 0xFFFFFFFF) - u.quando) / 1000.0)
+    except Exception:
+        return 0.0
+
+
+def manter_ou_desfazer(ctx, args, nomes, segundos=180, desfaz_se_calar=True):
     """Como a troca de resolução do Windows: depois de mudar algo de risco, pergunta se está tudo bem. Se o PC ficar
     pior (tela preta, sem som, jogo que não abre), é só deixar o tempo passar ou apertar D."""
     t = ctx.t
@@ -7876,6 +7892,12 @@ def manter_ou_desfazer(ctx, args, nomes, segundos=90, desfaz_se_calar=True):
         nomes = [n for n in nomes if n in RISCO_ALTO]
     if not nomes:
         return
+    # aplicação longa termina com a pessoa longe (foi tomar água): o relógio só começa quando ela volta a mexer no PC. Se a mudança
+    # quebrou a tela, ela mexe no mouse para tentar e o relógio corre e desfaz
+    if desfaz_se_calar and ocioso_s() >= 60:
+        t.nota('  Esperando você voltar ao PC para perguntar (o tempo para desfazer sozinho só corre com você aqui).')
+        while ocioso_s() >= 60:
+            time.sleep(2)
     t.titulo('está tudo funcionando?')
     quem = ', '.join(PACOTES[n].titulo for n in nomes)
     t.paragrafo(f'Olhe o PC por um instante ({quem}). M = manter · D = desfazer agora. ' +

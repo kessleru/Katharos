@@ -89,7 +89,7 @@ public class AoVivo : Tela
             montado = false;
             if (estado == Estado.Desligado) return;
             estado = Estado.Desligado;
-            Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."),
+            Monta(Cabecalho("Ao vivo", null),
                   Vazio("O acompanhamento está desligado", "Ligado, ele lê o PC a cada segundo, em prioridade baixa (usa uns 50 MB de RAM e menos de 1 % da CPU), grava as sessões de jogo com o FPS e avisa quando algo fica no limite. Não abre nem lê o processo do jogo.",
                         Botao("Ligar o acompanhamento", true, async () => await Liga())));
             return;
@@ -179,7 +179,7 @@ public class AoVivo : Tela
                 Child = new StackPanel { Spacing = 4, Children = { topo, new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.Texto, c.G } } });
         }
         conclusoes = new StackPanel();
-        Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo.", luz), S(jogo), S(grade), S(conclusoes));
+        Monta(Cabecalho("Ao vivo", null, luz), S(jogo), S(grade), S(conclusoes));
     }
 
     void Amplia(Cel c)
@@ -192,7 +192,7 @@ public class AoVivo : Tela
         var verTudo = Botao("Ver tudo", false, () => g.VerTudo()).Com(b => b.IsVisible = false);
         g.ZoomMudou += () => verTudo.IsVisible = g.ComZoom;
         j.MostraCaixa(Janela.Caixa(c.Rotulo + " agora", new StackPanel { Spacing = 10, Children = { verTudo, g,
-            T("Os últimos segundos, como estavam ao abrir. A roda aproxima e afasta; arrastar escolhe um trecho. Esc fecha.", "rotulo", tamanho: 12.5) } },
+            T("Roda: zoom · arrastar: trecho · Esc fecha", "rotulo", tamanho: 12.5) } },
             Botao("Fechar", true, j.FechaCaixa).Com(b => b.HorizontalAlignment = HorizontalAlignment.Right)), true);
     }
 
@@ -204,7 +204,7 @@ public class AoVivo : Tela
         try
         {
             var (sec, passo, _) = Carregando("Abrindo o acompanhamento (na primeira vez, o Windows e o antivírus podem levar alguns segundos)");
-            Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."), sec);
+            Monta(Cabecalho("Ao vivo", null), sec);
             Trabalho.Comeca("Ligando o acompanhamento…"); comecou = true;
             await Servico.Le("segundo_plano", new { ligar = true });
             passo.Text = "Aberto. Esperando a primeira leitura do PC";
@@ -218,7 +218,7 @@ public class AoVivo : Tela
                 {
                     Trabalho.Termina(); comecou = false;
                     estado = Estado.Desligado;   // o relógio troca para as leituras assim que a primeira chegar
-                    Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora e o que segura o jogo."),
+                    Monta(Cabecalho("Ao vivo", null),
                           Vazio("O acompanhamento está rodando", "Ele abriu (o ícone fica perto do relógio), mas ainda não gravou a primeira leitura: neste PC isso está demorando. Esta tela muda sozinha quando ela chegar; não precisa clicar de novo."));
                     return;
                 }
@@ -233,7 +233,7 @@ public class AoVivo : Tela
             Registro.Escreve("ligar o acompanhamento: " + e);
             if (comecou) Trabalho.Termina();
             estado = Estado.Erro;   // a mensagem fica na tela até a pessoa tentar de novo
-            Monta(Cabecalho("Ao vivo", "O que o PC está fazendo agora."), Erro(e, async () => { estado = Estado.Leitura; await Liga(); }));
+            Monta(Cabecalho("Ao vivo", null), Erro(e, async () => { estado = Estado.Leitura; await Liga(); }));
         }
     }
 }

@@ -12,7 +12,7 @@ public class Jogos : Tela
 {
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Jogos", "Cada vez que você joga, o Katharos grava quanto tempo, o FPS e o que segurou o jogo.");
+        var cab = Cabecalho("Jogos", "FPS e o que segurou cada sessão.");
         Monta(cab, Carregando("Lendo as sessões").secao);
         var d = await Servico.Le("sessoes", new { dias = 60 });
         var ss = d.A("sessoes").Reverse().ToList();
@@ -33,14 +33,14 @@ public class Jogos : Tela
         var cs = d.A("comparacoes").ToList();
         if (cs.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Antes e depois das mudanças", "Pelo menos 3 sessões de cada lado; diferença menor que a variação normal conta como sem diferença.") } };
+            var p = new StackPanel { Children = { Subtitulo("Antes e depois das mudanças", null, "grafico") } };
             foreach (var c in cs.Take(8))
             {
                 string v = c.S("veredito");
                 var cor = v.Contains("melhor") ? Tema.Verde : v.Contains("pior") ? Tema.Vermelho : Tema.Apagado;
                 p.Children.Add(Linha($"{c.S("jogo")} · {c.S("rotulo")}: {Num(c.D("antes"), 0)} → {Num(c.D("depois"), 0)}", $"depois de {c.S("nome_pacote")} ({Quando(c.S("quando"))})", Etiqueta(v == "" ? "?" : v, cor)));
             }
-            comp = S(p);
+            comp = G(p);
         }
 
         // I20: por jogo: o que segura o FPS, a evolução de FPS e travadas e a recomendação para aquele uso
@@ -48,7 +48,7 @@ public class Jogos : Tela
         var pj = d.A("por_jogo").ToList();
         if (pj.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Por jogo", "Cada jogo que o Katharos viu, com o que segura o FPS nele.") } };
+            var p = new StackPanel { Children = { Subtitulo("Por jogo", null, "jogos") } };
             foreach (var j in pj.Take(8))
             {
                 var segura = j.A("segura").Select(x => $"{x.S("nome")} em {Num(x.D("pct"))} % do tempo").ToList();
@@ -68,17 +68,17 @@ public class Jogos : Tela
                 }
                 p.Children.Add(new Border { Padding = new Thickness(32, 16), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Child = bloco });
             }
-            porJogo = S(p);
+            porJogo = G(p);
         }
 
-        var lista = new StackPanel { Children = { Subtitulo("Sessões") } };
+        var lista = new StackPanel { Children = { Subtitulo("Sessões", null, "tempo") } };
         foreach (var s in ss.Take(30))
         {
             string fps = s.D("fps_med") is double f ? $" · {Num(f)} FPS médio · 1% mais lento {Num(s.D("fps_1low"))}" : "";
             lista.Children.Add(Linha($"{s.S("jogo")} · {Num(s.D("min"))} min{fps}", $"{Quando(s.S("inicio"))} · limite: {Limite(s.S("principal"))}" +
                                      (s.D("temp_cpu_max") is double tc ? $" · CPU até {Num(tc)} °C" : "")));
         }
-        Monta(cab, numeros, porJogo, comp, S(lista));
+        Monta(cab, numeros, porJogo, comp, G(lista));
     }
 
     static string Limite(string p) => p switch
@@ -99,7 +99,7 @@ public class Desfazer : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Desfazer", "Tudo o que o Katharos mudou guarda o valor de antes. Volte uma área inteira ou só alguns itens.");
+        var cab = Cabecalho("Desfazer", "Volte uma área inteira ou só alguns itens.");
         var g = Servico.Guardado("aplicado");
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo o que foi aplicado").secao);
         var d = await Servico.Le("aplicado");
@@ -110,7 +110,7 @@ public class Desfazer : Tela
     {
         var ps = d.A("pacotes").ToList();
         if (ps.Count == 0) { Monta(cab, Vazio("Nada para desfazer", "Nenhuma mudança do Katharos está aplicada neste PC.")); return; }
-        var lista = new StackPanel { Children = { Subtitulo("Aplicado neste PC", "Do mais novo para o mais antigo.", "desfazer") } };
+        var lista = new StackPanel { Children = { Subtitulo("Aplicado neste PC", null, "desfazer") } };
         foreach (var p in ps) lista.Children.Add(Area(p));
         var tudo = Botao("Desfazer tudo", false, async () => await Volta(ps.Where(p => p.B("desfaz")).Select(p => p.S("pacote")).ToArray(), null, "tudo"));
         var ponto = d.S("ponto");
@@ -213,17 +213,17 @@ public class Configuracoes : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Configurações", "Valem para as janelas e para o terminal.");
+        var cab = Cabecalho("Configurações", null);
         Monta(cab, Carregando("Lendo").secao);
         var d = await Servico.Le("config_ler");
-        var lista = new StackPanel { Children = { Subtitulo("Preferências") } };
+        var lista = new StackPanel { Children = { Subtitulo("Preferências", null, "config") } };
         foreach (var k in Mostrar) Preferencia(d, k, lista);
-        var motor = new StackPanel { Children = { Subtitulo("O motor de inteligência", "O que ele pode avisar e com que frequência.") } };
+        var motor = new StackPanel { Children = { Subtitulo("O motor de inteligência", null, "central") } };
         foreach (var k in Motor) Preferencia(d, k, motor);
         // o que ele nunca propõe: comandos separados por vírgula
         var nunca = new TextBox { Text = d?["motor-nunca"].S("valor") ?? "", Watermark = "ex.: turbo, energia", MinWidth = 220 };
         var salvar = Botao("Salvar", false, async () => { await Servico.Le("config_gravar", new { chave = "motor-nunca", valor = (nunca.Text ?? "").Trim() }); await Recarrega(); });
-        motor.Children.Add(Linha("O que ele nunca propõe", "Os comandos que a central não deve sugerir neste PC.", null, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { nunca, salvar } }));
+        motor.Children.Add(Linha("O que ele nunca propõe", null, null, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { nunca, salvar } }));
 
         // a memória do PC: o que ele aprendeu, exportar e apagar (com exportação antes)
         var mem = await Servico.Le("memoria");
@@ -233,11 +233,11 @@ public class Configuracoes : Tela
         var acoes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         acoes.Children.Add(Botao("Exportar", false, async () => await Exporta()));
         acoes.Children.Add(Botao("Apagar", false, async () => await Apaga()));
-        var memoria = S(new StackPanel { Children = { Subtitulo("Memória do PC", "Tudo o que o Katharos aprendeu deste PC fica neste computador, em ~/.katharos. Nada vai para a internet."),
+        var memoria = S(new StackPanel { Children = { Subtitulo("Memória do PC", "Fica só neste PC.", "memoria"),
                                                       Linha("O que ele guarda", resumo, null, acoes) } });
-        var versao = S(new StackPanel { Children = { Subtitulo("Esta versão"),
-                                                     Linha("Novidades", "O que mudou nas últimas versões do Katharos.", null, Botao("Ver", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false))) } });
-        Monta(cab, S(lista), S(motor), memoria, versao);
+        var versao = S(new StackPanel { Children = { Subtitulo("Esta versão", null, "info"),
+                                                     Linha("Novidades", null, null, Botao("Ver", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false))) } });
+        Monta(cab, G(lista), G(motor), memoria, versao);
     }
 
     void Preferencia(JsonNode? d, string k, StackPanel lista)

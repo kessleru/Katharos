@@ -32,7 +32,6 @@ public static class Aplicacao
         else
             foreach (var g in itens.GroupBy(i => i.Area))
                 corpo.Children.Add(T($"{Maiuscula(g.First().AreaTitulo)}: {g.Count()} {(g.Count() == 1 ? "item" : "itens")}", null, Tema.Texto, 14));
-        corpo.Children.Add(T("O Windows vai pedir permissão de administrador. Antes de mudar, o Katharos cria um ponto de restauração.", "rotulo", quebra: true).Com(t => t.Margin = new Thickness(0, 8, 0, 0)));
         if (semVolta > 0) corpo.Children.Add(T($"{semVolta} {(semVolta == 1 ? "item não volta" : "itens não voltam")} pelo Desfazer (remoções).", null, Tema.Vermelho, 13.5, true));
         if (!await j.Confirma($"Aplicar {itens.Count} {(itens.Count == 1 ? "mudança" : "mudanças")}?", corpo, $"Aplicar {itens.Count}")) return false;
 
@@ -99,18 +98,35 @@ public static class Aplicacao
             Children = { Botao("Ver o Desfazer", false, () => { j.FechaCaixa(); abre?.Invoke("desfazer"); }), Botao("Fechar", true, () => { j.FechaCaixa(); depois?.Invoke(); }) } }), true);
     }
 
-    /// <summary>Como a troca de resolução do Windows: depois de mudança de risco, "está tudo funcionando?"; sem resposta em 90 s, desfaz.</summary>
+    /// <summary>
+    /// Como a troca de resolução do Windows: depois de mudança de risco, "está tudo funcionando?". O tempo para desfazer sozinho (3 min)
+    /// só corre com a pessoa no PC: aplicação longa termina com ela longe (foi tomar água), e voltar e achar tudo desfeito era pior que
+    /// o risco. Longe (mais de 1 min sem mexer no mouse ou no teclado), o relógio para e espera; mexeu, ele volta a correr. Se a
+    /// mudança quebrou a tela ou a rede, a pessoa mexe no mouse para tentar e o relógio corre e desfaz.
+    /// </summary>
     static async Task PerguntaManter(List<string> pacotes, string titulo, Control corpo, Action? depois)
     {
         var j = Janela.Atual!;
-        int resta = 90;
+        const int Total = 180;
+        int resta = Total;
         var conta = T("", null, Tema.Ambar, 14, true);
         var tcs = new TaskCompletionSource<bool>();
         var rel = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        void Texto() => conta.Text = $"Olhe o PC por um instante (tela, som, internet, o jogo abrindo). Se não responder em {resta} s, o Katharos desfaz sozinho.";
+        void Texto()
+        {
+            bool longe = Presenca.OciosoSegundos() >= 60;
+            conta.Text = longe
+                ? "Esperando você voltar: o tempo para desfazer sozinho só corre com você no PC."
+                : $"Olhe o PC por um instante (tela, som, internet, o jogo abrindo). Se não responder em {resta / 60}:{resta % 60:00}, o Katharos desfaz sozinho.";
+        }
         Texto();
-        rel.Tick += (_, _) => { if (--resta <= 0) tcs.TrySetResult(false); else Texto(); };
+        rel.Tick += (_, _) =>
+        {
+            if (Presenca.OciosoSegundos() < 60 && --resta <= 0) { tcs.TrySetResult(false); return; }
+            Texto();
+        };
         rel.Start();
+        Presenca.ChamaAtencao(j);
         var p = new StackPanel { Spacing = 14, Children = { corpo, T("Está tudo funcionando?", "forte", tamanho: 17), conta } };
         j.MostraCaixa(Janela.Caixa(titulo, p, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0),
             Children = { Botao("Desfazer agora", false, () => tcs.TrySetResult(false)), Botao("Manter", true, () => tcs.TrySetResult(true)) } }));
@@ -193,5 +209,39 @@ public static class Aplicacao
         var rodape = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0),
             Children = { Botao("Ver a área inteira", false, () => { j.FechaCaixa(); abre?.Invoke("otimizar:" + area); }), Botao("Voltar", false, j.FechaCaixa), botao } };
         j.MostraCaixa(Janela.Caixa("Aplicar esta correção", corpo, rodape), true);
+    }
+}
+
+/// <summary>Se a pessoa está no PC (há quanto tempo não mexe no mouse ou no teclado) e como chamar a atenção dela sem roubar o foco.</summary>
+public static class Presenca
+{
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] struct ULTIMA { public uint tamanho; public uint quando; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetLastInputInfo(ref ULTIMA u);
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] struct PISCA { public uint tamanho; public IntPtr janela; public uint como, vezes, intervalo; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool FlashWindowEx(ref PISCA p);
+
+    public static double OciosoSegundos()
+    {
+        if (!OperatingSystem.IsWindows()) return 0;
+        try
+        {
+            var u = new ULTIMA { tamanho = 8 };
+            return GetLastInputInfo(ref u) ? Math.Max(0, ((uint)Environment.TickCount - u.quando) / 1000.0) : 0;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>Pisca o botão na barra de tarefas até a pessoa olhar (o mesmo aviso que o Windows usa para "precisa de você").</summary>
+    public static void ChamaAtencao(Window j)
+    {
+        if (!OperatingSystem.IsWindows() || j.IsActive) return;
+        try
+        {
+            var h = j.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+            if (h == IntPtr.Zero) return;
+            var p = new PISCA { tamanho = (uint)System.Runtime.InteropServices.Marshal.SizeOf<PISCA>(), janela = h, como = 3 | 12, vezes = 0, intervalo = 0 };
+            FlashWindowEx(ref p);
+        }
+        catch { }
     }
 }

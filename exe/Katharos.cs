@@ -1858,8 +1858,8 @@ namespace KatharosApp
 
     /// <summary>
     /// O ícone perto do relógio, desenhado no tamanho exato da bandeja (a gravura do cavaleiro vira borrão em 16 px): o elmo do cavaleiro
-    /// num quadrado escuro. Jogando, o mesmo elmo em âmbar, com o contorno âmbar; atenção e grave ganham um ponto no canto; pausado fica
-    /// apagado. Montado como um .ico de 32 bits com transparência de verdade (o GetHicon de antes estragava as bordas).
+    /// num quadrado escuro, sempre igual. O estado é só um selo no canto: jogando (círculo âmbar), atenção (triângulo âmbar), grave
+    /// (círculo vermelho), pausado (duas barras). Montado como um .ico de 32 bits com transparência de verdade (o GetHicon de antes estragava as bordas).
     /// </summary>
     static class IconeBandeja
     {
@@ -1873,22 +1873,20 @@ namespace KatharosApp
                     g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     g.Clear(Color.Transparent);
                     float k = px / 16f;
-                    bool jogo = estado == "jogo", pausa = estado == "pausa";
-                    Color elmo = jogo ? Cor.Ambar : pausa ? Cor.Apagado : Cor.Osso;
+                    // a base é sempre a mesma (o elmo claro no quadrado escuro); o estado é só o selo no canto de baixo
                     using (var fundo = Arredondado(new RectangleF(0.5f * k, 0.5f * k, 15f * k, 15f * k), 3.2f * k))
                     {
                         using (var b = new SolidBrush(Cor.Fundo)) g.FillPath(b, fundo);
-                        using (var c = new Pen(jogo ? Cor.Ambar : Cor.LinhaForte, Math.Max(1f, k))) g.DrawPath(c, fundo);
+                        using (var c = new Pen(Cor.LinhaForte, Math.Max(1f, k))) g.DrawPath(c, fundo);
                     }
-                    // o elmo: um balde de topo arredondado, com três pontas de coroa, a viseira e a fresta do meio
                     using (var corpo = new GraphicsPath())
                     {
                         corpo.AddLines(new[] { P(4.2f, 5.6f, k), P(4.6f, 4.0f, k), P(6.0f, 3.6f, k), P(10.0f, 3.6f, k), P(11.4f, 4.0f, k), P(11.8f, 5.6f, k),
                                                P(12.2f, 12.0f, k), P(11.4f, 12.8f, k), P(4.6f, 12.8f, k), P(3.8f, 12.0f, k) });
                         corpo.CloseFigure();
-                        using (var b = new SolidBrush(elmo)) g.FillPath(b, corpo);
+                        using (var b = new SolidBrush(Cor.Osso)) g.FillPath(b, corpo);
                     }
-                    using (var b = new SolidBrush(elmo))
+                    using (var b = new SolidBrush(Cor.Osso))
                         foreach (var x in new[] { 5.6f, 8f, 10.4f })
                             g.FillPolygon(b, new[] { P(x - 0.9f, 3.9f, k), P(x, x == 8f ? 1.6f : 2.2f, k), P(x + 0.9f, 3.9f, k) });
                     using (var b = new SolidBrush(Cor.Fundo))
@@ -1896,11 +1894,18 @@ namespace KatharosApp
                         g.FillRectangle(b, 4.9f * k, 6.6f * k, 6.2f * k, Math.Max(1.2f, 1.3f * k));
                         g.FillRectangle(b, 7.45f * k, 8.9f * k, Math.Max(1f, 1.1f * k), 3.0f * k);
                     }
-                    if (estado == "atencao" || estado == "grave")
+                    // o selo: jogando = círculo âmbar; atenção = triângulo âmbar; grave = círculo vermelho; pausado = duas barras cinza
+                    if (estado != "")
                     {
-                        float r = 3.1f * k; var c = new PointF(13f * k, 13f * k);
-                        using (var b = new SolidBrush(Cor.Fundo)) g.FillEllipse(b, c.X - r - k, c.Y - r - k, 2 * (r + k), 2 * (r + k));
-                        using (var b = new SolidBrush(estado == "grave" ? Cor.Vermelho : Cor.Ambar)) g.FillEllipse(b, c.X - r, c.Y - r, 2 * r, 2 * r);
+                        float r = 3.3f * k; float cx = 12.9f * k, cy = 12.9f * k;
+                        using (var b = new SolidBrush(Cor.Fundo)) g.FillEllipse(b, cx - r - k, cy - r - k, 2 * (r + k), 2 * (r + k));
+                        Color c = estado == "grave" ? Cor.Vermelho : estado == "pausa" ? Cor.Apagado : Cor.Ambar;
+                        using (var b = new SolidBrush(c))
+                        {
+                            if (estado == "atencao") g.FillPolygon(b, new[] { new PointF(cx, cy - r), new PointF(cx + r, cy + r * 0.8f), new PointF(cx - r, cy + r * 0.8f) });
+                            else if (estado == "pausa") { g.FillRectangle(b, cx - r * 0.8f, cy - r * 0.8f, r * 0.6f, r * 1.6f); g.FillRectangle(b, cx + r * 0.2f, cy - r * 0.8f, r * 0.6f, r * 1.6f); }
+                            else g.FillEllipse(b, cx - r, cy - r, 2 * r, 2 * r);
+                        }
                     }
                 }
                 return DeBitmap(bmp);

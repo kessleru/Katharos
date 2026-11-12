@@ -21,7 +21,7 @@ public class Memoria : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Memória", "Quem está usando a RAM deste PC, medido pelo acompanhamento a cada minuto.");
+        var cab = Cabecalho("Memória", "Quem está usando a RAM.");
         var g = Servico.Guardado("memoria_programas");
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo a memória dos últimos dias").secao);
         var d = await Servico.Le("memoria_programas");
@@ -53,7 +53,7 @@ public class Memoria : Tela
         if (!todos && ps.Count > 10)
             lista.Children.Add(new Border { Padding = new Thickness(32, 10, 32, 14), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
                 Child = Link($"Ver os outros {ps.Count - 10}", () => { todos = true; Desenha(cab, d); }) });
-        Monta(cab, estado, frase, S(lista));
+        Monta(cab, estado, frase, G(lista));
     }
 
     Control Programa(JsonNode x)

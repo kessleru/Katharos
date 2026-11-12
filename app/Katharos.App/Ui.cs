@@ -30,12 +30,13 @@ public static class Ui
 
     public static Secao S(Control filho, bool linha = true) => new() { Child = filho, LinhaEmbaixo = linha };
 
-    public static Secao Cabecalho(string titulo, string sub, Control? direita = null)
+    public static Secao Cabecalho(string titulo, string? sub, Control? direita = null)
     {
         var t = new TextBlock();
         t.Classes.Add("titulo");
         t.Inlines = new InlineCollection { new Run(titulo), new Run(".") { Foreground = Tema.Ambar } };
-        var esq = new StackPanel { Spacing = 8, Children = { t, T(sub, "sub") } };
+        var esq = new StackPanel { Spacing = 8, Children = { t } };
+        if (!string.IsNullOrEmpty(sub)) esq.Children.Add(T(sub, "sub"));
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(32, 36, 32, 30) };
         g.Children.Add(esq);
         if (direita != null) { Grid.SetColumn(direita, 1); direita.VerticalAlignment = VerticalAlignment.Bottom; g.Children.Add(direita); }
@@ -60,7 +61,7 @@ public static class Ui
     public static Control Numero(string rotulo, string valor, string unidade, string contexto, IBrush corContexto, Control? extra = null)
     {
         var num = new StackPanel { Orientation = Orientation.Horizontal, Children = { T(valor, "numero"), T(unidade, "unidade") } };
-        var p = new StackPanel { Spacing = 4, Children = { T(rotulo, "rotulo"), num, T(contexto, null, corContexto, 13) } };
+        var p = new StackPanel { Spacing = 4, Children = { T(rotulo, "rotulo", quebra: true), num, T(contexto, null, corContexto, 13, true) } };
         if (extra != null) p.Children.Add(extra);
         return new Border { Padding = new Thickness(32, 24), Child = p };
     }
@@ -204,19 +205,69 @@ public static class Ui
         3 => ("grave", Tema.Vermelho), 2 => ("atenção", Tema.Ambar), 1 => ("dica", Tema.Apagado), _ => ("info", Tema.Apagado),
     };
 
-    /// <summary>Uma linha de lista: etiqueta à esquerda (opcional), título e explicação, ação à direita.</summary>
+    /// <summary>
+    /// Uma linha de lista: ícone (opcional), a etiqueta em cima do título, a explicação embaixo e a ação à direita. Quando falta espaço,
+    /// a ação desce para baixo do texto (Fileira): nada é espremido nem cortado.
+    /// </summary>
     public static Control Linha(string titulo, string? explica, Border? etiqueta = null, Control? direita = null, string? icone = null)
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions((icone != null ? "Auto," : "") + (etiqueta != null ? "112,*,Auto" : "*,Auto")) };
-        int c = 0;
-        if (icone != null) { g.Children.Add(Icones.De(icone, 18, Tema.Apagado).Com(i => { i.VerticalAlignment = VerticalAlignment.Top; i.Margin = new Thickness(0, 2, 16, 0); })); c = 1; }
-        if (etiqueta != null) { etiqueta.VerticalAlignment = VerticalAlignment.Top; etiqueta.Margin = new Thickness(0, 2, 0, 0); Grid.SetColumn(etiqueta, c); g.Children.Add(etiqueta); c++; }
-        var meio = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        var meio = new StackPanel { Spacing = 4 };
+        if (etiqueta != null) { etiqueta.HorizontalAlignment = HorizontalAlignment.Left; etiqueta.Margin = new Thickness(0, 0, 0, 2); meio.Children.Add(etiqueta); }
         meio.Children.Add(T(titulo, null, Tema.Osso, 15, true).Com(t => t.FontWeight = FontWeight.SemiBold));
-        if (!string.IsNullOrWhiteSpace(explica)) meio.Children.Add(T(explica!, "rotulo", tamanho: 13.5, quebra: true));
-        Grid.SetColumn(meio, c); g.Children.Add(meio);
-        if (direita != null) { direita.Margin = new Thickness(16, 0, 0, 0); direita.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(direita, c + 1); g.Children.Add(direita); }
-        return new Border { Padding = new Thickness(32, 16), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Child = g };
+        if (!string.IsNullOrWhiteSpace(explica)) meio.Children.Add(T(explica!, "rotulo", tamanho: 13.5, quebra: true).Com(t => t.MaxWidth = 720));
+        Control? esq = icone == null ? null : Icones.De(icone, 18, Tema.Apagado).Com(i => { i.VerticalAlignment = VerticalAlignment.Top; i.Margin = new Thickness(0, etiqueta != null ? 26 : 2, 16, 0); });
+        return new Border { Padding = new Thickness(32, 18), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
+                            Child = new Controles.Fileira { Esquerda = esq, Meio = meio, Direita = direita } };
+    }
+
+    /// <summary>
+    /// Um grupo de linhas que pertencem a um título (Saúde, Memória...): o cabeçalho numa faixa mais clara, com ícone e o resumo à
+    /// direita, e as linhas embaixo recuadas, presas por uma régua vertical na cor do grupo. Entre um grupo e outro, a linha de seção com
+    /// as marcas "+": assim fica claro onde um assunto termina e o outro começa.
+    /// </summary>
+    public static Secao Grupo(string titulo, string? sub, string? icone, IEnumerable<Control> linhas, string? direita = null, IBrush? cor = null)
+    {
+        var cab = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        if (icone != null)
+            cab.Children.Add(new Border { Width = 34, Height = 34, BorderBrush = cor ?? Tema.LinhaForte, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 14, 0),
+                                          Child = Icones.De(icone, 18, cor ?? Tema.Ambar).Com(i => { i.HorizontalAlignment = HorizontalAlignment.Center; i.VerticalAlignment = VerticalAlignment.Center; }) });
+        var tx = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { T(titulo, "forte") } };
+        if (sub != null) tx.Children.Add(T(sub, "rotulo", tamanho: 13, quebra: true));
+        cab.Children.Add(tx.Com(t => Grid.SetColumn(t, 1)));
+        if (direita != null) cab.Children.Add(T(direita, null, cor ?? Tema.Texto, 14).Com(t => { t.FontFamily = Tema.Mono; Grid.SetColumn(t, 2); t.VerticalAlignment = VerticalAlignment.Center; }));
+        var corpo = new StackPanel();
+        foreach (var l in linhas)
+        {
+            if (l is Border b) { b.Padding = new Thickness(24, 16, 32, 16); b.BorderThickness = new Thickness(0, corpo.Children.Count == 0 ? 0 : 1, 0, 0); }
+            corpo.Children.Add(l);
+        }
+        return S(new StackPanel { Children = {
+            new Border { Background = Tema.Painel, Padding = new Thickness(32, 16), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 0, 1), Child = cab },
+            new Border { Margin = new Thickness(48, 6, 0, 10), BorderBrush = cor ?? Tema.LinhaForte, BorderThickness = new Thickness(2, 0, 0, 0), Child = corpo } } });
+    }
+
+    /// <summary>
+    /// O mesmo raciocínio do Grupo para uma seção já montada do jeito antigo (Subtitulo seguido das linhas): o primeiro filho vira a
+    /// faixa do cabeçalho e o resto fica recuado, preso pela régua vertical. Assim toda tela separa os assuntos do mesmo jeito.
+    /// </summary>
+    public static Secao G(StackPanel p, IBrush? cor = null)
+    {
+        var filhos = p.Children.ToList();
+        p.Children.Clear();
+        if (filhos.Count == 0) return S(p);
+        var cab = filhos[0];
+        cab.Margin = new Thickness(0);
+        var corpo = new StackPanel();
+        foreach (var l in filhos.Skip(1))
+        {
+            if (l is Border b && b.Padding.Left >= 24) { b.Padding = new Thickness(24, b.Padding.Top, b.Padding.Right, b.Padding.Bottom); b.BorderThickness = new Thickness(0, corpo.Children.Count == 0 ? 0 : 1, 0, 0); }
+            else if (l.Margin.Left >= 32) l.Margin = new Thickness(24, l.Margin.Top, l.Margin.Right, l.Margin.Bottom);
+            corpo.Children.Add(l);
+        }
+        var pilha = new StackPanel { Opacity = p.Opacity, Children = { new Border { Background = Tema.Painel, Padding = new Thickness(32, 16), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 0, corpo.Children.Count > 0 ? 1 : 0), Child = cab } } };
+        if (corpo.Children.Count > 0)
+            pilha.Children.Add(new Border { Margin = new Thickness(48, 6, 0, 10), BorderBrush = cor ?? Tema.LinhaForte, BorderThickness = new Thickness(2, 0, 0, 0), Child = corpo });
+        return S(pilha);
     }
 
     /// <summary>Um botão discreto, em texto âmbar sublinhado ao passar o mouse: para a ação secundária ("Entender", "Ler de novo").</summary>

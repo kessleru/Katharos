@@ -40,7 +40,7 @@ public class Inicializacao : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("O que abre com o Windows", "Desligar não desinstala: o programa só deixa de abrir sozinho. Volta quando quiser.");
+        var cab = Cabecalho("O que abre com o Windows", "Desligar não desinstala.");
         modo = Servico.Guardado("config_ler")?["modo"].S("valor", modo) ?? modo;
         var g = Servico.Guardado("itens", Pedido());
         aplicado = Servico.Guardado("aplicado");
@@ -89,7 +89,7 @@ public class Inicializacao : Tela
                 ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(32, 20),
                 Children = { new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = {
                                  T("Desligar os que não preciso", null, Tema.Osso, 16).Com(t => t.FontWeight = FontWeight.SemiBold),
-                                 T("Já marcados com o que o Katharos sugere. Antivírus, drivers e o que é do Windows ficam sempre.", "rotulo", quebra: true) } },
+                                 T("Antivírus, drivers e o que é do Windows ficam sempre.", "rotulo", quebra: true) } },
                              Botao($"Desligar {sugeridos.Count}", true, async () => await Aplica(sugeridos)).Com(b => Grid.SetColumn(b, 1)) },
             });
 
@@ -103,7 +103,7 @@ public class Inicializacao : Tela
         if (pac != null && pac.A("itens").Any())
         {
             var porItem = pac.A("por_item").Select(x => x.ToString()).ToHashSet();
-            var p = new StackPanel { Children = { Subtitulo("Desligados pelo Katharos", "Continuam instalados. Religar volta a abrir com o Windows.", "desligar") } };
+            var p = new StackPanel { Children = { Subtitulo("Desligados pelo Katharos", null, "desligar") } };
             foreach (var id in pac.A("itens").Select(x => x.ToString()))
             {
                 string nome = pac?["titulos"]?[id]?.ToString() ?? (id.StartsWith("ini:") ? id[4..] : id);
@@ -111,15 +111,15 @@ public class Inicializacao : Tela
                                                     : T("volta com a área inteira, no Desfazer", "rotulo", tamanho: 12.5);
                 p.Children.Add(Linha(nome, "não abre sozinho · desde " + Quando(pac.S("quando")), Etiqueta("desligado", Tema.Apagado), acao, "desligar"));
             }
-            desligados = S(p);
+            desligados = G(p);
         }
 
         aplicar = Botao("Aplicar", true, async () => await Aplica(itens.Where(i => pedidos.GetValueOrDefault(i.S("id"))).ToList()));
         if (resumo.Parent is Panel pr) pr.Children.Remove(resumo);
         barra.Child = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = {
-            new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { resumo, T("Antes, o Katharos cria um ponto de restauração. Tudo volta pelo Desfazer.", "rotulo") } },
+            new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { resumo } },
             aplicar.Com(b => Grid.SetColumn(b, 1)) } };
-        Monta(cab, numeros, topo, S(lista), desligados);
+        Monta(cab, numeros, topo, G(lista), desligados);
         Conta();
     }
 

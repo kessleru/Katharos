@@ -17,7 +17,7 @@ public class Sugestoes : Tela
 {
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Central", "O que o Katharos concluiu com as medidas deste PC, e o que ele faria. Nada muda sem você.");
+        var cab = Cabecalho("Central", null);
         Monta(cab, Carregando("Pensando com as medidas deste PC").secao);
         var d = await Servico.Le("sugestoes");
         var diags = d.A("diagnosticos").ToList();
@@ -28,26 +28,26 @@ public class Sugestoes : Tela
         Control? diagnostico = null;
         if (diags.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("Diagnóstico", "A causa mais provável de cada problema medido, com as que eu descartei e por quê.") } };
+            var p = new StackPanel { Children = { Subtitulo("Diagnóstico", null, "alvo") } };
             foreach (var g in diags) p.Children.Add(Diagnostico(g));
-            diagnostico = S(p);
+            diagnostico = G(p);
         }
 
         Control? propostas = null;
         if (props.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("O que eu faria", "Da que mais rende para a que menos. \"Aplicar esta correção\" mostra só os itens dela, para você conferir antes.") } };
+            var p = new StackPanel { Children = { Subtitulo("O que eu faria", null, "lampada") } };
             foreach (var x in props) p.Children.Add(Proposta(x));
-            propostas = S(p);
+            propostas = G(p);
         }
 
         // o que foi aplicado: previsto x aconteceu (verde, cinza ou vermelho), com o desfazer onde piorou e o "ajudou?"
         Control? linha = null;
         if (tempo.Count > 0 || res.Count > 0)
         {
-            var p = new StackPanel { Children = { Subtitulo("O que eu previ e o que aconteceu", "Medido 7 dias antes e depois, no mesmo contexto. A sua resposta ensina o motor: o que não ajudou pesa menos neste PC.") } };
+            var p = new StackPanel { Children = { Subtitulo("O que eu previ e o que aconteceu", "7 dias antes contra 7 depois.", "grafico") } };
             foreach (var r in tempo.Count > 0 ? tempo : res) p.Children.Add(Resultado(r));
-            linha = S(p);
+            linha = G(p);
         }
 
         if (diagnostico == null && propostas == null && linha == null)

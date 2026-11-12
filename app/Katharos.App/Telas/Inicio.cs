@@ -19,7 +19,7 @@ public class Inicio : Tela
 
     protected override async Task Carrega()
     {
-        var cab = Cabecalho("Início", "Como está o seu PC e o que fazer agora.");
+        var cab = Cabecalho("Início", null);
         // a última leitura aparece na hora; a nova troca quando chegar (só se mudou)
         var g = Servico.Guardado("inicio");
         jogos = Servico.Guardado("sessoes", new { dias = 30 });
@@ -99,7 +99,7 @@ public class Inicio : Tela
             if (rx.D("total") is double tot && tot > 3)
                 p.Children.Add(new Border { Padding = new Avalonia.Thickness(32, 12, 32, 16), BorderBrush = Tema.Linha, BorderThickness = new Avalonia.Thickness(0, 1, 0, 0),
                     Child = Botao($"Ver as outras {Num(tot - 3)} no Raio-x", false, () => Abre("raiox")).Com(b => b.HorizontalAlignment = HorizontalAlignment.Left) });
-            lista = S(p);
+            lista = G(p);
         }
         jogosDesenhados = jogos?.ToJsonString();
         var secJogos = SecaoJogos(jogos);
@@ -129,7 +129,7 @@ public class Inicio : Tela
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 20),
             Children = { new StackPanel { Spacing = 3, Children = { T("Achou um erro ou tem uma ideia?", null, Tema.Osso, 15).Com(t => t.FontWeight = Avalonia.Media.FontWeight.SemiBold),
-                                                                     T("Mande um relatório, a sua opinião ou os dois. Você vê tudo antes de sair.", "rotulo") } },
+                                                                     T("Você vê tudo antes de sair.", "rotulo") } },
                          Botao("Enviar relatório", false, () => Abre("enviar")).Com(b => Grid.SetColumn(b, 1)) },
         });
         Monta(cab, versao, passo, numeros, lista, secJogos, ultima, enviar);
@@ -157,17 +157,16 @@ public class Inicio : Tela
             var b = Botao(bo, i == 0, () => Abre(te)); b.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(b, 2); g.Children.Add(b);
             p.Children.Add(g);
         }
-        return S(p);
+        return G(p);
     }
 
     static Control Proximo(string titulo, string texto, params Control[] botoes)
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 28) };
-        g.Children.Add(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21), T(texto, "sub").Com(x => { x.MaxWidth = 600; x.HorizontalAlignment = HorizontalAlignment.Left; }) } });
-        var b = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
+        var meio = new StackPanel { Spacing = 6, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21, quebra: true),
+            T(texto, "sub", quebra: true).Com(x => { x.MaxWidth = 640; x.HorizontalAlignment = HorizontalAlignment.Left; }) } };
+        var b = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         foreach (var x in botoes.Reverse()) b.Children.Add(x);
-        Grid.SetColumn(b, 1); g.Children.Add(b);
-        return S(g);
+        return S(new Katharos.App.Controles.Fileira { Meio = meio, Direita = b, MinMeio = 380, Margin = new Avalonia.Thickness(32, 28) });
     }
 
     static string Primeira(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
@@ -177,7 +176,7 @@ public class Inicio : Tela
     {
         var ses = j.A("sessoes").OrderByDescending(x => x.S("inicio")).Take(3).ToList();
         if (ses.Count == 0) return null;
-        var p = new StackPanel { Children = { Subtitulo("Jogos", "Últimas sessões medidas", "jogos") } };
+        var p = new StackPanel { Children = { Subtitulo("Jogos", null, "jogos") } };
         static string Limite(string x) => x switch { "gpu" => "placa de vídeo no limite", "cpu" => "processador segurando", "ram" => "memória cheia", "disco" => "disco", "" => "sem limite claro", _ => x };
         foreach (var x in ses)
         {
