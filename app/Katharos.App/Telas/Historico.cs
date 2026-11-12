@@ -116,10 +116,12 @@ public class Historico : Tela
             var p = new StackPanel { Children = { Subtitulo("Fora do normal", null, "alerta") } };
             foreach (var x in an)
             {
-                string vezes = (x.D("dias") ?? 1) > 1 ? $" · apareceu em {Num(x.D("dias"))} dias" : "";
-                var exp = new Expander { Header = T($"{x.S("titulo")} ({Quando(x.S("dia") + "T12:00")}{vezes})", null, Tema.Osso, 15), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-                                         Content = T(Maiuscula(x.S("vi")) + ". Confiança " + x.S("confianca") + ".", "rotulo", quebra: true), Margin = new Thickness(32, 8) };
-                p.Children.Add(exp);
+                // o mesmo jeito das outras listas (a caixa de expandir cortava o título): quando à vista, o que eu vi em "detalhes"
+                string vezes = (x.D("dias") ?? 1) > 1 ? $" · em {Num(x.D("dias"))} dias" : "";
+                string conf = x.S("confianca");
+                p.Children.Add(Linha(Maiuscula(x.S("titulo")), Quando(x.S("dia") + "T12:00") + vezes,
+                    conf == "" ? null : Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado),
+                    detalhes: x.S("vi") != "" ? Maiuscula(x.S("vi")) + "." : null));
             }
             anomalias = G(p);
         }

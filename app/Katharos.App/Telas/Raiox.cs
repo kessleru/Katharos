@@ -17,6 +17,9 @@ public class Raiox : Tela
     {
         var cab = Cabecalho("Raio-x", "Só lê: nada muda.", Botao("Fazer de novo", false, async () => { rodar = true; await Recarrega(); }));
         if (rodar) { rodar = false; await Roda(cab); return; }
+        // o guardado aparece na hora; a resposta do motor (com o que foi resolvido desde então) troca por cima quando chega
+        if (Servico.Guardado("raiox_guardado") is JsonNode g) Monta(cab, Resultado(g, g["pc"], Quando(g.S("quando"))));
+        else Monta(cab, Carregando("Lendo o último raio-x").secao);
         var rx = await Servico.Le("raiox_guardado");
         if (rx == null) { Monta(cab, Vazio("Ainda não tem raio-x", "Leva de 1 a 3 minutos. Pode usar o PC enquanto isso.", Botao("Fazer o raio-x", true, async () => { rodar = true; await Recarrega(); }))); return; }
         Monta(cab, Resultado(rx, rx["pc"], Quando(rx.S("quando"))));

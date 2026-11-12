@@ -137,9 +137,9 @@ public class Inicializacao : Tela
         if (i.B("marcado")) linha1.Children.Add(Etiqueta("sugerido", Tema.Ambar));
         if (i.S("nota") != "") linha1.Children.Add(Etiqueta("cuidado", Tema.Vermelho));
         meio.Children.Add(linha1);
-        meio.Children.Add(T(Maiuscula(curto) + (onde != "" ? " · " + onde : ""), "rotulo", tamanho: 13, quebra: true));
-        if (i.S("nota") != "") meio.Children.Add(T(Maiuscula(i.S("nota")) + ".", null, Tema.Ambar, 13, true));
-        ToolTip.SetTip(meio, porque);
+        // na linha só o nome e as etiquetas; o que o programa é e onde ele se registra ficam no mouse parado em cima
+        string dica = Maiuscula(curto) + (onde != "" ? " · " + onde : "") + (i.S("nota") != "" ? "\n\nCuidado: " + Maiuscula(i.S("nota")) + "." : "");
+        ToolTip.SetTip(meio, dica); ToolTip.SetShowDelay(meio, 400);
         var boot = dd.D("boot_s") is double b && b > 0 ? T($"+{Num(b, 1)} s", null, b >= 2 ? Tema.Ambar : Tema.Texto, 14).Com(t => { t.FontFamily = Tema.Mono; t.VerticalAlignment = VerticalAlignment.Center; ToolTip.SetTip(t, "atraso no boot medido pelo Windows"); })
                                                      : T("—", null, Tema.Apagado, 14).Com(t => { t.VerticalAlignment = VerticalAlignment.Center; ToolTip.SetTip(t, "o Windows ainda não mediu o atraso deste"); });
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,80,Auto") };

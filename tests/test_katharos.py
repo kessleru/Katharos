@@ -2955,6 +2955,23 @@ class TestApi(_CasaTemporaria):
         r = self.conversa({'id': 1, 'metodo': metodo, 'params': params or {}})
         return [x for x in r if x.get('id') == 1 and 'evento' not in x][0]
 
+    def test_leitura_nao_espera_o_pedido_lento(self):
+        # abrir o Raio-x durante uma conferência longa deixava a tela vazia: agora a leitura rápida responde antes da lenta
+        import threading as th
+        solta = th.Event()
+
+        def lento(ctx, p, ev):
+            solta.wait(5)
+            return 'lento'
+
+        def rapido(ctx, p, ev):
+            solta.set()
+            return 'rapido'
+        with mock.patch.dict(k.METODOS_API, {'_lento': (lento, False), '_rapido': (rapido, False)}):
+            r = self.conversa({'id': 1, 'metodo': '_lento'}, {'id': 2, 'metodo': '_rapido'})
+        ids = [x['id'] for x in r if 'id' in x and 'evento' not in x and x.get('ok')]
+        self.assertEqual(ids, [2, 1])
+
     def test_protocolo(self):
         r = self.conversa('lixo', {'id': 2, 'metodo': 'nao-existe'}, {'id': 3, 'metodo': 'versao'}, {'id': 4, 'metodo': 'sair'},
                           {'id': 5, 'metodo': 'versao'})
@@ -4022,6 +4039,79 @@ class TestPosTeste421(unittest.TestCase):
         self.assertEqual((s['certeza'], s['causa']), ('aconteceu', 'a investigar'))
 
 
+class TestNotaCriterios431(TestRaioxInteligente):
+    """Critérios da nota revistos: cada achado no grupo certo, nada "em repouso" medido com jogo aberto, nada grave que seja só suspeita."""
+
+    def test_categoria_pelo_titulo_antes_das_queixas(self):
+        c = k.categoria_achado
+        self.assertEqual(c('O Windows está num HD mecânico', 'disco', ['lento', 'boot']), 'disco')
+        self.assertEqual(c('Driver da placa de vídeo antigo', 'atualizar', ['jogos']), 'saúde')
+        self.assertEqual(c('Placa de vídeo sem driver', '', ['jogos']), 'saúde')
+        self.assertEqual(c('PC sem proteção em tempo real', '', ['tudo']), 'segurança')
+        self.assertEqual(c('Dois antivírus ativos ao mesmo tempo', '', ['lento']), 'segurança')
+        self.assertEqual(c('Disco ocupado sem parar com o PC parado', '', ['lento', 'boot']), 'disco')
+        self.assertEqual(c('Temperatura alta em repouso', '', ['calor']), 'saúde')
+        self.assertEqual(c('Restos de programas desinstalados', 'servicos', ['tudo', 'boot']), 'inicialização')
+        self.assertEqual(c('Integridade de memória ligada', '', ['jogos']), 'jogos')
+
+    def test_jogo_aberto_tira_as_regras_de_repouso(self):
+        med = {'cpu': 60, 'kernel': 5, 'disco_ativo': 80, 'temperatura': 92, 'limite': 50}
+        livre = self.titulos(medidas=med, perfil={'ram': {'usada': 15}})
+        self.assertIn('CPU ocupada com o PC parado', livre)
+        ocupado = self.titulos(medidas=med, perfil={'ram': {'usada': 15}}, dados={'jogo_aberto': True})
+        for t in ('CPU ocupada com o PC parado', 'Disco ocupado sem parar com o PC parado', 'Temperatura alta em repouso',
+                  'Processador sendo limitado', 'RAM quase cheia em repouso'):
+            self.assertNotIn(t, ocupado)
+        self.assertIn('Medido com o PC ocupado', ocupado)
+        a = self.analisa(medidas=med, dados={'jogo_aberto': True})
+        self.assertEqual(k.nota_pc(a), 100)
+
+    def test_placa_de_video_ocupada_conta_como_jogo(self):
+        self.assertIn('Medido com o PC ocupado', self.titulos(medidas={'gpu_uso': 90}))
+
+    def test_ram_em_uso_normal_nao_e_quase_cheia(self):
+        self.assertNotIn('RAM quase cheia em repouso', self.titulos(perfil={'ram': {'usada': 12}}))   # 75 %: o Windows usa o que tem
+        self.assertIn('RAM quase cheia em repouso', self.titulos(perfil={'ram': {'usada': 14.5}}))
+
+    def test_tarefa_sem_assinatura_nunca_e_grave(self):
+        x = {'tarefa': '\\Atualiza', 'exe': 'C:\\Users\\a\\AppData\\x.exe', 'assinado': False, 'curta': True}
+        a = [y for y in self.analisa(dados={'tarefas_suspeitas': [x]}) if y.titulo == 'Tarefas agendadas suspeitas'][0]
+        self.assertEqual(a.impacto, 2)
+
+
+class TestBloqueados431(unittest.TestCase):
+    """Relatório do dono: o Windows negou os valores de "widgets" três vezes e o item seguia marcado e contado."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        for alvo, v in (('CASA', self.tmp), ('build_atual', lambda: 26200)):
+            pt = mock.patch.object(k, alvo, v); pt.start(); self.addCleanup(pt.stop)
+
+    def test_negado_em_todos_os_valores_bloqueia_e_tira_da_conta(self):
+        it = k.Item('widgets', 'widgets', '', nivel=1, ps=k.RR(k.R('HKLM:\\X\\Dsh', 'AllowNewsAndInterests', 0), k.R('HKCU:\\Y', 'ShellFeedsTaskbarViewMode', 2)))
+        outro = k.Item('anuncios', 'anúncios', '', nivel=1, ps=k.R('HKCU:\\Z', 'Enabled', 0))
+        av = ['nao gravou AllowNewsAndInterests em HKLM:\\X\\Dsh: Tentativa de execução de uma operação não autorizada.',
+              'nao gravou ShellFeedsTaskbarViewMode em HKCU:\\Y: Tentativa de execução de uma operação não autorizada.']
+        self.assertEqual(k.marca_bloqueados('privacidade', [it, outro], av), ['privacidade:widgets'])
+        for x in (it, outro):
+            x.pacote, x.ja = 'privacidade', False
+        k.marca_por_modo([it, outro], 'seguro')
+        self.assertFalse(it.marcado)
+        self.assertTrue(it.bloqueado)
+        self.assertTrue(outro.marcado)
+
+    def test_negado_em_parte_nao_bloqueia(self):
+        it = k.Item('w', 'w', '', ps=k.RR(k.R('HKLM:\\X', 'A', 0), k.R('HKCU:\\Y', 'B', 2)))
+        self.assertEqual(k.marca_bloqueados('p', [it], ['nao gravou A em HKLM:\\X: Acesso negado']), [])
+
+    def test_outro_build_esquece(self):
+        it = k.Item('w', 'w', '', ps=k.R('HKLM:\\X', 'A', 0))
+        k.marca_bloqueados('p', [it], ['nao gravou A em HKLM:\\X: Acesso negado'])
+        with mock.patch.object(k, 'build_atual', lambda: 26300):
+            self.assertEqual(k.bloqueados(), {})
+
+
 class TestLogica431(unittest.TestCase):
     """O teste da 4.3.0 no PC do dono: 3 programas na inicialização viravam "grave"; a tarefa "Katharos - segundo plano" (Python antigo
     em AppData) aparecia como suspeita; a nota somava problemas do mesmo tipo sem limite."""
@@ -4113,7 +4203,7 @@ class TestLogica431(unittest.TestCase):
         with mock.patch.object(k, 'roda_ps', side_effect=falso), mock.patch.object(k, 'mede', return_value={'cpu': 3}), \
              mock.patch.object(k, 'perfil_pc', return_value={'so': {}}):
             perf, m, d = k.raiox_paralelo(mock.Mock(mult=1.0), lambda *a: etapas.append(a))
-        self.assertEqual(set(d), {'raiox-amostra', 'raiox-1', 'raiox-2', 'raiox-3', 'raiox-4'})
+        self.assertEqual(set(d), {'raiox-amostra', 'raiox-1', 'raiox-2', 'raiox-3', 'raiox-4', 'jogo_aberto'})
         self.assertEqual(m, {'cpu': 3})
         self.assertEqual(etapas[-1][1], etapas[-1][2], 'a última etapa fecha a conta (n de n)')
 

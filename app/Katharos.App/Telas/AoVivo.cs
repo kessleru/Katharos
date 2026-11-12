@@ -40,13 +40,13 @@ public class AoVivo : Tela
     {
         cels = new()
         {
-            new("Placa de vídeo", a => a.D("gpu"), "%", 0, a => a.D("gpu") >= 95 ? ("no limite: é ela que segura o FPS", Tema.Ambar) : ("sobra", Tema.Verde), 100, 95),
-            new("CPU", a => a.D("cpu"), "%", 0, a => ($"núcleo mais usado em {Num(a.D("nucleo_max"))} %", a.D("nucleo_max") >= 95 ? Tema.Ambar : Tema.Verde), 100, double.NaN, "cpu"),
+            new("Placa de vídeo", a => a.D("gpu"), "%", 0, a => a.D("gpu") >= 95 ? ("no limite", Tema.Ambar) : ("sobra", Tema.Verde), 100, 95),
+            new("CPU", a => a.D("cpu"), "%", 0, a => ($"núcleo mais cheio: {Num(a.D("nucleo_max"))} %", a.D("nucleo_max") >= 95 ? Tema.Ambar : Tema.Verde), 100, double.NaN, "cpu"),
             new("Memória RAM", a => a.D("ram_pct"), "%", 0, a => ($"{Num(a.D("ram_gb"), 1)} de {Num(a.D("ram_total_gb"))} GB", a.D("ram_pct") >= 90 ? Tema.Vermelho : Tema.Verde), 100, 90, "ram"),
             new("Temperatura", a => a.D("temp_cpu") ?? a.D("temp_gpu"), "°C", 0, a => a.D("temp_cpu") == null && a.D("temp_gpu") == null
-                ? ("sem leitura: abra o MSI Afterburner ou o HWiNFO", Tema.Apagado)
-                : ($"CPU {Num(a.D("temp_cpu"))} · placa de vídeo {Num(a.D("temp_gpu"))}", (a.D("temp_cpu") ?? 0) >= 90 || (a.D("temp_gpu") ?? 0) >= 85 ? Tema.Vermelho : Tema.Verde), 100, 90, "temp_cpu"),
-            new("Memória da placa", a => a.D("vram_gb"), "GB", 1, a => a.D("vram_total_gb") is double t ? ($"de {Num(t)} GB" + (a.D("vram_gb") / t >= .95 ? ": quase cheia" : ""), a.D("vram_gb") / t >= .95 ? Tema.Ambar : Tema.Verde) : ("", Tema.Apagado), 16, double.NaN),
+                ? ("sem leitura", Tema.Apagado)
+                : ($"CPU {Num(a.D("temp_cpu"))} · vídeo {Num(a.D("temp_gpu"))}", (a.D("temp_cpu") ?? 0) >= 90 || (a.D("temp_gpu") ?? 0) >= 85 ? Tema.Vermelho : Tema.Verde), 100, 90, "temp_cpu"),
+            new("Memória da placa", a => a.D("vram_gb"), "GB", 1, a => a.D("vram_total_gb") is double t ? ($"de {Num(t)} GB" + (a.D("vram_gb") / t >= .95 ? " · cheia" : ""), a.D("vram_gb") / t >= .95 ? Tema.Ambar : Tema.Verde) : ("", Tema.Apagado), 16, double.NaN),
             new("Disco", a => a.D("disco"), "%", 0, a => ($"lendo {Num(a.D("disco_le_mbs"), 1)} MB/s", a.D("disco") >= 95 ? Tema.Ambar : Tema.Verde), 100, 95, "disco"),
         };
         // o arquivo é lido fora da linha da tela (num disco lento ou com o antivírus olhando, a leitura não trava a janela), uma por vez
@@ -102,7 +102,7 @@ public class AoVivo : Tela
             var v = c.Valor(a);
             c.Numero!.Text = v.HasValue ? Num(v, c.Casas) : "-";
             var (txt, cor) = c.Contexto(a);
-            c.Texto!.Text = txt; c.Texto.Foreground = cor;
+            c.Texto!.Text = txt; c.Texto.Foreground = cor; ToolTip.SetTip(c.Texto, txt == "sem leitura" ? "Para ler a temperatura, deixe aberto o MSI Afterburner ou o HWiNFO." : txt);
             if (v.HasValue) { c.Hist.Add(v.Value); if (c.Hist.Count > 120) c.Hist.RemoveAt(0); }
             c.G!.Valores = c.Hist.ToArray();
         }
@@ -173,7 +173,8 @@ public class AoVivo : Tela
             // ampliar: a mesma série, grande, com eixos (é a foto deste instante; o Ao vivo continua andando atrás)
             c.G.PedeAmpliar += () => Amplia(cc);
             var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { T(c.Rotulo, "rotulo") } };
-            if (c.Rotulo.Contains("RAM") || c.Rotulo.Contains("Memória"))
+            // só a RAM: a memória da placa de vídeo não aparece na tela Memória
+            if (c.Rotulo == "Memória RAM")
                 topo.Children.Add(Link("Quem usa", () => Abre("memoria")).Com(b => { Grid.SetColumn(b, 1); b.Padding = new Thickness(4, 0); }));
             grade.Children.Add(new Border { Padding = new Thickness(32, 22, 32, 20), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 1, 1),
                 Child = new StackPanel { Spacing = 4, Children = { topo, new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.Texto, c.G } } });

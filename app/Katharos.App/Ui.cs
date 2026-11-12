@@ -60,7 +60,9 @@ public static class Ui
 
     public static Control Numero(string rotulo, string valor, string unidade, string contexto, IBrush corContexto, Control? extra = null)
     {
-        var num = new StackPanel { Orientation = Orientation.Horizontal, Children = { T(valor, "numero"), T(unidade, "unidade") } };
+        // valor em palavras ("placa de vídeo") vai menor e quebra: no tamanho do número invadia a célula do lado
+        bool palavra = valor.Length > 6 && !char.IsDigit(valor[0]);
+        var num = new WrapPanel { Children = { T(valor, palavra ? "forte" : "numero", tamanho: palavra ? 22 : 0, quebra: palavra), T(unidade, "unidade") } };
         var p = new StackPanel { Spacing = 4, Children = { T(rotulo, "rotulo", quebra: true), num, T(contexto, null, corContexto, 13, true) } };
         if (extra != null) p.Children.Add(extra);
         return new Border { Padding = new Thickness(32, 24), Child = p };
@@ -209,15 +211,25 @@ public static class Ui
     /// Uma linha de lista: ícone (opcional), a etiqueta em cima do título, a explicação embaixo e a ação à direita. Quando falta espaço,
     /// a ação desce para baixo do texto (Fileira): nada é espremido nem cortado.
     /// </summary>
-    public static Control Linha(string titulo, string? explica, Border? etiqueta = null, Control? direita = null, string? icone = null)
+    public static Control Linha(string titulo, string? explica, Border? etiqueta = null, Control? direita = null, string? icone = null, string? detalhes = null)
     {
         var meio = new StackPanel { Spacing = 4 };
         if (etiqueta != null) { etiqueta.HorizontalAlignment = HorizontalAlignment.Left; etiqueta.Margin = new Thickness(0, 0, 0, 2); meio.Children.Add(etiqueta); }
         meio.Children.Add(T(titulo, null, Tema.Osso, 15, true).Com(t => t.FontWeight = FontWeight.SemiBold));
         if (!string.IsNullOrWhiteSpace(explica)) meio.Children.Add(T(explica!, "rotulo", tamanho: 13.5, quebra: true).Com(t => t.MaxWidth = 720));
+        if (!string.IsNullOrWhiteSpace(detalhes)) meio.Children.Add(Detalhes(T(detalhes!, "rotulo", tamanho: 13.5, quebra: true).Com(t => t.MaxWidth = 720)));
         Control? esq = icone == null ? null : Icones.De(icone, 18, Tema.Apagado).Com(i => { i.VerticalAlignment = VerticalAlignment.Top; i.Margin = new Thickness(0, etiqueta != null ? 26 : 2, 16, 0); });
         return new Border { Padding = new Thickness(32, 18), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
                             Child = new Controles.Fileira { Esquerda = esq, Meio = meio, Direita = direita } };
+    }
+
+    /// <summary>O resto do texto escondido atrás de "detalhes" (o que é, risco, como desfazer): à vista só o que decide.</summary>
+    public static Control Detalhes(Control conteudo)
+    {
+        conteudo.IsVisible = false;
+        var ver = new Button { Classes = { "link" }, Padding = new Thickness(0), Content = "detalhes", FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Left };
+        ver.Click += (_, e) => { conteudo.IsVisible = !conteudo.IsVisible; ver.Content = conteudo.IsVisible ? "esconder" : "detalhes"; if (conteudo.IsVisible) Movimento.Entra(conteudo, 3); e.Handled = true; };
+        return new StackPanel { Spacing = 4, Children = { ver, conteudo } };
     }
 
     /// <summary>
@@ -421,6 +433,9 @@ public abstract class Tela : UserControl
 
     public async Task Recarrega()
     {
+        // tela nova que ainda espera o motor: em 150 ms sem nada montado, mostra "carregando" (antes ficava a tela preta, vazia)
+        if (Corpo.Children.Count == 0)
+            DispatcherTimer.RunOnce(() => { if (Corpo.Children.Count == 0) Monta(Ui.Carregando("Carregando").secao); }, TimeSpan.FromMilliseconds(150));
         try { await Carrega(); }
         catch (Exception e)
         {

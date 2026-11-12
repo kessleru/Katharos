@@ -34,7 +34,7 @@ public partial class Janela : Window
             if (b.Content is string texto)
                 b.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { Icones.De(icone, 16, Tema.Apagado), new TextBlock { Text = texto, VerticalAlignment = VerticalAlignment.Center } } };
         }
-        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.3.0";
+        this.FindControl<TextBlock>("Versao")!.Text = typeof(Janela).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "4.3.1";
         relogio.Tick += async (_, _) =>
         {
             if (!lendoAgora)
@@ -183,6 +183,8 @@ public partial class Janela : Window
     {
         var p = new StackPanel { Margin = new Thickness(28, 24), Spacing = 10 };
         p.Children.Add(T(titulo, "forte", tamanho: 19, quebra: true));
+        // um corpo reaproveitado (a caixa "Lendo…" que vira a caixa de verdade) ainda está na caixa anterior: solta antes
+        if (corpo.Parent is Panel pai) pai.Children.Remove(corpo);
         p.Children.Add(corpo);
         if (rodape != null) p.Children.Add(rodape);
         return new ScrollViewer { Content = p, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };

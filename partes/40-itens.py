@@ -59,11 +59,48 @@ def nivel_do_modo(modo):
     return NIVEL_MODO.get(modo, 2)
 
 
+_NEGADO = re.compile(r'não autorizad|nao autorizad|not authorized|access (is )?denied|acesso negado|unauthorized', re.I)
+
+
+def _arq_bloqueados():
+    return CASA / 'cache' / 'bloqueados.json'
+
+
+def bloqueados():
+    """Itens que o Windows não deixou gravar ("operação não autorizada", nem como administrador), neste build: {"pacote:id": quando}.
+    Relatório do dono (4.3.0): "widgets" falhou três vezes seguidas e continuava marcado e contado como "vai mudar"."""
+    d = le_json(_arq_bloqueados(), {}) or {}
+    return d.get('itens') or {} if d.get('build') == build_atual() else {}
+
+
+def marca_bloqueados(pacote, itens, avisos):
+    """Depois de aplicar: o item cujos valores de registro TODOS voltaram "não autorizado" fica bloqueado (não é marcado nem contado)."""
+    negados = [a for a in avisos or () if _NEGADO.search(str(a))]
+    if not negados:
+        return []
+    novos = []
+    for it in itens:
+        nomes = re.findall(r"Set-Valor '[^']*' '([^']+)'", it.ps or '')
+        if nomes and all(any(f'gravou {n} ' in a for a in negados) for n in nomes):
+            novos.append(f'{pacote}:{it.id}')
+    if novos:
+        with _TRAVA_CACHE:
+            b = dict(bloqueados())
+            b.update({k: agora_iso() for k in novos})
+            try:
+                grava_json(_arq_bloqueados(), {'build': build_atual(), 'itens': b})
+            except OSError as e:
+                LOG.escreve(f'bloqueados: não gravou: {e!r}')
+    return novos
+
+
 def marca_por_modo(itens, modo):
     n = nivel_do_modo(modo)
     vistos = set()
+    bl = bloqueados()
     for it in itens:
-        it.marcado = 1 <= it.nivel <= n
+        it.bloqueado = f'{getattr(it, "pacote", "")}:{it.id}' in bl and it.ja is not True
+        it.marcado = 1 <= it.nivel <= n and not it.bloqueado
         if it.marcado and it.grupo:
             if it.grupo in vistos:
                 it.marcado = False

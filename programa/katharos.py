@@ -23,8 +23,8 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '4.3.0'
-DATA_VERSAO = '11 nov 2026'
+VERSAO = '4.3.1'
+DATA_VERSAO = '12 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #
@@ -1154,7 +1154,8 @@ def le_json(arq, padrao):
 def grava_json(arq, dados):
     arq = Path(arq)
     arq.parent.mkdir(parents=True, exist_ok=True)
-    tmp = arq.with_name(f'{arq.name}.{os.getpid()}.tmp')   # um por processo: o motor comum, o elevado e a manutenção gravam juntos
+    # um por processo e por linha: o motor comum, o elevado e a manutenção gravam juntos, e o motor atende pedidos em paralelo
+    tmp = arq.with_name(f'{arq.name}.{os.getpid()}.{threading.get_ident()}.tmp')
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=1)
     os.replace(tmp, arq)
@@ -1182,10 +1183,14 @@ def salva_estado(e):
     grava_json(CASA / 'estado.json', e)
 
 
+_TRAVA_ESTADO = threading.RLock()
+
+
 def marca_estado(chave, valor):
-    e = estado()
-    e[chave] = valor
-    salva_estado(e)
+    with _TRAVA_ESTADO:   # ler, mudar e gravar de uma vez: dois pedidos ao mesmo tempo não apagam a marca um do outro
+        e = estado()
+        e[chave] = valor
+        salva_estado(e)
 
 
 def agora_iso():
@@ -2940,7 +2945,7 @@ def ps_dos_grupos():
 
 def raiox_paralelo(ctx, ev=None):
     """(perfil, medidas, dados) do raio-x. Fase 1: medidas em repouso + amostra dos processos, juntas e leves. Fase 2: o perfil e os grupos
-    do diagnóstico, todos ao mesmo tempo. ev(texto, n, de) diz o que terminou (a tela anda só com etapa real)."""
+    do diagnóstico, todos ao mesmo tempo. A fase 1 roda uma coisa por vez (medir junto com outra leitura mede a leitura). ev(texto, n, de) diz o que terminou (a tela anda só com etapa real)."""
     from concurrent.futures import ThreadPoolExecutor
     amostra, grupos = ps_dos_grupos()
     feitos = [0]
@@ -2957,12 +2962,15 @@ def raiox_paralelo(ctx, ev=None):
         s = roda_ps(ctx.t, ps, rot, minutos=minutos, mostra=False, mult=getattr(ctx, 'mult', 1.0) or 1.0)
         return s
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f_med = ex.submit(lambda: mede(ctx, 'medidas em repouso', progresso=False))
-        f_am = ex.submit(roda, amostra[0], amostra[1], 3)
-        m = f_med.result(); avisa('medido o PC em repouso')
-        s_am = f_am.result(); avisa('vistos os processos que mais gastam')
+    # fase 1 em fila, de propósito: a medida de repouso consulta contadores pelo WMI, e a amostra dos processos, rodando junto, via o
+    # WmiPrvSE e o PowerShell da medida gastando CPU, e acusava "WMI gastando CPU parado" e "CPU ocupada" causados pelo próprio raio-x
+    m = mede(ctx, 'medidas em repouso', progresso=False); avisa('medido o PC em repouso')
+    s_am = roda(amostra[0], amostra[1], 3); avisa('vistos os processos que mais gastam')
     dados = dict(s_am.dados)
+    try:   # jogo aberto: pelo anti-cheat visto agora ou pelo segundo plano (agora.json recente)
+        dados['jogo_aberto'] = bool(dados.get('anticheat')) or _jogo_aberto_agora()
+    except Exception:
+        dados['jogo_aberto'] = bool(dados.get('anticheat'))
     nomes = {'raiox-1': 'inicialização e boot', 'raiox-2': 'tarefas agendadas', 'raiox-3': 'saúde do Windows', 'raiox-4': 'espaço e programas'}
     with ThreadPoolExecutor(max_workers=len(grupos) + 1) as ex:
         f_perf = ex.submit(lambda: perfil_pc(ctx, forca=True))
@@ -3071,7 +3079,8 @@ def ferramenta_medir(ctx, args):
 DIAG_PS = INICIO_PS + r'''
 $dias60 = (Get-Date).AddDays(-60)
 Vivo 'processos que mais gastam'
-$a = @{}; foreach ($p in Get-Process) { try { $a[$p.Id] = $p.TotalProcessorTime.TotalMilliseconds } catch {} }
+# o próprio PowerShell desta amostra fica de fora (ele gasta CPU ao abrir e não é do PC)
+$a = @{}; foreach ($p in Get-Process) { if ($p.Id -eq $PID) { continue }; try { $a[$p.Id] = $p.TotalProcessorTime.TotalMilliseconds } catch {} }
 Start-Sleep -Seconds 4
 $nucleos = [Environment]::ProcessorCount
 $top = foreach ($p in Get-Process) { try { if ($a.ContainsKey($p.Id)) { [pscustomobject]@{ n = $p.ProcessName; cpu = [math]::Round(($p.TotalProcessorTime.TotalMilliseconds - $a[$p.Id]) / 40 / $nucleos, 1); mb = [math]::Round($p.WorkingSet64 / 1MB) } } } catch {} }
@@ -3082,6 +3091,7 @@ $porNome = $top | Group-Object n | ForEach-Object { [pscustomobject]@{ n = $_.Na
 $inf = @{}
 $antiCheat = @('easyanticheat', 'easyanticheat_eos', 'beservice', 'vgc', 'vgtray', 'faceit', 'faceitclient', 'faceit-ac', 'battleye', 'eac_launcher')
 $comAC = [bool](@($top | Where-Object { $antiCheat -contains ([string]$_.n).ToLower() }).Count)
+Dado 'anticheat' $comAC
 foreach ($x in @(@($porNome | Sort-Object cpu -Descending | Select-Object -First 8) + @($porNome | Sort-Object mb -Descending | Select-Object -First 8))) {
     if ($comAC) { break }
     if (-not $x -or $inf.ContainsKey($x.n)) { continue }
@@ -3307,6 +3317,13 @@ def analisa(p, m, d):
     total = pf(p, 'disco.total', 1) or 1
     ini = lista(d.get('inicializacao'))
     saude = d.get('saude') or {}
+    # "em repouso" só vale com o PC parado: jogo aberto ou placa de vídeo trabalhando = os números são do jogo, não de um problema.
+    # Nesse caso as regras de repouso ficam de fora (falso alarme é pior que nenhum) e um aviso sem ponto diz isso.
+    ocupado = bool(d.get('jogo_aberto')) or (m.get('gpu_uso') or 0) >= 40
+    if ocupado:
+        A.append(Achado(0, ['tudo'], 'Medido com o PC ocupado',
+                        'Um jogo ou a placa de vídeo estava trabalhando durante o raio-x.',
+                        'CPU, RAM, disco e temperatura "em repouso" ficaram de fora da nota. Faça de novo com o PC parado para ver esses.', 'raiox'))
 
     for imp, tit, evid, faz, cmd in achados_da_versao(compat_windows(p)):
         A.append(Achado(imp, ['tudo', 'seguranca'], tit, evid, faz, cmd))
@@ -3320,7 +3337,7 @@ def analisa(p, m, d):
         A.append(Achado(3, ['lento', 'tudo', 'jogos'], 'Pouca memória RAM',
                         f'{gb(ram_t)} instalados; o Windows sozinho usa perto de 3 GB.',
                         'Aumentar para 8 GB ou mais. Enquanto isso: menos coisas na inicialização e em segundo plano.', 'memoria'))
-    elif ram_t and ram_u / ram_t > 0.7:
+    elif ram_t and ram_u / ram_t > 0.85 and not ocupado:
         A.append(Achado(2, ['lento', 'tudo', 'jogos'], 'RAM quase cheia em repouso',
                         f'{gb(ram_u)} de {gb(ram_t)} em uso com o PC parado ({br(100 * ram_u / ram_t, 0)}%).',
                         'Ver quem usa a memória: o que você não precisa aberto sai da inicialização; se continuar alto, mais RAM.', 'memoria'))
@@ -3338,7 +3355,7 @@ def analisa(p, m, d):
     soma = sum(c.get('gb', 0) for c in caches if c.get('nome') != 'Windows.old')
     if soma > 2:
         maiores = ', '.join(f'{c["nome"]} {gb(c["gb"])}' for c in caches[:3])
-        A.append(Achado(2 if soma > 8 else 1, ['disco', 'tudo'], 'Caches e temporários acumulados',
+        A.append(Achado(1, ['disco', 'tudo'], 'Caches e temporários acumulados',
                         f'{gb(soma)} que se recriam sozinhos. Maiores: {maiores}.', 'Limpar com segurança.', 'limpar'))
     if any(c.get('nome') == 'Windows.old' for c in caches):
         w = next(c['gb'] for c in caches if c.get('nome') == 'Windows.old')
@@ -3381,7 +3398,7 @@ def analisa(p, m, d):
         A.append(Achado(3, ['tudo'], 'PC sem proteção em tempo real', 'Nenhum antivírus ativo.',
                         'Abra Segurança do Windows e ligue a proteção em tempo real (o katharos nunca desliga isso).'))
     cpu = m.get('cpu')
-    if cpu is not None and cpu > 20 and (pf(p, 'sistema.uptime_h', 1) or 0) >= 0.17:
+    if cpu is not None and cpu > 20 and (pf(p, 'sistema.uptime_h', 1) or 0) >= 0.17 and not ocupado:
         tops = lista(d.get('top_cpu'))
         top = explica_processos(tops, 'cpu', '%')
         q = quem_e(tops[0].get('n')) if tops else None
@@ -3399,12 +3416,12 @@ def analisa(p, m, d):
                         'Passando de 100% os programas fecham sozinhos. Feche o que mais usa memória, deixe o arquivo de paginação '
                         'automático e, se for sempre assim, este PC precisa de mais RAM. Mais usam: '
                         + (explica_processos(lista(d.get('top_ram')), 'mb', 'MB') or 'sem registro') + '.', 'memoria'))
-    elif (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
+    elif not ocupado and (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
         A.append(Achado(2, ['lento', 'tudo'], 'Windows buscando memória no disco',
                         f'{br(m["paginas_s"], 0)} páginas por segundo lidas do arquivo de paginação, com só {gb(m["ram_disponivel"])} disponíveis.',
                         'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'memoria'))
     ativo = m.get('disco_ativo')
-    if ativo is not None and ativo >= 50:
+    if ativo is not None and ativo >= 50 and not ocupado:
         io = lista(d.get('top_io'))
         quem = ', '.join(f'{x.get("n")} {br(x.get("mbs"), 1)} MB/s' + (f' ({quem_e(x.get("n"))[0]})' if quem_e(x.get('n')) else '') for x in io[:3])
         A.append(Achado(3 if eh_hd(p) else 2, ['lento', 'boot', 'tudo'], 'Disco ocupado sem parar com o PC parado',
@@ -3490,22 +3507,25 @@ def analisa(p, m, d):
                         'O Windows não está avisando o SSD sobre os blocos livres.',
                         'Sem TRIM o SSD fica mais lento para gravar com o tempo e se desgasta mais. O pacote de disco liga de novo.', 'disco'))
     w = d.get('wmi') or {}
-    if (w.get('cpu') or 0) > 2:
+    if (w.get('cpu') or 0) > 2 and not ocupado:
         cli = ', '.join(f'{c.get("processo")} ({c.get("consultas")})' for c in lista(w.get('clientes'))[:3])
         A.append(Achado(2, ['calor', 'bateria', 'lento', 'tudo'], 'WMI gastando CPU parado',
                         f'WmiPrvSE com {br(w.get("cpu"), 1)}% de CPU. Quem mais consulta: {cli or "não registrado"}.',
                         'Normalmente é software de fabricante (centrais de jogo, assistentes de suporte). Atualizar ou deixar em manual.', 'servicos'))
     na_bateria = bool(pf(p, 'pc.notebook') and (d.get('energia') or {}).get('na_bateria'))
-    if m.get('limite') is not None and m['limite'] < 85 and not na_bateria:
+    if m.get('limite') is not None and m['limite'] < 85 and not na_bateria and not ocupado:
         A.append(Achado(2, ['calor', 'lento', 'jogos', 'tudo'], 'Processador sendo limitado',
                         f'O Windows diz que o processador está limitado a {br(m["limite"], 0)}% do que poderia (contador "% Performance Limit")'
                         + (f', com {br(m["temperatura"], 0)} °C.' if m.get('temperatura') else '.'),
                         'Calor (poeira, pasta térmica), carregador fraco ou plano de energia. Limpe as saídas de ar.'))
-    if (m.get('temperatura') or 0) >= (80 if m.get('temp_fonte') not in (None, 'zona térmica') else 90):
+    if not ocupado and (m.get('temperatura') or 0) >= (80 if m.get('temp_fonte') not in (None, 'zona térmica') else 90):
         A.append(Achado(2, ['calor', 'tudo'], 'Temperatura alta em repouso', f'{br(m["temperatura"], 0)} °C (lido por: {m.get("temp_fonte") or "zona térmica"}).',
                         'Limpar ventoinhas; em notebook, usar o plano "fresco" (mínimo de CPU 5% e turbo eficiente).', 'energia'))
-    trocas = lista(saude.get('trocas_plano'))
-    if trocas:
+    # uma troca só não é "programa trocando"; e o powercfg.exe é o próprio Katharos quando o pacote de energia foi aplicado (relatório do
+    # dono, 4.3.0: "powercfg.exe (1x)" virou achado depois de aplicar energia)
+    trocas = [x for x in lista(saude.get('trocas_plano'))
+              if not (str(x.get('processo') or '').lower() == 'powercfg.exe' and 'energia' in ja_aplicados())]
+    if sum(int(x.get('vezes') or 0) for x in trocas) >= 3:
         A.append(Achado(1, ['calor', 'bateria', 'tudo'], 'Programa trocando o plano de energia',
                         ', '.join(f'{x.get("processo")} ({x.get("vezes")}x)' for x in trocas) + ' nos últimos 14 dias.',
                         'Centrais de fabricante forçam "Alto desempenho". Ajuste o perfil no app e use o plano de energia daqui.', 'energia'))
@@ -3541,7 +3561,7 @@ def analisa(p, m, d):
     sem_assinatura = [x for x in susp if not x.get('assinado')]
     assinadas = [x for x in susp if x.get('assinado')]
     if sem_assinatura:
-        A.append(Achado(3 if any(x.get('curta') for x in sem_assinatura) else 2, ['tudo', 'lento'], 'Tarefas agendadas suspeitas',
+        A.append(Achado(2, ['tudo', 'lento', 'seguranca'], 'Tarefas agendadas suspeitas',
                         ', '.join(f'{x.get("tarefa")} → {x.get("exe")}' + (' (repete a cada poucos minutos)' if x.get('curta') else '') for x in sem_assinatura[:3]),
                         'Programa sem assinatura digital rodando de AppData/Temp é padrão comum de malware. Confira cada um e faça uma verificação completa no Defender.'))
     if assinadas:
@@ -3675,20 +3695,25 @@ CATEGORIAS = ('segurança', 'inicialização', 'memória', 'disco', 'jogos', 'sa
 
 
 def categoria_achado(titulo, comando, queixas=()):
-    """Em que parte do diagnóstico o achado entra (o raio-x agrupa por estas). Raio-x antigo, sem as queixas guardadas, usa o comando e o título."""
+    """Em que parte do diagnóstico o achado entra (o raio-x agrupa por estas). Raio-x antigo, sem as queixas guardadas, usa o comando e o título.
+    O título vem antes das queixas: "HD mecânico" tem a queixa "boot", mas é disco; "driver da placa de vídeo" tem "jogos", mas é saúde."""
     q, cmd, t = set(queixas or ()), str(comando or '').split(' ')[0], str(titulo or '').lower()
-    if 'seguranca' in q or cmd in ('seguranca', 'privacidade') or re.search(r'defender|ameaça|suspeit|bitlocker|segurança', t):
+    if 'seguranca' in q or cmd in ('seguranca', 'privacidade') or re.search(r'defender|ameaça|suspeit|bitlocker|segurança|antivírus|proteção', t):
         return 'segurança'
-    if cmd == 'inicializacao' or 'boot' in q or re.search(r'inicializa|boot|abrindo com o windows', t):
+    if 'integridade de memória' in t or 'agendamento de gpu' in t:
+        return 'jogos'
+    if cmd == 'inicializacao' or re.search(r'inicializa|boot|abrindo com o windows', t):
         return 'inicialização'
     if cmd == 'memoria' or re.search(r'\bram\b|memória', t):
         return 'memória'
-    if cmd in ('limpar', 'disco') or 'disco' in q or re.search(r'disco|espaço|ssd|\bhd\b', t):
+    if cmd in ('limpar', 'disco') or re.search(r'disco|espaço|ssd|\bhd\b|windows\.old|temporários|paginação|onedrive', t):
         return 'disco'
+    if cmd in ('atualizar', 'reparar', 'medir', 'travadas') or re.search(r'driver|bios|firmware|tela azul|desligou|desligamento|temperatura|limitado|dispositivos|bateria', t):
+        return 'saúde'
     if cmd == 'jogos' or 'jogos' in q:
         return 'jogos'
-    if cmd in ('atualizar', 'reparar', 'medir', 'travadas') or re.search(r'driver|bios|firmware|tela azul|desligou|erro', t):
-        return 'saúde'
+    if 'boot' in q:
+        return 'inicialização'
     return 'geral'
 
 
@@ -4325,11 +4350,48 @@ def nivel_do_modo(modo):
     return NIVEL_MODO.get(modo, 2)
 
 
+_NEGADO = re.compile(r'não autorizad|nao autorizad|not authorized|access (is )?denied|acesso negado|unauthorized', re.I)
+
+
+def _arq_bloqueados():
+    return CASA / 'cache' / 'bloqueados.json'
+
+
+def bloqueados():
+    """Itens que o Windows não deixou gravar ("operação não autorizada", nem como administrador), neste build: {"pacote:id": quando}.
+    Relatório do dono (4.3.0): "widgets" falhou três vezes seguidas e continuava marcado e contado como "vai mudar"."""
+    d = le_json(_arq_bloqueados(), {}) or {}
+    return d.get('itens') or {} if d.get('build') == build_atual() else {}
+
+
+def marca_bloqueados(pacote, itens, avisos):
+    """Depois de aplicar: o item cujos valores de registro TODOS voltaram "não autorizado" fica bloqueado (não é marcado nem contado)."""
+    negados = [a for a in avisos or () if _NEGADO.search(str(a))]
+    if not negados:
+        return []
+    novos = []
+    for it in itens:
+        nomes = re.findall(r"Set-Valor '[^']*' '([^']+)'", it.ps or '')
+        if nomes and all(any(f'gravou {n} ' in a for a in negados) for n in nomes):
+            novos.append(f'{pacote}:{it.id}')
+    if novos:
+        with _TRAVA_CACHE:
+            b = dict(bloqueados())
+            b.update({k: agora_iso() for k in novos})
+            try:
+                grava_json(_arq_bloqueados(), {'build': build_atual(), 'itens': b})
+            except OSError as e:
+                LOG.escreve(f'bloqueados: não gravou: {e!r}')
+    return novos
+
+
 def marca_por_modo(itens, modo):
     n = nivel_do_modo(modo)
     vistos = set()
+    bl = bloqueados()
     for it in itens:
-        it.marcado = 1 <= it.nivel <= n
+        it.bloqueado = f'{getattr(it, "pacote", "")}:{it.id}' in bl and it.ja is not True
+        it.marcado = 1 <= it.nivel <= n and not it.bloqueado
         if it.marcado and it.grupo:
             if it.grupo in vistos:
                 it.marcado = False
@@ -5686,7 +5748,7 @@ if ($__st -match 'Enabled') { if ($TESTE) { Plano 'desligar armazenamento reserv
         Item('lixeira', 'esvaziar a Lixeira', 'Apaga de vez o que está na Lixeira de todas as unidades.', 'espaço',
              'é definitivo: não dá para recuperar', 0,
              _limpa_ps('Lixeira', r'''$__sh = New-Object -ComObject Shell.Application; $__n = @($__sh.NameSpace(10).Items()).Count
-if ($__n -gt 0) { $__d0 = (Get-PSDrive C).Free; if (-not $TESTE) { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; $__livre += [math]::Max(0, (Get-PSDrive C).Free - $__d0) } else { Plano ("esvaziar {0} itens da Lixeira" -f $__n) } }'''), reverte=False),
+if ($__n -gt 0) { $__d0 = (Get-PSDrive C).Free; if (-not $TESTE) { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; $__livre += [math]::Max([double]0, [double](Get-PSDrive C).Free - [double]$__d0) } else { Plano ("esvaziar {0} itens da Lixeira" -f $__n) } }'''), reverte=False),
     ]
 
 
@@ -15015,6 +15077,13 @@ def responde_api(ctx, canal, pedido, permitidos=None):
         canal.manda({'id': id_, 'ok': False, 'erro': {'codigo': 'interno', 'texto': f'{type(e).__name__}: {e}'}})
 
 
+# o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
+# comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
+_ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
+             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades')
+_SOZINHOS = ('raiox',)
+
+
 def roda_api(argv, entrada=None, saida=None, permitidos=None):
     """katharos api              conversa por linhas (a interface usa assim)
        katharos api METODO [JSON] um pedido só, para testar no terminal"""
@@ -15057,6 +15126,24 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
         threading.Thread(target=preparo, daemon=True).start()
         if not preparo_pronto.wait(20):
             LOG.escreve('api: o preparo passou de 20 s; atendendo os pedidos mesmo assim')
+        # pedidos em paralelo: uma conferência longa ou o raio-x não seguram mais a leitura de outra tela (antes, abrir o Raio-x durante
+        # a conferência deixava a tela vazia até ela acabar). A resposta leva o id; a janela já casa pelo id, fora de ordem.
+        # O que muda o PC continua um por vez, e o mesmo método pesado (raio-x) não roda duas vezes junto.
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='api')
+        trava_muda, trava_escrita = threading.Lock(), threading.Lock()
+        travas = {n: trava_escrita for n in _ESCREVEM}
+        travas.update({n: threading.Lock() for n in _SOZINHOS})
+
+        def atende(pedido):
+            nome = pedido.get('metodo') if isinstance(pedido, dict) else None
+            muda = nome in METODOS_API and METODOS_API[nome][1]
+            trava = trava_muda if muda else travas.get(nome)
+            if trava is None:
+                responde_api(ctx, canal, pedido, permitidos)
+            else:
+                with trava:
+                    responde_api(ctx, canal, pedido, permitidos)
         for linha in (entrada or sys.stdin):
             linha = linha.strip()
             if not linha:
@@ -15067,9 +15154,12 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
                 canal.manda({'id': None, 'ok': False, 'erro': {'codigo': 'json_invalido', 'texto': 'a linha não é JSON'}})
                 continue
             if isinstance(pedido, dict) and pedido.get('metodo') == 'sair':
+                pool.shutdown(wait=True, cancel_futures=True)
                 canal.manda({'id': pedido.get('id'), 'ok': True, 'dados': None})
                 break
-            responde_api(ctx, canal, pedido, permitidos)
+            pool.submit(atende, pedido)
+        else:
+            pool.shutdown(wait=True)
         return 0
     finally:
         sys.stdout = canal_real
@@ -15329,7 +15419,7 @@ def _item_api(it, pac):
     t = getattr(it, 'ja_t', None)
     return {'id': it.id, 'pacote': pac, 'titulo': it.titulo, 'explica': it.explica, 'ganho': it.ganho, 'custo': it.custo,
             'nivel': it.nivel, 'marcado': bool(it.marcado), 'ja': it.ja, 'alerta': it.alerta or '', 'nota': it.nota or '',
-            'sem_volta': not it.reverte, 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente),
+            'sem_volta': not it.reverte, 'bloqueado': bool(getattr(it, 'bloqueado', False)), 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente),
             'ja_idade_h': round((time.time() - t) / 3600, 2) if t else None,
             # o que a tela precisa além do texto (inicialização: o programa, onde está e o atraso medido no boot); só valores simples
             'dados': {k: v for k, v in it.dados.items() if isinstance(v, (str, int, float, bool)) or v is None} if isinstance(it.dados, dict) else None}
@@ -15705,6 +15795,10 @@ def api_aplicar(ctx, p, ev):
                 ctx.ultimas_provas = []
                 feitos, avisos, erros = executa_itens(ctx, pac, its)
                 evs = getattr(ctx, 'ultimos_eventos', []) or []
+                try:
+                    marca_bloqueados(nome, its, [a for e in evs for a in e.get('avisos', [])])
+                except Exception as ex:
+                    LOG.escreve(f'api aplicar: bloqueados: {ex!r}')
                 nao_ficou = []
                 if nome in REAPLICA and feitos:
                     nao_ficou = verifica_pacote(ctx, nome, [i.id for i in its])
@@ -16922,6 +17016,57 @@ def abre_por_clique(cru):
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "4.3.1",
+  "data": "12 de novembro de 2026",
+  "resumo": "Corrige o que o teste da 4.3.0 mostrou (no PC e nos relatórios enviados) e deixa a janela mais rápida e com menos texto.",
+  "itens": [
+   {
+    "titulo": "Mais rápido",
+    "texto": "o motor atende várias telas ao mesmo tempo. Abrir o Raio-x durante uma conferência não deixa mais a tela vazia, e toda tela mostra \"carregando\" em vez de ficar preta. O raio-x lê as partes do diagnóstico ao mesmo tempo."
+   },
+   {
+    "titulo": "Nota mais justa",
+    "texto": "poucos programas na inicialização não são mais \"grave\"; a tarefa do próprio Katharos não aparece como suspeita; cada tipo de problema tem um teto de pontos; cada achado vai para o grupo certo (driver é saúde, HD é disco). Com um jogo aberto, nada \"em repouso\" (CPU, RAM, disco, temperatura) entra na nota."
+   },
+   {
+    "titulo": "Menos alarme falso",
+    "texto": "tarefa sem assinatura é para conferir, nunca grave; o plano de energia trocado pelo próprio Katharos não vira achado; RAM só é \"quase cheia\" acima de 85 %."
+   },
+   {
+    "titulo": "O que o Windows bloqueia",
+    "texto": "item que o Windows não deixou gravar (como os widgets no Windows 11 25H2) aparece como \"o Windows bloqueia\" e não conta mais como \"vai mudar\"."
+   },
+   {
+    "titulo": "Menos texto",
+    "texto": "cada item mostra o nome e o que ganha; o que perde, a atenção e os detalhes ficam em \"detalhes\" ou com o mouse em cima. Conceitos (serviços, telemetria, memória virtual...) abrem numa janelinha."
+   },
+   {
+    "titulo": "Raio-x por grupos",
+    "texto": "Saúde, Disco, Memória, Inicialização, cada um com quanto tira da nota. As outras telas seguem o mesmo jeito."
+   },
+   {
+    "titulo": "Otimizar",
+    "texto": "o número de mudanças em cada modo, busca, \"Desmarcar tudo\", marcar ou tirar uma área inteira. Trocar de modo não guarda mais as marcas do modo anterior."
+   },
+   {
+    "titulo": "\"Manter alterações?\"",
+    "texto": "espera você voltar ao PC. O tempo para desfazer sozinho (3 minutos) só corre com você presente; antes, uma otimização longa era desfeita enquanto você estava longe."
+   },
+   {
+    "titulo": "Ícone da bandeja",
+    "texto": "um só desenho em todos os estados, com um sinal pequeno no canto (jogando, atenção, pausado)."
+   },
+   {
+    "titulo": "Atualização",
+    "texto": "o segundo plano abre a janela, não o terminal; nenhuma janela de PowerShell aparece."
+   },
+   {
+    "titulo": "",
+    "texto": "Corrigidos: \"Aplicar esta correção\" dava erro ao abrir em alguns casos; esvaziar a Lixeira com mais de 2 GB dava erro."
+   }
+  ]
+ },
+ {
   "versao": "4.3.0",
   "data": "11 de novembro de 2026",
   "resumo": "Corrige o que apareceu no primeiro teste da 4.2.0 num PC de verdade e deixa a janela mais fácil de entender: abre na hora, cada botão leva ao lugar certo e o Início nunca sugere o que já está feito.",
@@ -17157,21 +17302,6 @@ NOVIDADES = [
    {
     "titulo": "Windows Server 2022 e 2025",
     "texto": "no teste de verdade do CI, além do Windows 10 e 11."
-   }
-  ]
- },
- {
-  "versao": "3.1.2",
-  "data": "10 de novembro de 2026",
-  "resumo": "Menu do ícone mais curto, só com o que se resolve num clique.",
-  "itens": [
-   {
-    "titulo": "Menu do ícone enxuto",
-    "texto": "painel ao vivo, abrir o Katharos, pausar por 1 hora, ritmo da leitura (1, 2, 5 ou 10 s), avisos ligados ou não, iniciar com o Windows e sair. Turbo, raio-x, limpar, desfazer e o resto ficam no Katharos, a um clique em \"Abrir o Katharos\"."
-   },
-   {
-    "titulo": "",
-    "texto": "Ritmo e avisos mudados no ícone valem na hora e ficam salvos nas preferências do Katharos (as mesmas do config)."
    }
   ]
  }

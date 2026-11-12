@@ -40,14 +40,14 @@ public class Inicio : Tela
         // a ação principal: uma só, a que faz mais sentido agora
         Control passo;
         if (rx == null)
-            passo = Proximo("Faça o raio-x", "Leva de 1 a 3 minutos e não muda nada. Ele diz o que vale a pena fazer neste PC.",
+            passo = Proximo("Faça o raio-x", "1 a 3 minutos. Só lê.",
                             Botao("Fazer o raio-x", true, () => Abre("raiox")));
         else
         {
             var achados = rx.A("achados").ToList();
             int graves = achados.Count(a => a.D("impacto") >= 3);
             passo = achados.Count == 0
-                ? Proximo("Nada urgente", "O último raio-x não achou problema. Se quiser ir além, escolha um modo para otimizar.",
+                ? Proximo("Nada urgente", "O último raio-x não achou problema.",
                           Botao("Otimizar", true, () => Abre("otimizar")))
                 : Proximo(achados.Count == 1 ? "Resolver 1 coisa que o raio-x achou" : $"Resolver {achados.Count} coisas que o raio-x achou",
                           (graves > 0 ? $"{(graves == 1 ? "Uma é grave" : graves + " são graves")}: {achados[0].S("titulo")}." : "Nenhuma é grave.")
@@ -61,10 +61,10 @@ public class Inicio : Tela
         if (acao != null && motor.S("frase") != "")
         {
             string cmd = acao.S("comando");
-            var txt = new List<string> { Primeira(acao.S("porque")) };
-            if (acao.S("previsao") != "") txt.Add("O que eu faria: " + acao.S("previsao"));
-            if (acao.S("desfazer") != "") txt.Add("Para voltar: " + ComoDesfazer(acao.S("desfazer")) + ".");
-            passo = Proximo(motor.S("frase"), string.Join(" ", txt), Detalhe.Botoes(acao, Abre, "Central", primario: true));
+            // à vista só o que eu faria (uma frase); o porquê e como voltar ficam em "detalhes"
+            var det = new List<string> { Primeira(acao.S("porque")) };
+            if (acao.S("desfazer") != "") det.Add("Para voltar: " + ComoDesfazer(acao.S("desfazer")) + ".");
+            passo = Proximo(motor.S("frase"), acao.S("previsao") != "" ? Primeira(acao.S("previsao")).TrimEnd('.') + "." : "", string.Join(" ", det), Detalhe.Botoes(acao, Abre, "Central", primario: true));
         }
         // 2.13: primeira abertura guiada, em três passos (o raio-x só lê; mudar vem depois e sempre item por item)
         if (d.B("primeira_vez")) passo = PrimeirosPassos(d?["pc"].B("notebook") == true);
@@ -139,13 +139,12 @@ public class Inicio : Tela
     {
         var p = new StackPanel { Margin = new Avalonia.Thickness(32, 26, 32, 22), Spacing = 4 };
         p.Children.Add(T("Primeiros passos", "rotulo"));
-        p.Children.Add(T("Três passos, nesta ordem. Nada muda no PC sem você ver antes.", "forte", tamanho: 21));
+        p.Children.Add(T("Três passos, nesta ordem.", "forte", tamanho: 21));
         var passos = new (string titulo, string texto, string botao, string tela)[]
         {
-            ("Faça o raio-x", "Leva de 1 a 3 minutos e só lê. Ele dá a nota do PC e diz o que vale a pena fazer.", "Fazer o raio-x", "raiox:rodar"),
-            ("Otimize no modo seguro", "Você vê cada item com o que ganha e o que perde, marca o que quiser e aplica. Tudo volta com Desfazer.", "Abrir Otimizar", "otimizar"),
-            ("Ligue o acompanhamento (opcional)", "Um ícone perto do relógio mede o PC e os jogos, leve, e avisa quando algo pesa."
-                + (notebook ? " Num notebook ele também pode trocar o plano de energia na tomada e na bateria, se você quiser." : ""), "Ver Ao vivo", "aovivo"),
+            ("Faça o raio-x", "1 a 3 minutos. Só lê e dá a nota do PC.", "Fazer o raio-x", "raiox:rodar"),
+            ("Otimize no modo seguro", "Marque o que quiser. Tudo volta pelo Desfazer.", "Abrir Otimizar", "otimizar"),
+            ("Ligue o acompanhamento (opcional)", "Mede o PC e os jogos e avisa quando algo pesa.", "Ver Ao vivo", "aovivo"),
         };
         for (int i = 0; i < passos.Length; i++)
         {
@@ -160,10 +159,13 @@ public class Inicio : Tela
         return G(p);
     }
 
-    static Control Proximo(string titulo, string texto, params Control[] botoes)
+    static Control Proximo(string titulo, string texto, params Control[] botoes) => Proximo(titulo, texto, null, botoes);
+
+    static Control Proximo(string titulo, string texto, string? detalhes, params Control[] botoes)
     {
-        var meio = new StackPanel { Spacing = 6, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21, quebra: true),
-            T(texto, "sub", quebra: true).Com(x => { x.MaxWidth = 640; x.HorizontalAlignment = HorizontalAlignment.Left; }) } };
+        var meio = new StackPanel { Spacing = 6, Children = { T("Próximo passo", "rotulo"), T(titulo, "forte", tamanho: 21, quebra: true) } };
+        if (texto != "") meio.Children.Add(T(texto, "sub", quebra: true).Com(x => { x.MaxWidth = 640; x.HorizontalAlignment = HorizontalAlignment.Left; }));
+        if (!string.IsNullOrWhiteSpace(detalhes)) meio.Children.Add(Detalhes(T(detalhes!, "rotulo", quebra: true).Com(x => x.MaxWidth = 640)));
         var b = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         foreach (var x in botoes.Reverse()) b.Children.Add(x);
         return S(new Katharos.App.Controles.Fileira { Meio = meio, Direita = b, MinMeio = 380, Margin = new Avalonia.Thickness(32, 28) });

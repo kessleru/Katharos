@@ -541,7 +541,7 @@ def ps_dos_grupos():
 
 def raiox_paralelo(ctx, ev=None):
     """(perfil, medidas, dados) do raio-x. Fase 1: medidas em repouso + amostra dos processos, juntas e leves. Fase 2: o perfil e os grupos
-    do diagnóstico, todos ao mesmo tempo. ev(texto, n, de) diz o que terminou (a tela anda só com etapa real)."""
+    do diagnóstico, todos ao mesmo tempo. A fase 1 roda uma coisa por vez (medir junto com outra leitura mede a leitura). ev(texto, n, de) diz o que terminou (a tela anda só com etapa real)."""
     from concurrent.futures import ThreadPoolExecutor
     amostra, grupos = ps_dos_grupos()
     feitos = [0]
@@ -558,12 +558,15 @@ def raiox_paralelo(ctx, ev=None):
         s = roda_ps(ctx.t, ps, rot, minutos=minutos, mostra=False, mult=getattr(ctx, 'mult', 1.0) or 1.0)
         return s
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f_med = ex.submit(lambda: mede(ctx, 'medidas em repouso', progresso=False))
-        f_am = ex.submit(roda, amostra[0], amostra[1], 3)
-        m = f_med.result(); avisa('medido o PC em repouso')
-        s_am = f_am.result(); avisa('vistos os processos que mais gastam')
+    # fase 1 em fila, de propósito: a medida de repouso consulta contadores pelo WMI, e a amostra dos processos, rodando junto, via o
+    # WmiPrvSE e o PowerShell da medida gastando CPU, e acusava "WMI gastando CPU parado" e "CPU ocupada" causados pelo próprio raio-x
+    m = mede(ctx, 'medidas em repouso', progresso=False); avisa('medido o PC em repouso')
+    s_am = roda(amostra[0], amostra[1], 3); avisa('vistos os processos que mais gastam')
     dados = dict(s_am.dados)
+    try:   # jogo aberto: pelo anti-cheat visto agora ou pelo segundo plano (agora.json recente)
+        dados['jogo_aberto'] = bool(dados.get('anticheat')) or _jogo_aberto_agora()
+    except Exception:
+        dados['jogo_aberto'] = bool(dados.get('anticheat'))
     nomes = {'raiox-1': 'inicialização e boot', 'raiox-2': 'tarefas agendadas', 'raiox-3': 'saúde do Windows', 'raiox-4': 'espaço e programas'}
     with ThreadPoolExecutor(max_workers=len(grupos) + 1) as ex:
         f_perf = ex.submit(lambda: perfil_pc(ctx, forca=True))
@@ -672,7 +675,8 @@ def ferramenta_medir(ctx, args):
 DIAG_PS = INICIO_PS + r'''
 $dias60 = (Get-Date).AddDays(-60)
 Vivo 'processos que mais gastam'
-$a = @{}; foreach ($p in Get-Process) { try { $a[$p.Id] = $p.TotalProcessorTime.TotalMilliseconds } catch {} }
+# o próprio PowerShell desta amostra fica de fora (ele gasta CPU ao abrir e não é do PC)
+$a = @{}; foreach ($p in Get-Process) { if ($p.Id -eq $PID) { continue }; try { $a[$p.Id] = $p.TotalProcessorTime.TotalMilliseconds } catch {} }
 Start-Sleep -Seconds 4
 $nucleos = [Environment]::ProcessorCount
 $top = foreach ($p in Get-Process) { try { if ($a.ContainsKey($p.Id)) { [pscustomobject]@{ n = $p.ProcessName; cpu = [math]::Round(($p.TotalProcessorTime.TotalMilliseconds - $a[$p.Id]) / 40 / $nucleos, 1); mb = [math]::Round($p.WorkingSet64 / 1MB) } } } catch {} }
@@ -683,6 +687,7 @@ $porNome = $top | Group-Object n | ForEach-Object { [pscustomobject]@{ n = $_.Na
 $inf = @{}
 $antiCheat = @('easyanticheat', 'easyanticheat_eos', 'beservice', 'vgc', 'vgtray', 'faceit', 'faceitclient', 'faceit-ac', 'battleye', 'eac_launcher')
 $comAC = [bool](@($top | Where-Object { $antiCheat -contains ([string]$_.n).ToLower() }).Count)
+Dado 'anticheat' $comAC
 foreach ($x in @(@($porNome | Sort-Object cpu -Descending | Select-Object -First 8) + @($porNome | Sort-Object mb -Descending | Select-Object -First 8))) {
     if ($comAC) { break }
     if (-not $x -or $inf.ContainsKey($x.n)) { continue }
@@ -908,6 +913,13 @@ def analisa(p, m, d):
     total = pf(p, 'disco.total', 1) or 1
     ini = lista(d.get('inicializacao'))
     saude = d.get('saude') or {}
+    # "em repouso" só vale com o PC parado: jogo aberto ou placa de vídeo trabalhando = os números são do jogo, não de um problema.
+    # Nesse caso as regras de repouso ficam de fora (falso alarme é pior que nenhum) e um aviso sem ponto diz isso.
+    ocupado = bool(d.get('jogo_aberto')) or (m.get('gpu_uso') or 0) >= 40
+    if ocupado:
+        A.append(Achado(0, ['tudo'], 'Medido com o PC ocupado',
+                        'Um jogo ou a placa de vídeo estava trabalhando durante o raio-x.',
+                        'CPU, RAM, disco e temperatura "em repouso" ficaram de fora da nota. Faça de novo com o PC parado para ver esses.', 'raiox'))
 
     for imp, tit, evid, faz, cmd in achados_da_versao(compat_windows(p)):
         A.append(Achado(imp, ['tudo', 'seguranca'], tit, evid, faz, cmd))
@@ -921,7 +933,7 @@ def analisa(p, m, d):
         A.append(Achado(3, ['lento', 'tudo', 'jogos'], 'Pouca memória RAM',
                         f'{gb(ram_t)} instalados; o Windows sozinho usa perto de 3 GB.',
                         'Aumentar para 8 GB ou mais. Enquanto isso: menos coisas na inicialização e em segundo plano.', 'memoria'))
-    elif ram_t and ram_u / ram_t > 0.7:
+    elif ram_t and ram_u / ram_t > 0.85 and not ocupado:
         A.append(Achado(2, ['lento', 'tudo', 'jogos'], 'RAM quase cheia em repouso',
                         f'{gb(ram_u)} de {gb(ram_t)} em uso com o PC parado ({br(100 * ram_u / ram_t, 0)}%).',
                         'Ver quem usa a memória: o que você não precisa aberto sai da inicialização; se continuar alto, mais RAM.', 'memoria'))
@@ -939,7 +951,7 @@ def analisa(p, m, d):
     soma = sum(c.get('gb', 0) for c in caches if c.get('nome') != 'Windows.old')
     if soma > 2:
         maiores = ', '.join(f'{c["nome"]} {gb(c["gb"])}' for c in caches[:3])
-        A.append(Achado(2 if soma > 8 else 1, ['disco', 'tudo'], 'Caches e temporários acumulados',
+        A.append(Achado(1, ['disco', 'tudo'], 'Caches e temporários acumulados',
                         f'{gb(soma)} que se recriam sozinhos. Maiores: {maiores}.', 'Limpar com segurança.', 'limpar'))
     if any(c.get('nome') == 'Windows.old' for c in caches):
         w = next(c['gb'] for c in caches if c.get('nome') == 'Windows.old')
@@ -982,7 +994,7 @@ def analisa(p, m, d):
         A.append(Achado(3, ['tudo'], 'PC sem proteção em tempo real', 'Nenhum antivírus ativo.',
                         'Abra Segurança do Windows e ligue a proteção em tempo real (o katharos nunca desliga isso).'))
     cpu = m.get('cpu')
-    if cpu is not None and cpu > 20 and (pf(p, 'sistema.uptime_h', 1) or 0) >= 0.17:
+    if cpu is not None and cpu > 20 and (pf(p, 'sistema.uptime_h', 1) or 0) >= 0.17 and not ocupado:
         tops = lista(d.get('top_cpu'))
         top = explica_processos(tops, 'cpu', '%')
         q = quem_e(tops[0].get('n')) if tops else None
@@ -1000,12 +1012,12 @@ def analisa(p, m, d):
                         'Passando de 100% os programas fecham sozinhos. Feche o que mais usa memória, deixe o arquivo de paginação '
                         'automático e, se for sempre assim, este PC precisa de mais RAM. Mais usam: '
                         + (explica_processos(lista(d.get('top_ram')), 'mb', 'MB') or 'sem registro') + '.', 'memoria'))
-    elif (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
+    elif not ocupado and (m.get('paginas_s') or 0) > 300 and m.get('ram_disponivel') is not None and ram_t and m['ram_disponivel'] / ram_t < 0.12:
         A.append(Achado(2, ['lento', 'tudo'], 'Windows buscando memória no disco',
                         f'{br(m["paginas_s"], 0)} páginas por segundo lidas do arquivo de paginação, com só {gb(m["ram_disponivel"])} disponíveis.',
                         'É o que faz tudo "engasgar" ao trocar de janela. Menos programas abertos juntos ou mais RAM.', 'memoria'))
     ativo = m.get('disco_ativo')
-    if ativo is not None and ativo >= 50:
+    if ativo is not None and ativo >= 50 and not ocupado:
         io = lista(d.get('top_io'))
         quem = ', '.join(f'{x.get("n")} {br(x.get("mbs"), 1)} MB/s' + (f' ({quem_e(x.get("n"))[0]})' if quem_e(x.get('n')) else '') for x in io[:3])
         A.append(Achado(3 if eh_hd(p) else 2, ['lento', 'boot', 'tudo'], 'Disco ocupado sem parar com o PC parado',
@@ -1091,22 +1103,25 @@ def analisa(p, m, d):
                         'O Windows não está avisando o SSD sobre os blocos livres.',
                         'Sem TRIM o SSD fica mais lento para gravar com o tempo e se desgasta mais. O pacote de disco liga de novo.', 'disco'))
     w = d.get('wmi') or {}
-    if (w.get('cpu') or 0) > 2:
+    if (w.get('cpu') or 0) > 2 and not ocupado:
         cli = ', '.join(f'{c.get("processo")} ({c.get("consultas")})' for c in lista(w.get('clientes'))[:3])
         A.append(Achado(2, ['calor', 'bateria', 'lento', 'tudo'], 'WMI gastando CPU parado',
                         f'WmiPrvSE com {br(w.get("cpu"), 1)}% de CPU. Quem mais consulta: {cli or "não registrado"}.',
                         'Normalmente é software de fabricante (centrais de jogo, assistentes de suporte). Atualizar ou deixar em manual.', 'servicos'))
     na_bateria = bool(pf(p, 'pc.notebook') and (d.get('energia') or {}).get('na_bateria'))
-    if m.get('limite') is not None and m['limite'] < 85 and not na_bateria:
+    if m.get('limite') is not None and m['limite'] < 85 and not na_bateria and not ocupado:
         A.append(Achado(2, ['calor', 'lento', 'jogos', 'tudo'], 'Processador sendo limitado',
                         f'O Windows diz que o processador está limitado a {br(m["limite"], 0)}% do que poderia (contador "% Performance Limit")'
                         + (f', com {br(m["temperatura"], 0)} °C.' if m.get('temperatura') else '.'),
                         'Calor (poeira, pasta térmica), carregador fraco ou plano de energia. Limpe as saídas de ar.'))
-    if (m.get('temperatura') or 0) >= (80 if m.get('temp_fonte') not in (None, 'zona térmica') else 90):
+    if not ocupado and (m.get('temperatura') or 0) >= (80 if m.get('temp_fonte') not in (None, 'zona térmica') else 90):
         A.append(Achado(2, ['calor', 'tudo'], 'Temperatura alta em repouso', f'{br(m["temperatura"], 0)} °C (lido por: {m.get("temp_fonte") or "zona térmica"}).',
                         'Limpar ventoinhas; em notebook, usar o plano "fresco" (mínimo de CPU 5% e turbo eficiente).', 'energia'))
-    trocas = lista(saude.get('trocas_plano'))
-    if trocas:
+    # uma troca só não é "programa trocando"; e o powercfg.exe é o próprio Katharos quando o pacote de energia foi aplicado (relatório do
+    # dono, 4.3.0: "powercfg.exe (1x)" virou achado depois de aplicar energia)
+    trocas = [x for x in lista(saude.get('trocas_plano'))
+              if not (str(x.get('processo') or '').lower() == 'powercfg.exe' and 'energia' in ja_aplicados())]
+    if sum(int(x.get('vezes') or 0) for x in trocas) >= 3:
         A.append(Achado(1, ['calor', 'bateria', 'tudo'], 'Programa trocando o plano de energia',
                         ', '.join(f'{x.get("processo")} ({x.get("vezes")}x)' for x in trocas) + ' nos últimos 14 dias.',
                         'Centrais de fabricante forçam "Alto desempenho". Ajuste o perfil no app e use o plano de energia daqui.', 'energia'))
@@ -1142,7 +1157,7 @@ def analisa(p, m, d):
     sem_assinatura = [x for x in susp if not x.get('assinado')]
     assinadas = [x for x in susp if x.get('assinado')]
     if sem_assinatura:
-        A.append(Achado(3 if any(x.get('curta') for x in sem_assinatura) else 2, ['tudo', 'lento'], 'Tarefas agendadas suspeitas',
+        A.append(Achado(2, ['tudo', 'lento', 'seguranca'], 'Tarefas agendadas suspeitas',
                         ', '.join(f'{x.get("tarefa")} → {x.get("exe")}' + (' (repete a cada poucos minutos)' if x.get('curta') else '') for x in sem_assinatura[:3]),
                         'Programa sem assinatura digital rodando de AppData/Temp é padrão comum de malware. Confira cada um e faça uma verificação completa no Defender.'))
     if assinadas:
@@ -1276,20 +1291,25 @@ CATEGORIAS = ('segurança', 'inicialização', 'memória', 'disco', 'jogos', 'sa
 
 
 def categoria_achado(titulo, comando, queixas=()):
-    """Em que parte do diagnóstico o achado entra (o raio-x agrupa por estas). Raio-x antigo, sem as queixas guardadas, usa o comando e o título."""
+    """Em que parte do diagnóstico o achado entra (o raio-x agrupa por estas). Raio-x antigo, sem as queixas guardadas, usa o comando e o título.
+    O título vem antes das queixas: "HD mecânico" tem a queixa "boot", mas é disco; "driver da placa de vídeo" tem "jogos", mas é saúde."""
     q, cmd, t = set(queixas or ()), str(comando or '').split(' ')[0], str(titulo or '').lower()
-    if 'seguranca' in q or cmd in ('seguranca', 'privacidade') or re.search(r'defender|ameaça|suspeit|bitlocker|segurança', t):
+    if 'seguranca' in q or cmd in ('seguranca', 'privacidade') or re.search(r'defender|ameaça|suspeit|bitlocker|segurança|antivírus|proteção', t):
         return 'segurança'
-    if cmd == 'inicializacao' or 'boot' in q or re.search(r'inicializa|boot|abrindo com o windows', t):
+    if 'integridade de memória' in t or 'agendamento de gpu' in t:
+        return 'jogos'
+    if cmd == 'inicializacao' or re.search(r'inicializa|boot|abrindo com o windows', t):
         return 'inicialização'
     if cmd == 'memoria' or re.search(r'\bram\b|memória', t):
         return 'memória'
-    if cmd in ('limpar', 'disco') or 'disco' in q or re.search(r'disco|espaço|ssd|\bhd\b', t):
+    if cmd in ('limpar', 'disco') or re.search(r'disco|espaço|ssd|\bhd\b|windows\.old|temporários|paginação|onedrive', t):
         return 'disco'
+    if cmd in ('atualizar', 'reparar', 'medir', 'travadas') or re.search(r'driver|bios|firmware|tela azul|desligou|desligamento|temperatura|limitado|dispositivos|bateria', t):
+        return 'saúde'
     if cmd == 'jogos' or 'jogos' in q:
         return 'jogos'
-    if cmd in ('atualizar', 'reparar', 'medir', 'travadas') or re.search(r'driver|bios|firmware|tela azul|desligou|erro', t):
-        return 'saúde'
+    if 'boot' in q:
+        return 'inicialização'
     return 'geral'
 
 

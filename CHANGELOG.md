@@ -18,6 +18,22 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.3.1 · 12 de novembro de 2026
+
+Corrige o que o teste da 4.3.0 mostrou (no PC e nos relatórios enviados) e deixa a janela mais rápida e com menos texto.
+
+- **Mais rápido**: o motor atende várias telas ao mesmo tempo. Abrir o Raio-x durante uma conferência não deixa mais a tela vazia, e toda tela mostra "carregando" em vez de ficar preta. O raio-x lê as partes do diagnóstico ao mesmo tempo.
+- **Nota mais justa**: poucos programas na inicialização não são mais "grave"; a tarefa do próprio Katharos não aparece como suspeita; cada tipo de problema tem um teto de pontos; cada achado vai para o grupo certo (driver é saúde, HD é disco). Com um jogo aberto, nada "em repouso" (CPU, RAM, disco, temperatura) entra na nota.
+- **Menos alarme falso**: tarefa sem assinatura é para conferir, nunca grave; o plano de energia trocado pelo próprio Katharos não vira achado; RAM só é "quase cheia" acima de 85 %.
+- **O que o Windows bloqueia**: item que o Windows não deixou gravar (como os widgets no Windows 11 25H2) aparece como "o Windows bloqueia" e não conta mais como "vai mudar".
+- **Menos texto**: cada item mostra o nome e o que ganha; o que perde, a atenção e os detalhes ficam em "detalhes" ou com o mouse em cima. Conceitos (serviços, telemetria, memória virtual...) abrem numa janelinha.
+- **Raio-x por grupos**: Saúde, Disco, Memória, Inicialização, cada um com quanto tira da nota. As outras telas seguem o mesmo jeito.
+- **Otimizar**: o número de mudanças em cada modo, busca, "Desmarcar tudo", marcar ou tirar uma área inteira. Trocar de modo não guarda mais as marcas do modo anterior.
+- **"Manter alterações?"**: espera você voltar ao PC. O tempo para desfazer sozinho (3 minutos) só corre com você presente; antes, uma otimização longa era desfeita enquanto você estava longe.
+- **Ícone da bandeja**: um só desenho em todos os estados, com um sinal pequeno no canto (jogando, atenção, pausado).
+- **Atualização**: o segundo plano abre a janela, não o terminal; nenhuma janela de PowerShell aparece.
+- Corrigidos: "Aplicar esta correção" dava erro ao abrir em alguns casos; esvaziar a Lixeira com mais de 2 GB dava erro.
+
 ## 4.3.0 · 11 de novembro de 2026
 
 Corrige o que apareceu no primeiro teste da 4.2.0 num PC de verdade e deixa a janela mais fácil de entender: abre na hora, cada botão leva ao lugar certo e o Início nunca sugere o que já está feito.

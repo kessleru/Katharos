@@ -18,14 +18,14 @@ public class Jogos : Tela
         var ss = d.A("sessoes").Reverse().ToList();
         if (ss.Count == 0)
         {
-            Monta(cab, Vazio("Nenhuma sessão de jogo ainda", "Com o acompanhamento ligado, a próxima vez que você jogar aparece aqui sozinha: o jogo, o FPS de verdade e o que limitou (placa de vídeo, CPU, memória ou calor).",
+            Monta(cab, Vazio("Nenhuma sessão de jogo ainda", "A próxima vez que você jogar aparece aqui.",
                              Botao("Ver o acompanhamento", false, () => Abre("aovivo"))));
             return;
         }
         var r = d?["resumo"];
         var numeros = S(Celulas(
             Numero("Jogado em 60 dias", Num(r.D("horas"), 1), "h", $"{Num(r.D("sessoes"))} sessões", Tema.Apagado),
-            Numero("O que mais segura", Limite(r.S("principal")), "", "no tempo somado das sessões", Tema.Apagado),
+            Numero("O que mais segura", Limite(r.S("principal")), "", "somando as sessões", Tema.Apagado),
             Numero("Mais quente", Num(r.D("temp_cpu_max")), "°C", "CPU, no pico das sessões", (r.D("temp_cpu_max") ?? 0) >= 90 ? Tema.Vermelho : Tema.Verde)));
 
         // antes e depois: só o que tem sessões dos dois lados (a central diz "sem diferença" quando a mudança cabe no ruído)
@@ -55,12 +55,16 @@ public class Jogos : Tela
                 var ev = j.A("evolucao").Where(x => x.D("fps_1low") != null).ToList();
                 string fps = ev.Count >= 2 ? $"1% mais lento: {Num(ev[0].D("fps_1low"))} → {Num(ev[^1].D("fps_1low"))} FPS em {ev.Count} sessões" : "";
                 var rec = j["recomendacao"];
-                var txt = new List<string> { segura.Count > 0 ? "Segura: " + string.Join("; ", segura) + "." : "Nada ficou no limite por tempo que importe." };
+                // à vista só o que mais segura; o resto (todos os limites, o 1% mais lento, o que eu faria) em "detalhes"
+                var txt = new List<string>();
+                if (segura.Count > 1) txt.Add("Segura: " + string.Join("; ", segura) + ".");
                 if (fps != "") txt.Add(fps + ".");
                 if (rec != null) txt.Add($"O que eu faria: {rec.S("faria")}.");
+                string principal = segura.Count > 0 ? "Segura: " + segura[0] + "." : "Nada ficou no limite.";
                 var vals = ev.Select(x => x.D("fps_1low") ?? 0).ToArray();
                 var bloco = new StackPanel { Spacing = 4, Children = { T($"{j.S("jogo")} · {Num(j.D("horas"), 1)} h em {Num(j.D("sessoes"))} sessões", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold),
-                                                                       T(string.Join(" ", txt), "rotulo", tamanho: 13.5, quebra: true) } };
+                                                                       T(principal, "rotulo", tamanho: 13.5, quebra: true) } };
+                if (txt.Count > 0) bloco.Children.Add(Detalhes(T(string.Join(" ", txt), "rotulo", tamanho: 13.5, quebra: true)));
                 if (vals.Length >= 3)
                 {
                     double piso = vals.Min() * 0.8;   // a variação entre sessões importa mais que a distância do zero
@@ -258,8 +262,28 @@ public class Configuracoes : Tela
                 await Recarrega();
             }));
         }
-        lista.Children.Add(Linha(Maiuscula(c.S("rotulo")), c.S("explica"), null, ops));
+        // os botões já dizem as opções: a linha leva só uma frase curta; o texto inteiro do motor (o mesmo do terminal) fica no mouse
+        var linha = Linha(Maiuscula(c.S("rotulo")), ExplicaCurta.GetValueOrDefault(k), null, ops);
+        if (c.S("explica") != "") { ToolTip.SetTip(linha, Maiuscula(c.S("explica"))); ToolTip.SetShowDelay(linha, 700); }
+        lista.Children.Add(linha);
     }
+
+    static readonly Dictionary<string, string?> ExplicaCurta = new()
+    {
+        ["modo"] = "O que vem marcado em cada tela.",
+        ["confirmar"] = "Depois de mudar, pergunta se ficou tudo bem.",
+        ["tempo-real"] = "Segundos entre uma leitura e outra.",
+        ["avisos"] = "Notificação quando algo fica no limite.",
+        ["coleta-em-jogo"] = null,
+        ["atualizacoes"] = null,
+        ["canal"] = "Prévia recebe as versões de teste antes.",
+        ["avisos-intervalo"] = "Calor grave avisa sempre.",
+        ["avisos-no-jogo"] = null,
+        ["resumo-diario"] = null,
+        ["energia-automatica"] = "No notebook: troca o plano na tomada e na bateria.",
+        ["fps"] = null,
+        ["animacoes"] = null,
+    };
 
     async Task Exporta()
     {

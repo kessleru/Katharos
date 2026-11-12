@@ -51,9 +51,9 @@ public class Enviar : Tela
         // 1. o que mandar
         var cartoes = new UniformGrid { Columns = 3, Margin = new Thickness(32, 0, 32, 26) };
         foreach (var (id, nome, explica) in new[] {
-            ("ambos", "Relatório e feedback", "O relatório do Katharos e o que você tem a dizer. É o que mais ajuda."),
-            ("relatorio", "Só o relatório", "Erros, o que foi aplicado e o que cada otimização rendeu neste PC."),
-            ("feedback", "Só o feedback", "Um problema, uma ideia ou um elogio, sem dados do PC.") })
+            ("ambos", "Relatório e feedback", "É o que mais ajuda."),
+            ("relatorio", "Só o relatório", "Erros e o que foi aplicado."),
+            ("feedback", "Só o feedback", "Sem dados do PC.") })
             cartoes.Children.Add(Cartao(nome, explica, tipo == id, () => { tipo = id; Refaz(); }));
         var partes = new List<Control?> { cab, S(new StackPanel { Children = { Subtitulo("1. O que mandar"), cartoes } }) };
 
@@ -84,12 +84,14 @@ public class Enviar : Tela
                 lista.Children.Add(cx);
             }
             partes.Add(S(new StackPanel { Children = { Subtitulo(tipo == "ambos" ? "3. O que o relatório leva" : "2. O que o relatório leva",
-                "Tudo vem do que o Katharos já guardou neste PC. Desmarque o que não quiser mandar."), lista } }));
+                "Desmarque o que não quiser mandar."), lista } }));
         }
 
         // a ação, com para onde vai e o que nunca vai
-        var privacidade = T("Vai para um repositório privado do criador do Katharos. Não vai: o seu nome de usuário, o nome do PC, e-mail (só o contato que você escrever), IP, arquivos ou pastas pessoais. "
-                            + "Um número aleatório deste PC vai junto, só para contar PCs diferentes. Antes de sair você vê o texto exato. Para apagar um envio, mande o código dele num feedback.", "rotulo", quebra: true);
+        var privacidade = new StackPanel { Spacing = 4, Children = {
+            T("Sem nome, PC, IP ou arquivos seus. Você vê o texto antes.", "rotulo", quebra: true),
+            Detalhes(T("Vai para um repositório privado do criador do Katharos. Não vai: o seu nome de usuário, o nome do PC, e-mail (só o contato que você escrever), IP, arquivos ou pastas pessoais. "
+                       + "Um número aleatório deste PC vai junto, só para contar PCs diferentes. Para apagar um envio, mande o código dele num feedback.", "rotulo", quebra: true)) } };
         var acao = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(32, 22), Children = {
             privacidade.Com(t => { t.MaxWidth = 720; t.HorizontalAlignment = HorizontalAlignment.Left; t.VerticalAlignment = VerticalAlignment.Center; }),
             Botao("Revisar e enviar", true, async () => await Revisa(cab, d)).Com(b => { Grid.SetColumn(b, 1); b.Margin = new Thickness(24, 0, 0, 0); }) } };
@@ -130,7 +132,7 @@ public class Enviar : Tela
     static Control Cartao(string nome, string explica, bool esc, Action clique)
     {
         var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { T(nome, "forte", tamanho: 16, quebra: true) } };
-        if (esc) topo.Children.Add(T("escolhido", null, Tema.Ambar, 12).Com(t => { t.FontFamily = Tema.Mono; t.Margin = new Thickness(10, 3, 0, 0); Grid.SetColumn(t, 1); }));
+        // o escolhido já aparece pela borda laranja; a palavra "escolhido" espremia o título no cartão estreito
         var b = new Button
         {
             Padding = new Thickness(0), Margin = new Thickness(0, 0, 12, 0), Background = Brushes.Transparent,

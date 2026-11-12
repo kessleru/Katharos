@@ -116,8 +116,8 @@ public static class Aplicacao
         {
             bool longe = Presenca.OciosoSegundos() >= 60;
             conta.Text = longe
-                ? "Esperando você voltar: o tempo para desfazer sozinho só corre com você no PC."
-                : $"Olhe o PC por um instante (tela, som, internet, o jogo abrindo). Se não responder em {resta / 60}:{resta % 60:00}, o Katharos desfaz sozinho.";
+                ? "Esperando você voltar."
+                : $"Sem resposta em {resta / 60}:{resta % 60:00}, desfaz sozinho.";
         }
         Texto();
         rel.Tick += (_, _) =>
@@ -150,6 +150,8 @@ public static class Aplicacao
     /// "Aplicar esta correção": uma caixa só com os itens de uma área que ainda não estão feitos, o que cada um muda, como desfazer e um
     /// botão. Os que o modo escolhido recomenda vêm marcados; a pessoa tira o que não quiser. Nunca abre o Otimizar com o modo inteiro.
     /// </summary>
+    static void Solta(Control c) { if (c.Parent is Panel p) p.Children.Remove(c); else if (c.Parent is ContentControl cc) cc.Content = null; else if (c.Parent is Decorator d) d.Child = null; }
+
     public static async Task Correcao(string area, string porque, Action<string>? abre, Action? depois = null)
     {
         var j = Janela.Atual!;
@@ -167,12 +169,15 @@ public static class Aplicacao
         }
         catch (Exception e) { j.FechaCaixa(); MostraErro(e, "Não deu para abrir a correção"); return; }
         var a = d.A("areas").FirstOrDefault();
-        var faltam = a.A("itens").Where(i => !i.B("ja")).ToList();
+        // a primeira caixa ("Lendo…") ainda segura o corpo: solta antes de pôr numa caixa nova (relatório KTH-MM9NKS, 4.3.0:
+        // "The control StackPanel already has a visual parent")
+        Solta(corpo);
+        var faltam = a.A("itens").Where(i => !i.B("ja") && !i.B("bloqueado")).ToList();
         corpo.Children.Clear();
         if (porque != "") corpo.Children.Add(T(porque, "sub", quebra: true));
         if (a == null || faltam.Count == 0)
         {
-            corpo.Children.Add(T(a == null ? "Esta área não tem itens neste PC." : "Tudo desta área já está assim neste PC. Nada para aplicar.", null, Tema.Verde, 14, true));
+            corpo.Children.Add(T(a == null ? "Esta área não tem itens neste PC." : a.A("itens").Any(i => !i.B("ja")) ? "O que falta o Windows não deixa mudar." : "Tudo desta área já está assim neste PC.", null, Tema.Verde, 14, true));
             j.MostraCaixa(Janela.Caixa("Aplicar esta correção", corpo, Botao("Fechar", true, j.FechaCaixa).Com(b => b.HorizontalAlignment = HorizontalAlignment.Right)), true);
             return;
         }
@@ -189,12 +194,18 @@ public static class Aplicacao
         // marcados primeiro (o que o modo recomenda), o resto embaixo
         foreach (var i in faltam.OrderByDescending(i => i.B("marcado")))
         {
+            // igual ao Otimizar: nome e o que ganha; o que perde e a atenção em "detalhes"; "sem volta" como etiqueta
             var tx = new StackPanel { Spacing = 2, Margin = new Thickness(4, 0, 0, 0) };
-            tx.Children.Add(T(Maiuscula(i.S("titulo")), null, Tema.Osso, 15, true));
-            if (i.S("ganho") != "") tx.Children.Add(T("ganha: " + i.S("ganho"), null, Tema.Verde, 13, true));
-            if (i.S("custo") != "" && i.S("custo") != "nenhum") tx.Children.Add(T("perde: " + i.S("custo"), null, Tema.Texto, 13, true));
-            if (i.S("alerta") != "") tx.Children.Add(T("atenção: " + i.S("alerta"), null, Tema.Ambar, 13, true));
-            tx.Children.Add(T(i.B("sem_volta") ? "sem volta: o Desfazer não traz de volta" : "volta pelo Desfazer, a um clique", null, i.B("sem_volta") ? Tema.Vermelho : Tema.Apagado, 12.5, true));
+            var nome = new WrapPanel { Children = { T(Maiuscula(i.S("titulo")), null, Tema.Osso, 15, true).Com(t => t.Margin = new Thickness(0, 0, 8, 0)) } };
+            if (i.S("alerta") != "") nome.Children.Add(Etiqueta("atenção", Tema.Ambar));
+            if (i.B("sem_volta")) nome.Children.Add(Etiqueta("sem volta", Tema.Vermelho).Com(e => e.Margin = new Thickness(6, 0, 0, 0)));
+            tx.Children.Add(nome);
+            if (i.S("ganho") != "") tx.Children.Add(T("Ganha: " + i.S("ganho"), null, Tema.Verde, 13, true));
+            var det = new List<string>();
+            if (i.S("custo") != "" && i.S("custo") != "nenhum") det.Add("Perde: " + i.S("custo"));
+            if (i.S("alerta") != "") det.Add("Atenção: " + i.S("alerta"));
+            if (i.B("sem_volta")) det.Add("Sem volta: o Desfazer não traz de volta.");
+            if (det.Count > 0) tx.Children.Add(Detalhes(T(string.Join("\n", det), "rotulo", tamanho: 13, quebra: true)));
             var c = new CheckBox { Content = tx, IsChecked = i.B("marcado"), VerticalAlignment = VerticalAlignment.Top };
             c.IsCheckedChanged += (_, _) => Conta();
             caixas.Add((c, i));

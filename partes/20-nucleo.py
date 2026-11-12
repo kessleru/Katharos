@@ -106,7 +106,8 @@ def le_json(arq, padrao):
 def grava_json(arq, dados):
     arq = Path(arq)
     arq.parent.mkdir(parents=True, exist_ok=True)
-    tmp = arq.with_name(f'{arq.name}.{os.getpid()}.tmp')   # um por processo: o motor comum, o elevado e a manutenção gravam juntos
+    # um por processo e por linha: o motor comum, o elevado e a manutenção gravam juntos, e o motor atende pedidos em paralelo
+    tmp = arq.with_name(f'{arq.name}.{os.getpid()}.{threading.get_ident()}.tmp')
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=1)
     os.replace(tmp, arq)
@@ -134,10 +135,14 @@ def salva_estado(e):
     grava_json(CASA / 'estado.json', e)
 
 
+_TRAVA_ESTADO = threading.RLock()
+
+
 def marca_estado(chave, valor):
-    e = estado()
-    e[chave] = valor
-    salva_estado(e)
+    with _TRAVA_ESTADO:   # ler, mudar e gravar de uma vez: dois pedidos ao mesmo tempo não apagam a marca um do outro
+        e = estado()
+        e[chave] = valor
+        salva_estado(e)
 
 
 def agora_iso():

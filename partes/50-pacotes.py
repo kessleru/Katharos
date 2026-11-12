@@ -145,7 +145,7 @@ if ($__st -match 'Enabled') { if ($TESTE) { Plano 'desligar armazenamento reserv
         Item('lixeira', 'esvaziar a Lixeira', 'Apaga de vez o que está na Lixeira de todas as unidades.', 'espaço',
              'é definitivo: não dá para recuperar', 0,
              _limpa_ps('Lixeira', r'''$__sh = New-Object -ComObject Shell.Application; $__n = @($__sh.NameSpace(10).Items()).Count
-if ($__n -gt 0) { $__d0 = (Get-PSDrive C).Free; if (-not $TESTE) { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; $__livre += [math]::Max(0, (Get-PSDrive C).Free - $__d0) } else { Plano ("esvaziar {0} itens da Lixeira" -f $__n) } }'''), reverte=False),
+if ($__n -gt 0) { $__d0 = (Get-PSDrive C).Free; if (-not $TESTE) { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; $__livre += [math]::Max([double]0, [double](Get-PSDrive C).Free - [double]$__d0) } else { Plano ("esvaziar {0} itens da Lixeira" -f $__n) } }'''), reverte=False),
     ]
 
 

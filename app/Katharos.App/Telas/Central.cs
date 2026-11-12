@@ -67,12 +67,15 @@ public class Sugestoes : Tela
         var ev = string.Join("; ", g.A("evidencias").Select(x => x.ToString()));
         var desc = g.A("descartadas").Select(x => $"{x.S("causa")} ({x.S("motivo")})").ToList();
         var corpo = new StackPanel { Spacing = 10, Margin = new Thickness(0, 6, 0, 0) };
-        corpo.Children.Add(Bloco("O que eu vi", Primeira(ev) + "."));
-        corpo.Children.Add(Bloco("Por que acho que é isso", $"A causa com mais evidência é {g.S("nome")}." + (desc.Count > 0 ? " Descartei: " + string.Join("; ", desc) + "." : "")));
+        // à vista: a conclusão e o que fazer. O porquê (o que vi, o que descartei, o que mudaria) fica em "detalhes"
         corpo.Children.Add(Bloco("O que eu faria", Primeira(g.S("faria")) + "."));
-        corpo.Children.Add(Bloco("O que mudaria a minha conclusão", Primeira(g.S("mudaria")) + "."));
-        var cab = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { T($"{g.S("titulo")}: {g.S("nome")}", "forte", tamanho: 17) } };
-        cab.Children.Add(Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado).Com(e => Grid.SetColumn(e, 1)));
+        corpo.Children.Add(Detalhes(new StackPanel { Spacing = 10, Children = {
+            Bloco("O que eu vi", Primeira(ev) + "."),
+            Bloco("Por que acho que é isso", $"A causa com mais evidência é {g.S("nome")}." + (desc.Count > 0 ? " Descartei: " + string.Join("; ", desc) + "." : "")),
+            Bloco("O que mudaria a minha conclusão", Primeira(g.S("mudaria")) + ".") } }));
+        var cab = new StackPanel { Spacing = 6, Children = {
+            Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado).Com(e => e.HorizontalAlignment = HorizontalAlignment.Left),
+            T($"{g.S("titulo")}: {g.S("nome")}", "forte", tamanho: 17, quebra: true) } };
         return new Border { Padding = new Thickness(32, 18), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Child = new StackPanel { Children = { cab, corpo } } };
     }
 
@@ -85,7 +88,8 @@ public class Sugestoes : Tela
         bt.Children.Add(Botao("Agora não", false, async () => { await Servico.Le("dispensar", new { id }); await Recarrega(); }).Com(b => ToolTip.SetTip(b, "Esconde por 30 dias.")));
         bt.Children.Add(Botao("Não me importa", false, async () => { await Servico.Le("responder", new { id, resposta = "nao-importa" }); await Recarrega(); }).Com(b => ToolTip.SetTip(b, "Não proponho mais isto.")));
         bt.Children.Add(Detalhe.Botoes(x, Abre, "Central"));
-        var texto = new List<string> { exp.S("vi", x.S("porque")) };
+        // à vista só o que eu vi (uma frase); o plano, a previsão, o risco e como desfazer ficam em "detalhes"
+        var texto = new List<string>();
         if (exp.S("faria") != "") texto.Add("O que eu faria: " + exp.S("faria"));
         var prev = x["previsao"];
         if (prev.S("texto") != "") texto.Add("O que espero: " + prev.S("texto") + ".");
@@ -94,7 +98,7 @@ public class Sugestoes : Tela
         // o que é certo (o Windows registrou) separado do que é provável (a causa): nunca "confiança alta" numa causa que só se investiga
         var selo = x.S("certeza") != "" ? Etiqueta("aconteceu · causa " + x.S("causa", "provável"), Tema.Ambar)
                                          : Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado);
-        return Linha(x.S("titulo"), string.Join("\n", texto), selo, bt);
+        return Linha(x.S("titulo"), Primeira(exp.S("vi", x.S("porque"))), selo, bt, detalhes: texto.Count > 0 ? string.Join("\n", texto) : null);
     }
 
     Control Resultado(JsonNode r)

@@ -111,3 +111,37 @@ tags: [tipo/decisao, projeto/katharos, area/publicacao]
 O dono pediu para fazer o plano inteiro sem parar e segurar a publicação. Ramo `v4.3.0` no GitHub, sem tag (o publicar.yml só roda com tag ou à mão).
 
 Falta conferir no Windows: tempo da segunda abertura do Otimizar, a tarefa do Katharos fora das suspeitas, "Aplicar esta correção" mudando só aquele item, desfazer 2 de 18 serviços, CPU e GPU da janela parada e trocando de tela (meta ~0 % parada), e a tela de abertura em 1 a 2 s com cache.
+
+---
+arquivo: 2026-11-12 nota-e-alarme-falso-4.3.1.md
+---
+resumo: "Nota com teto por categoria e grupo decidido pelo título; nada 'em repouso' com jogo aberto ou GPU ≥ 40 %; tarefa sem assinatura no máximo 2; powercfg do próprio Katharos não vira achado; RAM 'quase cheia' só acima de 85 %."
+tipo: decisao
+status: aceita
+criado: 2026-11-12
+tags: [tipo/decisao, projeto/katharos, area/diagnostico, area/confiabilidade]
+---
+# Nota e alarme falso (4.3.1)
+
+## Contexto
+Relatório KTH-MM9NKS (PC do dono, 4.3.0): nota 62 com "Muita coisa abrindo" grave (3 programas), "Tarefas agendadas suspeitas" grave (a tarefa do próprio Katharos) e "Programa trocando o plano de energia" (powercfg.exe 1x, o Katharos aplicando energia).
+
+## Decisão
+- PESO_NOTA {3:15, 2:7, 1:2}; teto por categoria (segurança 30, saúde 30, disco 20, memória 20, inicialização 10, jogos 15, geral 15).
+- `categoria_achado` olha o título antes das queixas (HD é disco, driver é saúde, antivírus é segurança).
+- Raio-x: fase 1 (medida em repouso + amostra de processos) em fila, para a própria leitura não virar "WMI gastando CPU"; fase 2 em paralelo.
+- `ocupado` (anti-cheat visto, jogo no agora.json ou GPU ≥ 40 %): as regras de repouso saem e um aviso sem ponto diz isso.
+- Itens que o Windows nega ("operação não autorizada") ficam em `cache/bloqueados.json` por build e não são marcados nem contados.
+
+---
+arquivo: 2026-11-12 motor-em-paralelo.md
+---
+resumo: "O motor comum atende pedidos em paralelo (6 linhas); o que grava arquivos do Katharos vai numa trava só e o raio-x tem a dele. A janela já casava respostas pelo id."
+tipo: decisao
+status: aceita
+criado: 2026-11-12
+tags: [tipo/decisao, projeto/katharos, area/desempenho]
+---
+# Motor em paralelo
+
+Abrir o Raio-x durante a conferência deixava a tela preta até a conferência acabar (o motor atendia um pedido por vez). Agora a leitura rápida responde antes; `grava_json` usa arquivo temporário por processo e linha, e `marca_estado` tem trava. Toda tela mostra "Carregando" depois de 150 ms sem conteúdo.

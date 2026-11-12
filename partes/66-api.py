@@ -82,6 +82,13 @@ def responde_api(ctx, canal, pedido, permitidos=None):
         canal.manda({'id': id_, 'ok': False, 'erro': {'codigo': 'interno', 'texto': f'{type(e).__name__}: {e}'}})
 
 
+# o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
+# comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
+_ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
+             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades')
+_SOZINHOS = ('raiox',)
+
+
 def roda_api(argv, entrada=None, saida=None, permitidos=None):
     """katharos api              conversa por linhas (a interface usa assim)
        katharos api METODO [JSON] um pedido só, para testar no terminal"""
@@ -124,6 +131,24 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
         threading.Thread(target=preparo, daemon=True).start()
         if not preparo_pronto.wait(20):
             LOG.escreve('api: o preparo passou de 20 s; atendendo os pedidos mesmo assim')
+        # pedidos em paralelo: uma conferência longa ou o raio-x não seguram mais a leitura de outra tela (antes, abrir o Raio-x durante
+        # a conferência deixava a tela vazia até ela acabar). A resposta leva o id; a janela já casa pelo id, fora de ordem.
+        # O que muda o PC continua um por vez, e o mesmo método pesado (raio-x) não roda duas vezes junto.
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix='api')
+        trava_muda, trava_escrita = threading.Lock(), threading.Lock()
+        travas = {n: trava_escrita for n in _ESCREVEM}
+        travas.update({n: threading.Lock() for n in _SOZINHOS})
+
+        def atende(pedido):
+            nome = pedido.get('metodo') if isinstance(pedido, dict) else None
+            muda = nome in METODOS_API and METODOS_API[nome][1]
+            trava = trava_muda if muda else travas.get(nome)
+            if trava is None:
+                responde_api(ctx, canal, pedido, permitidos)
+            else:
+                with trava:
+                    responde_api(ctx, canal, pedido, permitidos)
         for linha in (entrada or sys.stdin):
             linha = linha.strip()
             if not linha:
@@ -134,9 +159,12 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None):
                 canal.manda({'id': None, 'ok': False, 'erro': {'codigo': 'json_invalido', 'texto': 'a linha não é JSON'}})
                 continue
             if isinstance(pedido, dict) and pedido.get('metodo') == 'sair':
+                pool.shutdown(wait=True, cancel_futures=True)
                 canal.manda({'id': pedido.get('id'), 'ok': True, 'dados': None})
                 break
-            responde_api(ctx, canal, pedido, permitidos)
+            pool.submit(atende, pedido)
+        else:
+            pool.shutdown(wait=True)
         return 0
     finally:
         sys.stdout = canal_real
@@ -396,7 +424,7 @@ def _item_api(it, pac):
     t = getattr(it, 'ja_t', None)
     return {'id': it.id, 'pacote': pac, 'titulo': it.titulo, 'explica': it.explica, 'ganho': it.ganho, 'custo': it.custo,
             'nivel': it.nivel, 'marcado': bool(it.marcado), 'ja': it.ja, 'alerta': it.alerta or '', 'nota': it.nota or '',
-            'sem_volta': not it.reverte, 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente),
+            'sem_volta': not it.reverte, 'bloqueado': bool(getattr(it, 'bloqueado', False)), 'grupo': it.grupo, 'conflita': sorted(it.conflita), 'recorrente': bool(it.recorrente),
             'ja_idade_h': round((time.time() - t) / 3600, 2) if t else None,
             # o que a tela precisa além do texto (inicialização: o programa, onde está e o atraso medido no boot); só valores simples
             'dados': {k: v for k, v in it.dados.items() if isinstance(v, (str, int, float, bool)) or v is None} if isinstance(it.dados, dict) else None}
@@ -772,6 +800,10 @@ def api_aplicar(ctx, p, ev):
                 ctx.ultimas_provas = []
                 feitos, avisos, erros = executa_itens(ctx, pac, its)
                 evs = getattr(ctx, 'ultimos_eventos', []) or []
+                try:
+                    marca_bloqueados(nome, its, [a for e in evs for a in e.get('avisos', [])])
+                except Exception as ex:
+                    LOG.escreve(f'api aplicar: bloqueados: {ex!r}')
                 nao_ficou = []
                 if nome in REAPLICA and feitos:
                     nao_ficou = verifica_pacote(ctx, nome, [i.id for i in its])

@@ -66,8 +66,10 @@ public class Memoria : Tela
         if (classe == "desconhecido") l1.Children.Add(Etiqueta("não conheço", Tema.Apagado));
         meio.Children.Add(l1);
         string oque = x.S("o_que_e");
-        meio.Children.Add(T(Maiuscula(oque == nome ? x.S("faz") : oque) + (proc.ToLowerInvariant() != nome.ToLowerInvariant() ? $" · {proc}" : ""), "rotulo", tamanho: 13, quebra: true));
-        var acoes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(-8, 2, 0, 0) };
+        // o que o programa é aparece com o mouse parado no nome (na coluna estreita virava três linhas)
+        ToolTip.SetTip(l1, Maiuscula(oque == nome ? x.S("faz") : oque) + (proc.ToLowerInvariant() != nome.ToLowerInvariant() ? $" · {proc}" : ""));
+        ToolTip.SetShowDelay(l1, 400);
+        var acoes = new WrapPanel { Margin = new Thickness(-8, 2, 0, 0) };
         foreach (var a in x.A("acoes").Select(a => a.ToString()))
             acoes.Children.Add(a switch
             {
@@ -81,10 +83,10 @@ public class Memoria : Tela
         var numeros = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = {
             T(Mb(x.D("agora_mb")), null, Tema.Osso, 17).Com(t => { t.FontFamily = Tema.Mono; t.HorizontalAlignment = HorizontalAlignment.Right; }),
             T($"média {Mb(x.D("media_24h_mb"))} · pico {Mb(x.D("pico_24h_mb"))}", "rotulo", tamanho: 12.5).Com(t => { t.HorizontalAlignment = HorizontalAlignment.Right; ToolTip.SetTip(t, $"7 dias: média {Mb(x.D("media_7d_mb"))}, pico {Mb(x.D("pico_7d_mb"))}"); }) } };
-        var mini = new Minigrafico { Valores = x.A("horas").Select(v => v is JsonValue jv && jv.TryGetValue(out double dv) ? dv : (double?)null).ToArray(), Width = 120, Height = 30,
+        var mini = new Minigrafico { Valores = x.A("horas").Select(v => v is JsonValue jv && jv.TryGetValue(out double dv) ? dv : (double?)null).ToArray(), Width = 90, Height = 30,
                                      VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 0, 18, 0) };
         ToolTip.SetTip(mini, "últimas 24 h, uma média por hora");
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,190") };
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
         g.Children.Add(IconeDoPrograma.Inicial(nome, 24).Com(c => { c.VerticalAlignment = VerticalAlignment.Top; c.Margin = new Thickness(0, 2, 16, 0); }));
         g.Children.Add(meio.Com(m => Grid.SetColumn(m, 1)));
         g.Children.Add(mini.Com(m => Grid.SetColumn(m, 2)));
@@ -99,7 +101,7 @@ public class Memoria : Tela
     async Task Fecha(string proc, string nome)
     {
         var j = Janela.Atual!;
-        if (!await j.Confirma($"Fechar {nome}?", T("Ele fecha como se você clicasse no X da janela: se tiver algo sem salvar, ele pergunta. Nada é forçado.", "sub", quebra: true), "Fechar")) return;
+        if (!await j.Confirma($"Fechar {nome}?", T("Como o X da janela: se tiver algo sem salvar, ele pergunta.", "sub", quebra: true), "Fechar")) return;
         int pedidos = 0;
         if (OperatingSystem.IsWindows())
             foreach (var p in Process.GetProcessesByName(proc))

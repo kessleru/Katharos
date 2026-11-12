@@ -432,7 +432,10 @@ public class Otimizar : Tela
             foreach (var i in a.Itens.Where(i => i.Estado != null))
             {
                 bool lendo = Conferencia.NaFila(i.Pacote) && (i.Ja == null || i.Velho);
-                i.Estado!.Text = lendo && i.Ja != true ? "conferindo…" : i.Ja == true ? (i.Velho ? "já estava assim" : "já está assim") : i.Marcado ? "vai mudar" : "não marcado";
+                // o Windows negou da última vez (mesmo como administrador): não conta como "vai mudar"; tentar de novo continua possível
+                bool bloq = i.J.B("bloqueado") && i.Ja != true;
+                ToolTip.SetTip(i.Estado, bloq ? "Da última vez o Windows não deixou mudar isto. Dá para marcar e tentar de novo." : null);
+                i.Estado!.Text = bloq && !i.Marcado ? "o Windows bloqueia" : lendo && i.Ja != true ? "conferindo…" : i.Ja == true ? (i.Velho ? "já estava assim" : "já está assim") : i.Marcado ? "vai mudar" : "não marcado";
                 i.Estado.Foreground = i.Ja == true ? (i.Velho ? Tema.Apagado : Tema.Verde) : i.Marcado ? Tema.Ambar : Tema.Apagado;
             }
         }
