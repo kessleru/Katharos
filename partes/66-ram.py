@@ -39,13 +39,21 @@ def _nome_amigavel(n):
     return n
 
 
+# ferramentas do próprio Windows que o dicionário explica, mas que não se fecham nem se desinstalam (relatório do dono, 4.3.1: a
+# "Verificação de disco" aparecia com "Fechar" e "Desinstalar")
+FERRAMENTAS_DO_WINDOWS = frozenset(
+    'chkdsk autochk defrag dfrgui tiworker trustedinstaller usocoreworker wuaucltcore musnotification musnotifyicon sihclient '
+    'memcompression memory compression msmpeng nissrv mpdefendercoreservice mpcmdrun searchindexer searchprotocolhost '
+    'searchfilterhost searchhost compattelrunner devicecensus cleanmgr dismhost sfc'.split()) | {'memory compression'}
+
+
 def classe_programa(n):
     """('protegido' | 'conhecido' | 'desconhecido', o que é, o que fazer). Protegido: Windows, drivers, proteção, anti-cheat e o próprio
     Katharos: aparece, mas sem nenhuma ação. Desconhecido: "não conheço este programa", sem palpite."""
     base = str(n or '').lower()
     base = base[:-4] if base.endswith('.exe') else base
     q = quem_e(base)
-    if not pode_sugerir_fechar(base) or base in ANTICHEAT_PROCESSOS or (q and q[1] == _NORMAL):
+    if not pode_sugerir_fechar(base) or base in ANTICHEAT_PROCESSOS or (q and q[1] == _NORMAL) or base in FERRAMENTAS_DO_WINDOWS:
         return 'protegido', (q[0] if q else 'parte do Windows'), 'faz parte do Windows ou da proteção: o Katharos nunca mexe'
     if q:
         return 'conhecido', q[0], q[1]

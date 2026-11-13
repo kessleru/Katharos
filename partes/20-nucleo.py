@@ -32,7 +32,8 @@ EXPLICA_MODOS = [
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
            'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar',
-           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel', 'animacoes': 'ligadas'}
+           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel', 'animacoes': 'ligadas',
+           'abrir-com-windows': 'sim', 'relatorio-automatico': 'semanal'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -58,6 +59,8 @@ DESCR_CONFIG = {
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
     'animacoes': ('animações da janela', 'ligadas (padrão): movimentos curtos ao trocar de tela e abrir caixas; desligadas: tudo parado. Com '
                   '"Mostrar animações no Windows" desligado, ficam paradas de qualquer jeito'),
+    'abrir-com-windows': ('abrir a janela com o Windows', 'sim (padrão): ao ligar o PC, confere se há versão nova e abre a janela, como o Discord; ou nao'),
+    'relatorio-automatico': ('relatório automático', 'semanal (padrão): uma vez por semana manda o relatório (sem nome, PC ou arquivos); ou nunca'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
 
@@ -1058,6 +1061,7 @@ class _PoolPS:
 
 
 POOL_PS = _PoolPS()
+_SEQ_PS = itertools.count(1)
 
 
 def _usa_pool(admin, pacote, desfaz):
@@ -1083,7 +1087,9 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
         s.codigo = 1
         _exibe(t, 'erro', f'não consegui proteger a pasta {pasta_da_tarefa()} (só administradores devem gravar nela); nada foi rodado', s, mostra)
         return s
-    arq = tmp / f'{re.sub(r"[^a-z0-9-]", "-", rotulo.lower())[:30]}-{os.getpid()}-{int(time.time() * 1000) % 100000}.ps1'
+    # nome único por linha e por chamada: dois pedaços da conferência no mesmo milissegundo gravavam o MESMO arquivo e um rodava o
+    # script do outro pela metade (relatório KTH-A34GKB, 4.3.1: "Token '}' inesperado" e "cadeia sem terminador")
+    arq = tmp / f'{re.sub(r"[^a-z0-9-]", "-", rotulo.lower())[:30]}-{os.getpid()}-{threading.get_ident() % 100000}-{next(_SEQ_PS)}.ps1'
     # as variáveis vão dentro do script: o processo criado pelo WMI não herda o ambiente
     cabeca = (f"$env:OTM_TESTE = '{'1' if teste else '0'}'\n$env:OTM_CASA = {psq(CASA)}\n$env:OTM_MULT = '{mult:.2f}'\n"
               f"$env:OTM_BK = {psq(bk)}\n")

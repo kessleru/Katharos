@@ -23,6 +23,8 @@ public class AoVivo : Tela
     }
 
     readonly DispatcherTimer relogio = new() { Interval = TimeSpan.FromSeconds(1) };
+    TextBlock? proprioCpu, proprioRam, proprioTexto;
+    Grafico? gProprioCpu, gProprioRam;
     readonly List<Cel> cels;
     StackPanel? jogo, conclusoes;
     TextBlock? ritmo;
@@ -97,6 +99,15 @@ public class AoVivo : Tela
         estado = Estado.Leitura;
         if (!montado) MontaTela();
         ritmo!.Text = $"lendo a cada {Num(a.D("intervalo_s"))} s · o Katharos usa {Num(a["segundo_plano"].D("cpu_pct"), 1)} % da CPU";
+        if (proprioCpu != null)
+        {
+            var (pc, pr, pn) = ConsumoProprio.Mede();
+            proprioCpu.Text = Num(pc, 1); proprioRam!.Text = Num(pr);
+            gProprioCpu!.Maximo = Math.Max(5, ConsumoProprio.HistCpu.DefaultIfEmpty(0).Max() * 1.3);
+            gProprioRam!.Maximo = Math.Max(100, ConsumoProprio.HistRam.DefaultIfEmpty(0).Max() * 1.2);
+            gProprioCpu.Valores = ConsumoProprio.HistCpu.ToArray(); gProprioRam.Valores = ConsumoProprio.HistRam.ToArray();
+            proprioTexto!.Text = $"Janela, motor e o ícone perto do relógio ({pn} {(pn == 1 ? "processo" : "processos")}). Os PowerShell de leitura, que abrem e fecham sozinhos, não entram.";
+        }
         foreach (var c in cels)
         {
             var v = c.Valor(a);
@@ -180,7 +191,17 @@ public class AoVivo : Tela
                 Child = new StackPanel { Spacing = 4, Children = { topo, new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.Texto, c.G } } });
         }
         conclusoes = new StackPanel();
-        Monta(Cabecalho("Ao vivo", null, luz), S(jogo), S(grade), S(conclusoes));
+        // o consumo do próprio Katharos, com gráfico (pedido do dono): quem mede o PC também mostra quanto pesa
+        proprioCpu = T("-", "numero"); proprioRam = T("-", "numero"); proprioTexto = T("", "rotulo");
+        gProprioCpu = new Grafico { Height = 44, Margin = new Thickness(0, 8, 0, 0), Maximo = 10, Formata = v => Num(v, 1) + " %" };
+        gProprioRam = new Grafico { Height = 44, Margin = new Thickness(0, 8, 0, 0), Maximo = 400, Formata = v => Num(v) + " MB" };
+        var gp = new UniformGrid { Columns = 2 };
+        foreach (var (rot, num, un, g) in new[] { ("Processador", proprioCpu, "%", gProprioCpu), ("Memória RAM", proprioRam, "MB", gProprioRam) })
+            gp.Children.Add(new Border { Padding = new Thickness(32, 16, 32, 18), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 1, 0),
+                Child = new StackPanel { Spacing = 4, Children = { T(rot, "rotulo"), new StackPanel { Orientation = Orientation.Horizontal, Children = { num, T(un, "unidade") } }, g } } });
+        var proprio = new StackPanel { Children = { Subtitulo("O Katharos neste PC", null, "central"), gp,
+            proprioTexto.Com(t => { t.Margin = new Thickness(32, 0, 32, 16); t.TextWrapping = TextWrapping.Wrap; }) } };
+        Monta(Cabecalho("Ao vivo", null, luz), S(jogo), S(grade), S(conclusoes), G(proprio));
     }
 
     void Amplia(Cel c)

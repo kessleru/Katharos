@@ -80,9 +80,34 @@ public class Jogos : Tela
         {
             string fps = s.D("fps_med") is double f ? $" · {Num(f)} FPS médio · 1% mais lento {Num(s.D("fps_1low"))}" : "";
             lista.Children.Add(Linha($"{s.S("jogo")} · {Num(s.D("min"))} min{fps}", $"{Quando(s.S("inicio"))} · limite: {Limite(s.S("principal"))}" +
-                                     (s.D("temp_cpu_max") is double tc ? $" · CPU até {Num(tc)} °C" : "")));
+                                     (s.D("temp_cpu_max") is double tc ? $" · CPU até {Num(tc)} °C" : ""), detalhes: DetalheSessao(s)));
         }
         Monta(cab, numeros, porJogo, comp, G(lista));
+    }
+
+    /// <summary>O que o segundo plano mediu na sessão (médias e picos, quanto tempo cada parte ficou no limite), uma linha por assunto.</summary>
+    static string DetalheSessao(JsonNode s)
+    {
+        string Pct(string k) => s.D(k) is double v ? $"{Num(v)} %" : "-";
+        var l = new List<string>
+        {
+            $"Processador: média {Pct("cpu")}, pico {Pct("cpu_max")}; núcleo mais cheio em média {Pct("nucleo")}",
+            $"Placa de vídeo: média {Pct("gpu")}, pico {Pct("gpu_max")}" + (s.D("vram_max") is double vr ? $"; memória dela até {Num(vr)} %" : ""),
+            $"Memória RAM: média {Pct("ram")}, pico {Pct("ram_max")}",
+        };
+        if (s.D("temp_cpu_max") is double tc || s.D("temp_gpu_max") is double) l.Add("Temperatura máxima: " + string.Join(", ", new[] {
+            s.D("temp_cpu_max") is double a ? $"CPU {Num(a)} °C" : null, s.D("temp_gpu_max") is double b ? $"placa de vídeo {Num(b)} °C" : null }.Where(x => x != null)));
+        if (s.D("desempenho_min") is double dm) l.Add($"Clock mais baixo com o processador ocupado: {Num(dm)} % do normal");
+        if (s.D("fps_med") is double) l.Add($"FPS: médio {Num(s.D("fps_med"))}, 1% mais lento {Num(s.D("fps_1low"))}");
+        else l.Add("FPS: não medido (o PresentMon não estava rodando)");
+        if (s["tempo_no_limite"] is JsonObject t)
+        {
+            var partes = t.Select(kv => (k: kv.Key, v: kv.Value?.GetValue<double>() ?? 0)).Where(x => x.v > 0).OrderByDescending(x => x.v)
+                          .Select(x => $"{Limite(x.k)} {Num(x.v)} % do tempo").ToList();
+            l.Add("No limite: " + (partes.Count > 0 ? string.Join(", ", partes) : "nada"));
+        }
+        l.Add($"De {Quando(s.S("inicio"))} até {Quando(s.S("fim"))} · {Num(s.D("leituras"))} leituras");
+        return string.Join("\n", l.Where(x => x != ""));
     }
 
     static string Limite(string p) => p switch
@@ -152,7 +177,7 @@ public class Desfazer : Tela
             bool sozinho = porItem.Contains(id);
             var c = new CheckBox { Content = new StackPanel { Spacing = 1, Children = {
                     T(Maiuscula(nomeItem), null, Tema.Osso, 14, true),
-                    T(sozinho ? "volta sozinho" : "só volta com a área inteira (aplicado antes da 4.2.1)", null, sozinho ? Tema.Apagado : Tema.Ambar, 12.5, true) } },
+                    T(sozinho ? "dá para desfazer só este" : "só volta com a área inteira (aplicado antes da 4.2.1)", null, sozinho ? Tema.Apagado : Tema.Ambar, 12.5, true) } },
                 IsEnabled = desfaz && sozinho };
             c.IsCheckedChanged += (_, _) => { int n = caixas.Count(x => x.c.IsChecked == true); marcados.Content = n == 0 ? "Desfazer marcados" : $"Desfazer {n} {(n == 1 ? "item" : "itens")}"; marcados.IsEnabled = n > 0; };
             caixas.Add((c, id));
@@ -209,7 +234,7 @@ public class Desfazer : Tela
 public class Configuracoes : Tela
 {
     // as que importam para quem usa as janelas, na ordem de uso (as de aparência do terminal ficam na CLI)
-    static readonly string[] Mostrar = { "modo", "confirmar", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes", "canal", "animacoes" };
+    static readonly string[] Mostrar = { "modo", "confirmar", "abrir-com-windows", "relatorio-automatico", "tempo-real", "avisos", "coleta-em-jogo", "atualizacoes", "canal", "animacoes" };
     // o que o motor pode avisar e quando (I24)
     static readonly string[] Motor = { "avisos-intervalo", "avisos-no-jogo", "resumo-diario" };
     static readonly Dictionary<string, string[]> OpcoesCurtas = new() { ["avisos-intervalo"] = new[] { "2", "6", "12", "24" } };
@@ -239,8 +264,12 @@ public class Configuracoes : Tela
         acoes.Children.Add(Botao("Apagar", false, async () => await Apaga()));
         var memoria = S(new StackPanel { Children = { Subtitulo("Memória do PC", "Fica só neste PC.", "memoria"),
                                                       Linha("O que ele guarda", resumo, null, acoes) } });
-        var versao = S(new StackPanel { Children = { Subtitulo("Esta versão", null, "info"),
-                                                     Linha("Novidades", null, null, Botao("Ver", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false))) } });
+        // "Esta versão" aparecia só com o título: agora diz qual é e mostra as novidades a um clique
+        var v = typeof(Configuracoes).Assembly.GetName().Version;
+        string nv = v == null ? "" : $"{v.Major}.{v.Minor}.{v.Build}";
+        var versao = G(new StackPanel { Children = { Subtitulo("Esta versão", null, "info"),
+            Linha($"Katharos {nv}", Atualizacao.VersaoPronta is string vp ? $"A versão {vp} já foi baixada e entra quando você reiniciar o Katharos." : "Procura versão nova sozinho ao abrir.",
+                  null, Botao("Ver novidades", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false)), "estrela") } });
         Monta(cab, G(lista), G(motor), memoria, versao);
     }
 
@@ -271,6 +300,8 @@ public class Configuracoes : Tela
     static readonly Dictionary<string, string?> ExplicaCurta = new()
     {
         ["modo"] = "O que vem marcado em cada tela.",
+        ["abrir-com-windows"] = "Ao ligar o PC, confere a versão nova e abre a janela.",
+        ["relatorio-automatico"] = "Uma vez por semana, sem nome, PC ou arquivos.",
         ["confirmar"] = "Depois de mudar, pergunta se ficou tudo bem.",
         ["tempo-real"] = "Segundos entre uma leitura e outra.",
         ["avisos"] = "Notificação quando algo fica no limite.",

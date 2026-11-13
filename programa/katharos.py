@@ -16,6 +16,7 @@ Visual: Kessleru (kterm 2.0.0, embutido abaixo). Dados em ~/.katharos.
 
 import argparse
 import base64
+import itertools
 import ctypes
 import functools
 import hashlib
@@ -24,8 +25,8 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '4.3.1'
-DATA_VERSAO = '12 nov 2026'
+VERSAO = '4.4.0'
+DATA_VERSAO = '13 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #
@@ -1081,7 +1082,8 @@ EXPLICA_MODOS = [
 
 PADROES = {'modo': 'equilibrado', 'explicacao': 'curta', 'cores': 'automático', 'simbolos': 'automático',
            'grandes-mb': '500', 'navegador': 'nenhum', 'confirmar': 'risco', 'protegidos': '', 'coleta-em-jogo': 'segura', 'abrir-relatorio': 'perguntar', 'tempo-real': '1', 'avisos': 'sim', 'fps': 'sim', 'energia-automatica': 'nao', 'atualizacoes': 'avisar',
-           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel', 'animacoes': 'ligadas'}
+           'avisos-intervalo': '6', 'avisos-no-jogo': 'so-grave', 'resumo-diario': 'nao', 'motor-nunca': '', 'canal': 'estavel', 'animacoes': 'ligadas',
+           'abrir-com-windows': 'sim', 'relatorio-automatico': 'semanal'}
 DESCR_CONFIG = {
     'modo': ('modo padrão', 'seguro, equilibrado ou extremo: o que vem marcado em cada tela'),
     'explicacao': ('explicações', 'curta (uma linha por item; "? número" explica) ou completa (o que faz, ganho e custo de todos)'),
@@ -1107,6 +1109,8 @@ DESCR_CONFIG = {
     'avisos': ('avisos do segundo plano', 'sim (padrão): notificação quando algo fica no limite (calor, RAM cheia, CPU freando); ou nao'),
     'animacoes': ('animações da janela', 'ligadas (padrão): movimentos curtos ao trocar de tela e abrir caixas; desligadas: tudo parado. Com '
                   '"Mostrar animações no Windows" desligado, ficam paradas de qualquer jeito'),
+    'abrir-com-windows': ('abrir a janela com o Windows', 'sim (padrão): ao ligar o PC, confere se há versão nova e abre a janela, como o Discord; ou nao'),
+    'relatorio-automatico': ('relatório automático', 'semanal (padrão): uma vez por semana manda o relatório (sem nome, PC ou arquivos); ou nunca'),
     'protegidos': ('itens que nunca mexo', 'ids separados por vírgula (ex.: rdp,servicos:xbox,ini:OneDrive). O id aparece em "v N" na tela de escolha'),
 }
 
@@ -2107,6 +2111,7 @@ class _PoolPS:
 
 
 POOL_PS = _PoolPS()
+_SEQ_PS = itertools.count(1)
 
 
 def _usa_pool(admin, pacote, desfaz):
@@ -2132,7 +2137,9 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
         s.codigo = 1
         _exibe(t, 'erro', f'não consegui proteger a pasta {pasta_da_tarefa()} (só administradores devem gravar nela); nada foi rodado', s, mostra)
         return s
-    arq = tmp / f'{re.sub(r"[^a-z0-9-]", "-", rotulo.lower())[:30]}-{os.getpid()}-{int(time.time() * 1000) % 100000}.ps1'
+    # nome único por linha e por chamada: dois pedaços da conferência no mesmo milissegundo gravavam o MESMO arquivo e um rodava o
+    # script do outro pela metade (relatório KTH-A34GKB, 4.3.1: "Token '}' inesperado" e "cadeia sem terminador")
+    arq = tmp / f'{re.sub(r"[^a-z0-9-]", "-", rotulo.lower())[:30]}-{os.getpid()}-{threading.get_ident() % 100000}-{next(_SEQ_PS)}.ps1'
     # as variáveis vão dentro do script: o processo criado pelo WMI não herda o ambiente
     cabeca = (f"$env:OTM_TESTE = '{'1' if teste else '0'}'\n$env:OTM_CASA = {psq(CASA)}\n$env:OTM_MULT = '{mult:.2f}'\n"
               f"$env:OTM_BK = {psq(bk)}\n")
@@ -2625,7 +2632,11 @@ $pfDiscos = @(Tenta { Get-CimInstance Win32_PageFileUsage -ErrorAction Stop | Fo
     $pd = $(if ($null -ne $n) { Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { "$($_.DeviceId)" -eq "$n" } | Select-Object -First 1 })
     [pscustomobject]@{ letra = $l; tipo = $(if ($pd) { [string]$pd.MediaType } else { '' }) } } } @())
 # integridade de memória (HVCI) e agendamento de GPU por hardware: só leitura, para o raio-x explicar
-$hvci = Tenta { [bool](@((Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop).SecurityServicesRunning) -contains 2) } $null
+$dg = Tenta { Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop } $null
+$hvci = $(if ($dg) { [bool](@($dg.SecurityServicesRunning) -contains 2) } else { $null })
+$vbs = $(if ($dg) { [int]$dg.VirtualizationBasedSecurityStatus -eq 2 } else { $null })
+# Secure Boot sem administrador: a chave que o próprio Windows mantém (o Confirm-SecureBootUEFI pede administrador)
+$sbr = Tenta { [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -ErrorAction Stop).UEFISecureBootEnabled -eq 1 } $null
 $hags = Tenta { [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -ErrorAction Stop).HwSchMode -eq 2 } $null
 $pfAuto = Tenta { (Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile } $true
 $mm = Tenta { (Get-MMAgent -ErrorAction Stop).MemoryCompression } $null
@@ -2692,7 +2703,7 @@ Dado 'perfil' @{
     defender = @{ tempo_real = [bool]$mp.RealTimeProtectionEnabled; ativo = [bool]$mp.AntivirusEnabled; modo = [string]$mp.AMRunningMode }
     energia = @{ plano = $plano }
     memoria = @{ pagefile_auto = [bool]$pfAuto; pagefile_config = [bool]$pf; compressao = $mm; pagefile_discos = (Lista $pfDiscos) }
-    seguranca = @{ hvci = $hvci }
+    seguranca = @{ hvci = $hvci; vbs = $vbs; secure_boot = $sbr }
     video_cfg = @{ hags = $hags }
     sistema = @{ uptime_h = $uptime; reinicio_pendente = $pend; admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator); dono_explorer = [string]$dono; usuario = $env:USERNAME }
 }
@@ -2795,7 +2806,13 @@ INICIO_PS = r'''
 # ligado: o Gerenciador de Tarefas não marcou como desativado (vale a marca do usuário OU a da máquina).
 # existe: o programa ainda está no disco (entrada de programa desinstalado não abre nada e não conta).
 function _Aprovado([string[]]$Chaves, [string]$Nome) {
-    foreach ($ap in $Chaves) { $b = Tenta { (Get-Item -LiteralPath $ap -ErrorAction Stop).GetValue($Nome) } $null; if ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] % 2) -eq 1) { return $false } }
+    # sem Tenta: o "& bloco" desmonta o byte[] num object[] e o "-is [byte[]]" nunca batia; tudo contava como ligado (relatório do
+    # dono, 4.3.1: 13 "abrem com o Windows" com quase tudo desativado no Gerenciador de Tarefas)
+    foreach ($ap in $Chaves) {
+        $b = $null
+        try { $b = (Get-Item -LiteralPath $ap -ErrorAction Stop).GetValue($Nome) } catch {}
+        if ($null -ne $b -and @($b).Count -gt 0 -and ([int]@($b)[0] % 2) -eq 1) { return $false }
+    }
     return $true
 }
 function _ExeDe([string]$Cmd) {
@@ -3454,7 +3471,13 @@ def eh_tarefa_do_katharos(x, proprios):
     if exe == EXE_NOME.lower() and 'katharos' in str(x.get('exe') or '').lower():
         return True
     empresa = str(x.get('empresa') or '').lower()
-    return exe.startswith('python') and roda_o_nosso and bool(x.get('assinado')) and 'python software foundation' in empresa
+    if exe.startswith('python') and roda_o_nosso and bool(x.get('assinado')) and 'python software foundation' in empresa:
+        return True
+    # Python da Microsoft Store: a pasta WindowsApps não deixa ler o arquivo (sem hash nem assinatura), mas só a Loja instala ali,
+    # numa pasta com o nome do editor (relatório do dono, 4.3.1: as duas tarefas do Katharos ainda saíam como suspeitas)
+    caminho = str(x.get('exe') or '').replace('/', '\\').lower()
+    return (exe.startswith('python') and roda_o_nosso
+            and '\\windowsapps\\pythonsoftwarefoundation.python.' in caminho)
 
 
 def analisa(p, m, d):
@@ -3755,11 +3778,32 @@ def analisa(p, m, d):
                         'O Windows guarda parte da memória em ' + ', '.join(f'{x["letra"]}:' for x in pfd if x.get('tipo') == 'HDD') + ', que é um HD; o PC tem SSD.',
                         'Ponha o arquivo de paginação no SSD: Configurações > Sistema > Sobre > Configurações avançadas do sistema > Desempenho > '
                         'Avançado > Memória virtual. O Katharos não muda isso sozinho (mexe em disco).'))
+    # o anti-cheat novo (FACEIT desde 14/10/2026 aos poucos; Valorant no modo sob demanda) pede Windows 11 com estas proteções.
+    # Só o que deu para ler entra; o que não deu fica de fora (nada de chute)
+    if joga(p):
+        falta = []
+        b = pf(p, 'so.build', 0) or 0
+        if b and b < 22000:
+            falta.append('Windows 11 (este PC tem o 10)')
+        elif b and b < 26200:
+            falta.append('Windows 11 25H2 (para o Valorant sob demanda)')
+        if pf(p, 'seguranca.secure_boot') is False:
+            falta.append('Inicialização Segura (Secure Boot), que se liga na BIOS')
+        if pf(p, 'seguranca.vbs') is False:
+            falta.append('segurança baseada em virtualização (VBS)')
+        if pf(p, 'seguranca.hvci') is False:
+            falta.append('integridade de memória')
+        if falta:
+            A.append(Achado(0, ['jogos', 'seguranca'], 'Falta proteção que o anti-cheat novo pede',
+                            'Para o FACEIT e para o Valorant (modo sob demanda): ' + '; '.join(falta) + '.',
+                            'Não é erro do PC: só os jogos com esse anti-cheat pedem. A integridade de memória fica em Segurança do Windows > '
+                            'Segurança do dispositivo > Isolamento de núcleo; a Inicialização Segura e o TPM, na BIOS da placa-mãe (o Katharos '
+                            'não mexe na BIOS).'))
     if pf(p, 'seguranca.hvci') is True and joga(p):
         A.append(Achado(0, ['jogos', 'tudo'], 'Integridade de memória ligada',
-                        'Protege o Windows contra drivers maliciosos; em alguns jogos custa um pouco de FPS.',
-                        'O Katharos não desliga: é proteção. Se você decidir trocar segurança por FPS, é em Segurança do Windows > Segurança do '
-                        'dispositivo > Isolamento de núcleo.'))
+                        'Protege o Windows contra drivers maliciosos; na maioria dos jogos custa de 0 a 5 % de FPS (até 10 % em poucos).',
+                        'O Katharos não desliga: é proteção, e o anti-cheat do FACEIT e do Valorant pode exigir que fique ligada. Se mesmo assim você '
+                        'decidir trocar segurança por FPS, é em Segurança do Windows > Segurança do dispositivo > Isolamento de núcleo.'))
     if pf(p, 'video_cfg.hags') is False and joga(p) and (pf(p, 'so.build', 0) or 0) >= 19041 \
             and any(isinstance(v, dict) and not v.get('integrada') and not v.get('basico') for v in lista(p.get('video'))):
         A.append(Achado(0, ['jogos', 'tudo'], 'Agendamento de GPU por hardware desligado',
@@ -6097,6 +6141,12 @@ def _py_remove_apps(ctx, it, pr, teste):
     return feitos, avisos
 
 
+def ryzen_x3d_dois_ccds(p):
+    """Ryzen 9 com 3D V-Cache em um dos dois CCDs (7900X3D, 7950X3D, 9900X3D, 9950X3D): o jogo só vai para os núcleos com o cache se o
+    driver de chipset da AMD souber que um jogo abriu, e ele sabe pelo Xbox Game Bar."""
+    return bool(re.search(r'Ryzen 9 (79[05]0|99[05]0)X3D', str(pf(p, 'cpu.nome', '') or ''), re.I))
+
+
 @pacote('apps', 'apps da Loja', 'apps pré-instalados que quase ninguém usa',
         'Remove para todos os usuários e também da instalação padrão (contas novas não recebem de novo). '
         'Apps de sistema e protegidos pelo Windows nunca entram. Cada remoção tem limite de 3 minutos, porque às vezes ela trava.',
@@ -6112,6 +6162,9 @@ def itens_apps(ctx):
         nota = ''
         if titulo == 'Xbox' and joga(ctx.perfil):
             nivel, nota = 0, 'tem jogos instalados (' + ', '.join(lista(ctx.perfil.get('jogos'))) + '): não vem marcado'
+        if titulo == 'Xbox' and ryzen_x3d_dois_ccds(ctx.perfil):
+            # o driver de chipset da AMD usa o Game Bar para saber que um jogo abriu e mandar o jogo aos núcleos com o cache extra
+            nivel, nota = 0, 'o seu processador (' + str(pf(ctx.perfil, 'cpu.nome', '')) + ') usa o Game Bar para mandar o jogo aos núcleos certos: sem ele, o jogo pode rodar nos núcleos sem o cache extra'
         if titulo == 'Câmera' and not pf(ctx.perfil, 'tem.camera'):
             nivel = 3
         det = ', '.join(a.split('.')[-1] for a in achados[:4]) + ('…' if len(achados) > 4 else '')
@@ -6480,6 +6533,7 @@ def itens_servicos(ctx):
         'Políticas e configurações oficiais. Nada é apagado: tudo volta com o desfazer. Na edição Home, algumas políticas valem '
         'só em parte (a telemetria fica em "obrigatória", que é o mínimo possível).')
 def itens_privacidade(ctx):
+    p = ctx.perfil
     dc = f'{HKLM_POL}\\DataCollection'
     sub = ['SilentInstalledAppsEnabled', 'SoftLandingEnabled', 'SubscribedContentEnabled', 'SystemPaneSuggestionsEnabled',
            'PreInstalledAppsEnabled', 'OemPreInstalledAppsEnabled', 'PreInstalledAppsEverEnabled', 'ContentDeliveryAllowed',
@@ -6570,6 +6624,20 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
                 R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer', 'NoDriveTypeAutoRun', 255),
                 R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer', 'NoAutorun', 1),
                 R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Remote Assistance', 'fAllowToGetHelp', 0)), minutos=6),
+        Item('wpbt', 'programa do fabricante gravado no firmware', 'Não deixa o Windows rodar, a cada boot, um programa que o fabricante '
+             'gravou na placa-mãe (a tabela WPBT). É por ali que alguns PCs reinstalam sozinhos o app da marca mesmo depois de removido.',
+             'nenhum programa entra pelo firmware sem você saber', 'o app da marca não se reinstala sozinho (instale pelo site dela se quiser)', 2,
+             R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager', 'DisableWpbtExecution', 1)),
+        Item('apps-de-fabricante', 'apps de fabricante instalados sozinhos', 'Ligar um mouse, teclado ou headset novo deixa de baixar e '
+             'instalar sozinho o programa da marca (Razer, Logitech...) e as informações do aparelho pela internet.',
+             'nada instala sem você pedir', 'o programa da marca, se você quiser, se instala pelo site dela', 1,
+             RR(R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Device Metadata', 'PreventDeviceMetadataFromNetwork', 1),
+                R(f'{HKLM_POL}\\Device Metadata', 'PreventDeviceMetadataFromNetwork', 1))),
+        Item('permissoes-apps', 'apps da Loja sem acesso a contatos, agenda, e-mail e chamadas', 'Nega, para os apps da Loja, o acesso '
+             'a contatos, calendário, e-mail, mensagens, chamadas, tarefas e às informações da conta (Configurações > Privacidade).',
+             'apps da Loja não leem seus dados pessoais', 'um app da Loja que precise disso (Outlook novo, Teams) pede de novo ou para de ver', 2,
+             RR(*[R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\' + c, 'Value', 'Deny', 'String') for c in
+                  ('contacts', 'appointments', 'email', 'chat', 'phoneCall', 'phoneCallHistory', 'userDataTasks', 'userAccountInformation')])),
         Item('busca-web', 'busca do menu sem resultados da web', 'A busca do menu Iniciar procura só no PC: sem Bing, sem sugestões '
              'da internet e sem "destaques da pesquisa".', 'busca mais rápida e privada', 'pesquisas na web vão para o navegador', 2,
              RR(R(f'{HKCU_POL}\\Explorer', 'DisableSearchBoxSuggestions', 1), R(f'{HKLM_POL}\\Windows Search', 'ConnectedSearchUseWeb', 0),
@@ -6578,8 +6646,13 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
                 R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\SearchSettings', 'IsDynamicSearchBoxEnabled', 0))),
         Item('widgets', 'widgets e notícias', 'O painel de notícias e clima (Windows 11) ou "Notícias e Interesses" (Windows 10).',
              'menos um processo do Edge em segundo plano', 'perde o painel de widgets', 2,
-             RR(R('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh', 'AllowNewsAndInterests', 0), R(f'{HKLM_POL}\\Windows Feeds', 'EnableFeeds', 0),
-                R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds', 'ShellFeedsTaskbarViewMode', 2))),
+             # Windows 11 sem o app Widgets (removido em "apps"): não há painel, então já está feito (o WinUtil faz assim; no 25H2 o UCPD
+             # bloqueia gravar estas chaves e o item ficava para sempre como "vai mudar")
+             ("if (@(Get-AppxPackage -Name 'MicrosoftWindows.Client.WebExperience' -ErrorAction SilentlyContinue).Count -eq 0) "
+              "{ Info 'o app Widgets nao esta instalado: nao ha painel para desligar' } else {\n" if pf(p, 'so.win11') else '')
+             + RR(R('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh', 'AllowNewsAndInterests', 0), R(f'{HKLM_POL}\\Windows Feeds', 'EnableFeeds', 0),
+                  R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds', 'ShellFeedsTaskbarViewMode', 2))
+             + ('\n}' if pf(p, 'so.win11') else '')),
         Item('segundo-plano', 'apps da Loja em segundo plano', 'Apps da Loja deixam de rodar escondidos quando você não está usando.',
              'pouco de RAM e CPU', 'apps da Loja fechados (WhatsApp, Teams novo) podem não notificar', 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications', 'GlobalUserDisabled', 1),
@@ -6645,10 +6718,10 @@ def itens_visual(ctx):
              'pastas de mídia abrem mais rápido em HD', 'não vê a prévia das fotos', 3, R(ADV, 'IconsOnly', 1)),
         Item('fundo-preto', 'papel de parede liso', 'Fundo preto em vez de imagem (e sem Windows Destaque).', 'um pouco de RAM',
              'perde o papel de parede', 3, RR(R(d, 'WallPaper', '', 'String'), R('HKCU:\\Control Panel\\Colors', 'Background', '0 0 0', 'String'))),
-        Item('barra', 'barra de tarefas enxuta', 'Sem Visão de Tarefas, Chat e botão de widgets; a busca vira só o ícone.',
-             'barra limpa', 'esses botões somem (o atalho Win+Tab continua)', 2,
+        Item('barra', 'barra de tarefas enxuta', 'Sem Visão de Tarefas, Chat, botão de widgets e sem a lupa da busca.',
+             'barra limpa', 'esses botões somem; a busca abre pela tecla Windows (é só digitar) e o Win+Tab continua', 2,
              RR(R(ADV, 'ShowTaskViewButton', 0), R(ADV, 'TaskbarMn', 0), R(ADV, 'TaskbarDa', 0), R(ADV, 'ShowCortanaButton', 0),
-                R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', 'SearchboxTaskbarMode', 1))),
+                R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', 'SearchboxTaskbarMode', 0))),
         Item('extensoes', 'mostrar extensões dos arquivos', 'Mostra ".exe", ".pdf" etc. Ajuda a perceber arquivo disfarçado (foto.jpg.exe).',
              'segurança', 'nomes um pouco mais longos', 1, R(ADV, 'HideFileExt', 0)),
         Item('este-pc', 'Explorador abre em "Este Computador"', 'Em vez do Acesso Rápido com arquivos recentes.', 'privacidade e menos leitura',
@@ -6723,7 +6796,8 @@ def itens_jogos(ctx):
         Item('directx-jogos', 'jogos em janela e VRR otimizados', 'Liga as duas opções de Configurações > Sistema > Tela > Gráficos: '
              '"Otimizações para jogos em janela" (o jogo em janela ou sem borda passa a apresentar quadros como em tela cheia) e '
              '"Otimizações para taxa de atualização variável". Mantém as outras opções que você já tinha ali (como o HDR automático).',
-             'menos atraso e mais FPS em jogo em janela ou sem borda (DirectX 10 e 11)', 'nenhum conhecido; desligue nas Configurações se um jogo antigo reclamar', 1,
+             'menos atraso e mais FPS em jogo em janela ou sem borda (DirectX 10 e 11; o DirectX 12 já funciona assim)',
+             'nenhum conhecido; se um jogo reclamar, desligue só para ele em Configurações > Sistema > Tela > Gráficos', 1,
              r"""$__k = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
 $__a = (Get-ItemProperty -LiteralPath $__k -Name DirectXUserGlobalSettings -ErrorAction SilentlyContinue).DirectXUserGlobalSettings
 $__d = [ordered]@{}
@@ -6732,8 +6806,8 @@ $__d['SwapEffectUpgradeEnable'] = '1'; $__d['VRROptimizeEnable'] = '1'
 $__n = ((@($__d.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value })) -join ';') + ';'
 Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos em janela e de VRR' | Out-Null""") if pf(p, 'so.win11') else None,
         Item('mmcss', 'agendador multimídia: menos CPU reservada ao fundo', 'Baixa a reserva de CPU para tarefas de fundo de 20% para 10% '
-             '(SystemResponsiveness) e põe a tarefa "Games" do agendador multimídia em categoria High. Só isso: a Microsoft documenta que '
-             '"GPU Priority" e "SFIO Priority" não são usados, então eles não são tocados. Só vale para jogos que usam o MMCSS.',
+             '(SystemResponsiveness) e põe a tarefa "Games" em categoria High. Medições não viram jogo nenhum usar essa tarefa: o que '
+             'pode valer é só a reserva menor. "GPU Priority" e "SFIO Priority" não são usados e não são tocados.',
              'pequeno e raramente medido; só em jogo que usa o agendador multimídia', 'tarefas de fundo ficam com menos CPU enquanto joga', 3,
              RR(R(mm, 'SystemResponsiveness', 10), R(mm + '\\Tasks\\Games', 'Scheduling Category', 'High', 'String'))),
         Item('primeiro-plano', 'prioridade do primeiro plano explícita', 'Grava Win32PrioritySeparation = 0x26, o valor que a opção "Programas" '
@@ -6763,11 +6837,13 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              RR(R(gc, 'GameDVR_FSEBehaviorMode', 2), R(gc, 'GameDVR_HonorUserFSEBehaviorMode', 1), R(gc, 'GameDVR_FSEBehavior', 2),
                 R(gc, 'GameDVR_DXGIHonorFSEWindowsCompatible', 1))),
         Item('timer', 'resolução do temporizador global', 'No Windows 11, um programa que pede temporizador fino volta a valer para o '
-             'sistema todo (GlobalTimerResolutionRequests).', 'pode reduzir latência em alguns jogos', 'mais consumo de energia; efeito varia', 3,
+             'sistema todo (GlobalTimerResolutionRequests). Sozinho não muda nada: só tem efeito se algum programa pedir esse '
+             'temporizador (um limitador de FPS, por exemplo).', 'só com um programa que pede o temporizador fino',
+             'o PC inteiro acorda mais vezes: mais consumo e mais trabalho com programas parados', 3,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel', 'GlobalTimerResolutionRequests', 1)) if pf(p, 'so.win11') else None,
-        Item('rede-jogos', 'rede: sem atraso de pacotes (Nagle) e sem limite multimídia', 'Confirmações TCP imediatas e sem o '
-             'limitador de rede do agendador multimídia.', 'quase sempre zero ou mínimo (a maioria dos jogos usa UDP)',
-             'um pouco mais de pacotes na rede', 3, RR(nagle, R(mm, 'NetworkThrottlingIndex', -1))),
+        Item('rede-jogos', 'rede: sem atraso de pacotes (Nagle)', 'Confirmações TCP imediatas. O limitador de rede do agendador '
+             'multimídia (NetworkThrottlingIndex) fica como o Windows deixa: desligá-lo aumenta o atraso do driver de rede (medido).',
+             'quase sempre zero ou mínimo (a maioria dos jogos usa UDP)', 'um pouco mais de pacotes na rede', 3, nagle),
         Item('mpo', 'desligar o Multiplane Overlay (MPO)', 'Correção conhecida para tela piscando, cintilação e engasgos com '
              'algumas placas NVIDIA e vários monitores.', 'só resolve se você tem esse problema', 'sem o problema, não muda nada (ou piora um pouco)', 0,
              R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm', 'OverlayTestMode', 5)),
@@ -6861,6 +6937,10 @@ foreach ($a in $__ad) { $pm = Get-NetAdapterPowerManagement -Name $a.Name -Error
 $__h = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction SilentlyContinue).HibernateEnabled
 if ($__h -eq 0) { if ($TESTE) { Plano 'ligar hibernacao reduzida' } else { Guarda-Desfazer 'hib' 'powercfg /h off'; powercfg /h on | Out-Null; powercfg /h /type reduced | Out-Null; $script:MUDOU++ } }
 Set-Valor 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' 'HiberbootEnabled' 1 | Out-Null''') if eh_hd(p) else None,
+        Item('inicio-rapido', 'inicialização rápida desligada', 'Com a inicialização rápida ligada, "Desligar" não zera o Windows: ele '
+             'hiberna o núcleo e volta dele. O tempo ligado não zera, e driver ou atualização travada continua lá até um "Reiniciar".',
+             '"Desligar" passa a zerar o Windows (como Reiniciar)', 'o PC liga alguns segundos mais devagar', 0,
+             R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power', 'HiberbootEnabled', 0)) if not eh_hd(p) else None,
         Item('hibernacao', 'hibernação desligada', 'Apaga o hiberfil.sys (do tamanho de boa parte da RAM). Em SSD o boot já é rápido.',
              'alguns GB de espaço', 'sem hibernar e sem inicialização rápida', 3 if not nb else 0, r'''
 $__h = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction SilentlyContinue).HibernateEnabled
@@ -7390,6 +7470,10 @@ def itens_ajustes(ctx):
         Item('caminhos', 'caminhos longos (mais de 260 letras)', 'Libera nomes de pasta longos, comuns em projetos de programação (node_modules).',
              'menos erros "caminho muito longo"', 'programas antigos podem não entender esses caminhos', 2 if dev else 0,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem', 'LongPathsEnabled', 1)),
+        Item('chamadas', 'volume do jogo igual em chamadas', 'O Windows deixa de abaixar os outros sons quando detecta uma chamada '
+             '(Discord, Teams): o jogo fica no mesmo volume. Não mexe na qualidade do áudio.', 'jogo e chamada no mesmo volume',
+             'quem gosta que a música abaixe nas ligações perde isso', 2,
+             R('HKCU:\\Software\\Microsoft\\Multimedia\\Audio', 'UserDuckingPreference', 3)),
         Item('esquerda', 'barra de tarefas à esquerda', 'Ícones alinhados à esquerda, como no Windows 10.', 'costume', 'nenhum', 0,
              R(ADV, 'TaskbarAl', 0)) if win11 else None,
         Item('segundos', 'segundos no relógio', 'Mostra os segundos no relógio da barra.', 'precisão', 'gasta um pouquinho de bateria', 0,
@@ -8670,7 +8754,7 @@ def ferramenta_cartao(ctx, args):
 # ███████████████████████████████████████████████████████████████████████████
 
 VALIDOS_CONFIG = {'modo': MODOS, 'explicacao': ('completa', 'curta'), 'cores': ('automático', 'sem cor'),
-                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'avisos-intervalo': tuple(str(h) for h in range(1, 49)), 'avisos-no-jogo': ('so-grave', 'nunca', 'todos'), 'resumo-diario': ('sim', 'nao'), 'canal': ('estavel', 'previa'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca'), 'animacoes': ('ligadas', 'desligadas')}
+                  'simbolos': ('automático', 'simples'), 'navegador': ('brave', 'nenhum'), 'confirmar': ('risco', 'sempre', 'nunca'), 'coleta-em-jogo': ('segura', 'pausar'), 'tempo-real': ('1', '2', '5', '10'), 'avisos': ('sim', 'nao'), 'fps': ('sim', 'nao'), 'energia-automatica': ('sim', 'nao'), 'atualizacoes': ('avisar', 'automatico', 'nunca'), 'avisos-intervalo': tuple(str(h) for h in range(1, 49)), 'avisos-no-jogo': ('so-grave', 'nunca', 'todos'), 'resumo-diario': ('sim', 'nao'), 'canal': ('estavel', 'previa'), 'abrir-relatorio': ('perguntar', 'sempre', 'nunca'), 'animacoes': ('ligadas', 'desligadas'), 'abrir-com-windows': ('sim', 'nao'), 'relatorio-automatico': ('semanal', 'nunca')}
 CONFIG_EXPORTAVEL = ('modo', 'explicacao', 'cores', 'simbolos', 'grandes-mb', 'navegador', 'protegidos', 'confirmar')
 
 # Um PC "completo" só para listar os itens sem ler o PC de verdade (site e testes).
@@ -16625,13 +16709,21 @@ def _nome_amigavel(n):
     return n
 
 
+# ferramentas do próprio Windows que o dicionário explica, mas que não se fecham nem se desinstalam (relatório do dono, 4.3.1: a
+# "Verificação de disco" aparecia com "Fechar" e "Desinstalar")
+FERRAMENTAS_DO_WINDOWS = frozenset(
+    'chkdsk autochk defrag dfrgui tiworker trustedinstaller usocoreworker wuaucltcore musnotification musnotifyicon sihclient '
+    'memcompression memory compression msmpeng nissrv mpdefendercoreservice mpcmdrun searchindexer searchprotocolhost '
+    'searchfilterhost searchhost compattelrunner devicecensus cleanmgr dismhost sfc'.split()) | {'memory compression'}
+
+
 def classe_programa(n):
     """('protegido' | 'conhecido' | 'desconhecido', o que é, o que fazer). Protegido: Windows, drivers, proteção, anti-cheat e o próprio
     Katharos: aparece, mas sem nenhuma ação. Desconhecido: "não conheço este programa", sem palpite."""
     base = str(n or '').lower()
     base = base[:-4] if base.endswith('.exe') else base
     q = quem_e(base)
-    if not pode_sugerir_fechar(base) or base in ANTICHEAT_PROCESSOS or (q and q[1] == _NORMAL):
+    if not pode_sugerir_fechar(base) or base in ANTICHEAT_PROCESSOS or (q and q[1] == _NORMAL) or base in FERRAMENTAS_DO_WINDOWS:
         return 'protegido', (q[0] if q else 'parte do Windows'), 'faz parte do Windows ou da proteção: o Katharos nunca mexe'
     if q:
         return 'conhecido', q[0], q[1]
@@ -17176,6 +17268,85 @@ def abre_por_clique(cru):
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "4.4.0",
+  "data": "13 de novembro de 2026",
+  "resumo": "Corrige o que o teste da 4.3.1 e os relatórios mostraram, e traz o que a pesquisa de otimizadores apontou.",
+  "itens": [
+   {
+    "titulo": "Inicialização certa",
+    "texto": "o Katharos contava como ligado o que estava desativado no Gerenciador de Tarefas. Agora a contagem, o achado do raio-x e a lista batem com o Gerenciador."
+   },
+   {
+    "titulo": "Conferência sem erro",
+    "texto": "dois pedaços da conferência ao mesmo tempo podiam usar o mesmo arquivo e dar \"Token '}' inesperado\". Corrigido."
+   },
+   {
+    "titulo": "Tarefas do Katharos",
+    "texto": "com o Python da Microsoft Store, elas não aparecem mais como suspeitas."
+   },
+   {
+    "titulo": "Memória",
+    "texto": "ferramentas do Windows (verificação de disco, Windows Update, antivírus) não têm mais \"Fechar\" nem \"Desinstalar\"."
+   },
+   {
+    "titulo": "Otimizar",
+    "texto": "cada item mostra o que ganha e o que perde. O botão conta só o que vai mudar. Trocar de modo mostra que está trocando."
+   },
+   {
+    "titulo": "Sessões de jogo",
+    "texto": "\"detalhes\" mostra processador, placa de vídeo, RAM, temperatura, FPS e quanto tempo cada parte ficou no limite."
+   },
+   {
+    "titulo": "O Katharos neste PC",
+    "texto": "no Ao vivo, quanto a janela, o motor e o segundo plano gastam de processador e RAM, com gráfico."
+   },
+   {
+    "titulo": "Abre com o Windows",
+    "texto": "ao ligar o PC, confere se há versão nova e abre a janela, como o Discord (desliga em Configurações)."
+   },
+   {
+    "titulo": "Relatório automático",
+    "texto": "uma vez por semana, sem nome, PC ou arquivos. Um aviso na primeira vez deixa desligar na hora."
+   },
+   {
+    "titulo": "Ícone perto do relógio",
+    "texto": "o painel ficou só com os números; \"abrir o Katharos\" abre a janela."
+   },
+   {
+    "titulo": "Rede para jogos",
+    "texto": "deixa de desligar o limitador de rede do Windows, que medições mostraram aumentar o atraso do driver de rede."
+   },
+   {
+    "titulo": "Xbox em Ryzen X3D de dois CCDs",
+    "texto": "não vem marcado, porque o processador usa o Game Bar para mandar o jogo aos núcleos certos."
+   },
+   {
+    "titulo": "Widgets",
+    "texto": "sem o app Widgets, o item conta como feito (o Windows 11 25H2 não deixa mudar as chaves)."
+   },
+   {
+    "titulo": "Itens novos",
+    "texto": "programa do fabricante gravado no firmware (WPBT), apps de fabricante instalados sozinhos, apps da Loja sem acesso a contatos e e-mail, volume do jogo igual em chamadas e inicialização rápida (só se marcar)."
+   },
+   {
+    "titulo": "Anti-cheat",
+    "texto": "o raio-x diz o que falta para o FACEIT e o Valorant (Windows 11 25H2, Secure Boot, VBS, integridade de memória), só com o que deu para ler."
+   },
+   {
+    "titulo": "Textos honestos",
+    "texto": "agendador multimídia, temporizador e jogos em janela dizem o que fazem de verdade."
+   },
+   {
+    "titulo": "Barra de tarefas enxuta",
+    "texto": "também esconde a lupa da busca."
+   },
+   {
+    "titulo": "PC de escola ou empresa",
+    "texto": "quando o Windows bloqueia a pasta protegida do Katharos, a mensagem diz isso em vez de \"código 13\"."
+   }
+  ]
+ },
+ {
   "versao": "4.3.1",
   "data": "12 de novembro de 2026",
   "resumo": "Corrige o que o teste da 4.3.0 mostrou (no PC e nos relatórios enviados) e deixa a janela mais rápida e com menos texto.",
@@ -17391,81 +17562,6 @@ NOVIDADES = [
    {
     "titulo": "Pergunte ao Katharos",
     "texto": "\"vírus\" voltou a achar o comando que confere se o programa é o original, e pergunta enorme é cortada em 500 caracteres."
-   }
-  ]
- },
- {
-  "versao": "4.0.0",
-  "data": "11 de novembro de 2026",
-  "resumo": "O Katharos ganha janelas e um instalador que se atualiza sozinho. O terminal continua, com o mesmo motor e os mesmos dados.",
-  "itens": [
-   {
-    "titulo": "Katharos com janelas",
-    "texto": "Início, Raio-x, Otimizar, Ao vivo, Jogos, Central, Histórico, Desfazer e Configurações, no visual do site. O Otimizar mostra cada item com o que ganha, o que perde e se já está assim no seu PC; o botão diz exatamente quantas mudanças vai fazer. Na primeira abertura, três passos guiados."
-   },
-   {
-    "titulo": "Um programa só",
-    "texto": "o ícone perto do relógio (segundo plano) abre a janela na tela certa, o aviso também; a janela liga e desliga o segundo plano, e a troca de versão fecha e religa ele sozinha."
-   },
-   {
-    "titulo": "Instalador com atualização",
-    "texto": "Katharos-win-Setup.exe instala sem pedir nada antes (o .NET e o Python vão dentro) e baixa só a diferença das versões novas. Nunca troca de versão no meio de uma mudança no PC. Em Configurações: avisar, automático ou nunca, e o canal estável ou prévia. A versão de terminal também se atualiza: katharos versoes --atualizar (confere o SHA-256 antes de trocar e guarda a anterior; --voltar desfaz)."
-   },
-   {
-    "titulo": "Conferido no Windows",
-    "texto": "depois de aplicar, cada ajuste é lido de volta; o que não ficou aparece como não ficou. Mudança arriscada pergunta \"está tudo funcionando?\" e desfaz sozinha em 90 s sem resposta."
-   },
-   {
-    "titulo": "FPS de verdade nos jogos",
-    "texto": "média, 1% mais lento e travadas, pelos eventos do próprio Windows (PresentMon, da Intel, que vem junto e é conferido pela impressão digital antes de rodar). Liberado uma vez, com confirmação. As partidas antes e depois de cada mudança são comparadas, com margem; se piorou, a central propõe desfazer."
-   },
-   {
-    "titulo": "Central que aprende com o seu PC",
-    "texto": "sabe o que é normal neste PC (linha de base por contexto, guardada por meses numa memória local em SQLite), acha o que pesa (limite nos jogos, fora do normal, piorando há dias, piora depois de uma mudança, erros do Windows, travadas) e diz a causa mais provável com as descartadas: o que viu, por que acha isso, o que faria e o que mudaria a conclusão. Diz o que previu e o que aconteceu, pesa a sua resposta e o resultado medido, e propõe desfazer o que piorou. Pergunte ao Katharos (\"por que meu jogo trava?\") responde com o que ele mediu, sem nada sair do PC."
-   },
-   {
-    "titulo": "Qual driver trava",
-    "texto": "katharos travadas (e o botão na central) mede por um minuto o tempo que cada driver segura o processador, como o LatencyMon, e diz o culpado em linguagem simples. Quando os jogos travam sem nenhum limite, a manutenção mede sozinha uma vez."
-   },
-   {
-    "titulo": "Avisos com orçamento",
-    "texto": "no máximo um por tipo a cada 6 horas (você escolhe), nada durante o jogo além de calor grave, e um resumo por dia se preferir."
-   },
-   {
-    "titulo": "Segundo plano mais leve",
-    "texto": "a lista de processos sai numa chamada só, as leituras pesadas nunca caem juntas e um freio espaça o ritmo se a leitura ficar cara. No Windows do CI: 3 a 6 ms por leitura e 0,1 % da CPU."
-   },
-   {
-    "titulo": "Notebook",
-    "texto": "troca o plano de energia sozinho na tomada e na bateria, se você ligar; confere cada troca e avisa se algo trocou de volta."
-   },
-   {
-    "titulo": "Todas as versões do Windows 10 e 11",
-    "texto": "o raio-x diz quando a sua versão está sem atualização de segurança (e o caminho do ESU no Windows 10), e os itens que uma edição não aceita dizem isso em vez de fingir."
-   },
-   {
-    "titulo": "Medidas fiéis",
-    "texto": "o benchmark mostra o que está aberto e pede para você fechar (nunca fecha nada sozinho); processos do Windows nunca aparecem como \"feche este\"."
-   },
-   {
-    "titulo": "À prova de invasores",
-    "texto": "nenhuma porta de rede aberta, PowerShell sempre pelo caminho completo, o motor de administrador roda de uma cópia em %ProgramData% conferida pelo SHA-256 gravado no aplicativo e só atende a janela que o abriu (senha de uso único), e o antivírus do Windows passa em cada versão antes de sair. Testado no Windows do CI: instalar, atualizar com o segundo plano rodando e desinstalar guardando os dados."
-   },
-   {
-    "titulo": "Raio-x e itens novos",
-    "texto": "arquivo de paginação num HD quando há SSD, integridade de memória (só informa: o Katharos não desliga), agendamento de GPU e o que ficou no limite nos jogos. Itens novos: monitor na taxa máxima (testa antes, lê de volta e volta sozinho se a tela apagar), placa de rede sem economia em PC de mesa, efeitos visuais já no modo seguro em PC fraco."
-   },
-   {
-    "titulo": "Medidas fiéis de verdade",
-    "texto": "boot medido pelo Windows (caminho principal, sem o boot logo depois de atualização, mediana dos últimos), qualidade da medida em toda tela de ganho, o antes e depois de cada aplicação pela janela e o ensaio repetido (provas --repetir)."
-   },
-   {
-    "titulo": "Site novo",
-    "texto": "vídeos do programa em uso, gravados com a interface de verdade, e a escolha entre janelas e terminal."
-   },
-   {
-    "titulo": "Windows Server 2022 e 2025",
-    "texto": "no teste de verdade do CI, além do Windows 10 e 11."
    }
   ]
  }

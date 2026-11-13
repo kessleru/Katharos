@@ -201,6 +201,7 @@ public static class Aplicacao
             if (i.B("sem_volta")) nome.Children.Add(Etiqueta("sem volta", Tema.Vermelho).Com(e => e.Margin = new Thickness(6, 0, 0, 0)));
             tx.Children.Add(nome);
             if (i.S("ganho") != "") tx.Children.Add(T("Ganha: " + i.S("ganho"), null, Tema.Verde, 13, true));
+            tx.Children.Add(T("Perde: " + (i.S("custo") != "" && i.S("custo") != "nenhum" ? Maiuscula(i.S("custo")) : "nada que você note."), null, Tema.Osso, 13, true));
             var det = new List<string>();
             if (i.S("custo") != "" && i.S("custo") != "nenhum") det.Add("Perde: " + i.S("custo"));
             if (i.S("alerta") != "") det.Add("Atenção: " + i.S("alerta"));

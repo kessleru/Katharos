@@ -226,14 +226,19 @@ public sealed class MotorElevado : Conversa
                 int cod = -1; try { cod = lancador.ExitCode; } catch { }
                 if (cod != 0)
                 {
+                    string det = "";
                     try
                     {
                         var arq = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "motor-elevado-erro.txt");
-                        if (File.Exists(arq)) { Registro.Escreve("motor elevado: " + File.ReadAllText(arq).Trim()); File.Delete(arq); }
+                        if (File.Exists(arq)) { det = File.ReadAllText(arq).Trim(); Registro.Escreve("motor elevado: " + det); File.Delete(arq); }
                     }
                     catch { }
+                    // PC de escola ou empresa (relatórios KTH-A34GKB e KTH-HAEFGX): o Windows não deixa criar a pasta protegida em ProgramData
+                    bool negado = det.Contains("UnauthorizedAccess", StringComparison.OrdinalIgnoreCase) || det.Contains("negado", StringComparison.OrdinalIgnoreCase);
                     throw new ErroDoMotor("motor_alterado", cod is 11 or 12
                         ? "Os arquivos do Katharos não conferem com os desta instalação (alguém mexeu neles). Nada foi alterado. Reinstale o Katharos pelo site."
+                        : negado
+                        ? "O Windows não deixou o Katharos criar a pasta protegida dele (em ProgramData). Em PC de escola ou de empresa, o administrador da rede costuma bloquear isso. Nada foi alterado."
                         : $"O motor de administrador não abriu (código {cod}). Nada foi alterado.");
                 }
             }

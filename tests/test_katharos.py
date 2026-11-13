@@ -4174,6 +4174,46 @@ class TestBloqueados431(unittest.TestCase):
             self.assertEqual(k.bloqueados(), {})
 
 
+class TestInbox440(TestRaioxInteligente):
+    """O que o dono pediu em 13/11 (inbox do cofre) e o que os relatórios KTH-A34GKB e KTH-HAEFGX mostraram."""
+
+    def test_tarefa_do_katharos_com_python_da_loja(self):
+        x = {'tarefa': '\\Katharos - segundo plano', 'args': '"C:\\Users\\o\\.katharos\\katharos.py" segundo-plano',
+             'exe': 'C:\\Users\\o\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\\pythonw.exe',
+             'assinado': False}
+        self.assertTrue(k.eh_tarefa_do_katharos(x, set()))
+        y = dict(x, exe='C:\\Users\\o\\AppData\\Local\\Temp\\pythonw.exe')
+        self.assertFalse(k.eh_tarefa_do_katharos(y, set()))
+        z = dict(x, args='"C:\\outro\\malware.py"')
+        self.assertFalse(k.eh_tarefa_do_katharos(z, set()))
+
+    def test_ferramenta_do_windows_nao_tem_fechar_nem_desinstalar(self):
+        for n in ('chkdsk', 'autochk', 'TiWorker', 'MsMpEng', 'SearchIndexer'):
+            self.assertEqual(k.classe_programa(n)[0], 'protegido', n)
+
+    def test_rede_jogos_nao_desliga_o_limite_multimidia(self):
+        for pac, it in todos_itens():
+            if it.id == 'rede-jogos':
+                self.assertNotIn('NetworkThrottlingIndex', it.ps)
+
+    def test_anti_cheat_so_com_o_que_deu_para_ler(self):
+        t = self.titulos(perfil={'so': {'build': 26100, 'win11': True}, 'seguranca': {'hvci': False, 'vbs': None, 'secure_boot': None},
+                                  'jogos': ['cs2']})
+        self.assertIn('Falta proteção que o anti-cheat novo pede', t)
+        a = [x for x in self.analisa(perfil={'so': {'build': 26200, 'win11': True}, 'seguranca': {'hvci': True, 'vbs': True, 'secure_boot': True},
+                                              'jogos': ['cs2']}) if x.titulo == 'Falta proteção que o anti-cheat novo pede']
+        self.assertEqual(a, [])
+
+    def test_ryzen_x3d_de_dois_ccds(self):
+        self.assertTrue(k.ryzen_x3d_dois_ccds({'cpu': {'nome': 'AMD Ryzen 9 9950X3D 16-Core Processor'}}))
+        self.assertTrue(k.ryzen_x3d_dois_ccds({'cpu': {'nome': 'AMD Ryzen 9 7900X3D 12-Core Processor'}}))
+        self.assertFalse(k.ryzen_x3d_dois_ccds({'cpu': {'nome': 'AMD Ryzen 7 7800X3D 8-Core Processor'}}))
+
+    def test_nome_do_script_e_unico_entre_linhas(self):
+        import inspect
+        self.assertIn('_SEQ_PS', inspect.getsource(_modulo_novo().roda_ps))
+
+
 class TestLogica431(unittest.TestCase):
     """O teste da 4.3.0 no PC do dono: 3 programas na inicialização viravam "grave"; a tarefa "Katharos - segundo plano" (Python antigo
     em AppData) aparecia como suspeita; a nota somava problemas do mesmo tipo sem limite."""

@@ -24,6 +24,10 @@ static class Program
         if (ta >= 0 && ta + 1 < args.Length) { Environment.Exit(TesteAtualizacao(args[ta + 1])); return; }
         // ensaio do CI (S5): abre o motor de administrador como a janela abre (cópia protegida conferida) e pede a versão
         if (args.Contains("--teste-motor-elevado")) { Environment.Exit(TesteMotorElevado().GetAwaiter().GetResult()); return; }
+        // aberto pelo Windows ao ligar o PC (Configurações > Abrir a janela com o Windows): antes de mostrar, confere a versão nova e, se
+        // houver, troca e abre já na nova (como o Discord). Uma janela já aberta não confere de novo (o Mutex abaixo).
+        if (args.Contains("--inicio-windows") && !Mutex.TryOpenExisting(@"Local\Katharos.Janela", out _))
+            Atualizacao.AntesDeAbrir();
         int i = Array.IndexOf(args, "--tela");
         if (i >= 0 && i + 1 < args.Length) TelaInicial = args[i + 1];
         // uma janela só: abrir de novo (pelo ícone, pelo menu Iniciar) traz a que já está aberta, na tela pedida

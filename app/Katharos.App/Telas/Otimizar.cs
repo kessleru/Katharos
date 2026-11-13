@@ -191,10 +191,15 @@ public class Otimizar : Tela
             ToolTip.SetTip(b, n < 0 ? nome : $"{nome}: {n} {(n == 1 ? "mudança" : "mudanças")} neste PC agora");
             b.Click += async (_, _) =>
             {
-                if (modo == m) return;
+                if (modo == m || !modos.IsEnabled) return;
                 var antes = modo;
+                // a troca lê a lista de novo (pode levar uns segundos): o cartão escolhido acende na hora e diz que está trocando
+                modos.IsEnabled = false;
+                cartao.BorderBrush = Tema.Ambar; cartao.Background = Tema.AmbarFraco;
+                if (quantos is Panel qp) { qp.Children.Clear(); qp.Children.Add(T("trocando…", "rotulo")); qp.Children.Add(new ProgressBar { IsIndeterminate = true, Width = 80, Height = 2, MinHeight = 2, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }); }
+                resumo.Text = $"Trocando para o modo {nome}…";
                 try { modo = m; var d = Servico.Guardado("itens", Pedido()) ?? await Servico.Le("itens", Pedido()); Le(d, novoModo: true); Desenha(cab); }
-                catch (Exception e) { modo = antes; MostraErro(e, "Não deu para trocar de modo", "O modo continua o de antes."); }
+                catch (Exception e) { modo = antes; modos.IsEnabled = true; MostraErro(e, "Não deu para trocar de modo", "O modo continua o de antes."); Desenha(cab); }
             };
             modos.Children.Add(b);
         }
@@ -207,6 +212,7 @@ public class Otimizar : Tela
         var lista = new StackPanel();
         lista.Children.Add(new StackPanel { Spacing = 6, Margin = new Thickness(32, 22, 32, 12), Children = { T("2. Confira os itens", "forte"),
             new WrapPanel { Children = { conferindo.Com(t => { t.TextWrapping = TextWrapping.Wrap; t.Margin = new Thickness(0, 0, 10, 0); t.VerticalAlignment = VerticalAlignment.Center; }), lerDeNovo,
+                                        T("·", null, Tema.Apagado).Com(t => { t.Margin = new Thickness(10, 0); t.VerticalAlignment = VerticalAlignment.Center; }),
                                         Link("O que é \"já está assim\"?", () => Conceitos.Abre("ja_feito")) } } } });
         busca.Watermark = "Buscar um item (ex.: Xbox, impressão, Copilot)";
         busca.TextChanged -= Filtra; busca.TextChanged += Filtra;
@@ -358,9 +364,11 @@ public class Otimizar : Tela
             var linhaGanho = new WrapPanel();
             if (ganho != "") linhaGanho.Children.Add(Sinal("Ganha:", Tema.Verde, Primeira(ganho)).Com(c => c.Margin = new Thickness(0, 0, 12, 0)));
             textos.Children.Add(linhaGanho);
+            // o que perde fica à vista também (pedido do dono): a primeira frase; o resto continua em "detalhes"
+            textos.Children.Add(Sinal("Perde:", Tema.Osso, temCusto ? Primeira(custo) : "nada que você note."));
             var detalhes = new StackPanel { Spacing = 4, IsVisible = false, Margin = new Thickness(0, 4, 0, 0) };
             if (explica != "") detalhes.Children.Add(T(explica, "rotulo", tamanho: 13.5, quebra: true).Com(t => t.MaxWidth = 680));
-            if (temCusto) detalhes.Children.Add(Sinal("Perde:", Tema.Osso, custo));
+            if (temCusto && custo.Trim().TrimEnd('.').Length > Primeira(custo).TrimEnd('.').Length + 2) detalhes.Children.Add(Sinal("Perde:", Tema.Osso, custo));
             if (alerta != "") detalhes.Children.Add(Sinal("Atenção:", Tema.Ambar, alerta));
             if (i.J.B("sem_volta")) detalhes.Children.Add(Sinal("Sem volta:", Tema.Vermelho, "o Desfazer não traz de volta."));
             if (detalhes.Children.Count > 0)
@@ -439,8 +447,11 @@ public class Otimizar : Tela
                 i.Estado.Foreground = i.Ja == true ? (i.Velho ? Tema.Apagado : Tema.Verde) : i.Marcado ? Tema.Ambar : Tema.Apagado;
             }
         }
-        int n = VaoMudar().Count(), feitos = areas.Sum(a => a.Itens.Count(i => i.Ja == true));
-        resumo.Text = n == 0 ? "Nada marcado para mudar" : $"{n} {(n == 1 ? "mudança" : "mudanças")}" + (feitos > 0 ? $" · {feitos} já feitas" : "");
+        int n = VaoMudar().Count(), feitos = areas.Sum(a => a.Itens.Count(i => i.Ja == true && i.Marcado)),
+            semConferir = VaoMudar().Count(i => i.Ja == null);
+        // o número do botão é o que vai mudar de verdade; o que ainda não foi conferido aparece separado (pode já estar assim)
+        resumo.Text = n == 0 ? "Nada marcado para mudar" : $"{n} {(n == 1 ? "mudança" : "mudanças")}" + (semConferir > 0 ? $" · {semConferir} sem conferir" : "");
+        ToolTip.SetTip(resumo, feitos > 0 ? $"{feitos} itens marcados já estão assim neste PC e não contam." : null);
         aplicar.Content = n == 0 ? "Aplicar" : $"Aplicar {n} {(n == 1 ? "mudança" : "mudanças")}";
         aplicar.IsEnabled = n > 0;
     }

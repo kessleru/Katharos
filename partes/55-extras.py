@@ -185,6 +185,10 @@ def itens_ajustes(ctx):
         Item('caminhos', 'caminhos longos (mais de 260 letras)', 'Libera nomes de pasta longos, comuns em projetos de programação (node_modules).',
              'menos erros "caminho muito longo"', 'programas antigos podem não entender esses caminhos', 2 if dev else 0,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem', 'LongPathsEnabled', 1)),
+        Item('chamadas', 'volume do jogo igual em chamadas', 'O Windows deixa de abaixar os outros sons quando detecta uma chamada '
+             '(Discord, Teams): o jogo fica no mesmo volume. Não mexe na qualidade do áudio.', 'jogo e chamada no mesmo volume',
+             'quem gosta que a música abaixe nas ligações perde isso', 2,
+             R('HKCU:\\Software\\Microsoft\\Multimedia\\Audio', 'UserDuckingPreference', 3)),
         Item('esquerda', 'barra de tarefas à esquerda', 'Ícones alinhados à esquerda, como no Windows 10.', 'costume', 'nenhum', 0,
              R(ADV, 'TaskbarAl', 0)) if win11 else None,
         Item('segundos', 'segundos no relógio', 'Mostra os segundos no relógio da barra.', 'precisão', 'gasta um pouquinho de bateria', 0,

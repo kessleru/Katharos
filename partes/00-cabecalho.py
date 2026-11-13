@@ -16,6 +16,7 @@ Visual: Kessleru (kterm 2.0.0, embutido abaixo). Dados em ~/.katharos.
 
 import argparse
 import base64
+import itertools
 import ctypes
 import functools
 import hashlib
@@ -24,8 +25,8 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '4.3.1'
-DATA_VERSAO = '12 nov 2026'
+VERSAO = '4.4.0'
+DATA_VERSAO = '13 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #

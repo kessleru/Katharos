@@ -345,6 +345,12 @@ def _py_remove_apps(ctx, it, pr, teste):
     return feitos, avisos
 
 
+def ryzen_x3d_dois_ccds(p):
+    """Ryzen 9 com 3D V-Cache em um dos dois CCDs (7900X3D, 7950X3D, 9900X3D, 9950X3D): o jogo só vai para os núcleos com o cache se o
+    driver de chipset da AMD souber que um jogo abriu, e ele sabe pelo Xbox Game Bar."""
+    return bool(re.search(r'Ryzen 9 (79[05]0|99[05]0)X3D', str(pf(p, 'cpu.nome', '') or ''), re.I))
+
+
 @pacote('apps', 'apps da Loja', 'apps pré-instalados que quase ninguém usa',
         'Remove para todos os usuários e também da instalação padrão (contas novas não recebem de novo). '
         'Apps de sistema e protegidos pelo Windows nunca entram. Cada remoção tem limite de 3 minutos, porque às vezes ela trava.',
@@ -360,6 +366,9 @@ def itens_apps(ctx):
         nota = ''
         if titulo == 'Xbox' and joga(ctx.perfil):
             nivel, nota = 0, 'tem jogos instalados (' + ', '.join(lista(ctx.perfil.get('jogos'))) + '): não vem marcado'
+        if titulo == 'Xbox' and ryzen_x3d_dois_ccds(ctx.perfil):
+            # o driver de chipset da AMD usa o Game Bar para saber que um jogo abriu e mandar o jogo aos núcleos com o cache extra
+            nivel, nota = 0, 'o seu processador (' + str(pf(ctx.perfil, 'cpu.nome', '')) + ') usa o Game Bar para mandar o jogo aos núcleos certos: sem ele, o jogo pode rodar nos núcleos sem o cache extra'
         if titulo == 'Câmera' and not pf(ctx.perfil, 'tem.camera'):
             nivel = 3
         det = ', '.join(a.split('.')[-1] for a in achados[:4]) + ('…' if len(achados) > 4 else '')
@@ -728,6 +737,7 @@ def itens_servicos(ctx):
         'Políticas e configurações oficiais. Nada é apagado: tudo volta com o desfazer. Na edição Home, algumas políticas valem '
         'só em parte (a telemetria fica em "obrigatória", que é o mínimo possível).')
 def itens_privacidade(ctx):
+    p = ctx.perfil
     dc = f'{HKLM_POL}\\DataCollection'
     sub = ['SilentInstalledAppsEnabled', 'SoftLandingEnabled', 'SubscribedContentEnabled', 'SystemPaneSuggestionsEnabled',
            'PreInstalledAppsEnabled', 'OemPreInstalledAppsEnabled', 'PreInstalledAppsEverEnabled', 'ContentDeliveryAllowed',
@@ -818,6 +828,20 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
                 R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer', 'NoDriveTypeAutoRun', 255),
                 R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer', 'NoAutorun', 1),
                 R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Remote Assistance', 'fAllowToGetHelp', 0)), minutos=6),
+        Item('wpbt', 'programa do fabricante gravado no firmware', 'Não deixa o Windows rodar, a cada boot, um programa que o fabricante '
+             'gravou na placa-mãe (a tabela WPBT). É por ali que alguns PCs reinstalam sozinhos o app da marca mesmo depois de removido.',
+             'nenhum programa entra pelo firmware sem você saber', 'o app da marca não se reinstala sozinho (instale pelo site dela se quiser)', 2,
+             R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager', 'DisableWpbtExecution', 1)),
+        Item('apps-de-fabricante', 'apps de fabricante instalados sozinhos', 'Ligar um mouse, teclado ou headset novo deixa de baixar e '
+             'instalar sozinho o programa da marca (Razer, Logitech...) e as informações do aparelho pela internet.',
+             'nada instala sem você pedir', 'o programa da marca, se você quiser, se instala pelo site dela', 1,
+             RR(R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Device Metadata', 'PreventDeviceMetadataFromNetwork', 1),
+                R(f'{HKLM_POL}\\Device Metadata', 'PreventDeviceMetadataFromNetwork', 1))),
+        Item('permissoes-apps', 'apps da Loja sem acesso a contatos, agenda, e-mail e chamadas', 'Nega, para os apps da Loja, o acesso '
+             'a contatos, calendário, e-mail, mensagens, chamadas, tarefas e às informações da conta (Configurações > Privacidade).',
+             'apps da Loja não leem seus dados pessoais', 'um app da Loja que precise disso (Outlook novo, Teams) pede de novo ou para de ver', 2,
+             RR(*[R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\' + c, 'Value', 'Deny', 'String') for c in
+                  ('contacts', 'appointments', 'email', 'chat', 'phoneCall', 'phoneCallHistory', 'userDataTasks', 'userAccountInformation')])),
         Item('busca-web', 'busca do menu sem resultados da web', 'A busca do menu Iniciar procura só no PC: sem Bing, sem sugestões '
              'da internet e sem "destaques da pesquisa".', 'busca mais rápida e privada', 'pesquisas na web vão para o navegador', 2,
              RR(R(f'{HKCU_POL}\\Explorer', 'DisableSearchBoxSuggestions', 1), R(f'{HKLM_POL}\\Windows Search', 'ConnectedSearchUseWeb', 0),
@@ -826,8 +850,13 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
                 R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\SearchSettings', 'IsDynamicSearchBoxEnabled', 0))),
         Item('widgets', 'widgets e notícias', 'O painel de notícias e clima (Windows 11) ou "Notícias e Interesses" (Windows 10).',
              'menos um processo do Edge em segundo plano', 'perde o painel de widgets', 2,
-             RR(R('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh', 'AllowNewsAndInterests', 0), R(f'{HKLM_POL}\\Windows Feeds', 'EnableFeeds', 0),
-                R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds', 'ShellFeedsTaskbarViewMode', 2))),
+             # Windows 11 sem o app Widgets (removido em "apps"): não há painel, então já está feito (o WinUtil faz assim; no 25H2 o UCPD
+             # bloqueia gravar estas chaves e o item ficava para sempre como "vai mudar")
+             ("if (@(Get-AppxPackage -Name 'MicrosoftWindows.Client.WebExperience' -ErrorAction SilentlyContinue).Count -eq 0) "
+              "{ Info 'o app Widgets nao esta instalado: nao ha painel para desligar' } else {\n" if pf(p, 'so.win11') else '')
+             + RR(R('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh', 'AllowNewsAndInterests', 0), R(f'{HKLM_POL}\\Windows Feeds', 'EnableFeeds', 0),
+                  R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds', 'ShellFeedsTaskbarViewMode', 2))
+             + ('\n}' if pf(p, 'so.win11') else '')),
         Item('segundo-plano', 'apps da Loja em segundo plano', 'Apps da Loja deixam de rodar escondidos quando você não está usando.',
              'pouco de RAM e CPU', 'apps da Loja fechados (WhatsApp, Teams novo) podem não notificar', 2,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications', 'GlobalUserDisabled', 1),
@@ -893,10 +922,10 @@ def itens_visual(ctx):
              'pastas de mídia abrem mais rápido em HD', 'não vê a prévia das fotos', 3, R(ADV, 'IconsOnly', 1)),
         Item('fundo-preto', 'papel de parede liso', 'Fundo preto em vez de imagem (e sem Windows Destaque).', 'um pouco de RAM',
              'perde o papel de parede', 3, RR(R(d, 'WallPaper', '', 'String'), R('HKCU:\\Control Panel\\Colors', 'Background', '0 0 0', 'String'))),
-        Item('barra', 'barra de tarefas enxuta', 'Sem Visão de Tarefas, Chat e botão de widgets; a busca vira só o ícone.',
-             'barra limpa', 'esses botões somem (o atalho Win+Tab continua)', 2,
+        Item('barra', 'barra de tarefas enxuta', 'Sem Visão de Tarefas, Chat, botão de widgets e sem a lupa da busca.',
+             'barra limpa', 'esses botões somem; a busca abre pela tecla Windows (é só digitar) e o Win+Tab continua', 2,
              RR(R(ADV, 'ShowTaskViewButton', 0), R(ADV, 'TaskbarMn', 0), R(ADV, 'TaskbarDa', 0), R(ADV, 'ShowCortanaButton', 0),
-                R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', 'SearchboxTaskbarMode', 1))),
+                R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', 'SearchboxTaskbarMode', 0))),
         Item('extensoes', 'mostrar extensões dos arquivos', 'Mostra ".exe", ".pdf" etc. Ajuda a perceber arquivo disfarçado (foto.jpg.exe).',
              'segurança', 'nomes um pouco mais longos', 1, R(ADV, 'HideFileExt', 0)),
         Item('este-pc', 'Explorador abre em "Este Computador"', 'Em vez do Acesso Rápido com arquivos recentes.', 'privacidade e menos leitura',
@@ -971,7 +1000,8 @@ def itens_jogos(ctx):
         Item('directx-jogos', 'jogos em janela e VRR otimizados', 'Liga as duas opções de Configurações > Sistema > Tela > Gráficos: '
              '"Otimizações para jogos em janela" (o jogo em janela ou sem borda passa a apresentar quadros como em tela cheia) e '
              '"Otimizações para taxa de atualização variável". Mantém as outras opções que você já tinha ali (como o HDR automático).',
-             'menos atraso e mais FPS em jogo em janela ou sem borda (DirectX 10 e 11)', 'nenhum conhecido; desligue nas Configurações se um jogo antigo reclamar', 1,
+             'menos atraso e mais FPS em jogo em janela ou sem borda (DirectX 10 e 11; o DirectX 12 já funciona assim)',
+             'nenhum conhecido; se um jogo reclamar, desligue só para ele em Configurações > Sistema > Tela > Gráficos', 1,
              r"""$__k = 'HKCU:\Software\Microsoft\DirectX\UserGpuPreferences'
 $__a = (Get-ItemProperty -LiteralPath $__k -Name DirectXUserGlobalSettings -ErrorAction SilentlyContinue).DirectXUserGlobalSettings
 $__d = [ordered]@{}
@@ -980,8 +1010,8 @@ $__d['SwapEffectUpgradeEnable'] = '1'; $__d['VRROptimizeEnable'] = '1'
 $__n = ((@($__d.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value })) -join ';') + ';'
 Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos em janela e de VRR' | Out-Null""") if pf(p, 'so.win11') else None,
         Item('mmcss', 'agendador multimídia: menos CPU reservada ao fundo', 'Baixa a reserva de CPU para tarefas de fundo de 20% para 10% '
-             '(SystemResponsiveness) e põe a tarefa "Games" do agendador multimídia em categoria High. Só isso: a Microsoft documenta que '
-             '"GPU Priority" e "SFIO Priority" não são usados, então eles não são tocados. Só vale para jogos que usam o MMCSS.',
+             '(SystemResponsiveness) e põe a tarefa "Games" em categoria High. Medições não viram jogo nenhum usar essa tarefa: o que '
+             'pode valer é só a reserva menor. "GPU Priority" e "SFIO Priority" não são usados e não são tocados.',
              'pequeno e raramente medido; só em jogo que usa o agendador multimídia', 'tarefas de fundo ficam com menos CPU enquanto joga', 3,
              RR(R(mm, 'SystemResponsiveness', 10), R(mm + '\\Tasks\\Games', 'Scheduling Category', 'High', 'String'))),
         Item('primeiro-plano', 'prioridade do primeiro plano explícita', 'Grava Win32PrioritySeparation = 0x26, o valor que a opção "Programas" '
@@ -1011,11 +1041,13 @@ Set-Valor $__k 'DirectXUserGlobalSettings' $__n 'String' 'otimizações de jogos
              RR(R(gc, 'GameDVR_FSEBehaviorMode', 2), R(gc, 'GameDVR_HonorUserFSEBehaviorMode', 1), R(gc, 'GameDVR_FSEBehavior', 2),
                 R(gc, 'GameDVR_DXGIHonorFSEWindowsCompatible', 1))),
         Item('timer', 'resolução do temporizador global', 'No Windows 11, um programa que pede temporizador fino volta a valer para o '
-             'sistema todo (GlobalTimerResolutionRequests).', 'pode reduzir latência em alguns jogos', 'mais consumo de energia; efeito varia', 3,
+             'sistema todo (GlobalTimerResolutionRequests). Sozinho não muda nada: só tem efeito se algum programa pedir esse '
+             'temporizador (um limitador de FPS, por exemplo).', 'só com um programa que pede o temporizador fino',
+             'o PC inteiro acorda mais vezes: mais consumo e mais trabalho com programas parados', 3,
              R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel', 'GlobalTimerResolutionRequests', 1)) if pf(p, 'so.win11') else None,
-        Item('rede-jogos', 'rede: sem atraso de pacotes (Nagle) e sem limite multimídia', 'Confirmações TCP imediatas e sem o '
-             'limitador de rede do agendador multimídia.', 'quase sempre zero ou mínimo (a maioria dos jogos usa UDP)',
-             'um pouco mais de pacotes na rede', 3, RR(nagle, R(mm, 'NetworkThrottlingIndex', -1))),
+        Item('rede-jogos', 'rede: sem atraso de pacotes (Nagle)', 'Confirmações TCP imediatas. O limitador de rede do agendador '
+             'multimídia (NetworkThrottlingIndex) fica como o Windows deixa: desligá-lo aumenta o atraso do driver de rede (medido).',
+             'quase sempre zero ou mínimo (a maioria dos jogos usa UDP)', 'um pouco mais de pacotes na rede', 3, nagle),
         Item('mpo', 'desligar o Multiplane Overlay (MPO)', 'Correção conhecida para tela piscando, cintilação e engasgos com '
              'algumas placas NVIDIA e vários monitores.', 'só resolve se você tem esse problema', 'sem o problema, não muda nada (ou piora um pouco)', 0,
              R('HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm', 'OverlayTestMode', 5)),
@@ -1109,6 +1141,10 @@ foreach ($a in $__ad) { $pm = Get-NetAdapterPowerManagement -Name $a.Name -Error
 $__h = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction SilentlyContinue).HibernateEnabled
 if ($__h -eq 0) { if ($TESTE) { Plano 'ligar hibernacao reduzida' } else { Guarda-Desfazer 'hib' 'powercfg /h off'; powercfg /h on | Out-Null; powercfg /h /type reduced | Out-Null; $script:MUDOU++ } }
 Set-Valor 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' 'HiberbootEnabled' 1 | Out-Null''') if eh_hd(p) else None,
+        Item('inicio-rapido', 'inicialização rápida desligada', 'Com a inicialização rápida ligada, "Desligar" não zera o Windows: ele '
+             'hiberna o núcleo e volta dele. O tempo ligado não zera, e driver ou atualização travada continua lá até um "Reiniciar".',
+             '"Desligar" passa a zerar o Windows (como Reiniciar)', 'o PC liga alguns segundos mais devagar', 0,
+             R('HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power', 'HiberbootEnabled', 0)) if not eh_hd(p) else None,
         Item('hibernacao', 'hibernação desligada', 'Apaga o hiberfil.sys (do tamanho de boa parte da RAM). Em SSD o boot já é rápido.',
              'alguns GB de espaço', 'sem hibernar e sem inicialização rápida', 3 if not nb else 0, r'''
 $__h = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction SilentlyContinue).HibernateEnabled

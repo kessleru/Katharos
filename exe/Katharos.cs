@@ -45,14 +45,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Katharos: abre o otimizador e acompanha o PC em segundo plano")]
 [assembly: AssemblyCompany("Katharos, código aberto (github.com/kessleru/Katharos)")]
 [assembly: AssemblyCopyright("Licença MIT")]
-[assembly: AssemblyVersion("4.3.1.0")]
-[assembly: AssemblyFileVersion("4.3.1.0")]
+[assembly: AssemblyVersion("4.4.0.0")]
+[assembly: AssemblyFileVersion("4.4.0.0")]
 
 namespace KatharosApp
 {
     static class K
     {
-        public const string VERSAO = "4.3.1";
+        public const string VERSAO = "4.4.0";
         public const string MUTEX = "Local\\KatharosSegundoPlano";
         public const string EV_SAIR = "Local\\KatharosSegundoPlanoSair";
         public const string EV_MOSTRAR = "Local\\KatharosSegundoPlanoMostrar";
@@ -2249,80 +2249,11 @@ namespace KatharosApp
                 if (a.Bateria.HasValue && pinta) Texto(g, "bateria " + a.Bateria + " %" + (a.NaBateria ? ", fora da tomada" : ", na tomada"), fPequeno, Cor.Apagado, pad, y);
                 if (a.Bateria.HasValue) y += 18 * s;
             }
-            // o que eu vejo agora
-            y += 6 * s;
-            if (pinta) Texto(g, "o que eu vejo agora", fRotulo, Cor.Apagado, pad, y);
-            y += 20 * s;
-            if (concl.Count == 0)
-            {
-                if (pinta) Texto(g, ses != null ? "O jogo está rodando sem nada no limite." : "Tudo dentro do normal.", fTexto, Cor.Texto, pad, y);
-                y += 22 * s;
-            }
-            float larg = W - 2 * pad - 16 * s;
-            foreach (var c in concl)
-            {
-                if (pinta) using (var b = new SolidBrush(Cor.DoNivel(c.Nivel))) g.FillRectangle(b, pad, y + 4 * s, 3 * s, 12 * s);
-                if (pinta) Texto(g, c.Titulo, fNegrito, Cor.Osso, pad + 12 * s, y);
-                y += 19 * s;
-                var t = g.MeasureString(c.Texto, fPequeno, (int)larg);
-                if (pinta) using (var b = new SolidBrush(Cor.Texto)) g.DrawString(c.Texto, fPequeno, b, new RectangleF(pad + 12 * s, y, larg, t.Height + 2));
-                y += t.Height + 8 * s;
-            }
-            // central de inteligência
+            // "o que eu vejo agora" e a central saíram do painel (pedido do dono): o painel é só para ver os números; o resto fica na janela
             y += 4 * s;
-            if (pinta) { Linha(g, pad, y, W - pad); Texto(g, "central de inteligência", fRotulo, Cor.Apagado, pad, y + 10 * s); }
-            y += 30 * s;
-            if (propostas.Count == 0)
-            {
-                if (pinta) Texto(g, "Nada a propor agora. Ela olha tudo de novo a cada hora.", fPequeno, Cor.Apagado, pad, y);
-                y += 20 * s;
-            }
-            foreach (var r in resultados)
-            {   // a última proposta que você aplicou: o que previ e o que aconteceu, e a sua resposta
-                string txt = "Você aplicou: " + r[1] + ". Resultado: " + r[2] + ". Ajudou?";
-                var tr = g.MeasureString(txt, fPequeno, (int)(W - 2 * pad));
-                if (pinta) using (var b = new SolidBrush(Cor.Texto)) g.DrawString(txt, fPequeno, b, new RectangleF(pad, y, W - 2 * pad, tr.Height + 2));
-                y += tr.Height + 4 * s;
-                float bx = pad;
-                foreach (var op in new[] { new[] { "sim", "sim" }, new[] { "não", "nao" } })
-                {
-                    var tm = g.MeasureString(op[0], fRotulo);
-                    var rr = new RectangleF(bx, y, tm.Width + 16 * s, 22 * s);
-                    if (pinta)
-                    {
-                        bool h = sobre == botoes.Count;
-                        using (var pn = new Pen(h ? Cor.Ambar : Cor.LinhaForte)) g.DrawRectangle(pn, rr.X, rr.Y, rr.Width, rr.Height);
-                        Texto(g, op[0], fRotulo, h ? Cor.Ambar : Cor.Texto, rr.X + 8 * s, rr.Y + 3 * s);
-                        botoes.Add(new KeyValuePair<RectangleF, string[]>(rr, new[] { "@resp", r[0], op[1] }));
-                    }
-                    bx += rr.Width + 8 * s;
-                }
-                y += 30 * s;
-            }
-            foreach (var p in propostas)
-            {
-                var t = g.MeasureString(p[0], fTexto, (int)(W - 2 * pad));
-                if (pinta) using (var b = new SolidBrush(Cor.Texto)) g.DrawString(p[0], fTexto, b, new RectangleF(pad, y, W - 2 * pad, t.Height + 2));
-                y += t.Height + 1 * s;
-                if (!string.IsNullOrEmpty(p[1])) { if (pinta) Texto(g, "katharos " + p[1], fMono, Cor.Ambar, pad, y); }
-                if (p.Length > 3 && !string.IsNullOrEmpty(p[3]))
-                {   // "não me importa": a central para de propor isso
-                    string ni = "não me importa";
-                    var tm = g.MeasureString(ni, fPequeno);
-                    var rr = new RectangleF(W - pad - tm.Width, y, tm.Width, 18 * s);
-                    if (pinta)
-                    {
-                        bool h = sobre == botoes.Count;
-                        Texto(g, ni, fPequeno, h ? Cor.Osso : Cor.Apagado, rr.X, rr.Y);
-                        botoes.Add(new KeyValuePair<RectangleF, string[]>(rr, new[] { "@resp", p[3], "nao-importa" }));
-                    }
-                }
-                if (!string.IsNullOrEmpty(p[1]) || (p.Length > 3 && !string.IsNullOrEmpty(p[3]))) y += 18 * s;
-                y += 6 * s;
-            }
             // botões
             y += 6 * s;
-            string[][] bs = { new[] { "central", "conselheiro" }, new[] { "painel", "painel" }, new[] { "raio-x", "raiox" }, new[] { "abrir", "" } };
+            string[][] bs = { new[] { "raio-x", "raiox" }, new[] { "jogos", "jogos" }, new[] { "abrir o Katharos", "" } };
             float gap = 8 * s, bw = (W - 2 * pad - gap * (bs.Length - 1)) / bs.Length, bh = 30 * s;
             for (int i = 0; i < bs.Length; i++)
             {
@@ -2649,9 +2580,12 @@ namespace KatharosApp
                 try
                 {
                     if (string.IsNullOrEmpty(app) || !File.Exists(app) || string.Equals(app, Application.ExecutablePath, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (Directory.Exists(Path.Combine(Path.GetDirectoryName(app), "python"))) return app;
+                    string dir = Path.GetDirectoryName(app);
+                    // a janela instalada tem python\ e motor\ ao lado; qualquer um dos dois (ou a DLL dela) basta para saber que é a janela
+                    if (Directory.Exists(Path.Combine(dir, "python")) || Directory.Exists(Path.Combine(dir, "motor")) || File.Exists(Path.Combine(dir, "Katharos.App.dll"))) return app;
                 }
                 catch { }
+            Log.Escreve("janela não encontrada (" + string.Join(" | ", cands.ToArray()) + "): abrindo o terminal");
             return null;
         }
 

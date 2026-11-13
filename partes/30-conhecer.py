@@ -72,7 +72,11 @@ $pfDiscos = @(Tenta { Get-CimInstance Win32_PageFileUsage -ErrorAction Stop | Fo
     $pd = $(if ($null -ne $n) { Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { "$($_.DeviceId)" -eq "$n" } | Select-Object -First 1 })
     [pscustomobject]@{ letra = $l; tipo = $(if ($pd) { [string]$pd.MediaType } else { '' }) } } } @())
 # integridade de memória (HVCI) e agendamento de GPU por hardware: só leitura, para o raio-x explicar
-$hvci = Tenta { [bool](@((Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop).SecurityServicesRunning) -contains 2) } $null
+$dg = Tenta { Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop } $null
+$hvci = $(if ($dg) { [bool](@($dg.SecurityServicesRunning) -contains 2) } else { $null })
+$vbs = $(if ($dg) { [int]$dg.VirtualizationBasedSecurityStatus -eq 2 } else { $null })
+# Secure Boot sem administrador: a chave que o próprio Windows mantém (o Confirm-SecureBootUEFI pede administrador)
+$sbr = Tenta { [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -ErrorAction Stop).UEFISecureBootEnabled -eq 1 } $null
 $hags = Tenta { [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -ErrorAction Stop).HwSchMode -eq 2 } $null
 $pfAuto = Tenta { (Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile } $true
 $mm = Tenta { (Get-MMAgent -ErrorAction Stop).MemoryCompression } $null
@@ -139,7 +143,7 @@ Dado 'perfil' @{
     defender = @{ tempo_real = [bool]$mp.RealTimeProtectionEnabled; ativo = [bool]$mp.AntivirusEnabled; modo = [string]$mp.AMRunningMode }
     energia = @{ plano = $plano }
     memoria = @{ pagefile_auto = [bool]$pfAuto; pagefile_config = [bool]$pf; compressao = $mm; pagefile_discos = (Lista $pfDiscos) }
-    seguranca = @{ hvci = $hvci }
+    seguranca = @{ hvci = $hvci; vbs = $vbs; secure_boot = $sbr }
     video_cfg = @{ hags = $hags }
     sistema = @{ uptime_h = $uptime; reinicio_pendente = $pend; admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator); dono_explorer = [string]$dono; usuario = $env:USERNAME }
 }
@@ -242,7 +246,13 @@ INICIO_PS = r'''
 # ligado: o Gerenciador de Tarefas não marcou como desativado (vale a marca do usuário OU a da máquina).
 # existe: o programa ainda está no disco (entrada de programa desinstalado não abre nada e não conta).
 function _Aprovado([string[]]$Chaves, [string]$Nome) {
-    foreach ($ap in $Chaves) { $b = Tenta { (Get-Item -LiteralPath $ap -ErrorAction Stop).GetValue($Nome) } $null; if ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] % 2) -eq 1) { return $false } }
+    # sem Tenta: o "& bloco" desmonta o byte[] num object[] e o "-is [byte[]]" nunca batia; tudo contava como ligado (relatório do
+    # dono, 4.3.1: 13 "abrem com o Windows" com quase tudo desativado no Gerenciador de Tarefas)
+    foreach ($ap in $Chaves) {
+        $b = $null
+        try { $b = (Get-Item -LiteralPath $ap -ErrorAction Stop).GetValue($Nome) } catch {}
+        if ($null -ne $b -and @($b).Count -gt 0 -and ([int]@($b)[0] % 2) -eq 1) { return $false }
+    }
     return $true
 }
 function _ExeDe([string]$Cmd) {
@@ -901,7 +911,13 @@ def eh_tarefa_do_katharos(x, proprios):
     if exe == EXE_NOME.lower() and 'katharos' in str(x.get('exe') or '').lower():
         return True
     empresa = str(x.get('empresa') or '').lower()
-    return exe.startswith('python') and roda_o_nosso and bool(x.get('assinado')) and 'python software foundation' in empresa
+    if exe.startswith('python') and roda_o_nosso and bool(x.get('assinado')) and 'python software foundation' in empresa:
+        return True
+    # Python da Microsoft Store: a pasta WindowsApps não deixa ler o arquivo (sem hash nem assinatura), mas só a Loja instala ali,
+    # numa pasta com o nome do editor (relatório do dono, 4.3.1: as duas tarefas do Katharos ainda saíam como suspeitas)
+    caminho = str(x.get('exe') or '').replace('/', '\\').lower()
+    return (exe.startswith('python') and roda_o_nosso
+            and '\\windowsapps\\pythonsoftwarefoundation.python.' in caminho)
 
 
 def analisa(p, m, d):
@@ -1202,11 +1218,32 @@ def analisa(p, m, d):
                         'O Windows guarda parte da memória em ' + ', '.join(f'{x["letra"]}:' for x in pfd if x.get('tipo') == 'HDD') + ', que é um HD; o PC tem SSD.',
                         'Ponha o arquivo de paginação no SSD: Configurações > Sistema > Sobre > Configurações avançadas do sistema > Desempenho > '
                         'Avançado > Memória virtual. O Katharos não muda isso sozinho (mexe em disco).'))
+    # o anti-cheat novo (FACEIT desde 14/10/2026 aos poucos; Valorant no modo sob demanda) pede Windows 11 com estas proteções.
+    # Só o que deu para ler entra; o que não deu fica de fora (nada de chute)
+    if joga(p):
+        falta = []
+        b = pf(p, 'so.build', 0) or 0
+        if b and b < 22000:
+            falta.append('Windows 11 (este PC tem o 10)')
+        elif b and b < 26200:
+            falta.append('Windows 11 25H2 (para o Valorant sob demanda)')
+        if pf(p, 'seguranca.secure_boot') is False:
+            falta.append('Inicialização Segura (Secure Boot), que se liga na BIOS')
+        if pf(p, 'seguranca.vbs') is False:
+            falta.append('segurança baseada em virtualização (VBS)')
+        if pf(p, 'seguranca.hvci') is False:
+            falta.append('integridade de memória')
+        if falta:
+            A.append(Achado(0, ['jogos', 'seguranca'], 'Falta proteção que o anti-cheat novo pede',
+                            'Para o FACEIT e para o Valorant (modo sob demanda): ' + '; '.join(falta) + '.',
+                            'Não é erro do PC: só os jogos com esse anti-cheat pedem. A integridade de memória fica em Segurança do Windows > '
+                            'Segurança do dispositivo > Isolamento de núcleo; a Inicialização Segura e o TPM, na BIOS da placa-mãe (o Katharos '
+                            'não mexe na BIOS).'))
     if pf(p, 'seguranca.hvci') is True and joga(p):
         A.append(Achado(0, ['jogos', 'tudo'], 'Integridade de memória ligada',
-                        'Protege o Windows contra drivers maliciosos; em alguns jogos custa um pouco de FPS.',
-                        'O Katharos não desliga: é proteção. Se você decidir trocar segurança por FPS, é em Segurança do Windows > Segurança do '
-                        'dispositivo > Isolamento de núcleo.'))
+                        'Protege o Windows contra drivers maliciosos; na maioria dos jogos custa de 0 a 5 % de FPS (até 10 % em poucos).',
+                        'O Katharos não desliga: é proteção, e o anti-cheat do FACEIT e do Valorant pode exigir que fique ligada. Se mesmo assim você '
+                        'decidir trocar segurança por FPS, é em Segurança do Windows > Segurança do dispositivo > Isolamento de núcleo.'))
     if pf(p, 'video_cfg.hags') is False and joga(p) and (pf(p, 'so.build', 0) or 0) >= 19041 \
             and any(isinstance(v, dict) and not v.get('integrada') and not v.get('basico') for v in lista(p.get('video'))):
         A.append(Achado(0, ['jogos', 'tudo'], 'Agendamento de GPU por hardware desligado',

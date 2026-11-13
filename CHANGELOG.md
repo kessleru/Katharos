@@ -18,6 +18,29 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.4.0 · 13 de novembro de 2026
+
+Corrige o que o teste da 4.3.1 e os relatórios mostraram, e traz o que a pesquisa de otimizadores apontou.
+
+- **Inicialização certa**: o Katharos contava como ligado o que estava desativado no Gerenciador de Tarefas. Agora a contagem, o achado do raio-x e a lista batem com o Gerenciador.
+- **Conferência sem erro**: dois pedaços da conferência ao mesmo tempo podiam usar o mesmo arquivo e dar "Token '}' inesperado". Corrigido.
+- **Tarefas do Katharos**: com o Python da Microsoft Store, elas não aparecem mais como suspeitas.
+- **Memória**: ferramentas do Windows (verificação de disco, Windows Update, antivírus) não têm mais "Fechar" nem "Desinstalar".
+- **Otimizar**: cada item mostra o que ganha e o que perde. O botão conta só o que vai mudar. Trocar de modo mostra que está trocando.
+- **Sessões de jogo**: "detalhes" mostra processador, placa de vídeo, RAM, temperatura, FPS e quanto tempo cada parte ficou no limite.
+- **O Katharos neste PC**: no Ao vivo, quanto a janela, o motor e o segundo plano gastam de processador e RAM, com gráfico.
+- **Abre com o Windows**: ao ligar o PC, confere se há versão nova e abre a janela, como o Discord (desliga em Configurações).
+- **Relatório automático**: uma vez por semana, sem nome, PC ou arquivos. Um aviso na primeira vez deixa desligar na hora.
+- **Ícone perto do relógio**: o painel ficou só com os números; "abrir o Katharos" abre a janela.
+- **Rede para jogos**: deixa de desligar o limitador de rede do Windows, que medições mostraram aumentar o atraso do driver de rede.
+- **Xbox em Ryzen X3D de dois CCDs**: não vem marcado, porque o processador usa o Game Bar para mandar o jogo aos núcleos certos.
+- **Widgets**: sem o app Widgets, o item conta como feito (o Windows 11 25H2 não deixa mudar as chaves).
+- **Itens novos**: programa do fabricante gravado no firmware (WPBT), apps de fabricante instalados sozinhos, apps da Loja sem acesso a contatos e e-mail, volume do jogo igual em chamadas e inicialização rápida (só se marcar).
+- **Anti-cheat**: o raio-x diz o que falta para o FACEIT e o Valorant (Windows 11 25H2, Secure Boot, VBS, integridade de memória), só com o que deu para ler.
+- **Textos honestos**: agendador multimídia, temporizador e jogos em janela dizem o que fazem de verdade.
+- **Barra de tarefas enxuta** também esconde a lupa da busca.
+- **PC de escola ou empresa**: quando o Windows bloqueia a pasta protegida do Katharos, a mensagem diz isso em vez de "código 13".
+
 ## 4.3.1 · 12 de novembro de 2026
 
 Corrige o que o teste da 4.3.0 mostrou (no PC e nos relatórios enviados) e deixa a janela mais rápida e com menos texto.

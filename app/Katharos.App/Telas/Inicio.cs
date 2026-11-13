@@ -104,16 +104,12 @@ public class Inicio : Tela
         jogosDesenhados = jogos?.ToJsonString();
         var secJogos = SecaoJogos(jogos);
 
+        // "Última mudança" e "Enviar relatório" num grupo próprio, com título: sem ele pareciam parte da seção Jogos (pedido do dono)
         var um = d?["ultima_mudanca"];
-        Control? ultima = um == null ? null : S(new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 22),
-            Children =
-            {
-                new StackPanel { Spacing = 3, Children = { T("Última mudança", "rotulo"), T($"{Primeira(um.S("titulo"))}, {Quando(um.S("quando"))}: {Num(um.D("itens"))} itens", null, Tema.Osso, 15) } },
-                Botao("Desfazer", false, () => Abre("desfazer")).Com(b => Grid.SetColumn(b, 1)),
-            }
-        });
+        var atalhos = new StackPanel { Children = { Subtitulo("Atalhos", null, "mais") } };
+        if (um != null)
+            atalhos.Children.Add(Linha("Última mudança", $"{Primeira(um.S("titulo"))}, {Quando(um.S("quando"))}: {Num(um.D("itens"))} itens", null,
+                                       Botao("Desfazer", false, () => Abre("desfazer")), "desfazer"));
         Control? versao = Atualizacao.VersaoPronta is string v ? S(new Avalonia.Controls.Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 18),
@@ -125,14 +121,8 @@ public class Inicio : Tela
                          }).Com(b => Avalonia.Controls.Grid.SetColumn(b, 1)) },
         }) : null;
         // achou um erro ou tem uma ideia: o relatório e o feedback a um clique, sempre à vista
-        var enviar = S(new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Avalonia.Thickness(32, 20),
-            Children = { new StackPanel { Spacing = 3, Children = { T("Achou um erro ou tem uma ideia?", null, Tema.Osso, 15).Com(t => t.FontWeight = Avalonia.Media.FontWeight.SemiBold),
-                                                                     T("Você vê tudo antes de sair.", "rotulo") } },
-                         Botao("Enviar relatório", false, () => Abre("enviar")).Com(b => Grid.SetColumn(b, 1)) },
-        });
-        Monta(cab, versao, passo, numeros, lista, secJogos, ultima, enviar);
+        atalhos.Children.Add(Linha("Achou um erro ou tem uma ideia?", "Você vê tudo antes de sair.", null, Botao("Enviar relatório", false, () => Abre("enviar")), "enviar"));
+        Monta(cab, versao, passo, numeros, lista, secJogos, G(atalhos));
     }
 
     Control PrimeirosPassos(bool notebook)

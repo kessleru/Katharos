@@ -59,6 +59,33 @@ public static class Atualizacao
         catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
     }
 
+    /// <summary>
+    /// Na abertura com o Windows: procura versão nova (até 25 s, para não segurar o boot) e, se houver, baixa e troca já, reabrindo a
+    /// janela na versão nova. Respeita "atualizações: nunca" (lê a config direto do arquivo: o motor ainda não abriu).
+    /// </summary>
+    public static void AntesDeAbrir()
+    {
+        try
+        {
+            var cfg = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "config.json");
+            if (File.Exists(cfg) && System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(cfg), "\"atualizacoes\"\\s*:\\s*\"nunca\"")) return;
+            var g = Gerente();
+            if (g == null) return;
+            var t = Task.Run(async () =>
+            {
+                var info = await g.CheckForUpdatesAsync();
+                if (info == null) return null;
+                await g.DownloadUpdatesAsync(info);
+                return info;
+            });
+            if (!t.Wait(TimeSpan.FromSeconds(25)) || t.Result == null) return;
+            Registro.Escreve("abertura com o Windows: trocando para " + t.Result.TargetFullRelease.Version);
+            SegundoPlano.PedeParaSair(reabrir: true);
+            g.ApplyUpdatesAndRestart(t.Result.TargetFullRelease, new[] { "--tela", "inicio" });
+        }
+        catch (Exception e) { Registro.Escreve("abertura com o Windows: " + e.Message); }
+    }
+
     /// <summary>Reinicia já na versão nova (o botão "Reiniciar agora").</summary>
     public static bool Aplica()
     {

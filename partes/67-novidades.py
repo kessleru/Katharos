@@ -1,6 +1,85 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "4.4.0",
+  "data": "13 de novembro de 2026",
+  "resumo": "Corrige o que o teste da 4.3.1 e os relatórios mostraram, e traz o que a pesquisa de otimizadores apontou.",
+  "itens": [
+   {
+    "titulo": "Inicialização certa",
+    "texto": "o Katharos contava como ligado o que estava desativado no Gerenciador de Tarefas. Agora a contagem, o achado do raio-x e a lista batem com o Gerenciador."
+   },
+   {
+    "titulo": "Conferência sem erro",
+    "texto": "dois pedaços da conferência ao mesmo tempo podiam usar o mesmo arquivo e dar \"Token '}' inesperado\". Corrigido."
+   },
+   {
+    "titulo": "Tarefas do Katharos",
+    "texto": "com o Python da Microsoft Store, elas não aparecem mais como suspeitas."
+   },
+   {
+    "titulo": "Memória",
+    "texto": "ferramentas do Windows (verificação de disco, Windows Update, antivírus) não têm mais \"Fechar\" nem \"Desinstalar\"."
+   },
+   {
+    "titulo": "Otimizar",
+    "texto": "cada item mostra o que ganha e o que perde. O botão conta só o que vai mudar. Trocar de modo mostra que está trocando."
+   },
+   {
+    "titulo": "Sessões de jogo",
+    "texto": "\"detalhes\" mostra processador, placa de vídeo, RAM, temperatura, FPS e quanto tempo cada parte ficou no limite."
+   },
+   {
+    "titulo": "O Katharos neste PC",
+    "texto": "no Ao vivo, quanto a janela, o motor e o segundo plano gastam de processador e RAM, com gráfico."
+   },
+   {
+    "titulo": "Abre com o Windows",
+    "texto": "ao ligar o PC, confere se há versão nova e abre a janela, como o Discord (desliga em Configurações)."
+   },
+   {
+    "titulo": "Relatório automático",
+    "texto": "uma vez por semana, sem nome, PC ou arquivos. Um aviso na primeira vez deixa desligar na hora."
+   },
+   {
+    "titulo": "Ícone perto do relógio",
+    "texto": "o painel ficou só com os números; \"abrir o Katharos\" abre a janela."
+   },
+   {
+    "titulo": "Rede para jogos",
+    "texto": "deixa de desligar o limitador de rede do Windows, que medições mostraram aumentar o atraso do driver de rede."
+   },
+   {
+    "titulo": "Xbox em Ryzen X3D de dois CCDs",
+    "texto": "não vem marcado, porque o processador usa o Game Bar para mandar o jogo aos núcleos certos."
+   },
+   {
+    "titulo": "Widgets",
+    "texto": "sem o app Widgets, o item conta como feito (o Windows 11 25H2 não deixa mudar as chaves)."
+   },
+   {
+    "titulo": "Itens novos",
+    "texto": "programa do fabricante gravado no firmware (WPBT), apps de fabricante instalados sozinhos, apps da Loja sem acesso a contatos e e-mail, volume do jogo igual em chamadas e inicialização rápida (só se marcar)."
+   },
+   {
+    "titulo": "Anti-cheat",
+    "texto": "o raio-x diz o que falta para o FACEIT e o Valorant (Windows 11 25H2, Secure Boot, VBS, integridade de memória), só com o que deu para ler."
+   },
+   {
+    "titulo": "Textos honestos",
+    "texto": "agendador multimídia, temporizador e jogos em janela dizem o que fazem de verdade."
+   },
+   {
+    "titulo": "Barra de tarefas enxuta",
+    "texto": "também esconde a lupa da busca."
+   },
+   {
+    "titulo": "PC de escola ou empresa",
+    "texto": "quando o Windows bloqueia a pasta protegida do Katharos, a mensagem diz isso em vez de \"código 13\"."
+   }
+  ]
+ },
+ {
   "versao": "4.3.1",
   "data": "12 de novembro de 2026",
   "resumo": "Corrige o que o teste da 4.3.0 mostrou (no PC e nos relatórios enviados) e deixa a janela mais rápida e com menos texto.",
@@ -216,81 +295,6 @@ NOVIDADES = [
    {
     "titulo": "Pergunte ao Katharos",
     "texto": "\"vírus\" voltou a achar o comando que confere se o programa é o original, e pergunta enorme é cortada em 500 caracteres."
-   }
-  ]
- },
- {
-  "versao": "4.0.0",
-  "data": "11 de novembro de 2026",
-  "resumo": "O Katharos ganha janelas e um instalador que se atualiza sozinho. O terminal continua, com o mesmo motor e os mesmos dados.",
-  "itens": [
-   {
-    "titulo": "Katharos com janelas",
-    "texto": "Início, Raio-x, Otimizar, Ao vivo, Jogos, Central, Histórico, Desfazer e Configurações, no visual do site. O Otimizar mostra cada item com o que ganha, o que perde e se já está assim no seu PC; o botão diz exatamente quantas mudanças vai fazer. Na primeira abertura, três passos guiados."
-   },
-   {
-    "titulo": "Um programa só",
-    "texto": "o ícone perto do relógio (segundo plano) abre a janela na tela certa, o aviso também; a janela liga e desliga o segundo plano, e a troca de versão fecha e religa ele sozinha."
-   },
-   {
-    "titulo": "Instalador com atualização",
-    "texto": "Katharos-win-Setup.exe instala sem pedir nada antes (o .NET e o Python vão dentro) e baixa só a diferença das versões novas. Nunca troca de versão no meio de uma mudança no PC. Em Configurações: avisar, automático ou nunca, e o canal estável ou prévia. A versão de terminal também se atualiza: katharos versoes --atualizar (confere o SHA-256 antes de trocar e guarda a anterior; --voltar desfaz)."
-   },
-   {
-    "titulo": "Conferido no Windows",
-    "texto": "depois de aplicar, cada ajuste é lido de volta; o que não ficou aparece como não ficou. Mudança arriscada pergunta \"está tudo funcionando?\" e desfaz sozinha em 90 s sem resposta."
-   },
-   {
-    "titulo": "FPS de verdade nos jogos",
-    "texto": "média, 1% mais lento e travadas, pelos eventos do próprio Windows (PresentMon, da Intel, que vem junto e é conferido pela impressão digital antes de rodar). Liberado uma vez, com confirmação. As partidas antes e depois de cada mudança são comparadas, com margem; se piorou, a central propõe desfazer."
-   },
-   {
-    "titulo": "Central que aprende com o seu PC",
-    "texto": "sabe o que é normal neste PC (linha de base por contexto, guardada por meses numa memória local em SQLite), acha o que pesa (limite nos jogos, fora do normal, piorando há dias, piora depois de uma mudança, erros do Windows, travadas) e diz a causa mais provável com as descartadas: o que viu, por que acha isso, o que faria e o que mudaria a conclusão. Diz o que previu e o que aconteceu, pesa a sua resposta e o resultado medido, e propõe desfazer o que piorou. Pergunte ao Katharos (\"por que meu jogo trava?\") responde com o que ele mediu, sem nada sair do PC."
-   },
-   {
-    "titulo": "Qual driver trava",
-    "texto": "katharos travadas (e o botão na central) mede por um minuto o tempo que cada driver segura o processador, como o LatencyMon, e diz o culpado em linguagem simples. Quando os jogos travam sem nenhum limite, a manutenção mede sozinha uma vez."
-   },
-   {
-    "titulo": "Avisos com orçamento",
-    "texto": "no máximo um por tipo a cada 6 horas (você escolhe), nada durante o jogo além de calor grave, e um resumo por dia se preferir."
-   },
-   {
-    "titulo": "Segundo plano mais leve",
-    "texto": "a lista de processos sai numa chamada só, as leituras pesadas nunca caem juntas e um freio espaça o ritmo se a leitura ficar cara. No Windows do CI: 3 a 6 ms por leitura e 0,1 % da CPU."
-   },
-   {
-    "titulo": "Notebook",
-    "texto": "troca o plano de energia sozinho na tomada e na bateria, se você ligar; confere cada troca e avisa se algo trocou de volta."
-   },
-   {
-    "titulo": "Todas as versões do Windows 10 e 11",
-    "texto": "o raio-x diz quando a sua versão está sem atualização de segurança (e o caminho do ESU no Windows 10), e os itens que uma edição não aceita dizem isso em vez de fingir."
-   },
-   {
-    "titulo": "Medidas fiéis",
-    "texto": "o benchmark mostra o que está aberto e pede para você fechar (nunca fecha nada sozinho); processos do Windows nunca aparecem como \"feche este\"."
-   },
-   {
-    "titulo": "À prova de invasores",
-    "texto": "nenhuma porta de rede aberta, PowerShell sempre pelo caminho completo, o motor de administrador roda de uma cópia em %ProgramData% conferida pelo SHA-256 gravado no aplicativo e só atende a janela que o abriu (senha de uso único), e o antivírus do Windows passa em cada versão antes de sair. Testado no Windows do CI: instalar, atualizar com o segundo plano rodando e desinstalar guardando os dados."
-   },
-   {
-    "titulo": "Raio-x e itens novos",
-    "texto": "arquivo de paginação num HD quando há SSD, integridade de memória (só informa: o Katharos não desliga), agendamento de GPU e o que ficou no limite nos jogos. Itens novos: monitor na taxa máxima (testa antes, lê de volta e volta sozinho se a tela apagar), placa de rede sem economia em PC de mesa, efeitos visuais já no modo seguro em PC fraco."
-   },
-   {
-    "titulo": "Medidas fiéis de verdade",
-    "texto": "boot medido pelo Windows (caminho principal, sem o boot logo depois de atualização, mediana dos últimos), qualidade da medida em toda tela de ganho, o antes e depois de cada aplicação pela janela e o ensaio repetido (provas --repetir)."
-   },
-   {
-    "titulo": "Site novo",
-    "texto": "vídeos do programa em uso, gravados com a interface de verdade, e a escolha entre janelas e terminal."
-   },
-   {
-    "titulo": "Windows Server 2022 e 2025",
-    "texto": "no teste de verdade do CI, além do Windows 10 e 11."
    }
   ]
  }
