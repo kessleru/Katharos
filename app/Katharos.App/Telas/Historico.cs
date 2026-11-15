@@ -42,6 +42,10 @@ public class Historico : Tela
         var porDia = new Dictionary<DateTime, double>();
         foreach (var x in s.A("pontos")) if (DateTime.TryParse(x.S("dia"), out var dd) && x.D("v") is double v) porDia[dd.Date] = v;
         DateTime fim = porDia.Count > 0 ? porDia.Keys.Max() : DateTime.Today, ini = fim.AddDays(-(dias - 1));
+        // com poucos dias de medida, o gráfico começa na primeira (um dia antes, para respirar): 30 dias com 3 pontos ficavam espremidos
+        // no canto direito, só com as marcas das mudanças à vista (relato do dono, 15/11)
+        if (porDia.Count > 0 && porDia.Keys.Min() > ini.AddDays(1)) { ini = porDia.Keys.Min().AddDays(-1); dias = (int)(fim - ini).TotalDays + 1; }
+        dias = Math.Max(dias, 2);
         var vals = new double[dias]; var rot = new string[dias];
         for (int i = 0; i < dias; i++) { var dd = ini.AddDays(i); vals[i] = porDia.TryGetValue(dd, out var v) ? v : double.NaN; rot[i] = dd.ToString("dd/MM"); }
         // as mudanças do mesmo dia viram uma marca só ("inicialização e serviços · 12/11")

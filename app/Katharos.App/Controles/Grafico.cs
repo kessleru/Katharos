@@ -193,6 +193,7 @@ public class Grafico : Control
     {
         // cada trecho com leitura vira uma figura; o dia sem leitura fica em branco
         var linha = new StreamGeometry(); var fundo = new StreamGeometry();
+        var soltos = new List<Point>();
         using (var gl = linha.Open())
         using (var ga = fundo.Open())
         {
@@ -208,7 +209,7 @@ public class Grafico : Control
                 i++;
                 while (i <= Fi && i < v.Count && !double.IsNaN(v[i])) { var p = new Point(XDe(i, a), YDe(v[i], max, a)); gl.LineTo(p); ga.LineTo(p); i++; }
                 // ponto sozinho (um dia entre lacunas): um traço curto, para não sumir
-                if (i - 1 == ini) gl.LineTo(new Point(XDe(ini, a) + 1.5, YDe(v[ini], max, a)));
+                if (i - 1 == ini) { gl.LineTo(new Point(XDe(ini, a) + 1.5, YDe(v[ini], max, a))); soltos.Add(new Point(XDe(ini, a), YDe(v[ini], max, a))); }
                 gl.EndFigure(false);
                 ga.LineTo(new Point(XDe(i - 1, a), a.Bottom));
                 ga.EndFigure(true);
@@ -224,6 +225,8 @@ public class Grafico : Control
             c.DrawGeometry(degrade, null, fundo);
         }
         c.DrawGeometry(null, new Pen(new SolidColorBrush(cor), Eixos ? 2 : 1.6, lineJoin: PenLineJoin.Round, lineCap: PenLineCap.Round), linha);
+        // dia com leitura entre lacunas: um ponto que se vê (antes era um traço de 1,5 px, que sumia; relato do dono no Histórico)
+        foreach (var p in soltos) c.DrawEllipse(new SolidColorBrush(cor), null, p, Eixos ? 3.5 : 2.5, Eixos ? 3.5 : 2.5);
     }
 
     static FormattedText Texto(string s, double tam, IBrush cor) =>
