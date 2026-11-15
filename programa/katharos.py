@@ -12360,9 +12360,11 @@ def migra_segundo_plano(ctx):
     if e.get('segundo_plano') in ('sim', 'nao') or not exe_do_pacote():
         if e.get('segundo_plano') == 'sim':
             escreve_config_sp()   # caminho do programa e do Python podem ter mudado
-            confere_segundo_plano(ctx)
+            # primeiro a versão nova do executável, depois religar: na ordem inversa (4.5.0) ele religava a antiga e a cópia da nova
+            # falhava com "arquivo em uso" (log do PC do dono, 15/11)
             if exe_do_pacote() and exe_instalado().is_file() and _sha(exe_do_pacote()) != _sha(exe_instalado()):
-                instala_segundo_plano(ctx, mostrar=False, quieto=True)   # versão nova do executável
+                instala_segundo_plano(ctx, mostrar=False, quieto=True)
+            confere_segundo_plano(ctx)
         return False
     if e.get('manut_freq') == 'continua' or e.get('bandeja') == 'sim':
         if instala_segundo_plano(ctx, mostrar=True, quieto=True):
@@ -15927,8 +15929,13 @@ def api_itens(ctx, p, ev):
         por_modo = {}
         for m in MODOS:
             marca_por_modo(its, m)
-            por_modo[m] = sum(1 for x in its if x.marcado and x.ja is not True)
+            por_modo[m] = 0 if nome in PACOTES_RECORRENTES else sum(1 for x in its if x.marcado and x.ja is not True)
         marca_por_modo(its, modo)
+        if nome in PACOTES_RECORRENTES:
+            # limpeza, reparo e atualização não vêm marcados na janela: são manutenção, que a pessoa pede quando quer (pedido do dono,
+            # 15/11: rodar SFC, DISM e Windows Update a cada "Aplicar" pesa e não é otimização). O terminal continua como era.
+            for x in its:
+                x.marcado = False
         return {'nome': nome, 'titulo': pac.titulo, 'resumo': pac.resumo, 'explica': pac.explica, 'reversivel': pac.reversivel,
                 'recomendado': recomendadas.get(nome),
                 'recorrente': nome in PACOTES_RECORRENTES, 'vazio': SEM_ITENS.get(nome, '') if not its else '',

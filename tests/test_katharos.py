@@ -3059,7 +3059,8 @@ class TestApi(_CasaTemporaria):
             its = [x for x in (pac.itens(ctx) or []) if x]
             its, _ = k.aplica_protegidos(nome, its)
             k.marca_por_modo(its, 'equilibrado')
-            esperado += sum(x.marcado for x in its)
+            if nome not in k.PACOTES_RECORRENTES:   # manutenção não vem marcada na janela (5.0.0)
+                esperado += sum(x.marcado for x in its)
         self.assertEqual(marcados, esperado)
         self.assertGreater(total, 100)
         self.assertEqual(self.um('itens', {'modo': 'turbo'})['erro']['codigo'], 'pedido_invalido')

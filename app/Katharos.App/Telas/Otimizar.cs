@@ -223,7 +223,16 @@ public class Otimizar : Tela
         atalhos.Children.Add(Botao("Voltar ao modo", false, () => MarcaTudo(null)).Com(b => { b.Margin = new Thickness(0, 0, 8, 8); ToolTip.SetTip(b, "Marca de novo só o que o modo escolhido marca"); }));
         atalhos.Children.Add(Link(areas.All(x => x.Aberta) ? "Fechar todas" : "Abrir todas", () => AbreTodas(!areas.All(x => x.Aberta))).Com(l => l.Margin = new Thickness(0, 0, 0, 8)));
         lista.Children.Add(atalhos);
-        foreach (var a in areas) lista.Children.Add(DesenhaArea(a));
+        // ajustes primeiro; limpeza, reparo e atualização num bloco à parte, sem vir marcados (são manutenção, não ajuste que fica)
+        foreach (var a in areas.Where(a => !a.J.B("recorrente"))) lista.Children.Add(DesenhaArea(a));
+        var manut = areas.Where(a => a.J.B("recorrente")).ToList();
+        if (manut.Count > 0)
+        {
+            lista.Children.Add(new Border { Margin = new Thickness(32, 22, 32, 8), Child = new StackPanel { Spacing = 2, Children = {
+                T("MANUTENÇÃO", "rotulo", tamanho: 12).Com(t => t.LetterSpacing = 1.5),
+                T("Limpeza, reparo e atualização rodam uma vez, quando você marcar. Não vêm marcados em nenhum modo.", "rotulo", tamanho: 12.5, quebra: true) } } });
+            foreach (var a in manut) lista.Children.Add(DesenhaArea(a));
+        }
         var passo2 = S(lista);
 
         // a ação, sempre à vista

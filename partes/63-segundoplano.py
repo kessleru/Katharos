@@ -291,9 +291,11 @@ def migra_segundo_plano(ctx):
     if e.get('segundo_plano') in ('sim', 'nao') or not exe_do_pacote():
         if e.get('segundo_plano') == 'sim':
             escreve_config_sp()   # caminho do programa e do Python podem ter mudado
-            confere_segundo_plano(ctx)
+            # primeiro a versão nova do executável, depois religar: na ordem inversa (4.5.0) ele religava a antiga e a cópia da nova
+            # falhava com "arquivo em uso" (log do PC do dono, 15/11)
             if exe_do_pacote() and exe_instalado().is_file() and _sha(exe_do_pacote()) != _sha(exe_instalado()):
-                instala_segundo_plano(ctx, mostrar=False, quieto=True)   # versão nova do executável
+                instala_segundo_plano(ctx, mostrar=False, quieto=True)
+            confere_segundo_plano(ctx)
         return False
     if e.get('manut_freq') == 'continua' or e.get('bandeja') == 'sim':
         if instala_segundo_plano(ctx, mostrar=True, quieto=True):

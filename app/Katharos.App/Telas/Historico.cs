@@ -25,7 +25,14 @@ public class Historico : Tela
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo as medidas").secao);
         var d = await Servico.Le("historico", new { dias = 60 });
         if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
+        // a medida do dia é gravada pelo motor logo depois de abrir a janela: sem o ponto de hoje, lê de novo daqui a pouco (uma vez)
+        string hoje = DateTime.Today.ToString("yyyy-MM-dd");
+        bool temHoje = d.A("series").Any(s => s.A("pontos").Any(p => p.S("dia") == hoje));
+        if (!temHoje && !releu) { releu = true; Avalonia.Threading.DispatcherTimer.RunOnce(async () => { if (IsAttachedToVisualTree()) await Recarrega(); }, TimeSpan.FromSeconds(25)); }
     }
+
+    bool releu;
+    bool IsAttachedToVisualTree() => Avalonia.VisualTree.VisualExtensions.GetVisualRoot(this) != null;
 
     /// <summary>Uma medida pronta para desenhar: um valor por dia do período (NaN no dia sem leitura) e as marcas agrupadas por dia.</summary>
     record Serie(string Rotulo, string Unidade, int Casas, double[] Valores, string[] Dias, double FaixaMin, double FaixaMax, int DiasComDado, List<MarcaGrafico> Marcas);
