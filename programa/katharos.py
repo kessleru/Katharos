@@ -15717,6 +15717,20 @@ def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
     return None
 
 
+# Achados que o Katharos aponta mas não resolve com um clique (é físico, é do fabricante ou é energia): a janela mostra
+# "Como resolver" no lugar de "Aplicar esta correção" (5.0.0, catálogo seguro: botão que não resolve não aparece).
+SO_ORIENTA = ('Memória em canal único', 'Pentes de memória de tamanhos diferentes', 'Disco quente', 'SSD perto do fim da vida útil',
+              'DISCO PODE FALHAR', 'Bateria gasta', 'PC de empresa (domínio)', 'Temperatura alta em repouso', 'Processador sendo limitado')
+
+
+def so_orienta(a):
+    t = str(a.get('titulo') or '')
+    if t in SO_ORIENTA or t.startswith('Monitor de ') or (t.startswith('Disco ') and 'desgaste' in t):
+        return True
+    # desligamento sem tela azul é energia, botão segurado ou fonte: o reparo do Windows não mexe nisso
+    return t == 'Telas azuis ou desligamentos inesperados' and 'nenhuma tela azul' in str(a.get('evidencia') or '')
+
+
 def concilia_achados(achados, quando_raiox):
     """Os achados com a situação de agora: os resolvidos ganham "resolvido" (o raio-x mostra apagado; o Início não mostra), e a
     evidência que mudou é trocada pela de agora."""
@@ -15725,6 +15739,8 @@ def concilia_achados(achados, quando_raiox):
     for a in achados:
         a = dict(a)
         a.setdefault('categoria', categoria_achado(a.get('titulo'), a.get('comando')))
+        if so_orienta(a):
+            a['so_orienta'] = True
         sit = situacao_achado(a, quando_raiox, areas, aplicados)
         # raio-x de antes da 4.3.0: "Muita coisa abrindo" contava até antivírus e drivers e podia ser "grave". Abrir com o Windows nunca é
         # grave; sem conferência nova, fica no máximo como dica

@@ -41,13 +41,13 @@ public class Detalhe : Tela
         void AbreDetalhe(string secao) { var c = x.DeepClone(); c["origem"] = origem; Prepara(c, secao); abre("detalhe"); }
         if (x.S("resolvido") == "")
         {
-            if (Rotas.EhArea(cmd) && !soLer)
+            if (Rotas.EhArea(cmd) && !soLer && !x.B("so_orienta"))
                 p.Children.Add(area == "inicializacao" ? Botao("Escolher quais abrem", primario, () => abre("inicializacao"))
                                                        : Botao("Aplicar esta correção", primario, async () => await Aplicacao.Correcao(area, Ponto(Primeiro(x.S("evidencia"), x?["explicacao"].S("vi") ?? "", x.S("porque"))), abre)));
-            else if (Rotas.Tela(cmd) is string t && !soLer && !(origem == "Raio-x" && t == "raiox"))
+            else if (Rotas.Tela(cmd) is string t && !soLer && !x.B("so_orienta") && !(origem == "Raio-x" && t == "raiox"))
                 p.Children.Add(Botao(Rotas.Acao(cmd), primario, () => abre(t)));
             else if (cmd != "" || x.S("faz") != "")
-                p.Children.Add(Botao(Rotas.EhArea(cmd) ? "Como resolver" : "Como investigar", primario, () => AbreDetalhe("resolver")));
+                p.Children.Add(Botao(Rotas.EhArea(cmd) || x.B("so_orienta") ? "Como resolver" : "Como investigar", primario, () => AbreDetalhe("resolver")));
         }
         // "Entender" é discreto (link): a ação é o botão; num achado só de leitura, "Como investigar" já abre o mesmo lugar
         p.Children.Add(Link("Entender", () => AbreDetalhe("")));

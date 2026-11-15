@@ -4371,3 +4371,30 @@ class TestAchados450(unittest.TestCase):
     def test_janela_nao_usa_a_entrada_do_segundo_plano(self):
         cs = (Path(__file__).resolve().parent.parent / 'app' / 'Katharos.App' / 'AbrirComWindows.cs').read_text(encoding='utf-8')
         self.assertIn('const string Nome = "Katharos Janela"', cs)
+
+
+class TestCatalogo500(unittest.TestCase):
+    """5.0.0: botão que não resolve não aparece; manutenção não vem marcada; o @@ no meio de uma linha CLIXML é lido."""
+
+    def test_desligamento_sem_tela_azul_so_orienta(self):
+        a = {'titulo': 'Telas azuis ou desligamentos inesperados', 'evidencia': '10 desligamentos sem aviso (nenhuma tela azul: pode ser queda de energia)'}
+        self.assertTrue(k.so_orienta(a))
+        self.assertFalse(k.so_orienta(dict(a, evidencia='3 telas azuis nos últimos 60 dias')))
+        self.assertTrue(k.so_orienta({'titulo': 'Monitor de 144 Hz rodando a 60 Hz'}))
+        self.assertFalse(k.so_orienta({'titulo': 'Muitos programas abrindo com o Windows'}))
+
+    def test_tarefa_com_python_da_loja_e_quebrada(self):
+        with tempfile.TemporaryDirectory() as d:
+            kpy = Path(d) / 'katharos.py'
+            kpy.write_text(f"VERSAO = '{k.VERSAO}'\n", encoding='utf-8')
+            dados = {'tarefas': [{'nome': k.TAREFA_AMOSTRA, 'estado': 'Ready', 'args': f'"{kpy}" amostrar', 'ultima': '2026-11-15T19:45:01', 'resultado': 1,
+                                  'exe': 'C:\\Users\\o\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\\pythonw.exe'}]}
+            s = types.SimpleNamespace(dados=dados, ok=True, erros=[])
+            with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s):
+                tk = k.confere_tarefas(types.SimpleNamespace(t=None))
+        self.assertIn('Store', tk[0]['problema'])
+
+    def test_tipo_pelas_interfaces(self):
+        self.assertEqual(k.tipo_dispositivo({'produto': 'Rapoo Gaming Device', 'filhas': ['Mouse', 'Keyboard']}), 'mouse')
+        self.assertEqual(k.tipo_dispositivo({'produto': 'HyperX Quadcast', 'filhas': ['Media']}), 'microfone')
+        self.assertEqual(k.tipo_dispositivo({'produto': 'Gaming Keyboard', 'filhas': ['Keyboard', 'Mouse']}), 'teclado')
