@@ -15534,6 +15534,10 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
                 preparo_pronto.wait(30)
                 cura_ao_abrir(ctx)
                 amostra_se_velha(ctx)
+                try:
+                    api_dispositivos(ctx, {}, None)   # o arquivo que o ícone lê fica com as baterias de agora
+                except Exception as e:
+                    LOG.escreve(f'dispositivos ao abrir: {e!r}')
             threading.Thread(target=cura, daemon=True).start()
         if paralelo:   # dois PowerShell já abertos para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
             threading.Thread(target=lambda: POOL_PS.aquece(2), daemon=True).start()
@@ -16621,10 +16625,52 @@ def le_dispositivos(ctx):
     return sorted(out, key=lambda x: (ordem.get(x['tipo'], 9), x['nome'].lower()))
 
 
+def controles_xinput():
+    """Bateria dos controles Xbox (e dos que se passam por eles) pelo XInput do Windows: XInputGetBatteryInformation só lê o que o
+    Windows já sabe. Nada é enviado ao controle. [{nome, tipo, conexao, bateria_nivel}] (o XInput dá nível, não porcentagem)."""
+    if not WINDOWS:
+        return []
+    try:
+        import ctypes
+        x = ctypes.WinDLL('xinput1_4')
+    except OSError:
+        return []
+
+    class _Bat(ctypes.Structure):
+        _fields_ = [('tipo', ctypes.c_ubyte), ('nivel', ctypes.c_ubyte)]
+
+    class _Estado(ctypes.Structure):
+        _fields_ = [('pacote', ctypes.c_uint32), ('dados', ctypes.c_ubyte * 12)]
+    out = []
+    for i in range(4):
+        st = _Estado()
+        if x.XInputGetState(i, ctypes.byref(st)) != 0:   # sem controle neste número
+            continue
+        b = _Bat()
+        if x.XInputGetBatteryInformation(i, 0, ctypes.byref(b)) != 0:
+            continue
+        # tipo: 0 desconectado, 1 com fio, 2 alcalina, 3 recarregável; nível: 0 vazia, 1 baixa, 2 média, 3 cheia
+        if b.tipo == 0:
+            continue
+        nivel = None if b.tipo == 1 else {0: 'vazia', 1: 'baixa', 2: 'média', 3: 'cheia'}.get(b.nivel)
+        out.append({'nome': f'Controle Xbox {i + 1}', 'nome_windows': 'XInput', 'fabricante': '', 'tipo': 'controle',
+                    'conexao': 'usb' if b.tipo == 1 else 'sem fio', 'vid': '', 'pid': '', 'bateria': None, 'bateria_nivel': nivel, 'ok': True})
+    return out
+
+
 @metodo_api('dispositivos')
 def api_dispositivos(ctx, p, ev):
     """Mouse, teclado, fone e controle ligados agora, com a bateria quando o Windows sabe (Bluetooth)."""
-    return {'dispositivos': le_dispositivos(ctx)}
+    ds = le_dispositivos(ctx)
+    try:
+        ds += controles_xinput()
+    except Exception as e:   # leitura extra: nunca derruba a tela
+        LOG.escreve(f'dispositivos: XInput: {e!r}')
+    try:   # o ícone (segundo plano) mostra as baterias a partir deste arquivo, sem ele mesmo ler nada
+        grava_json(CASA / 'dispositivos.json', {'quando': agora_iso(), 'dispositivos': ds})
+    except OSError:
+        pass
+    return {'dispositivos': ds}
 # ─────────────── envio de relatório e feedback ───────────────
 #
 #   A janela manda; o motor só monta. O relatório que sai daqui é feito para melhorar o Katharos: os erros dele, o que foi
@@ -17663,7 +17709,7 @@ NOVIDADES = [
    },
    {
     "titulo": "Dispositivos",
-    "texto": "(novo): mouse, teclado, fone e controle ligados, com a bateria do Bluetooth. A bateria e o DPI dos receptores 2.4 GHz chegam nas próximas versões, marca por marca."
+    "texto": "(novo): mouse, teclado, fone e controle ligados, em fichas com a bateria num anel (Bluetooth e controles Xbox). O painel do ícone mostra as baterias e fica vermelho quando uma está baixa. O Katharos só lê: nunca muda nada no aparelho."
    },
    {
     "titulo": "FPS",
@@ -17683,7 +17729,7 @@ NOVIDADES = [
    },
    {
     "titulo": "Visual",
-    "texto": "anel na nota do PC, medidor segmentado no Ao vivo, raio-x rodando com layout próprio e ícones de teclado, fone e controle."
+    "texto": "anel na nota do PC, medidor segmentado no Ao vivo, barra de gravidade nos achados do Início, raio-x rodando com layout próprio e ícones de teclado, fone e controle."
    },
    {
     "titulo": "Relatório",

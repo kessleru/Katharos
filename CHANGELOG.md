@@ -27,12 +27,12 @@ Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz 
 - **Desinstalar tira tudo**: o segundo plano sai, as entradas de abrir com o Windows e as tarefas agendadas também. Os seus dados ficam.
 - **Atualização**: confere a cada 3 h, também com a janela aberta, e pergunta "reiniciar agora" ou "na próxima vez".
 - **Telas que não perdem nada**: o raio-x continua rodando ao trocar de tela, e o texto do relatório não se apaga.
-- **Dispositivos** (novo): mouse, teclado, fone e controle ligados, com a bateria do Bluetooth. A bateria e o DPI dos receptores 2.4 GHz chegam nas próximas versões, marca por marca.
+- **Dispositivos** (novo): mouse, teclado, fone e controle ligados, em fichas com a bateria num anel (Bluetooth e controles Xbox). O painel do ícone mostra as baterias e fica vermelho quando uma está baixa. O Katharos só lê: nunca muda nada no aparelho.
 - **FPS**: o botão para liberar a medida agora existe (Configurações, FPS nos jogos).
 - **Consumo do Katharos**: o Ao vivo soma também os PowerShell de leitura, na mesma conta do Gerenciador de Tarefas. Eles fecham depois de 30 s parados e são no máximo 2.
 - **Memória**: separa o que está aberto agora do que já fechou.
 - **Jogos**: a dica de ajustes some quando tudo da área já está aplicado.
-- **Visual**: anel na nota do PC, medidor segmentado no Ao vivo, raio-x rodando com layout próprio e ícones de teclado, fone e controle.
+- **Visual**: anel na nota do PC, medidor segmentado no Ao vivo, barra de gravidade nos achados do Início, raio-x rodando com layout próprio e ícones de teclado, fone e controle.
 - **Relatório**: traz um autodiagnóstico (tarefas quebradas, histórico parado, segundo plano sem ler, FPS sem permissão) e a lista de periféricos, e não manda mais linhas que não são erro.
 
 ## 4.4.0 · 13 de novembro de 2026

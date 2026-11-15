@@ -27,7 +27,7 @@ NOVIDADES = [
    },
    {
     "titulo": "Dispositivos",
-    "texto": "(novo): mouse, teclado, fone e controle ligados, com a bateria do Bluetooth. A bateria e o DPI dos receptores 2.4 GHz chegam nas próximas versões, marca por marca."
+    "texto": "(novo): mouse, teclado, fone e controle ligados, em fichas com a bateria num anel (Bluetooth e controles Xbox). O painel do ícone mostra as baterias e fica vermelho quando uma está baixa. O Katharos só lê: nunca muda nada no aparelho."
    },
    {
     "titulo": "FPS",
@@ -47,7 +47,7 @@ NOVIDADES = [
    },
    {
     "titulo": "Visual",
-    "texto": "anel na nota do PC, medidor segmentado no Ao vivo, raio-x rodando com layout próprio e ícones de teclado, fone e controle."
+    "texto": "anel na nota do PC, medidor segmentado no Ao vivo, barra de gravidade nos achados do Início, raio-x rodando com layout próprio e ícones de teclado, fone e controle."
    },
    {
     "titulo": "Relatório",

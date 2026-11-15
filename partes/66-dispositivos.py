@@ -91,7 +91,49 @@ def le_dispositivos(ctx):
     return sorted(out, key=lambda x: (ordem.get(x['tipo'], 9), x['nome'].lower()))
 
 
+def controles_xinput():
+    """Bateria dos controles Xbox (e dos que se passam por eles) pelo XInput do Windows: XInputGetBatteryInformation só lê o que o
+    Windows já sabe. Nada é enviado ao controle. [{nome, tipo, conexao, bateria_nivel}] (o XInput dá nível, não porcentagem)."""
+    if not WINDOWS:
+        return []
+    try:
+        import ctypes
+        x = ctypes.WinDLL('xinput1_4')
+    except OSError:
+        return []
+
+    class _Bat(ctypes.Structure):
+        _fields_ = [('tipo', ctypes.c_ubyte), ('nivel', ctypes.c_ubyte)]
+
+    class _Estado(ctypes.Structure):
+        _fields_ = [('pacote', ctypes.c_uint32), ('dados', ctypes.c_ubyte * 12)]
+    out = []
+    for i in range(4):
+        st = _Estado()
+        if x.XInputGetState(i, ctypes.byref(st)) != 0:   # sem controle neste número
+            continue
+        b = _Bat()
+        if x.XInputGetBatteryInformation(i, 0, ctypes.byref(b)) != 0:
+            continue
+        # tipo: 0 desconectado, 1 com fio, 2 alcalina, 3 recarregável; nível: 0 vazia, 1 baixa, 2 média, 3 cheia
+        if b.tipo == 0:
+            continue
+        nivel = None if b.tipo == 1 else {0: 'vazia', 1: 'baixa', 2: 'média', 3: 'cheia'}.get(b.nivel)
+        out.append({'nome': f'Controle Xbox {i + 1}', 'nome_windows': 'XInput', 'fabricante': '', 'tipo': 'controle',
+                    'conexao': 'usb' if b.tipo == 1 else 'sem fio', 'vid': '', 'pid': '', 'bateria': None, 'bateria_nivel': nivel, 'ok': True})
+    return out
+
+
 @metodo_api('dispositivos')
 def api_dispositivos(ctx, p, ev):
     """Mouse, teclado, fone e controle ligados agora, com a bateria quando o Windows sabe (Bluetooth)."""
-    return {'dispositivos': le_dispositivos(ctx)}
+    ds = le_dispositivos(ctx)
+    try:
+        ds += controles_xinput()
+    except Exception as e:   # leitura extra: nunca derruba a tela
+        LOG.escreve(f'dispositivos: XInput: {e!r}')
+    try:   # o ícone (segundo plano) mostra as baterias a partir deste arquivo, sem ele mesmo ler nada
+        grava_json(CASA / 'dispositivos.json', {'quando': agora_iso(), 'dispositivos': ds})
+    except OSError:
+        pass
+    return {'dispositivos': ds}

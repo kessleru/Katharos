@@ -1114,6 +1114,50 @@ namespace KatharosApp
     // ───────── limites do motor: uma fonte só (REGRAS_MOTOR no Python) ─────────
     // A montagem grava exe/regras.json (embutido aqui); o Katharos grava ~/.katharos/regras.json, que vale por cima (versão nova sem
     // recompilar). Nenhum limite fica escrito neste arquivo: um teste confere.
+    // o resumo das baterias dos periféricos para o painel, lido do arquivo que a janela grava (só leitura, cache de 60 s)
+    static class Dispositivos
+    {
+        static DateTime lido = DateTime.MinValue; static string resumo; public static bool TemBaixa;
+
+        public static string Resumo()
+        {
+            if ((DateTime.Now - lido).TotalSeconds < 60) return resumo;
+            lido = DateTime.Now; resumo = null; TemBaixa = false;
+            try
+            {
+                string arq = K.Arq("dispositivos.json");
+                if (!File.Exists(arq) || (DateTime.Now - File.GetLastWriteTime(arq)).TotalHours > 12) return null;
+                var d = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(arq, Encoding.UTF8)) as Dictionary<string, object>;
+                var ds = d != null && d.ContainsKey("dispositivos") ? d["dispositivos"] as object[] : null;
+                if (ds == null) return null;
+                var partes = new List<string>();
+                foreach (var o in ds)
+                {
+                    var x = o as Dictionary<string, object>;
+                    if (x == null) continue;
+                    string tipo = x.ContainsKey("tipo") ? Convert.ToString(x["tipo"]) : "";
+                    string nome = tipo == "mouse" ? "mouse" : tipo == "teclado" ? "teclado" : tipo == "fone" ? "fone" : tipo == "controle" ? "controle" : null;
+                    if (nome == null) continue;
+                    if (x.ContainsKey("bateria") && x["bateria"] != null)
+                    {
+                        int b = Convert.ToInt32(x["bateria"], K.INV);
+                        if (b <= 15) TemBaixa = true;
+                        partes.Add(nome + " " + b + " %");
+                    }
+                    else if (x.ContainsKey("bateria_nivel") && x["bateria_nivel"] != null && Convert.ToString(x["bateria_nivel"]) != "")
+                    {
+                        string n = Convert.ToString(x["bateria_nivel"]);
+                        if (n == "baixa" || n == "vazia") TemBaixa = true;
+                        partes.Add(nome + " " + n);
+                    }
+                }
+                if (partes.Count > 0) resumo = "bateria: " + string.Join(" · ", partes.GetRange(0, Math.Min(4, partes.Count)).ToArray());
+            }
+            catch (Exception e) { Log.Escreve("dispositivos: " + e.Message); }
+            return resumo;
+        }
+    }
+
     static class Lim
     {
         static Dictionary<string, double> v = new Dictionary<string, double>();
@@ -2248,6 +2292,13 @@ namespace KatharosApp
                     y = Linha(g, pinta, y, pad, "rede", K.Num((a.RedeBaixa ?? 0) * 8, 1) + " Mb/s", "baixando · enviando " + K.Num((a.RedeSobe ?? 0) * 8, 1) + " Mb/s", hist, fRede, 0, false);
                 if (a.Bateria.HasValue && pinta) Texto(g, "bateria " + a.Bateria + " %" + (a.NaBateria ? ", fora da tomada" : ", na tomada"), fPequeno, Cor.Apagado, pad, y);
                 if (a.Bateria.HasValue) y += 18 * s;
+                // as baterias de mouse, fone e controle que a janela leu (dispositivos.json, de até 12 h): o ícone não abre aparelho nenhum
+                string disp = Dispositivos.Resumo();
+                if (disp != null)
+                {
+                    if (pinta) Texto(g, disp, fPequeno, Dispositivos.TemBaixa ? Cor.Vermelho : Cor.Apagado, pad, y);
+                    y += 18 * s;
+                }
             }
             // "o que eu vejo agora" e a central saíram do painel (pedido do dono): o painel é só para ver os números; o resto fica na janela
             y += 4 * s;

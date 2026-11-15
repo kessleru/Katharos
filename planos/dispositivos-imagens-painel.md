@@ -25,9 +25,12 @@ Não existe um jeito único de ler a bateria de todo aparelho:
 | C. Controles | Xbox (XInputGetBatteryInformation), DualSense/DualShock (byte de bateria no relatório de entrada), 8BitDo no modo Xbox | APIs do Windows e relatório de entrada | só leitura |
 | D. Protocolos de fabricante (leitura) | Logitech HID++ 2.0 (features 0x1000, 0x1001, 0x1004 de bateria; 0x2201 de DPI), Razer (relatório de feature de 90 bytes), SteelSeries, Corsair, HyperX e fones com protocolo conhecido | pedido de feature report, só os comandos de leitura | baixo: só leitura, comandos documentados por projetos abertos |
 | E. Chips chineses | Sinowealth (Redragon, Aula, Attack Shark, Glorious antigo...), Compx (Attack Shark, VXE, ATK), Beken, Nordic | os mesmos relatórios de feature que os "drivers web" (WebHID) dessas marcas usam | médio: varia por firmware; liga um modelo só depois de testado num aparelho real |
-| F. Escrita (DPI, taxa de polling, desligar sozinho, LED) | só onde a leitura já funciona | grava e guarda o valor de antes (desfazer) | só quando a pessoa clica, um aparelho por vez, nunca mexe em firmware |
+
+
+> **O que a regra de só leitura corta.** Quase todo protocolo de fabricante (Logitech HID++, Razer, SteelSeries, Corsair, chips chineses) pede a bateria **mandando um comando** ao aparelho (um relatório de saída ou de feature) e lendo a resposta. Mandar comando é escrever no aparelho, então **as camadas D e E ficam fora** até haver um caminho de leitura pura (o aparelho mandando a bateria sozinho num relatório de entrada, que o Katharos só escuta). Ficam valendo: A (o Windows já sabe), C (XInput, que é uma API de leitura do Windows) e B só quando o valor vem no relatório de entrada que o aparelho já envia, sem pedido.
 
 Regras:
+- **Só leitura, sempre (regra do dono, 15/11).** O Katharos nunca muda nada num aparelho: nem DPI, nem polling, nem LED, nem desligamento automático, nem firmware. Na dúvida se um pedido ao aparelho é só leitura, ele não é feito.
 - Nada de programa de terceiros. Os protocolos são reimplementados a partir da documentação dos projetos abertos (libratbag e Solaar são MIT/GPL, openrazer é GPL, HeadsetControl é GPL). O código é nosso, e cada protocolo cita a fonte.
 - Nada abre processo de jogo. Abrir o aparelho HID é outra coisa: é o mesmo que o software da marca faz.
 - Um aparelho só é marcado "suportado" depois de testado num aparelho real, pelo dono ou por alguém que mandou relatório.
@@ -43,7 +46,7 @@ Regras:
 - **Aviso antes da partida**: abriu um jogo com o mouse em 10 % → "conecte o cabo antes da partida". Fora do jogo, aviso a 20 % e 10 %. No jogo, só o grave, como os outros avisos.
 - **Estimativa de horas**: pela curva de descarga dos últimos dias. Mostra "quanto dura uma carga" e quando a bateria está envelhecendo (a carga durando cada vez menos).
 - **Receptor em porta ruim**: receptor 2.4 GHz numa porta USB 3 ou atrás do gabinete sofre interferência. Detectado pela porta e pelas quedas de conexão, a dica é usar o extensor ou uma porta da frente.
-- **Taxa de polling e teste de mouse**: uma área de teste na janela que mede a taxa de polling real (Raw Input), os cliques duplos fantasma (botão gasto) e o DPI real (arrastar uma distância conhecida).
+- **Taxa de polling e teste de mouse** (medido pelo que o Windows entrega à janela, sem falar com o aparelho): uma área de teste na janela que mede a taxa de polling real (Raw Input), os cliques duplos fantasma (botão gasto) e o DPI real (arrastar uma distância conhecida).
 - **Teste de controle**: zona morta e drift dos analógicos, desenhados ao vivo.
 - **Teste de teclado**: ghosting e teclas presas.
 - **Monitor**: a taxa de atualização em uso comparada com a máxima ("seu monitor de 144 Hz está em 60 Hz"). Só **avisa** e abre a página do Windows: nada muda a imagem sozinho (regra do Katharos).
@@ -57,7 +60,6 @@ Regras:
 2. **4.6**: camadas B e C. Leitura no segundo plano, faixa no painel do ícone, avisos de bateria baixa, histórico e estimativa.
 3. **4.7**: camada D (Logitech HID++, Razer, SteelSeries, HyperX, Corsair, fones conhecidos), leitura de DPI e de polling.
 4. **4.8**: camada E por chip, começando pelos que mais aparecem nos relatórios (o Rapoo e o Aula do dono primeiro), e a área de testes (mouse, controle, teclado).
-5. **4.9**: camada F (escrita) com desfazer.
 
 ### O que falta para começar a fase 2 no PC do dono
 
