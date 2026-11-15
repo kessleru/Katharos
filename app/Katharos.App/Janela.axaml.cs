@@ -60,6 +60,13 @@ public partial class Janela : Window
             // relatório semanal (com aviso na primeira vez) e o "abrir com o Windows", conforme as Configurações
             if (!Servico.Exemplo) { _ = AbrirComWindows.Aplica(); _ = Task.Delay(TimeSpan.FromSeconds(20)).ContinueWith(_ => Dispatcher.UIThread.Post(async () => await RelatorioAutomatico.Confere(this))); }
         };
+        Atualizacao.Pergunta += v => Dispatcher.UIThread.Post(() => PerguntaAtualizacao(v));
+        // a janela aberta o dia todo também confere (a cada 3 h; a conferência em si respeita "atualizações: nunca")
+        new DispatcherTimer(TimeSpan.FromHours(3), DispatcherPriority.Background, async (_, _) =>
+        {
+            try { var c = await Servico.Le("config_ler"); await Atualizacao.Confere(c?["atualizacoes"].S("valor", "avisar") ?? "avisar", c?["canal"].S("valor", "estavel") ?? "estavel"); }
+            catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
+        }).Start();
         Atualizacao.Mudou += () => Dispatcher.UIThread.Post(() => { if (this.FindControl<ContentControl>("Tela")!.Content is Inicio i) _ = i.Recarrega(); });
     }
 
@@ -78,6 +85,14 @@ public partial class Janela : Window
     {
         var partes = pedido.Split(':', 2);
         string tela = partes[0], arg = partes.Length > 1 ? partes[1] : "";
+        // o raio-x rodando e o relatório com texto escrito continuam os mesmos ao voltar (relatório ELQUQN: trocar de tela apagava o texto
+        // e parecia parar o raio-x)
+        bool podeVoltar = (tela == "raiox" && arg is "" or "rodar") || (tela == "enviar" && arg == "");   // raio-x já rodando: "rodar" mostra o que roda
+        if (podeVoltar && vivas.TryGetValue(tela, out var viva) && viva.Manter)
+        {
+            MostraTela(viva, tela);
+            return;
+        }
         Tela c = tela switch
         {
             "raiox" => new Raiox(arg == "rodar"),
@@ -96,6 +111,14 @@ public partial class Janela : Window
             _ => new Inicio(),
         };
         c.Pede += Mostra;
+        if (tela is "raiox" or "enviar") vivas[tela] = c;
+        MostraTela(c, tela);
+    }
+
+    readonly Dictionary<string, Tela> vivas = new();
+
+    void MostraTela(Tela c, string tela)
+    {
         this.FindControl<ContentControl>("Tela")!.Content = c;
         Movimento.Entra(c);
         // telas que se abrem de dentro de outra acendem o item do menu de onde vieram
@@ -143,6 +166,19 @@ public partial class Janela : Window
         if (soSePrecisa)
             try { await Servico.Le("novidades", new { vista = true }); }   // vista ao aparecer: fechar a janela sem clicar não repete
             catch (Exception e) { Registro.Escreve("novidades: marcar como vista: " + e.Message); }
+    }
+
+    /// <summary>Versão nova baixada com a janela aberta: reiniciar já ou deixar para quando fechar. Nunca no meio de uma mudança no PC nem
+    /// por cima de outra caixa (aí fica o cartão do Início, e entra ao fechar).</summary>
+    void PerguntaAtualizacao(string v)
+    {
+        if (Atualizacao.Ocupado || this.FindControl<Border>("Veu")!.IsVisible) { Atualizacao.NaProximaVez(); return; }
+        var b = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        b.Children.Add(Botao("Na próxima vez", false, () => { Atualizacao.NaProximaVez(); FechaCaixa(); }));
+        var ja = Botao("Reiniciar agora", true, () => { FechaCaixa(); if (!Atualizacao.Aplica()) Atualizacao.NaProximaVez(); });
+        b.Children.Add(ja);
+        MostraCaixa(Caixa($"Versão {v} pronta", T("Já baixada. Reiniciar leva segundos e nada do que você fez se perde. \"Na próxima vez\" troca quando você fechar o Katharos.", "sub", quebra: true), b), true);
+        ja.Focus();
     }
 
     // ───── painel por cima (confirmação, progresso, resultado) ─────

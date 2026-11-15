@@ -14,6 +14,8 @@ public static class Atualizacao
     static UpdateInfo? pronta;
     public static string? VersaoPronta => pronta?.TargetFullRelease.Version.ToString();
     public static event Action? Mudou;
+    /// <summary>Baixou uma versão com a janela aberta: a janela pergunta "reiniciar agora ou na próxima vez".</summary>
+    public static event Action<string>? Pergunta;
     public static int EmUso;
     public static bool Ocupado => Volatile.Read(ref EmUso) > 0;
     /// <summary>A versão nova entra quando a janela fechar: o segundo plano sai junto e volta sozinho depois da troca.</summary>
@@ -43,7 +45,9 @@ public static class Atualizacao
         try
         {
             var marca = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".katharos", "atualizacao-conferida.txt");
-            if (File.Exists(marca) && (DateTime.Now - File.GetLastWriteTime(marca)).TotalHours < 20) return;
+            // a cada 3 h no máximo (antes, 20 h: uma versão que saía de manhã só chegava no dia seguinte, e a janela aberta o dia todo nunca
+            // mais conferia; relatório ELQUQN)
+            if (pronta != null || File.Exists(marca) && (DateTime.Now - File.GetLastWriteTime(marca)).TotalHours < 3) return;
             var info = await g.CheckForUpdatesAsync();
             Directory.CreateDirectory(Path.GetDirectoryName(marca)!);
             File.WriteAllText(marca, DateTime.Now.ToString("s"));
@@ -54,7 +58,8 @@ public static class Atualizacao
             Mudou?.Invoke();
             // automático: troca ao fechar a janela (o segundo plano sai antes e a janela o religa na próxima abertura)
             // a versão nova abre só para religar o segundo plano (--depois-da-troca), sem janela
-            if (modo == "automatico") { AoFechar = true; g.WaitExitThenApplyUpdates(info.TargetFullRelease, silent: true, restart: true, new[] { "--depois-da-troca" }); }
+            if (modo == "automatico") NaProximaVez();
+            else Pergunta?.Invoke(VersaoPronta!);
         }
         catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
     }
@@ -84,6 +89,16 @@ public static class Atualizacao
             g.ApplyUpdatesAndRestart(t.Result.TargetFullRelease, new[] { "--tela", "inicio" });
         }
         catch (Exception e) { Registro.Escreve("abertura com o Windows: " + e.Message); }
+    }
+
+    /// <summary>A versão nova entra quando a janela fechar (sem perguntar de novo); a versão nova abre só para religar o segundo plano.</summary>
+    public static void NaProximaVez()
+    {
+        var g = Gerente();
+        if (g == null || pronta == null || AoFechar) return;
+        AoFechar = true;
+        try { g.WaitExitThenApplyUpdates(pronta.TargetFullRelease, silent: true, restart: true, new[] { "--depois-da-troca" }); }
+        catch (Exception e) { AoFechar = false; Registro.Escreve("atualização: na próxima vez: " + e.Message); }
     }
 
     /// <summary>Reinicia já na versão nova (o botão "Reiniciar agora").</summary>

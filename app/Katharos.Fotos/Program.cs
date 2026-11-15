@@ -64,6 +64,25 @@ foreach (var tela in espera.Keys)
     foto!.Save(arq);
     Console.WriteLine(arq);
 }
+// o raio-x rodando (o motor simulado manda algumas etapas e não termina)
+{
+    var antes = Servico.Simulador;
+    var nunca = new TaskCompletionSource<System.Text.Json.Nodes.JsonNode?>();
+    Servico.Simulador = (metodo, p, ev) =>
+    {
+        if (metodo != "raiox") return Task.FromResult(DadosDeExemplo.Para(metodo));
+        int n = 0;
+        foreach (var t in new[] { "segurança", "disco e SMART", "programas que abrem com o Windows", "memória", "jogos e launchers", "drivers de vídeo" })
+            ev?.Invoke("etapa", System.Text.Json.Nodes.JsonNode.Parse($"{{\"texto\":\"{t}\",\"n\":{++n},\"de\":14}}"));
+        return nunca.Task;
+    };
+    j.Mostra("raiox:rodar");
+    for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Thread.Sleep(30); }
+    using var foto = j.CaptureRenderedFrame();
+    foto!.Save(Path.Combine(pasta, "raiox-rodando.png"));
+    Console.WriteLine(Path.Combine(pasta, "raiox-rodando.png"));
+    Servico.Simulador = antes;
+}
 // a tela de abertura, na etapa do meio (o quadro "Lendo" do Figma)
 {
     var ab = new Abertura();

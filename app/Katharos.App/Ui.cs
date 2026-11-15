@@ -419,6 +419,9 @@ public abstract class Tela : UserControl
     public event Action<string>? Pede;
     protected void Abre(string tela) => Pede?.Invoke(tela);
 
+    /// <summary>A janela guarda esta tela ao trocar de tela (raio-x rodando, texto escrito) e mostra a mesma ao voltar.</summary>
+    public virtual bool Manter => false;
+
     protected Tela()
     {
         Content = new ScrollViewer { HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Content = Corpo };

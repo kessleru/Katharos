@@ -249,7 +249,9 @@ public static class DadosDeExemplo
                 P("svchost", "svchost", "protegido", "serviços do Windows agrupados", "faz parte do Windows ou da proteção: o Katharos nunca mexe", 1410, 1380, 1520),
                 P("Discord", "Discord", "conhecido", "chat de voz", "tire da inicialização se não usa todo dia", 640, 590, 820, "inicializacao", "fechar", "desinstalar"),
                 P("MsMpEng", "MsMpEng", "protegido", "o antivírus do Windows (Defender) verificando arquivos", "faz parte do Windows ou da proteção: o Katharos nunca mexe", 310, 280, 650),
-                P("xyzhelper", "xyzhelper", "desconhecido", "não conheço este programa", "", 220, 210, 240)),
+                P("xyzhelper", "xyzhelper", "desconhecido", "não conheço este programa", "", 220, 210, 240),
+                P("cs2", "cs2", "desconhecido", "não conheço este programa", "", 0, 2800, 4000).Com(o => o["agora_mb"] = null),
+                P("Spotify", "Spotify", "conhecido", "música", "tire da inicialização se não usa todo dia", 0, 420, 610, "inicializacao", "fechar").Com(o => o["agora_mb"] = null)),
             ["pressao"] = new JsonObject { ["nivel"] = "apertada", ["texto"] = "Apertada: ainda dá conta, mas abrir mais um programa pesado já começa a engasgar.", ["commit_pct"] = 84.0, ["comprimida_gb"] = 1.2, ["comprimida_pct"] = 7.5 },
             ["desde"] = DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd") + "T08:00", ["ram_total_gb"] = 16, ["dias"] = 6.4,
         };

@@ -26,6 +26,8 @@ public class Enviar : Tela
     };
     readonly TextBox contato = new() { Watermark = "Opcional: e-mail ou Discord, se quiser resposta", MaxLength = 120, MinWidth = 340 };
 
+    public override bool Manter => !string.IsNullOrWhiteSpace(texto.Text) || !string.IsNullOrWhiteSpace(contato.Text);
+
     public Enviar(string arg = "")
     {
         referencia = arg;

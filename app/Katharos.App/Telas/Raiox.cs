@@ -10,11 +10,13 @@ namespace Katharos.App.Telas;
 /// <summary>Raio-x: mostra o último e roda um novo na hora que a pessoa pedir (só lê). Cada achado leva ao lugar que resolve.</summary>
 public class Raiox : Tela
 {
-    bool rodar;
+    bool rodar, rodando;
     public Raiox(bool rodarJa = false) { rodar = rodarJa; }
+    public override bool Manter => rodando;
 
     protected override async Task Carrega()
     {
+        if (rodando) return;   // voltou para a tela no meio da leitura: o andamento que já está montado continua
         var cab = Cabecalho("Raio-x", "Só lê: nada muda.", Botao("Fazer de novo", false, async () => { rodar = true; await Recarrega(); }));
         if (rodar) { rodar = false; await Roda(cab); return; }
         // o guardado aparece na hora; a resposta do motor (com o que foi resolvido desde então) troca por cima quando chega
@@ -32,12 +34,24 @@ public class Raiox : Tela
     async Task Roda(Control cab)
     {
         var (pn, passo, barra) = Andamento("Medindo o PC em repouso (o raio-x só lê: nada muda)");
-        pn.Margin = new Avalonia.Thickness(32, 40); barra.MaxWidth = 480; barra.HorizontalAlignment = HorizontalAlignment.Left;
-        var feitos = new StackPanel { Spacing = 6, Margin = new Avalonia.Thickness(0, 14, 0, 0) };
-        pn.Children.Add(feitos);
+        pn.Margin = new Avalonia.Thickness(32, 32, 32, 28); barra.MaxWidth = 560; barra.HorizontalAlignment = HorizontalAlignment.Left;
+        // o que já terminou, em duas colunas (antes: uma lista solta embaixo da barra, que parecia uma tela sem estilo; relatório ELQUQN)
+        var feitos = new Avalonia.Controls.Primitives.UniformGrid { Columns = 2 };
+        var lidos = new StackPanel { Children = { Subtitulo("Já lido", "cada parte entra aqui quando termina; várias são lidas ao mesmo tempo", "raiox"),
+                                                  new Border { Padding = new Avalonia.Thickness(32, 14, 32, 18), Child = feitos } } };
+        var oque = new StackPanel { Children = { Subtitulo("O que o raio-x olha", null, "info") } };
+        foreach (var (t, e) in new[] {
+            ("Segurança", "antivírus, firewall, atualizações e as proteções que os anti-cheats novos pedem"),
+            ("Saúde", "disco, telas azuis, desligamentos inesperados e temperatura"),
+            ("Memória e disco", "quem usa a RAM, espaço livre e o que dá para limpar"),
+            ("Inicialização", "o que abre com o Windows e quanto pesa"),
+            ("Jogos", "launchers, Modo de Jogo e o que atrapalha o FPS") })
+            oque.Children.Add(Linha(t, e));
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         var sec = S(pn);
-        Monta(cab, sec);
+        Monta(cab, sec, G(lidos), G(oque), S(new StackPanel { Margin = new Avalonia.Thickness(32, 16), Children = {
+            T("Pode usar o PC e trocar de tela: a leitura continua e esta tela volta onde parou.", "rotulo", quebra: true) } }));
+        rodando = true;
         try
         {
             var r = await Servico.Le("raiox", null, (tipo, dados) => Dispatcher.UIThread.Post(() =>
@@ -46,7 +60,7 @@ public class Raiox : Tela
                 string txt = Primeira(dados.S("texto"));
                 if ((dados.D("n") ?? 0) > 0)
                 {
-                    feitos.Children.Add(Item(T(txt, "rotulo", tamanho: 13.5), Tema.Verde));
+                    feitos.Children.Add(Item(T(txt, "rotulo", tamanho: 13.5), Tema.Verde).Com(c => c.Margin = new Avalonia.Thickness(0, 4, 16, 4)));
                     Movimento.Entra(feitos.Children[^1], 3);
                     passo.Text = (dados.D("n") ?? 0) >= (dados.D("de") ?? 99) ? "Analisando o que foi lido" : "Lendo o resto ao mesmo tempo";
                 }
@@ -57,6 +71,7 @@ public class Raiox : Tela
             Monta(cab, Resultado(r, r?["pc"], $"agora, em {(int)Math.Round(relogio.Elapsed.TotalSeconds)} s"));
         }
         catch (Exception e) { Monta(cab, Erro(e, () => { rodar = true; _ = Recarrega(); })); }
+        finally { rodando = false; }
     }
 
     // as categorias do diagnóstico, na ordem em que aparecem na nota, com o teto de pontos de cada uma (o mesmo do motor)
