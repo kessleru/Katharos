@@ -2197,10 +2197,6 @@ class TestPerguntarRodada2(unittest.TestCase):
         sin = set(k.SINONIMOS['virus'])
         self.assertTrue({'autenticidade', 'defender', 'antivirus'} <= sin)
 
-    def test_texto_enorme_e_cortado(self):
-        r = k.responde_pergunta('a' * 100000)
-        self.assertLessEqual(len(r['pergunta']), 500)
-
 
 class TestLeJsonTipoErrado(unittest.TestCase):
     def test_json_de_outro_tipo_vira_o_padrao_e_guarda_a_copia(self):
@@ -3772,17 +3768,11 @@ class TestApiMotor(_CasaTemporaria):
             c = self.um('sugestoes')['dados']
             self.assertEqual(c['diagnosticos'][0]['causa'], 'calor')
             self.assertIn('linha_do_tempo', c)
-            r = self.um('perguntar', {'texto': 'por que meus jogos esquentam?'})['dados']
-            self.assertIn('calor', r['resposta'])
         self.assertTrue(self.um('dispensar', {'id': 'x'})['ok'])
         self.assertIn('x', k.estado()['conselheiro_dispensadas'])
         self.assertIn('contagens', self.um('memoria')['dados'])
         self.assertFalse(self.um('memoria_apagar', {})['ok'])
         self.assertTrue(self.um('memoria_apagar', {'confirmo': True})['ok'])
-
-    def test_perguntar_sem_dado_diz_que_nao_sabe(self):
-        r = self.um('perguntar', {'texto': 'por que meu jogo trava?'})['dados']
-        self.assertTrue(r['resposta'].startswith('Ainda não sei'))
 
 
 class TestAtualizaTerminal(unittest.TestCase):

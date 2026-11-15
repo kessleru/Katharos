@@ -52,11 +52,11 @@ public class Sugestoes : Tela
 
         if (diagnostico == null && propostas == null && linha == null)
         {
-            Monta(cab, Pergunta(), Vazio("Ainda não sei", "Para concluir algo com confiança, eu preciso de alguns dias de medida (o acompanhamento ligado) ou de algumas sessões de jogo. Sem número, eu não proponho nada.",
+            Monta(cab, Vazio("Ainda não sei", "Para concluir algo com confiança, eu preciso de alguns dias de medida (o acompanhamento ligado) ou de algumas sessões de jogo. Sem número, eu não proponho nada.",
                                          Botao("Ver o acompanhamento", false, () => Abre("aovivo"))));
             return;
         }
-        Monta(cab, diagnostico, propostas, linha, Pergunta());
+        Monta(cab, diagnostico, propostas, linha);
     }
 
     static Control Bloco(string rotulo, string texto) => new StackPanel { Spacing = 2, Children = { T(rotulo, "rotulo"), T(texto, null, Tema.Osso, 14, true) } };
@@ -120,47 +120,6 @@ public class Sugestoes : Tela
         }
         string quando = r.S("quando") != "" ? $" ({Quando(r.S("quando"))})" : "";
         return Linha(r.S("titulo") + quando, texto, Etiqueta(ver == "" ? "?" : ver, c), bt.Children.Count > 0 ? bt : null);
-    }
-
-    // "Pergunte ao Katharos": responde com o que o motor concluiu neste PC e os comandos que tratam do assunto. Nada sai do PC.
-    Control Pergunta()
-    {
-        var caixa = new TextBox { Watermark = "Por que meu jogo trava?", MinWidth = 360, FontSize = 15 };
-        var resposta = new StackPanel { Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
-        async Task Pergunta()
-        {
-            string q = (caixa.Text ?? "").Trim();
-            if (q.Length < 3) return;
-            resposta.Children.Clear();
-            resposta.Children.Add(T("Pensando...", "rotulo"));
-            try
-            {
-                var r = await Servico.Le("perguntar", new { texto = q });
-                resposta.Children.Clear();
-                resposta.Children.Add(T(r.S("resposta"), null, Tema.Osso, 15, true));
-                var cmds = r.A("comandos").Take(4).ToList();
-                if (cmds.Count > 0)
-                {
-                    var bts = new WrapPanel();
-                    foreach (var c in cmds)
-                    {
-                        string area = c.S("area"), tipo = c.S("tipo");
-                        string destino = tipo == "item" ? "otimizar:" + area : Rotas.Tela(c.S("id")) ?? "";
-                        var cc = c; 
-                        bts.Children.Add(Botao(Primeira(c.S("titulo")), false, () =>
-                        {
-                            if (destino != "") Abre(destino);
-                            else { Detalhe.Prepara(new JsonObject { ["titulo"] = cc.S("titulo"), ["comando"] = cc.S("id"), ["origem"] = "Pergunte ao Katharos" }, "resolver"); Abre("detalhe"); }
-                        }).Com(b => b.Margin = new Thickness(0, 0, 8, 8)));
-                    }
-                    resposta.Children.Add(bts);
-                }
-            }
-            catch (Exception e) { resposta.Children.Clear(); resposta.Children.Add(T("Não consegui responder: " + e.Message, "rotulo", quebra: true)); }
-        }
-        caixa.KeyDown += async (_, e) => { if (e.Key == Key.Enter) await Pergunta(); };
-        var linha = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { caixa, Botao("Perguntar", true, async () => await Pergunta()) } };
-        return S(new StackPanel { Margin = new Thickness(32, 22, 32, 26), Children = { T("Pergunte ao Katharos", "forte"), T("Responde com o que ele mediu neste PC. Nada sai do computador.", "rotulo").Com(t => t.Margin = new Thickness(0, 2, 0, 10)), linha, resposta } });
     }
 
     /// <summary>Mantido para quem ainda chama: o destino de um comando (sem tela própria, o Detalhe).</summary>

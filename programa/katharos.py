@@ -15505,7 +15505,7 @@ def responde_api(ctx, canal, pedido, permitidos=None):
 # o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
 # comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
 _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
-             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades', 'tarefas', 'segundo_plano_conferir')
+             'segundo_plano', 'envio_registrar', 'novidades', 'tarefas', 'segundo_plano_conferir')
 _SOZINHOS = ('raiox',)
 
 
@@ -16109,18 +16109,6 @@ def api_memoria_apagar(ctx, p, ev):
     except OSError as ex:
         raise ErroApi('ocupado', str(ex)) from ex
     return {'exportado': str(arq) if arq else None}
-
-
-@metodo_api('perguntar')
-def api_perguntar(ctx, p, ev):
-    """I25: a pessoa escreve uma pergunta; a resposta sai do motor (diagnósticos, propostas e achados que batem com ela) e da busca
-    de comandos (os mesmos sinônimos do "buscar"). Sem IA externa: nada sai do PC."""
-    texto = str(p.get('texto') or '').strip()
-    if len(texto) < 3:
-        raise ErroApi('pedido_invalido', '{"texto": "por que meu jogo trava?"}')
-    if ctx.perfil is None:
-        ctx.perfil = perfil_pc(ctx) if WINDOWS else json.loads(json.dumps(PC_MODELO))
-    return responde_pergunta(texto, ctx)
 
 
 
@@ -18699,42 +18687,6 @@ def ferramenta_buscar(ctx, args):
     return 0
 
 
-def responde_pergunta(texto, ctx=None):
-    """I25: "por que meu jogo trava?" → o que o motor concluiu que bate com a pergunta, e os comandos e itens que tratam disso.
-    Tudo local, pelos mesmos sinônimos da busca. Sem nada que bata, diz que não sabe (e o que medir para saber)."""
-    texto = str(texto or '')[:500]   # pergunta é uma frase: texto enorme não vira trabalho nem volta inteiro na resposta
-    palavras = _palavras(texto)
-    d = le_json(CASA / 'propostas.json', {}) or {}
-    # sem exigir todas as palavras: conta quantas batem (pergunta é frase, não busca)
-    def casa_parcial(*txts):
-        alvo = [(sem_acento(str(t or '')), 1) for t in txts]
-        return sum(1 for w in palavras if _pontos([w], alvo))
-    diags = sorted(((casa_parcial(x.get('titulo'), x.get('nome'), ' '.join(x.get('evidencias') or []), x.get('problema'),
-                                  {'jogos': 'jogo jogos fps lento', 'travadas': 'trava travadas engasga stutter', 'pc': 'pc lento devagar'}.get(x.get('problema'), '')), x)
-                    for x in d.get('diagnosticos') or []), key=lambda t: -t[0])
-    props = sorted(((casa_parcial(x.get('titulo'), x.get('porque'), x.get('comando')), x) for x in d.get('propostas') or []), key=lambda t: -t[0])
-    achados = sorted(((casa_parcial(x.get('titulo'), x.get('vi')), x) for x in d.get('achados') or []), key=lambda t: -t[0])
-    try:
-        cmds = busca(indice_busca(ctx), texto, 6) if ctx is not None else []
-    except Exception as ex:
-        LOG.escreve(f'perguntar: busca falhou: {ex!r}')
-        cmds = []
-    out = {'pergunta': texto, 'diagnosticos': [x for n, x in diags if n][:2], 'propostas': [x for n, x in props if n][:3],
-           'achados': [x for n, x in achados if n][:3],
-           'comandos': [{'tipo': tipo, 'area': area, 'id': id_, 'titulo': titulo} for _, tipo, area, id_, titulo, _ in cmds]}
-    if out['diagnosticos']:
-        g = out['diagnosticos'][0]
-        out['resposta'] = f'{g["titulo"]}: {g["nome"]}. ' + (('O que eu vi: ' + '; '.join(g.get('evidencias') or [])[:300] + '. ') if g.get('evidencias') else '') + \
-                          (g.get('faria') or '')[:1].upper() + (g.get('faria') or '')[1:] + '.'
-    elif out['propostas']:
-        x = out['propostas'][0]
-        out['resposta'] = f'{x["titulo"]}. {x.get("porque") or ""}'.strip()
-    elif out['achados']:
-        out['resposta'] = (out['achados'][0].get('titulo') or '') + ': ' + (out['achados'][0].get('vi') or '') + '.'
-    else:
-        out['resposta'] = ('Ainda não sei: não tenho medida que responda isso. Com o segundo plano ligado e algumas sessões de jogo, '
-                           'eu consigo dizer o que segura o PC.' if not d else 'Não achei nada medido que responda isso; os comandos abaixo tratam do assunto.')
-    return out
 
 
 # ███████████████████████████████████████████████████████████████████████████

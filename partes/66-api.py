@@ -85,7 +85,7 @@ def responde_api(ctx, canal, pedido, permitidos=None):
 # o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
 # comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
 _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
-             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades', 'tarefas', 'segundo_plano_conferir')
+             'segundo_plano', 'envio_registrar', 'novidades', 'tarefas', 'segundo_plano_conferir')
 _SOZINHOS = ('raiox',)
 
 
@@ -689,18 +689,6 @@ def api_memoria_apagar(ctx, p, ev):
     except OSError as ex:
         raise ErroApi('ocupado', str(ex)) from ex
     return {'exportado': str(arq) if arq else None}
-
-
-@metodo_api('perguntar')
-def api_perguntar(ctx, p, ev):
-    """I25: a pessoa escreve uma pergunta; a resposta sai do motor (diagnósticos, propostas e achados que batem com ela) e da busca
-    de comandos (os mesmos sinônimos do "buscar"). Sem IA externa: nada sai do PC."""
-    texto = str(p.get('texto') or '').strip()
-    if len(texto) < 3:
-        raise ErroApi('pedido_invalido', '{"texto": "por que meu jogo trava?"}')
-    if ctx.perfil is None:
-        ctx.perfil = perfil_pc(ctx) if WINDOWS else json.loads(json.dumps(PC_MODELO))
-    return responde_pergunta(texto, ctx)
 
 
 
