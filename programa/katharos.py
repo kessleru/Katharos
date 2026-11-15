@@ -3721,7 +3721,10 @@ def analisa(p, m, d):
                             f'Erros de leitura: {s.get("erros")}, desgaste: {s.get("desgaste")}%.', 'Backup em dia e acompanhar.'))
     if (saude.get('desligamentos') or 0) >= 3:
         azuis = saude.get('telas_azuis') or 0
-        A.append(Achado(2 if azuis else 1, ['tudo', 'lento'], 'Telas azuis ou desligamentos inesperados',
+        # sem tela azul e até uns 1,5 por semana (12 em 60 dias) é quase sempre energia ou o botão segurado, não defeito: vira dica sem
+        # peso na nota (5.0.0; no PC do dono, 10 em 60 dias tiravam pontos de saúde)
+        peso = 2 if azuis else (1 if saude['desligamentos'] > 12 else 0)
+        A.append(Achado(peso, ['tudo', 'lento'], 'Telas azuis ou desligamentos inesperados',
                         f'{saude["desligamentos"]} desligamentos sem aviso nos últimos 60 dias'
                         + (f', {azuis} com tela azul.' if azuis else ' (nenhuma tela azul: pode ser queda de energia ou botão de desligar segurado).'),
                         'Reparar o sistema e conferir drivers, fonte e temperatura.', 'reparar'))
