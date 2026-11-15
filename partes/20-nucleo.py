@@ -420,6 +420,7 @@ LOG = Log()
 PRELUDIO_PS = r'''
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
+$global:ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch {}
 $TESTE = ($env:OTM_TESTE -eq '1')
 $BK = $env:OTM_BK
@@ -954,6 +955,7 @@ class _Filho:
 
 _LACO_PS = r"""
 try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch {}
+$global:ProgressPreference = 'SilentlyContinue'
 $__casa = (Get-Location).Path
 while ($true) {
     $__l = [Console]::In.ReadLine()
@@ -1002,7 +1004,7 @@ class _PSAberto:
 
 
 class _PoolPS:
-    MAXIMO_PARADOS = 2   # cada PowerShell parado custa uns 100 MB de RAM
+    MAXIMO_PARADOS = 1   # cada PowerShell parado custa uns 100 MB de RAM (relato do dono: o Katharos usava muita RAM)
     PARADO_S = 30
 
     def __init__(self):
@@ -1131,6 +1133,12 @@ def roda_ps(t, corpo, rotulo='etapa', minutos=5, pacote=None, teste=False, mostr
             ultima_saida = time.time()
             linha = decodifica(bruto).rstrip('\r\n')
             LOG.escreve(f'  {linha}')
+            if not linha.startswith('@@') and '<Obj' in linha:
+                # o PowerShell às vezes manda o andamento em CLIXML pelo erro padrão, que no PowerShell aberto cai na mesma linha
+                # da saída: o @@dado vinha colado no fim e se perdia (a tela Dispositivos alternava entre achar e não achar nada)
+                m = list(re.finditer(r'@@[a-z_:]+\|', linha))
+                if m:
+                    linha = linha[m[-1].start():]
             if linha.startswith('@@'):
                 tipo, _, txt = linha[2:].partition('|')
                 if tipo == 'fim' and aberto is not None:

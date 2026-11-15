@@ -24,6 +24,15 @@ $__bat = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
 $__bus = '{540B947E-8B40-45BC-A8A2-6A0B894CBDA2} 4'
 $__l = @()
 $__vistos = @{}
+# as interfaces filhas (mouse, teclado, áudio) dizem o que o aparelho é quando o nome não diz ("Rapoo Gaming Device")
+$__filhos = @{}
+foreach ($__h in @(Get-PnpDevice -PresentOnly -Class Mouse, Keyboard, Media -ErrorAction SilentlyContinue)) {
+    if ([string]$__h.InstanceId -match 'VID_([0-9A-F]{4})&PID_([0-9A-F]{4})') {
+        $__k = $Matches[1] + $Matches[2]
+        if (-not $__filhos.ContainsKey($__k)) { $__filhos[$__k] = @() }
+        if ($__filhos[$__k] -notcontains [string]$__h.Class) { $__filhos[$__k] += [string]$__h.Class }
+    }
+}
 foreach ($__d in @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^USB\\VID_[0-9A-F]{4}&PID_[0-9A-F]{4}\\' -or $_.InstanceId -match '^(BTHENUM|BTHLE|BTHLEDEVICE)\\' })) {
     $__id = [string]$__d.InstanceId
     $__vid = ''; $__pid = ''
@@ -40,7 +49,8 @@ foreach ($__d in @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Wh
     if (-not $__bt -and $__d.Class -notin @('HIDClass', 'Mouse', 'Keyboard', 'USB', 'Media', 'AudioEndpoint', 'Image', 'XnaComposite', 'XboxComposite')) { continue }
     $__nome = Tenta { [string](Get-PnpDeviceProperty -InstanceId $__id -KeyName $__bus -ErrorAction Stop).Data } ''
     $__o = @{ nome = [string]$__d.FriendlyName; produto = $__nome; classe = [string]$__d.Class; vid = $__vid; pid = $__pid
-              conexao = $(if ($__bt) { 'bluetooth' } else { 'usb' }); bateria = $(if ($null -ne $__b) { [int]$__b } else { $null }); ok = ($__d.Status -eq 'OK') }
+              conexao = $(if ($__bt) { 'bluetooth' } else { 'usb' }); bateria = $(if ($null -ne $__b) { [int]$__b } else { $null }); ok = ($__d.Status -eq 'OK')
+              filhas = @($(if ($__filhos.ContainsKey("$__vid$__pid")) { $__filhos["$__vid$__pid"] } else { @() })) }
     $__vistos[$__chave] = $__o
     $__l += $__o
     if ($__l.Count -ge 60) { break }
@@ -55,9 +65,22 @@ _DISPOSITIVO_RUIDO = re.compile(r'hub|root|controlador|controller|host|composite
 
 
 def tipo_dispositivo(d):
-    """mouse, teclado, fone, controle, receptor ou outro, pelo nome e pela classe que o Windows dá."""
+    """mouse, teclado, fone, microfone, controle, receptor ou outro: pelo nome; quando o nome não diz, pelas interfaces filhas que o
+    Windows mostra (um mouse gamer também tem interface de teclado, então teclado só quando não há mouse ou o nome diz teclado)."""
     n = f'{d.get("nome") or ""} {d.get("produto") or ""}'.lower()
     c = str(d.get('classe') or '').lower()
+    filhas = {str(x).lower() for x in lista(d.get('filhas'))}
+    if re.search(r'quadcast|microphone|microfone|\bmic\b|yeti|seiren|wave:?\s*\d|snowball|podcast', n):
+        return 'microfone'
+    if re.search(r'receiver|receptor|dongle|unifying|lightspeed', n) and not re.search(r'mouse|keyboard|teclado|headset', n):
+        return 'receptor'
+    if not re.search(r'mouse|rato|keyboard|teclado|headset|headphone|fone|controller|gamepad', n) and filhas:
+        if 'mouse' in filhas:
+            return 'mouse'
+        if 'keyboard' in filhas:
+            return 'teclado'
+        if 'media' in filhas:
+            return 'fone'
     if re.search(r'mouse|rato', n) or c == 'mouse':
         return 'mouse'
     if re.search(r'keyboard|teclado', n) or c == 'keyboard':
@@ -87,7 +110,7 @@ def le_dispositivos(ctx):
         out.append({'nome': nome[:80], 'nome_windows': str(d.get('nome') or '')[:80], 'fabricante': VIDS_FABRICANTE.get(vid, ''),
                     'tipo': tipo_dispositivo(d), 'conexao': d.get('conexao'), 'vid': vid, 'pid': str(d.get('pid') or '').upper(),
                     'bateria': d.get('bateria') if isinstance(d.get('bateria'), int) and 0 <= d.get('bateria') <= 100 else None, 'ok': bool(d.get('ok'))})
-    ordem = {'mouse': 0, 'teclado': 1, 'fone': 2, 'controle': 3, 'receptor': 4, 'outro': 5}
+    ordem = {'mouse': 0, 'teclado': 1, 'fone': 2, 'microfone': 3, 'controle': 4, 'receptor': 5, 'outro': 6}
     return sorted(out, key=lambda x: (ordem.get(x['tipo'], 9), x['nome'].lower()))
 
 

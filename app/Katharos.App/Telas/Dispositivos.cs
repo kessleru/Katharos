@@ -20,10 +20,12 @@ public class Dispositivos : Tela
         var g = Servico.Guardado("dispositivos");
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Procurando os aparelhos ligados").secao);
         var d = await Servico.Le("dispositivos");
+        // uma leitura vazia logo depois de uma cheia é falha de leitura, não aparelho que sumiu: fica a anterior (antes a tela alternava)
+        if (g != null && g.A("dispositivos").Any() && !d.A("dispositivos").Any()) return;
         if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
     }
 
-    static string Tipo(string t) => t switch { "mouse" => "Mouse", "teclado" => "Teclado", "fone" => "Fone", "controle" => "Controle", "receptor" => "Receptor sem fio", _ => "Outro" };
+    static string Tipo(string t) => t switch { "mouse" => "Mouse", "teclado" => "Teclado", "fone" => "Fone", "controle" => "Controle", "microfone" => "Microfone", "receptor" => "Receptor sem fio", _ => "Outro" };
 
     void Desenha(Control cab, JsonNode? d)
     {
@@ -58,7 +60,7 @@ public class Dispositivos : Tela
     {
         string fab = x.S("fabricante"), con = x.S("conexao") switch { "bluetooth" => "Bluetooth", "sem fio" => "sem fio", _ => "USB ou receptor" };
         string sub = string.Join(" · ", new[] { Tipo(x.S("tipo")), fab, con }.Where(s => s != ""));
-        string icone = x.S("tipo") switch { "mouse" => "dispositivos", "teclado" => "teclado", "fone" => "fone", "controle" => "controle", _ => "mais" };
+        string icone = x.S("tipo") switch { "mouse" => "dispositivos", "teclado" => "teclado", "fone" => "fone", "controle" => "controle", "microfone" => "microfone", "receptor" => "receptor", _ => "mais" };
         // a ficha: ícone grande, nome, de onde é e a bateria num anel (referência: iStat Menus e Teenage Engineering)
         Control bateria;
         if (x.D("bateria") is double b)

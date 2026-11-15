@@ -91,8 +91,15 @@ def confere_tarefas(ctx):
             continue
         exe, script = str(tk.get('exe') or ''), _script_dos_args(tk.get('args'))
         problema = ''
+        res = tk.get('resultado')
         if tk.get('estado') == 'Disabled':
             problema = 'está desligada no Agendador de Tarefas'
+        elif '\\windowsapps\\' in exe.lower():
+            # o Python da Loja muda de pasta a cada atualização e não roda direito em tarefa agendada (no PC do dono, as duas davam
+            # erro 1 em toda execução): a tarefa passa para o Python do Katharos
+            problema = 'usa o Python da Microsoft Store, que falha em tarefa agendada'
+        elif isinstance(res, int) and res not in (0, 0x41301, 0x41303, 0x41325) and tk.get('ultima'):
+            problema = f'a última execução deu erro (código {res})'
         elif exe and exe.lower() != 'powershell.exe' and not Path(os.path.expandvars(exe)).is_file():
             problema = 'o Python que ela usa não existe mais'
         elif script and not Path(os.path.expandvars(script)).is_file():

@@ -139,8 +139,8 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
                 except Exception as e:
                     LOG.escreve(f'dispositivos ao abrir: {e!r}')
             threading.Thread(target=cura, daemon=True).start()
-        if paralelo:   # dois PowerShell já abertos para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
-            threading.Thread(target=lambda: POOL_PS.aquece(2), daemon=True).start()
+        if paralelo:   # um PowerShell já aberto para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
+            threading.Thread(target=lambda: POOL_PS.aquece(1), daemon=True).start()
         if not preparo_pronto.wait(20):
             LOG.escreve('api: o preparo passou de 20 s; atendendo os pedidos mesmo assim')
         # pedidos em paralelo: uma conferência longa ou o raio-x não seguram mais a leitura de outra tela (antes, abrir o Raio-x durante

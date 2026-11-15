@@ -137,7 +137,9 @@ public class Inicio : Tela
             {
                 var (g, cor) = Gravidade((int)(a.D("impacto") ?? 0));
                 // a barra fina à esquerda diz a gravidade de longe (vermelho só para o grave: "vermelho é quebrado, não 'olhe aqui'")
-                p.Children.Add(new Avalonia.Controls.Border { BorderBrush = cor, BorderThickness = new Avalonia.Thickness(3, 0, 0, 0),
+                // só o grave e a atenção ganham a barra (na dica, cinza, ela parecia uma linha grossa colada na do grupo: relato do dono)
+                bool barra = (a.D("impacto") ?? 0) >= 2;
+                p.Children.Add(new Avalonia.Controls.Border { BorderBrush = cor, BorderThickness = new Avalonia.Thickness(barra ? 2 : 0, 0, 0, 0),
                     Child = Linha(a.S("titulo"), a.S("evidencia"), Etiqueta(g, cor), Detalhe.Botoes(a, Abre, "Início"), Icones.DaCategoria(Rotas.Categoria(a.S("categoria"), a.S("titulo"), a.S("comando")))) });
             }
             if (rx.D("total") is double tot && tot > 3)
