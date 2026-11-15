@@ -41,18 +41,18 @@ Regras que continuam valendo:
 | Componente | Uso | Estado |
 |---|---|---|
 | `Anel` | nota do PC, bateria, % de uma área aplicada | **feito (4.5.0)** |
-| `Medidor` | barra fina segmentada (10 a 20 segmentos, estilo VU) sob cada número ao vivo, cor pela faixa | 4.5.0/4.6 |
-| `Matriz` | número em matriz de pontos (herói) | 4.6 |
-| `Mapa de calor` | calendário de 12 semanas (Histórico: horas de jogo, travadas, temperatura por dia) | 4.6 |
-| `Linha do tempo` | o que mudou no PC, com marcas nos gráficos (Histórico e Desfazer) | 4.6 |
-| `Antes / Depois` | prévia vetorial dos itens visuais (barra de tarefas, menu de contexto) e números de antes e depois de uma mudança | 4.7 |
-| `Ficha` (tile) | cartão quadrado com ícone grande, número e minigráfico: Dispositivos e o painel de Jogos | 4.6 |
-| `Chips` | filtros (mostrar só graves, só desta área) | 4.6 |
-| `Alternador` | troca sim/não no lugar de dois botões nas Configurações | 4.6 |
-| `Paleta de comandos` (Ctrl+K) | ir para qualquer tela, item ou ação digitando ("desligar teams", "raio-x") | 4.7 |
-| `Aviso flutuante` | resultado de uma ação sem cobrir a tela (substitui caixas de "Pronto") | 4.6 |
-| `Esqueleto` | o lugar do conteúdo enquanto carrega, no formato do que vem (no lugar de "Carregando") | 4.6 |
-| `IconeDoPrograma.De(caminho)` | ícone real do .exe com cache, com a letra quando não há | 4.6 (plano em dispositivos-imagens-painel.md) |
+| `Medidor` | barra fina segmentada (10 a 20 segmentos, estilo VU) sob cada número ao vivo, cor pela faixa | 4.5.0/5.0.0 |
+| `Matriz` | número em matriz de pontos (herói) | 5.0.0 |
+| `Mapa de calor` | calendário de 12 semanas (Histórico: horas de jogo, travadas, temperatura por dia) | 5.0.0 |
+| `Linha do tempo` | o que mudou no PC, com marcas nos gráficos (Histórico e Desfazer) | 5.0.0 |
+| `Antes / Depois` | prévia vetorial dos itens visuais (barra de tarefas, menu de contexto) e números de antes e depois de uma mudança | 5.0.0 |
+| `Ficha` (tile) | cartão quadrado com ícone grande, número e minigráfico: Dispositivos e o painel de Jogos | 5.0.0 |
+| `Chips` | filtros (mostrar só graves, só desta área) | 5.0.0 |
+| `Alternador` | troca sim/não no lugar de dois botões nas Configurações | 5.0.0 |
+| `Paleta de comandos` (Ctrl+K) | ir para qualquer tela, item ou ação digitando ("desligar teams", "raio-x") | 5.0.0 |
+| `Aviso flutuante` | resultado de uma ação sem cobrir a tela (substitui caixas de "Pronto") | 5.0.0 |
+| `Esqueleto` | o lugar do conteúdo enquanto carrega, no formato do que vem (no lugar de "Carregando") | 5.0.0 |
+| `IconeDoPrograma.De(caminho)` | ícone real do .exe com cache, com a letra quando não há | 5.0.0 (plano em dispositivos-imagens-painel.md) |
 
 ## Tela por tela
 
@@ -86,12 +86,12 @@ Regras que continuam valendo:
 - Ícones de programa extraídos uma vez e guardados em disco.
 - Uma meta medida pelo Katharos.Fotos e pelo log: abrir a janela em menos de 1,5 s (hoje 1,0 a 1,6 s) e trocar de tela em menos de 100 ms com dado guardado.
 
-## Fases
+## Fases (pedido do dono, 15/11: depois da 4.5.0, uma publicação só, a 5.0.0, com tudo)
 
 1. **4.5.0 (feito)**: anel da nota, ícones por tipo de aparelho, raio-x rodando com layout próprio, Memória abertos/fechados, Dispositivos.
-2. **4.6 (UI 2, parte 1)**: tokens novos (carvão quente, rótulos técnicos, barra de severidade), Medidor, Fichas, Esqueleto, Aviso flutuante, Alternador, ícone real dos programas, Início e Ao vivo redesenhados.
-3. **4.7 (parte 2)**: Matriz de pontos, Mapa de calor, Linha do tempo, Antes/Depois, Paleta de comandos, Otimizar e Histórico redesenhados.
-4. **4.8**: Dispositivos em fichas com bateria de 2.4 GHz (plano de dispositivos) e revisão final com o dono pelas fotos.
+2. **5.0.0 (UI 2, parte 1)**: tokens novos (carvão quente, rótulos técnicos, barra de severidade), Medidor, Fichas, Esqueleto, Aviso flutuante, Alternador, ícone real dos programas, Início e Ao vivo redesenhados.
+3. **5.0.0 (parte 2)**: Matriz de pontos, Mapa de calor, Linha do tempo, Antes/Depois, Paleta de comandos, Otimizar e Histórico redesenhados.
+4. **5.0.0**: Dispositivos em fichas com bateria de 2.4 GHz (plano de dispositivos) e revisão final com o dono pelas fotos.
 
 Cada fase passa pelo Katharos.Fotos: as fotos de antes e depois vão para o dono aprovar antes de publicar.
 

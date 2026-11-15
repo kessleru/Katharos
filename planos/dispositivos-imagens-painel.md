@@ -54,12 +54,12 @@ Regras:
 - **Histórico**: as baterias entram no histórico (quanto tempo cada aparelho fica longe da tomada).
 - **Relatório**: aparelho que o Katharos ainda não lê vai com VID/PID e o descritor HID (sem número de série). É assim que entra o próximo protocolo.
 
-### Fases
+### Fases (pedido do dono, 15/11: depois da 4.5.0, uma publicação só, a 5.0.0, com tudo)
 
 1. **4.5.0 (feito)**: lista dos periféricos, bateria Bluetooth, tela Dispositivos, lista no relatório.
-2. **4.6**: camadas B e C. Leitura no segundo plano, faixa no painel do ícone, avisos de bateria baixa, histórico e estimativa.
-3. **4.7**: camada D (Logitech HID++, Razer, SteelSeries, HyperX, Corsair, fones conhecidos), leitura de DPI e de polling.
-4. **4.8**: camada E por chip, começando pelos que mais aparecem nos relatórios (o Rapoo e o Aula do dono primeiro), e a área de testes (mouse, controle, teclado).
+2. **5.0.0**: camadas B e C. Leitura no segundo plano, faixa no painel do ícone, avisos de bateria baixa, histórico e estimativa.
+3. **5.0.0**: camada D (Logitech HID++, Razer, SteelSeries, HyperX, Corsair, fones conhecidos), leitura de DPI e de polling.
+4. **5.0.0**: camada E por chip, começando pelos que mais aparecem nos relatórios (o Rapoo e o Aula do dono primeiro), e a área de testes (mouse, controle, teclado).
 
 ### O que falta para começar a fase 2 no PC do dono
 
