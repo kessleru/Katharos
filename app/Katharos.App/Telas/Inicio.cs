@@ -31,6 +31,14 @@ public class Inicio : Tela
         else if (jogosDesenhados != jogos?.ToJsonString() || tarefasDesenhadas != tarefas?.ToJsonString()) Desenha(cab, d);
     }
 
+    /// <summary>O número com um anel fino ao lado (a nota enche o anel: dá para ler de longe).</summary>
+    static Control ComAnel(Control numero, double valor, Avalonia.Media.IBrush cor)
+    {
+        // no canto de cima, por cima da célula: o número continua com a largura inteira (ao lado, ele quebrava em três linhas)
+        return new Avalonia.Controls.Grid { Children = { numero, new Katharos.App.Controles.Anel { Valor = valor, Cor = cor, Width = 40, Height = 40, Espessura = 4,
+            Margin = new Avalonia.Thickness(0, 22, 22, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top } } };
+    }
+
     JsonNode? tarefas;
     string? tarefasDesenhadas;
 
@@ -108,10 +116,11 @@ public class Inicio : Tela
         var pc = d?["pc"];
         double? livre = pc.D("disco_livre_gb"), total = pc.D("disco_total_gb");
         var numeros = S(Celulas(
-            Numero("Nota do PC", nota.HasValue ? Num(nota) : "-", "de 100",
+            ComAnel(Numero("Nota do PC", nota.HasValue ? Num(nota) : "-", "de 100",
                    nota == null ? "faça o raio-x para ter a nota" : (nota >= 80 ? "bem cuidado" : nota >= 55 ? "dá para melhorar" : "precisa de atenção")
                        + (notaRx is double nr && nr != nota ? $" · era {Num(nr)} no raio-x" : " · raio-x " + Quando(rx.S("quando"))),
                    nota == null ? Tema.Apagado : nota >= 80 ? Tema.Verde : nota >= 55 ? Tema.Ambar : Tema.Vermelho),
+                   nota ?? 0, nota == null ? Tema.Apagado : nota >= 80 ? Tema.Verde : nota >= 55 ? Tema.Ambar : Tema.Vermelho),
             Numero("Temperatura da CPU", tc.HasValue ? Num(tc) : "-", "°C",
                    tc == null ? "sem leitura: abra o MSI Afterburner ou o HWiNFO" : (tc >= 90 ? "quente" : tc >= 80 ? "morna" : "normal") + " · lida do " + t.S("cpu_fonte"),
                    tc == null ? Tema.Apagado : tc >= 90 ? Tema.Vermelho : tc >= 80 ? Tema.Ambar : Tema.Verde),

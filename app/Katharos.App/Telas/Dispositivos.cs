@@ -62,7 +62,7 @@ public class Dispositivos : Tela
                 new ProgressBar { Minimum = 0, Maximum = 100, Value = b, Width = 90, Height = 4, MinHeight = 4, Foreground = cor, Background = Tema.Linha, CornerRadius = new CornerRadius(0) } } };
         }
         else direita = T(x.S("conexao") == "bluetooth" ? "sem bateria informada" : "bateria: ainda não leio", "rotulo", tamanho: 12.5);
-        var linha = Linha(x.S("nome"), sub, x.B("ok") ? null : Etiqueta("com problema", Tema.Vermelho), direita, x.S("tipo") is "mouse" or "teclado" or "fone" or "controle" ? "dispositivos" : "mais");
+        var linha = Linha(x.S("nome"), sub, x.B("ok") ? null : Etiqueta("com problema", Tema.Vermelho), direita, x.S("tipo") switch { "mouse" => "dispositivos", "teclado" => "teclado", "fone" => "fone", "controle" => "controle", _ => "mais" });
         string ids = x.S("vid") != "" ? $"VID {x.S("vid")} · PID {x.S("pid")}" : "";
         if (x.S("nome_windows") != "" && x.S("nome_windows") != x.S("nome")) ids += (ids != "" ? " · " : "") + "no Windows: " + x.S("nome_windows");
         if (ids != "") { ToolTip.SetTip(linha, ids); ToolTip.SetShowDelay(linha, 500); }

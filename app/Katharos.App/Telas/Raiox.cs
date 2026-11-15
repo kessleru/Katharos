@@ -17,8 +17,8 @@ public class Raiox : Tela
     protected override async Task Carrega()
     {
         if (rodando) return;   // voltou para a tela no meio da leitura: o andamento que já está montado continua
+        if (rodar) { rodar = false; await Roda(Cabecalho("Raio-x", "Só lê: nada muda. Lendo agora.")); return; }   // sem "Fazer de novo" enquanto lê
         var cab = Cabecalho("Raio-x", "Só lê: nada muda.", Botao("Fazer de novo", false, async () => { rodar = true; await Recarrega(); }));
-        if (rodar) { rodar = false; await Roda(cab); return; }
         // o guardado aparece na hora; a resposta do motor (com o que foi resolvido desde então) troca por cima quando chega
         if (Servico.Guardado("raiox_guardado") is JsonNode g) Monta(cab, Resultado(g, g["pc"], Quando(g.S("quando"))));
         else Monta(cab, Carregando("Lendo o último raio-x").secao);
