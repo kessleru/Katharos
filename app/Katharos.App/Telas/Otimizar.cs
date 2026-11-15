@@ -436,7 +436,10 @@ public class Otimizar : Tela
         foreach (var a in areas)
         {
             int m = a.Itens.Count(i => i.Marcado && i.Ja != true), f = a.Itens.Count(i => i.Ja == true);
-            if (a.Conta != null) a.Conta.Text = (m > 0 ? $"{m} mudam" : "nada muda") + (f > 0 ? $" · {f} já feitos" : "") + $" · {a.Itens.Count} itens";
+            // limpeza, reparo e atualização não são ajustes que ficam: rodam toda vez que se aplica (relato do dono: 22 dos 36 eram isso)
+            if (a.Conta != null) a.Conta.Text = a.J.B("recorrente")
+                ? (m > 0 ? $"{m} {(m == 1 ? "tarefa roda" : "tarefas rodam")} ao aplicar" : "nada roda") + $" · {a.Itens.Count} itens"
+                : (m > 0 ? $"{m} {(m == 1 ? "muda" : "mudam")}" : "nada muda") + (f > 0 ? $" · {f} já feitos" : "") + $" · {a.Itens.Count} itens";
             foreach (var i in a.Itens.Where(i => i.Estado != null))
             {
                 bool lendo = Conferencia.NaFila(i.Pacote) && (i.Ja == null || i.Velho);
@@ -448,9 +451,14 @@ public class Otimizar : Tela
             }
         }
         int n = VaoMudar().Count(), feitos = areas.Sum(a => a.Itens.Count(i => i.Ja == true && i.Marcado)),
-            semConferir = VaoMudar().Count(i => i.Ja == null);
-        // o número do botão é o que vai mudar de verdade; o que ainda não foi conferido aparece separado (pode já estar assim)
-        resumo.Text = n == 0 ? "Nada marcado para mudar" : $"{n} {(n == 1 ? "mudança" : "mudanças")}" + (semConferir > 0 ? $" · {semConferir} sem conferir" : "");
+            tarefas = areas.Where(a => a.J.B("recorrente")).Sum(a => a.Itens.Count(i => i.Marcado && i.Ja != true)),
+            ajustes = n - tarefas,
+            semConferir = areas.Where(a => !a.J.B("recorrente")).Sum(a => a.Itens.Count(i => i.Marcado && i.Ja == null));
+        // o número do botão é o que vai mudar de verdade, separado em ajustes (ficam no Windows) e tarefas (limpeza, reparo e
+        // atualização: rodam uma vez); o que ainda não foi conferido aparece separado (pode já estar assim)
+        resumo.Text = n == 0 ? "Nada marcado para mudar" :
+            string.Join(" · ", new[] { ajustes > 0 ? $"{ajustes} {(ajustes == 1 ? "ajuste" : "ajustes")}" : "", tarefas > 0 ? $"{tarefas} {(tarefas == 1 ? "tarefa" : "tarefas")} de manutenção" : "",
+                                       semConferir > 0 ? $"{semConferir} sem conferir" : "" }.Where(x => x != ""));
         ToolTip.SetTip(resumo, feitos > 0 ? $"{feitos} itens marcados já estão assim neste PC e não contam." : null);
         aplicar.Content = n == 0 ? "Aplicar" : $"Aplicar {n} {(n == 1 ? "mudança" : "mudanças")}";
         aplicar.IsEnabled = n > 0;
