@@ -10,6 +10,7 @@ import re
 import sys
 import tempfile
 import unittest
+import types
 from pathlib import Path
 from unittest import mock
 
@@ -4309,3 +4310,63 @@ class TestLogica431(unittest.TestCase):
         self.assertEqual(m, {'cpu': 3})
         self.assertEqual(etapas[-1][1], etapas[-1][2], 'a última etapa fecha a conta (n de n)')
 
+
+
+class TestAchados450(unittest.TestCase):
+    """Achados do dono (15/11) e relatórios ELQUQN, G65HKM, WWWRSJ: tarefas quebradas, histórico parado, Jogos com tudo aplicado."""
+
+    def test_dica_com_area_toda_aplicada_some(self):
+        a = {'comando': 'jogos', 'impacto': 0, 'titulo': 'Ajustes para jogos disponíveis'}
+        antes = datetime(2026, 11, 9).timestamp()
+        s = k.situacao_achado(a, '2026-11-10T09:00:00', {'jogos': {'t': antes, 'falta': 0, 'total': 6}}, {})
+        self.assertIn('resolvido', s)
+        # problema de verdade (impacto 1+) com conferência velha continua valendo
+        self.assertIsNone(k.situacao_achado(dict(a, impacto=2), '2026-11-10T09:00:00', {'jogos': {'t': antes, 'falta': 0, 'total': 6}}, {}))
+        # área ainda com coisa faltando: a dica fica
+        self.assertIsNone(k.situacao_achado(a, '2026-11-10T09:00:00', {'jogos': {'t': antes, 'falta': 2, 'total': 6}}, {}))
+
+    def test_script_da_tarefa(self):
+        self.assertEqual(k._script_dos_args('"C:\\ProgramData\\Katharos\\katharos.py" manutencao --agendada'), 'C:\\ProgramData\\Katharos\\katharos.py')
+        self.assertEqual(k._script_dos_args("-Command \"& 'C:\\py\\python.exe' 'C:\\Users\\o\\.katharos\\katharos.py' amostrar\""),
+                         'C:\\Users\\o\\.katharos\\katharos.py')
+        self.assertEqual(k._script_dos_args(''), '')
+
+    def test_tarefa_com_python_apagado_e_quebrada(self):
+        with tempfile.TemporaryDirectory() as d:
+            kpy = Path(d) / 'katharos.py'
+            kpy.write_text(f"VERSAO = '{k.VERSAO}'\n", encoding='utf-8')
+            velho = Path(d) / 'velho.py'
+            velho.write_text("VERSAO = '3.1.0'\n", encoding='utf-8')
+            py = Path(d) / 'pythonw.exe'
+            py.write_text('', encoding='utf-8')
+            dados = {'tarefas': [
+                {'nome': k.TAREFA_MANUT, 'estado': 'Ready', 'exe': str(Path(d) / 'sumiu' / 'pythonw.exe'), 'args': f'"{kpy}" manutencao', 'ultima': '2026-11-10T18:27:00', 'resultado': 0},
+                {'nome': k.TAREFA_AMOSTRA, 'estado': 'Ready', 'exe': str(py), 'args': f'"{velho}" amostrar', 'ultima': '', 'resultado': 0},
+            ]}
+            s = types.SimpleNamespace(dados=dados, ok=True, erros=[])
+            with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s):
+                tk = {x['nome']: x for x in k.confere_tarefas(types.SimpleNamespace(t=None))}
+        self.assertIn('Python', tk[k.TAREFA_MANUT]['problema'])
+        self.assertIn('3.1.0', tk[k.TAREFA_AMOSTRA]['problema'])
+
+    def test_erros_do_motor_sem_linha_de_registro(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'rel_carrega', return_value={}):
+            logs = Path(d) / 'logs'
+            logs.mkdir()
+            (logs / '2026-11-15.log').write_text(
+                '10:00:00 @@dado/saude/{"firmware_erro":false}\n'
+                '10:00:01 @@plano/Disabled = 1 (Windows Error Reporting)\n'
+                "10:00:02 versão: 4.3.1 -› 4.4.0, dados 3, passos (), erro ''\n"
+                '10:00:03 @@erro/Token inesperado\n'
+                '10:00:04 @@aviso/esvaziar a Lixeira: falhou\n', encoding='utf-8')
+            m = k._env_erros(None)['motor']
+        self.assertEqual(len(m), 2, m)
+
+    def test_copia_protegida_so_apaga_versao(self):
+        cs = (Path(__file__).resolve().parent.parent / 'app' / 'Katharos.App' / 'Motor.cs').read_text(encoding='utf-8')
+        self.assertNotIn("Where-Object { $_.Name -ne $ver } | ForEach-Object { Apaga", cs)
+        self.assertIn("-match '^\\d+(\\.\\d+){1,3}(\\.novo)?$'", cs)
+
+    def test_janela_nao_usa_a_entrada_do_segundo_plano(self):
+        cs = (Path(__file__).resolve().parent.parent / 'app' / 'Katharos.App' / 'AbrirComWindows.cs').read_text(encoding='utf-8')
+        self.assertIn('const string Nome = "Katharos Janela"', cs)

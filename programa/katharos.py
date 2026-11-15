@@ -15686,6 +15686,10 @@ def situacao_achado(a, quando_raiox=None, areas=None, aplicados=None):
             nomes = ', '.join(ar.get('titulos') or [])
             return {'evidencia': f'{pl(n, "programa que dá para desligar ainda abre", "programas que dá para desligar ainda abrem")} com o Windows '
                                  f'(conferido em {quando})' + (f': {nomes}' if nomes else '') + '.', 'impacto': 2 if n >= 12 else 1}
+    # dica (impacto 0, "ajustes disponíveis"): se a última conferência da área não achou nada faltando, mesmo antes deste raio-x, não é
+    # mais dica (achado do dono, 13/11: Jogos oferecia "Aplicar" e a caixa dizia que já estava tudo assim)
+    if ar and not (a.get('impacto') or 0) and ar.get('falta', 1) == 0 and not ar.get('sem_leitura') and ar.get('total', 0) > 0:
+        return {'resolvido': 'tudo desta área já está aplicado neste PC'}
     if aplicados.get(cmd, 0) > t_rx:
         quando = datetime.fromtimestamp(aplicados[cmd]).strftime('%d/%m %H:%M')
         return {'resolvido': f'aplicado em {quando}, depois deste raio-x'}
