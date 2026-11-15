@@ -18,6 +18,23 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 4.5.0 · 15 de novembro de 2026
+
+Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.
+
+- **Acompanhamento que desligava sozinho**: a janela e o segundo plano usavam a mesma entrada para abrir com o Windows, e a janela apagava a do segundo plano. Agora são duas. A janela conserta a entrada se ela tiver sido trocada e religa o segundo plano se ele fechou sem você sair pelo ícone.
+- **Manutenção e histórico parados**: ao trocar de versão, o motor de administrador limpava a pasta protegida inteira. Iam junto o programa da manutenção agendada e o backup do desfazer. Agora só sai a cópia da versão anterior. As tarefas agendadas são conferidas ao abrir e consertadas (a do usuário sozinha; a de administrador com um clique no Início). O histórico ganha uma medida por dia mesmo sem a manutenção.
+- **Desinstalar tira tudo**: o segundo plano sai, as entradas de abrir com o Windows e as tarefas agendadas também. Os seus dados ficam.
+- **Atualização**: confere a cada 3 h, também com a janela aberta, e pergunta "reiniciar agora" ou "na próxima vez".
+- **Telas que não perdem nada**: o raio-x continua rodando ao trocar de tela, e o texto do relatório não se apaga.
+- **Dispositivos** (novo): mouse, teclado, fone e controle ligados, com a bateria do Bluetooth. A bateria e o DPI dos receptores 2.4 GHz chegam nas próximas versões, marca por marca.
+- **FPS**: o botão para liberar a medida agora existe (Configurações, FPS nos jogos).
+- **Consumo do Katharos**: o Ao vivo soma também os PowerShell de leitura, na mesma conta do Gerenciador de Tarefas. Eles fecham depois de 30 s parados e são no máximo 2.
+- **Memória**: separa o que está aberto agora do que já fechou.
+- **Jogos**: a dica de ajustes some quando tudo da área já está aplicado.
+- **Visual**: anel na nota do PC, medidor segmentado no Ao vivo, raio-x rodando com layout próprio e ícones de teclado, fone e controle.
+- **Relatório**: traz um autodiagnóstico (tarefas quebradas, histórico parado, segundo plano sem ler, FPS sem permissão) e a lista de periféricos, e não manda mais linhas que não são erro.
+
 ## 4.4.0 · 13 de novembro de 2026
 
 Corrige o que o teste da 4.3.1 e os relatórios mostraram, e traz o que a pesquisa de otimizadores apontou.

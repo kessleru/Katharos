@@ -1,6 +1,61 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "4.5.0",
+  "data": "15 de novembro de 2026",
+  "resumo": "Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.",
+  "itens": [
+   {
+    "titulo": "Acompanhamento que desligava sozinho",
+    "texto": "a janela e o segundo plano usavam a mesma entrada para abrir com o Windows, e a janela apagava a do segundo plano. Agora são duas. A janela conserta a entrada se ela tiver sido trocada e religa o segundo plano se ele fechou sem você sair pelo ícone."
+   },
+   {
+    "titulo": "Manutenção e histórico parados",
+    "texto": "ao trocar de versão, o motor de administrador limpava a pasta protegida inteira. Iam junto o programa da manutenção agendada e o backup do desfazer. Agora só sai a cópia da versão anterior. As tarefas agendadas são conferidas ao abrir e consertadas (a do usuário sozinha; a de administrador com um clique no Início). O histórico ganha uma medida por dia mesmo sem a manutenção."
+   },
+   {
+    "titulo": "Desinstalar tira tudo",
+    "texto": "o segundo plano sai, as entradas de abrir com o Windows e as tarefas agendadas também. Os seus dados ficam."
+   },
+   {
+    "titulo": "Atualização",
+    "texto": "confere a cada 3 h, também com a janela aberta, e pergunta \"reiniciar agora\" ou \"na próxima vez\"."
+   },
+   {
+    "titulo": "Telas que não perdem nada",
+    "texto": "o raio-x continua rodando ao trocar de tela, e o texto do relatório não se apaga."
+   },
+   {
+    "titulo": "Dispositivos",
+    "texto": "(novo): mouse, teclado, fone e controle ligados, com a bateria do Bluetooth. A bateria e o DPI dos receptores 2.4 GHz chegam nas próximas versões, marca por marca."
+   },
+   {
+    "titulo": "FPS",
+    "texto": "o botão para liberar a medida agora existe (Configurações, FPS nos jogos)."
+   },
+   {
+    "titulo": "Consumo do Katharos",
+    "texto": "o Ao vivo soma também os PowerShell de leitura, na mesma conta do Gerenciador de Tarefas. Eles fecham depois de 30 s parados e são no máximo 2."
+   },
+   {
+    "titulo": "Memória",
+    "texto": "separa o que está aberto agora do que já fechou."
+   },
+   {
+    "titulo": "Jogos",
+    "texto": "a dica de ajustes some quando tudo da área já está aplicado."
+   },
+   {
+    "titulo": "Visual",
+    "texto": "anel na nota do PC, medidor segmentado no Ao vivo, raio-x rodando com layout próprio e ícones de teclado, fone e controle."
+   },
+   {
+    "titulo": "Relatório",
+    "texto": "traz um autodiagnóstico (tarefas quebradas, histórico parado, segundo plano sem ler, FPS sem permissão) e a lista de periféricos, e não manda mais linhas que não são erro."
+   }
+  ]
+ },
+ {
   "versao": "4.4.0",
   "data": "13 de novembro de 2026",
   "resumo": "Corrige o que o teste da 4.3.1 e os relatórios mostraram, e traz o que a pesquisa de otimizadores apontou.",
@@ -260,41 +315,6 @@ NOVIDADES = [
    {
     "titulo": "Versão na janela",
     "texto": "a barra lateral mostra os três números (4.0.2), que é o que a pessoa precisa dizer ao pedir ajuda."
-   }
-  ]
- },
- {
-  "versao": "4.0.1",
-  "data": "11 de novembro de 2026",
-  "resumo": "Correções da revisão depois da 4.0.0. Nenhum item novo.",
-  "itens": [
-   {
-    "titulo": "Limpeza segura com links",
-    "texto": "a limpeza nunca entra em junção nem em link simbólico. Antes, um link dentro de uma pasta limpa (como a de temporários) podia levar a limpeza a apagar arquivos antigos de fora dela."
-   },
-   {
-    "titulo": "Manutenção em segundo plano espera o jogo",
-    "texto": "com um jogo aberto ela adia, e o ponto de restauração mensal e a limpeza de componentes (DISM), que pesam no disco, só rodam com o PC livre."
-   },
-   {
-    "titulo": "Limpezas que não atrapalham o uso",
-    "texto": "o cache de shaders só apaga o que não é usado há mais de 30 dias (apagar tudo fazia cada jogo recompilar e engasgar); o cache dos navegadores na manutenção só apaga o que tem mais de 14 dias."
-   },
-   {
-    "titulo": "Aviso claro no HAGS",
-    "texto": "o agendamento de GPU por hardware só liga se o Windows já mostra suporte nessa placa e driver, e o texto do que se perde diz que o ganho é pequeno e que placa antiga ou com pouca memória de vídeo pode engasgar."
-   },
-   {
-    "titulo": "Arquivo de estado do tipo errado",
-    "texto": "um arquivo de estado ou configuração com JSON válido mas de outro tipo (lista, nulo, número) derrubava sete métodos do motor; agora é tratado como ilegível, guarda a cópia e recomeça com o padrão."
-   },
-   {
-    "titulo": "Windows PowerShell 5.1 sem módulos do PowerShell 7",
-    "texto": "no Windows as variáveis de ambiente vêm em maiúsculas e a limpeza do PSModulePath nunca era aplicada; agora é."
-   },
-   {
-    "titulo": "Pergunte ao Katharos",
-    "texto": "\"vírus\" voltou a achar o comando que confere se o programa é o original, e pergunta enorme é cortada em 500 caracteres."
    }
   ]
  }
