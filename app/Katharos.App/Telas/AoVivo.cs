@@ -19,7 +19,7 @@ public class AoVivo : Tela
     record Cel(string Rotulo, Func<JsonNode, double?> Valor, string Unidade, int Casas, Func<JsonNode, (string, IBrush)> Contexto, double Max, double Limite, string Base = "")
     {
         public List<double> Hist = new();
-        public TextBlock? Numero, Texto; public Grafico? G;
+        public TextBlock? Numero, Texto; public Grafico? G; public Katharos.App.Controles.Medidor? M;
     }
 
     readonly DispatcherTimer relogio = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -116,6 +116,11 @@ public class AoVivo : Tela
             c.Texto!.Text = txt; c.Texto.Foreground = cor; ToolTip.SetTip(c.Texto, txt == "sem leitura" ? "Para ler a temperatura, deixe aberto o MSI Afterburner ou o HWiNFO." : txt);
             if (v.HasValue) { c.Hist.Add(v.Value); if (c.Hist.Count > 120) c.Hist.RemoveAt(0); }
             c.G!.Valores = c.Hist.ToArray();
+            if (c.M != null)
+            {
+                if (c.Rotulo == "Memória da placa" && a.D("vram_total_gb") is double tv && tv > 0) { c.M.Maximo = tv; c.M.Limite = tv * 0.95; }   // o teto é o da placa
+                c.M.IsVisible = v.HasValue; c.M.Valor = v ?? 0;
+            }
         }
         var j = a["jogo"];
         jogo!.IsVisible = j != null;
@@ -183,12 +188,15 @@ public class AoVivo : Tela
             c.G = new Grafico { Height = 54, Margin = new Thickness(0, 10, 0, 0), Maximo = c.Max, Limite = c.Limite, Formata = v => (Num(v) + " " + cc.Unidade).Trim() };
             // ampliar: a mesma série, grande, com eixos (é a foto deste instante; o Ao vivo continua andando atrás)
             c.G.PedeAmpliar += () => Amplia(cc);
+            // o medidor segmentado só onde há um máximo de verdade (%, °C); disco e rede não têm teto fixo
+            c.M = new Katharos.App.Controles.Medidor { Maximo = c.Max > 0 ? c.Max : 100, Limite = c.Limite > 0 ? c.Limite : (c.Max > 0 ? c.Max * 0.85 : 85),
+                                                       Margin = new Thickness(0, 4, 0, 6), IsVisible = false };
             var topo = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { T(c.Rotulo, "rotulo") } };
             // só a RAM: a memória da placa de vídeo não aparece na tela Memória
             if (c.Rotulo == "Memória RAM")
                 topo.Children.Add(Link("Quem usa", () => Abre("memoria")).Com(b => { Grid.SetColumn(b, 1); b.Padding = new Thickness(4, 0); }));
             grade.Children.Add(new Border { Padding = new Thickness(32, 22, 32, 20), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 0, 1, 1),
-                Child = new StackPanel { Spacing = 4, Children = { topo, new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.Texto, c.G } } });
+                Child = new StackPanel { Spacing = 4, Children = { topo, new StackPanel { Orientation = Orientation.Horizontal, Children = { c.Numero, T(c.Unidade, "unidade") } }, c.M!, c.Texto, c.G } } });
         }
         conclusoes = new StackPanel();
         // o consumo do próprio Katharos, com gráfico (pedido do dono): quem mede o PC também mostra quanto pesa
