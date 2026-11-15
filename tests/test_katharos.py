@@ -4393,3 +4393,16 @@ class TestCatalogo500(unittest.TestCase):
             with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s):
                 tk = k.confere_tarefas(types.SimpleNamespace(t=None))
         self.assertIn('Store', tk[0]['problema'])
+
+    def test_nenhum_item_sem_volta_vem_marcado(self):
+        """Catálogo seguro (5.0.0): o que não volta com o Desfazer nunca vem marcado em modo nenhum (medidas, que não mudam nada, à parte)."""
+        ctx = k.Ctx(k._defaults(k.monta_parser().parse_args([])), k.Terminal(True, True, consulta_fundo=False))
+        ctx.perfil = json.loads(json.dumps(k.PC_MODELO))
+        ruins = []
+        for nome, pac in k.PACOTES.items():
+            if nome in k.PACOTES_RECORRENTES:
+                continue
+            for it in [x for x in (pac.itens(ctx) or []) if x]:
+                if it.nivel >= 1 and not it.reverte and not it.id.startswith(('ping', 'dns-teste')):
+                    ruins.append(f'{nome}:{it.id}')
+        self.assertEqual(ruins, [])

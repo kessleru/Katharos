@@ -6214,7 +6214,7 @@ def itens_ia(ctx):
                 R(ADV, 'ShowCopilotButton', 0),
                 R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Blocked', '{CB3B0003-8088-4EDE-8769-8B354AB2FF8C}', '', 'String'))),
         Item('copilot-app', 'remover o app Copilot', 'Desinstala o app Copilot (da Loja e, se houver, a versão Win32 pelo desinstalador dele).',
-             'menos espaço e processos', 'perde o app', 2, r'''
+             'menos espaço e processos', 'perde o app (volta só reinstalando pela Loja)', 0, r'''
 foreach ($__n in 'Microsoft.Copilot','Microsoft.Windows.Ai.Copilot.Provider') {
   foreach ($x in @(Get-AppxPackage -AllUsers -Name $__n -ErrorAction SilentlyContinue | Where-Object { -not $_.NonRemovable })) { if ($TESTE) { Plano ('remover ' + $__n) } else { try { Remove-AppxPackage -Package $x.PackageFullName -AllUsers -ErrorAction Stop; $script:MUDOU++ } catch { Aviso ($__n + ': ' + $_.Exception.Message) } } }
 }
