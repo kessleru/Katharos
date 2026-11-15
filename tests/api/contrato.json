@@ -27,6 +27,9 @@
   "dispensar": {
    "muda": false
   },
+  "dispositivos": {
+   "muda": false
+  },
   "envio_montar": {
    "muda": false
   },
@@ -35,6 +38,12 @@
   },
   "envio_secoes": {
    "muda": false
+  },
+  "fps_estado": {
+   "muda": false
+  },
+  "fps_liberar": {
+   "muda": true
   },
   "historico": {
    "muda": false

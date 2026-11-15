@@ -50,7 +50,7 @@ class CanalApi:
 
 
 # o motor de administrador só faz o que precisa de administrador (e o mínimo para conversar): o resto é com o motor comum
-METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos', 'tarefas_consertar'}
+METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos', 'tarefas_consertar', 'fps_liberar'}
 
 
 def responde_api(ctx, canal, pedido, permitidos=None):
@@ -1105,3 +1105,26 @@ def api_tarefas_consertar(ctx, p, ev):
 def api_segundo_plano_conferir(ctx, p, ev):
     """Ligado mas sem abrir com o Windows, ou fechado sem ninguém ter saído pelo ícone: arruma e diz o que fez."""
     return {'feito': confere_segundo_plano(ctx), 'segundo_plano': _segundo_plano()}
+
+
+@metodo_api('fps_estado')
+def api_fps_estado(ctx, p, ev):
+    """A medida de FPS está liberada? (o usuário no grupo Usuários de log de desempenho; lido do Windows quando o estado não diz)"""
+    ja = estado().get('fps_grupo') == 'sim'
+    if not ja and WINDOWS:
+        ja = bool(fps_no_grupo(ctx))
+        if ja:
+            marca_estado('fps_grupo', 'sim')
+    return {'ligado': config('fps', 'sim') == 'sim', 'liberado': ja}
+
+
+@metodo_api('fps_liberar', muda=True)
+def api_fps_liberar(ctx, p, ev):
+    """Põe o seu usuário no grupo Usuários de log de desempenho (o PresentMon só lê os quadros assim). Vale depois de sair e entrar na conta."""
+    ok = fps_permissao(ctx, ligar=True) and fps_no_grupo(ctx) is not False
+    if ok:
+        salva_config('fps', 'sim')
+        escreve_config_sp()
+    else:
+        marca_estado('fps_grupo', 'nao')
+    return {'liberado': ok}

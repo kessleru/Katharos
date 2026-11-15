@@ -128,7 +128,7 @@ public class AoVivo : Tela
             for (int k = 0; k < jogoValores.Length; k++) jogoValores[k].Text = vals[k].HasValue ? Num(vals[k]) : "-";
             string est = j.S("fps_estado");
             jogoFps!.IsVisible = est != "" && est != "medindo" && !j.D("fps_med").HasValue;
-            jogoFps.Text = est == "sem permissão" ? "FPS: libere em Configurações > FPS nos jogos" : "FPS: " + est;
+            jogoFps.Text = est == "sem permissão" ? "FPS: falta liberar a medida (Configurações, linha FPS nos jogos, botão Liberar)" : "FPS: " + est;
         }
         bool emJogo = a["jogo"] != null;
         if (faixaEmJogo != emJogo) { faixaEmJogo = emJogo; foreach (var c in cels) Faixa(c, emJogo); }

@@ -245,6 +245,8 @@ public class Configuracoes : Tela
         var cab = Cabecalho("Configurações", null);
         Monta(cab, Carregando("Lendo").secao);
         var d = await Servico.Le("config_ler");
+        if (fpsLiberado == null)
+            try { fpsLiberado = (await Servico.Le("fps_estado")).B("liberado"); } catch (Exception e) { Registro.Escreve("fps: " + e.Message); }
         var lista = new StackPanel { Children = { Subtitulo("Preferências", null, "config") } };
         foreach (var k in Mostrar) Preferencia(d, k, lista);
         var motor = new StackPanel { Children = { Subtitulo("O motor de inteligência", null, "central") } };
@@ -291,10 +293,39 @@ public class Configuracoes : Tela
                 await Recarrega();
             }));
         }
+        string? explica = ExplicaCurta.GetValueOrDefault(k);
+        // FPS: o Windows só deixa medir para quem está no grupo "Usuários de log de desempenho". Antes a tela dizia "libere aqui" e não
+        // tinha botão (nenhuma sessão do dono teve FPS)
+        if (k == "fps" && atual == "sim" && fpsLiberado == false)
+        {
+            explica = "Falta liberar uma vez (pede administrador; vale depois de sair e entrar na conta).";
+            ops.Children.Add(Botao("Liberar", true, async () => await LiberaFps()));
+        }
         // os botões já dizem as opções: a linha leva só uma frase curta; o texto inteiro do motor (o mesmo do terminal) fica no mouse
-        var linha = Linha(Maiuscula(c.S("rotulo")), ExplicaCurta.GetValueOrDefault(k), null, ops);
+        var linha = Linha(Maiuscula(c.S("rotulo")), explica, null, ops);
         if (c.S("explica") != "") { ToolTip.SetTip(linha, Maiuscula(c.S("explica"))); ToolTip.SetShowDelay(linha, 700); }
         lista.Children.Add(linha);
+    }
+
+    bool? fpsLiberado;
+
+    async Task LiberaFps()
+    {
+        var j = Janela.Atual!;
+        j.MostraCaixa(Janela.Caixa("Liberando a medida de FPS", Andamento("Esperando a permissão de administrador do Windows").painel));
+        Trabalho.Comeca("Liberando o FPS…");
+        try
+        {
+            var r = await Servico.Muda("fps_liberar");
+            bool ok = r.B("liberado");
+            fpsLiberado = ok;
+            j.MostraCaixa(Janela.Caixa(ok ? "Liberada" : "Não liberou",
+                T(ok ? "Saia e entre de novo na sua conta do Windows (ou reinicie). Depois disso, as sessões de jogo passam a ter FPS, 1% low e travadas."
+                     : "O Windows não pôs a sua conta no grupo. Em PC de empresa ou escola, uma política pode impedir.", "sub", quebra: true),
+                Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
+        }
+        catch (Exception e) { MostraErro(e, "Não deu para liberar"); }
+        finally { Trabalho.Termina(); }
     }
 
     static readonly Dictionary<string, string?> ExplicaCurta = new()

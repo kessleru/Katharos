@@ -198,6 +198,10 @@ def _auto_diagnostico(ctx, e):
             problemas.append('FPS sem permissão: a conta não está no grupo "Usuários de log de desempenho"')
     except OSError:
         pass
+    try:   # que periféricos as pessoas usam (VID, PID e nome do aparelho; sem número de série): guia o suporte a bateria e DPI por marca
+        out['perifericos'] = [{k: d[k] for k in ('nome', 'fabricante', 'tipo', 'conexao', 'vid', 'pid', 'bateria')} for d in le_dispositivos(ctx)]
+    except Exception as ex:
+        out['perifericos'] = f'não li: {type(ex).__name__}'
     out['problemas_vistos'] = problemas
     return out
 
