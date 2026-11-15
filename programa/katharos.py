@@ -16540,12 +16540,12 @@ def api_fps_liberar(ctx, p, ev):
 
 VIDS_FABRICANTE = {
     '046D': 'Logitech', '1532': 'Razer', '1038': 'SteelSeries', '1B1C': 'Corsair', '0951': 'HyperX', '03F0': 'HyperX (HP)', '24AE': 'Rapoo',
-    '258A': 'Sinowealth (Redragon, Attack Shark, Aula e outras)', '3554': 'Compx (Attack Shark, VXE e outras)', '373B': 'Compx',
-    '1EA7': 'SHARKOON / genérico chinês', '25A7': 'Areson (genérico chinês)', '093A': 'Pixart (sensor de vários mouses)',
-    '04D9': 'Holtek (vários teclados)', '0C45': 'Microdia (vários teclados)', '1A2C': 'China Resource (genérico)', '320F': 'Evision (vários teclados)',
-    '3151': 'YiChip (vários teclados)', '05AC': 'Apple', '045E': 'Microsoft', '054C': 'Sony', '057E': 'Nintendo', '0B05': 'ASUS', '1E7D': 'ROCCAT',
-    '3434': 'Keychron', '0738': 'Mad Catz', '3299': 'Glorious', '22D4': 'Laview (Glorious)', '1915': 'Nordic (receptor 2.4 GHz)', '0461': 'Primax',
-    '17EF': 'Lenovo', '413C': 'Dell', '1D57': 'Xenta (genérico)', '2EA8': 'Pulsar', '373E': 'Lamzu', '19F5': 'Ninjutso', '1E4E': 'Cubeternet',
+    '258A': 'chip Sinowealth', '3554': 'chip Compx', '373B': 'chip Compx',
+    '1EA7': 'chip SHARKOON', '25A7': 'chip Areson', '093A': 'chip Pixart',
+    '04D9': 'chip Holtek', '0C45': 'chip Microdia', '1A2C': 'chip China Resource', '320F': 'chip Evision',
+    '3151': 'chip YiChip', '05AC': 'Apple', '045E': 'Microsoft', '054C': 'Sony', '057E': 'Nintendo', '0B05': 'ASUS', '1E7D': 'ROCCAT',
+    '3434': 'Keychron', '0738': 'Mad Catz', '3299': 'Glorious', '22D4': 'Laview (Glorious)', '1915': 'chip Nordic', '0461': 'Primax',
+    '17EF': 'Lenovo', '413C': 'Dell', '1D57': 'chip Xenta', '2EA8': 'Pulsar', '373E': 'Lamzu', '19F5': 'Ninjutso', '1E4E': 'Cubeternet',
     '2717': 'Xiaomi', '12D1': 'Huawei', '04E8': 'Samsung', '1395': 'EPOS / Sennheiser', '047F': 'Poly', '0B0E': 'Jabra', '2F68': 'Hoksi',
 }
 
