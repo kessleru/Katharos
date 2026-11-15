@@ -4393,8 +4393,3 @@ class TestCatalogo500(unittest.TestCase):
             with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k, 'roda_ps', return_value=s):
                 tk = k.confere_tarefas(types.SimpleNamespace(t=None))
         self.assertIn('Store', tk[0]['problema'])
-
-    def test_tipo_pelas_interfaces(self):
-        self.assertEqual(k.tipo_dispositivo({'produto': 'Rapoo Gaming Device', 'filhas': ['Mouse', 'Keyboard']}), 'mouse')
-        self.assertEqual(k.tipo_dispositivo({'produto': 'HyperX Quadcast', 'filhas': ['Media']}), 'microfone')
-        self.assertEqual(k.tipo_dispositivo({'produto': 'Gaming Keyboard', 'filhas': ['Keyboard', 'Mouse']}), 'teclado')

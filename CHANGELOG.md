@@ -18,6 +18,10 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 5.0.0 · em preparo
+
+- **Dispositivos saiu**: a tela, a leitura de bateria, a linha no painel do ícone e a lista de periféricos no relatório (entrou na 4.5.0) foram removidas, a pedido.
+
 ## 4.5.0 · 15 de novembro de 2026
 
 Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.

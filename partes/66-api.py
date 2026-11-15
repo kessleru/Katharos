@@ -134,10 +134,6 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
                 preparo_pronto.wait(30)
                 cura_ao_abrir(ctx)
                 amostra_se_velha(ctx)
-                try:
-                    api_dispositivos(ctx, {}, None)   # o arquivo que o ícone lê fica com as baterias de agora
-                except Exception as e:
-                    LOG.escreve(f'dispositivos ao abrir: {e!r}')
             threading.Thread(target=cura, daemon=True).start()
         if paralelo:   # um PowerShell já aberto para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
             threading.Thread(target=lambda: POOL_PS.aquece(1), daemon=True).start()

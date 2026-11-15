@@ -15551,10 +15551,6 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
                 preparo_pronto.wait(30)
                 cura_ao_abrir(ctx)
                 amostra_se_velha(ctx)
-                try:
-                    api_dispositivos(ctx, {}, None)   # o arquivo que o ícone lê fica com as baterias de agora
-                except Exception as e:
-                    LOG.escreve(f'dispositivos ao abrir: {e!r}')
             threading.Thread(target=cura, daemon=True).start()
         if paralelo:   # um PowerShell já aberto para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
             threading.Thread(target=lambda: POOL_PS.aquece(1), daemon=True).start()
@@ -16570,168 +16566,6 @@ def api_fps_liberar(ctx, p, ev):
     else:
         marca_estado('fps_grupo', 'nao')
     return {'liberado': ok}
-
-# =====================================================================================================================================
-#   DISPOSITIVOS · mouse, teclado, fone e controle: o que está ligado e a bateria (só leitura)
-# =====================================================================================================================================
-# Fase 1 do plano planos/dispositivos-sem-fio.md. Só o que o Windows já sabe, sem abrir o dispositivo nem instalar nada:
-#   - a lista de periféricos USB e Bluetooth (fabricante pelo VID, nome que o próprio aparelho informa);
-#   - a bateria dos aparelhos Bluetooth (a mesma que aparece em Configurações > Bluetooth): DEVPKEY_Bluetooth_Battery.
-# A lista vai também no relatório (sem número de série): é ela que diz quais marcas e modelos as pessoas usam, e em qual ordem vale a
-# pena ler a bateria e o DPI de cada protocolo de fabricante (2.4 GHz).
-
-VIDS_FABRICANTE = {
-    '046D': 'Logitech', '1532': 'Razer', '1038': 'SteelSeries', '1B1C': 'Corsair', '0951': 'HyperX', '03F0': 'HyperX (HP)', '24AE': 'Rapoo',
-    '258A': 'chip Sinowealth', '3554': 'chip Compx', '373B': 'chip Compx',
-    '1EA7': 'chip SHARKOON', '25A7': 'chip Areson', '093A': 'chip Pixart',
-    '04D9': 'chip Holtek', '0C45': 'chip Microdia', '1A2C': 'chip China Resource', '320F': 'chip Evision',
-    '3151': 'chip YiChip', '05AC': 'Apple', '045E': 'Microsoft', '054C': 'Sony', '057E': 'Nintendo', '0B05': 'ASUS', '1E7D': 'ROCCAT',
-    '3434': 'Keychron', '0738': 'Mad Catz', '3299': 'Glorious', '22D4': 'Laview (Glorious)', '1915': 'chip Nordic', '0461': 'Primax',
-    '17EF': 'Lenovo', '413C': 'Dell', '1D57': 'chip Xenta', '2EA8': 'Pulsar', '373E': 'Lamzu', '19F5': 'Ninjutso', '1E4E': 'Cubeternet',
-    '2717': 'Xiaomi', '12D1': 'Huawei', '04E8': 'Samsung', '1395': 'EPOS / Sennheiser', '047F': 'Poly', '0B0E': 'Jabra', '2F68': 'Hoksi',
-}
-
-DISPOSITIVOS_PS = r'''
-$__bat = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
-$__bus = '{540B947E-8B40-45BC-A8A2-6A0B894CBDA2} 4'
-$__l = @()
-$__vistos = @{}
-# as interfaces filhas (mouse, teclado, áudio) dizem o que o aparelho é quando o nome não diz ("Rapoo Gaming Device")
-$__filhos = @{}
-foreach ($__h in @(Get-PnpDevice -PresentOnly -Class Mouse, Keyboard, Media -ErrorAction SilentlyContinue)) {
-    if ([string]$__h.InstanceId -match 'VID_([0-9A-F]{4})&PID_([0-9A-F]{4})') {
-        $__k = $Matches[1] + $Matches[2]
-        if (-not $__filhos.ContainsKey($__k)) { $__filhos[$__k] = @() }
-        if ($__filhos[$__k] -notcontains [string]$__h.Class) { $__filhos[$__k] += [string]$__h.Class }
-    }
-}
-foreach ($__d in @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^USB\\VID_[0-9A-F]{4}&PID_[0-9A-F]{4}\\' -or $_.InstanceId -match '^(BTHENUM|BTHLE|BTHLEDEVICE)\\' })) {
-    $__id = [string]$__d.InstanceId
-    $__vid = ''; $__pid = ''
-    if ($__id -match 'VID_([0-9A-F]{4})&PID_([0-9A-F]{4})') { $__vid = $Matches[1]; $__pid = $Matches[2] }
-    elseif ($__id -match '_VID&[0-9A-F]{2}([0-9A-F]{4})_PID&([0-9A-F]{4})') { $__vid = $Matches[1]; $__pid = $Matches[2] }
-    $__bt = $__id -match '^BTH'
-    if ($__bt -and $__d.Class -notin @('Bluetooth', 'System', 'HIDClass', 'AudioEndpoint', 'Media')) { continue }
-    $__chave = $(if ($__vid) { "$__vid$__pid$__bt" } else { $__id })
-    $__b = Tenta { (Get-PnpDeviceProperty -InstanceId $__id -KeyName $__bat -ErrorAction Stop).Data } $null
-    if ($__vistos.ContainsKey($__chave)) {
-        if ($null -ne $__b -and $null -eq $__vistos[$__chave].bateria) { $__vistos[$__chave].bateria = [int]$__b }
-        continue
-    }
-    if (-not $__bt -and $__d.Class -notin @('HIDClass', 'Mouse', 'Keyboard', 'USB', 'Media', 'AudioEndpoint', 'Image', 'XnaComposite', 'XboxComposite')) { continue }
-    $__nome = Tenta { [string](Get-PnpDeviceProperty -InstanceId $__id -KeyName $__bus -ErrorAction Stop).Data } ''
-    $__o = @{ nome = [string]$__d.FriendlyName; produto = $__nome; classe = [string]$__d.Class; vid = $__vid; pid = $__pid
-              conexao = $(if ($__bt) { 'bluetooth' } else { 'usb' }); bateria = $(if ($null -ne $__b) { [int]$__b } else { $null }); ok = ($__d.Status -eq 'OK')
-              filhas = @($(if ($__filhos.ContainsKey("$__vid$__pid")) { $__filhos["$__vid$__pid"] } else { @() })) }
-    $__vistos[$__chave] = $__o
-    $__l += $__o
-    if ($__l.Count -ge 60) { break }
-}
-Dado 'dispositivos' @($__l)
-'''
-
-# o que é periférico de entrada ou de som (os hubs, leitores e o próprio controlador USB ficam de fora da tela; no relatório vão todos)
-_DISPOSITIVO_RUIDO = re.compile(r'hub|root|controlador|controller|host|composite device$|dispositivo composto usb$|usb mass storage|'
-                                r'armazenamento|card reader|leitor de cart|enumerator|enumerador|rfcomm|protocolo|protocol|service|serviço|'
-                                r'generic attribute|generic access|device information|transport|transporte|adaptador|adapter|radio', re.I)
-
-
-def tipo_dispositivo(d):
-    """mouse, teclado, fone, microfone, controle, receptor ou outro: pelo nome; quando o nome não diz, pelas interfaces filhas que o
-    Windows mostra (um mouse gamer também tem interface de teclado, então teclado só quando não há mouse ou o nome diz teclado)."""
-    n = f'{d.get("nome") or ""} {d.get("produto") or ""}'.lower()
-    c = str(d.get('classe') or '').lower()
-    filhas = {str(x).lower() for x in lista(d.get('filhas'))}
-    if re.search(r'quadcast|microphone|microfone|\bmic\b|yeti|seiren|wave:?\s*\d|snowball|podcast', n):
-        return 'microfone'
-    if re.search(r'receiver|receptor|dongle|unifying|lightspeed', n) and not re.search(r'mouse|keyboard|teclado|headset', n):
-        return 'receptor'
-    if not re.search(r'mouse|rato|keyboard|teclado|headset|headphone|fone|controller|gamepad', n) and filhas:
-        if 'mouse' in filhas:
-            return 'mouse'
-        if 'keyboard' in filhas:
-            return 'teclado'
-        if 'media' in filhas:
-            return 'fone'
-    if re.search(r'mouse|rato', n) or c == 'mouse':
-        return 'mouse'
-    if re.search(r'keyboard|teclado', n) or c == 'keyboard':
-        return 'teclado'
-    if re.search(r'headset|headphone|fone|buds|earbud|airpods|arctis|cloud|blackshark|kraken|wh-1000|audio|áudio', n) or c in ('audioendpoint', 'media'):
-        return 'fone'
-    if re.search(r'controller|gamepad|xbox|dualsense|dualshock|wireless controller|joystick|8bitdo', n) or c in ('xnacomposite', 'xboxcomposite'):
-        return 'controle'
-    if re.search(r'receiver|receptor|dongle|2\.4g|unifying|lightspeed|wireless', n):
-        return 'receptor'
-    return 'outro'
-
-
-def le_dispositivos(ctx):
-    """[{nome, fabricante, tipo, conexao, vid, pid, bateria, ok}] dos periféricos presentes. Só leitura; nada abre o aparelho."""
-    if not WINDOWS:
-        return []
-    s = roda_ps(ctx.t, DISPOSITIVOS_PS, 'dispositivos', minutos=1, mostra=False)
-    out = []
-    for d in lista(s.dados.get('dispositivos')):
-        if not isinstance(d, dict):
-            continue
-        nome = str(d.get('produto') or '').strip() or str(d.get('nome') or '').strip()
-        if not nome or _DISPOSITIVO_RUIDO.search(nome) and d.get('bateria') is None:
-            continue
-        vid = str(d.get('vid') or '').upper()
-        out.append({'nome': nome[:80], 'nome_windows': str(d.get('nome') or '')[:80], 'fabricante': VIDS_FABRICANTE.get(vid, ''),
-                    'tipo': tipo_dispositivo(d), 'conexao': d.get('conexao'), 'vid': vid, 'pid': str(d.get('pid') or '').upper(),
-                    'bateria': d.get('bateria') if isinstance(d.get('bateria'), int) and 0 <= d.get('bateria') <= 100 else None, 'ok': bool(d.get('ok'))})
-    ordem = {'mouse': 0, 'teclado': 1, 'fone': 2, 'microfone': 3, 'controle': 4, 'receptor': 5, 'outro': 6}
-    return sorted(out, key=lambda x: (ordem.get(x['tipo'], 9), x['nome'].lower()))
-
-
-def controles_xinput():
-    """Bateria dos controles Xbox (e dos que se passam por eles) pelo XInput do Windows: XInputGetBatteryInformation só lê o que o
-    Windows já sabe. Nada é enviado ao controle. [{nome, tipo, conexao, bateria_nivel}] (o XInput dá nível, não porcentagem)."""
-    if not WINDOWS:
-        return []
-    try:
-        import ctypes
-        x = ctypes.WinDLL('xinput1_4')
-    except OSError:
-        return []
-
-    class _Bat(ctypes.Structure):
-        _fields_ = [('tipo', ctypes.c_ubyte), ('nivel', ctypes.c_ubyte)]
-
-    class _Estado(ctypes.Structure):
-        _fields_ = [('pacote', ctypes.c_uint32), ('dados', ctypes.c_ubyte * 12)]
-    out = []
-    for i in range(4):
-        st = _Estado()
-        if x.XInputGetState(i, ctypes.byref(st)) != 0:   # sem controle neste número
-            continue
-        b = _Bat()
-        if x.XInputGetBatteryInformation(i, 0, ctypes.byref(b)) != 0:
-            continue
-        # tipo: 0 desconectado, 1 com fio, 2 alcalina, 3 recarregável; nível: 0 vazia, 1 baixa, 2 média, 3 cheia
-        if b.tipo == 0:
-            continue
-        nivel = None if b.tipo == 1 else {0: 'vazia', 1: 'baixa', 2: 'média', 3: 'cheia'}.get(b.nivel)
-        out.append({'nome': f'Controle Xbox {i + 1}', 'nome_windows': 'XInput', 'fabricante': '', 'tipo': 'controle',
-                    'conexao': 'usb' if b.tipo == 1 else 'sem fio', 'vid': '', 'pid': '', 'bateria': None, 'bateria_nivel': nivel, 'ok': True})
-    return out
-
-
-@metodo_api('dispositivos')
-def api_dispositivos(ctx, p, ev):
-    """Mouse, teclado, fone e controle ligados agora, com a bateria quando o Windows sabe (Bluetooth)."""
-    ds = le_dispositivos(ctx)
-    try:
-        ds += controles_xinput()
-    except Exception as e:   # leitura extra: nunca derruba a tela
-        LOG.escreve(f'dispositivos: XInput: {e!r}')
-    try:   # o ícone (segundo plano) mostra as baterias a partir deste arquivo, sem ele mesmo ler nada
-        grava_json(CASA / 'dispositivos.json', {'quando': agora_iso(), 'dispositivos': ds})
-    except OSError:
-        pass
-    return {'dispositivos': ds}
 # ─────────────── envio de relatório e feedback ───────────────
 #
 #   A janela manda; o motor só monta. O relatório que sai daqui é feito para melhorar o Katharos: os erros dele, o que foi
@@ -16932,10 +16766,6 @@ def _auto_diagnostico(ctx, e):
             problemas.append('FPS sem permissão: a conta não está no grupo "Usuários de log de desempenho"')
     except OSError:
         pass
-    try:   # que periféricos as pessoas usam (VID, PID e nome do aparelho; sem número de série): guia o suporte a bateria e DPI por marca
-        out['perifericos'] = [{k: d[k] for k in ('nome', 'fabricante', 'tipo', 'conexao', 'vid', 'pid', 'bateria')} for d in le_dispositivos(ctx)]
-    except Exception as ex:
-        out['perifericos'] = f'não li: {type(ex).__name__}'
     out['problemas_vistos'] = problemas
     return out
 
@@ -17744,6 +17574,17 @@ def abre_por_clique(cru):
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "5.0.0",
+  "data": "em preparo",
+  "resumo": "",
+  "itens": [
+   {
+    "titulo": "Dispositivos saiu",
+    "texto": "a tela, a leitura de bateria, a linha no painel do ícone e a lista de periféricos no relatório (entrou na 4.5.0) foram removidas, a pedido."
+   }
+  ]
+ },
+ {
   "versao": "4.5.0",
   "data": "15 de novembro de 2026",
   "resumo": "Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.",
@@ -18031,33 +17872,6 @@ NOVIDADES = [
    {
     "titulo": "Esc fecha as caixas",
     "texto": "as caixas de aviso e de resultado também fecham com a tecla Esc."
-   }
-  ]
- },
- {
-  "versao": "4.0.2",
-  "data": "11 de novembro de 2026",
-  "resumo": "Correção da interface, vista num notebook Acer: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.",
-  "itens": [
-   {
-    "titulo": "Ligar o acompanhamento",
-    "texto": "a tela Ao vivo se refazia a cada segundo, o que derrubava o clique no botão e trocava o \"Ligando\" pelo aviso de desligado. Agora ela só se refaz quando o estado muda, ignora o segundo clique e espera até 20 s pela primeira leitura (PC mais lento). Se não ligar, a mensagem de erro fica na tela, com \"tentar de novo\"."
-   },
-   {
-    "titulo": "Carregando para sempre",
-    "texto": "o motor agora avisa que está pronto antes de converter dados e conferir o segundo plano; antes, um desses passos lento ou travado deixava toda tela em \"carregando\" sem nenhum sinal. A janela também desiste de esperar um motor mudo (60 s para abrir, 2 min sem resposta; 10 min no raio-x), fecha ele e mostra \"tentar de novo\"."
-   },
-   {
-    "titulo": "\"Desligado\" com o acompanhamento rodando",
-    "texto": "num PC lento o segundo plano espaça as leituras (até 30 s, para não pesar) e a janela e o motor só aceitavam uma leitura de até 20 s, então diziam \"desligado\" e o botão de ligar parecia não fazer nada. Agora o segundo plano grava o ritmo real (espera_s) e quem lê espera três ritmos. Ligar também espera até 20 s o Katharos.exe abrir (antes 5 s), para o caso de o antivírus verificá-lo na primeira vez."
-   },
-   {
-    "titulo": "Telas travadas esperando a permissão do Windows",
-    "texto": "o motor comum e o de administrador usavam a mesma fila de abertura; enquanto o Windows esperava a resposta do pedido de permissão (até 90 s), toda tela ficava em \"carregando\". Agora cada motor tem a sua fila."
-   },
-   {
-    "titulo": "Versão na janela",
-    "texto": "a barra lateral mostra os três números (4.0.2), que é o que a pessoa precisa dizer ao pedir ajuda."
    }
   ]
  }

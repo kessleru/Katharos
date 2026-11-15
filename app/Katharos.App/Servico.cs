@@ -214,13 +214,6 @@ public static class DadosDeExemplo
             """),
         "linha_de_base" => JsonNode.Parse("""{"metricas": {"cpu": {"jogo": {"p10": 22, "p90": 58, "dias": 12}}, "ram": {"jogo": {"p10": 52, "p90": 66, "dias": 12}}, "temp_cpu": {"jogo": {"p10": 61, "p90": 78, "dias": 12}}, "disco": {"jogo": {"p10": 1, "p90": 12, "dias": 12}}}}"""),
         "memoria_programas" => MemoriaProgramas(),
-        "dispositivos" => JsonNode.Parse("""
-            {"dispositivos": [
-            {"nome": "Rapoo 2.4G Wireless Device", "nome_windows": "Dispositivo de Entrada USB", "fabricante": "Rapoo", "tipo": "mouse", "conexao": "usb", "vid": "24AE", "pid": "1861", "bateria": null, "ok": true},
-            {"nome": "AULA F75", "nome_windows": "Dispositivo de Entrada USB", "fabricante": "chip Sinowealth", "tipo": "teclado", "conexao": "usb", "vid": "258A", "pid": "010C", "bateria": null, "ok": true},
-            {"nome": "WH-1000XM4", "nome_windows": "WH-1000XM4 Hands-Free AG", "fabricante": "Sony", "tipo": "fone", "conexao": "bluetooth", "vid": "054C", "pid": "0D58", "bateria": 70, "ok": true},
-            {"nome": "Xbox Wireless Controller", "nome_windows": "Xbox Wireless Controller", "fabricante": "Microsoft", "tipo": "controle", "conexao": "bluetooth", "vid": "045E", "pid": "0B13", "bateria": 12, "ok": true}]}
-            """),
         "memoria" => JsonNode.Parse("""{"contagens": {"minutos": 41230, "horas": 0, "sessoes": 14, "resultados": 3}, "desde": "2026-09-30T18:02:00", "bytes": 9400000}"""),
         "perguntar" => JsonNode.Parse("""
             {"resposta": "O que segura os seus jogos: economia de energia. O que eu vi: CPU freando em 31 % do tempo nas sessões de jogo. Plano de energia de desempenho na tomada.",

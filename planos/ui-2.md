@@ -33,7 +33,7 @@ Regras que continuam valendo:
 
    As faixas de severidade viram uma **barra vertical fina** à esquerda da linha, e não só uma etiqueta.
 4. **Superfícies**: fundo carvão quente (não #000), e as seções com 2 a 3 % a mais de luz. As divisórias ficam mais suaves, mas os "+" nos cruzamentos continuam.
-5. **Matriz de pontos** (novo): um componente que desenha números em pontos 5×7, só para três heróis (nota, FPS, bateria). É a assinatura visual nova.
+5. **Matriz de pontos** (novo): um componente que desenha números em pontos 5×7, só para três heróis (nota, FPS). É a assinatura visual nova.
 6. **Movimento**: só transições curtas (≤150 ms) de entrada e de valor (o número "rola" do antigo ao novo). Nada em laço, exceto o ponto "ao vivo". O desligar animações das Configurações continua valendo.
 
 ## Componentes novos (Controles/)
@@ -74,7 +74,6 @@ Regras que continuam valendo:
   - Em jogo, o FPS em matriz de pontos, o 1% low e a faixa de tempo de quadro. Fora do jogo, a grade de seis.
   - "O Katharos neste PC" vira uma faixa discreta no fim.
 - **Memória**: barras horizontais proporcionais ao uso, de cima para baixo, com o ícone real. Abertos e fechados separados (feito na 4.5.0).
-- **Dispositivos**: fichas por aparelho (ícone grande, anel de bateria, horas restantes, DPI). Aparelho com bateria baixa em vermelho no topo.
 - **Histórico**: mapa de calor do ano, linha do tempo das mudanças e gráficos com as marcas de cada mudança.
 - **Central**: cartões de proposta com "se fizer, espero X" e, depois, "deu Y" (antes/depois).
 - **Configurações**: alternadores, grupos recolhidos e busca no topo.

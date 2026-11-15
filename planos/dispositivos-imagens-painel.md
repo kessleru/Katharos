@@ -1,69 +1,10 @@
-# Plano: dispositivos sem fio, imagens na interface e o painel do ícone
+# Plano: imagens na interface e o painel do ícone (dispositivos saiu)
 
 15/11/2026. Pedido do dono: tirar a necessidade de instalar o software de cada marca só para ver a bateria ou o DPI. Precisa funcionar com marcas chinesas (Rapoo, Aula, Redragon, Attack Shark, VXE...) e com as grandes (Logitech, Razer, SteelSeries, Corsair, HyperX). Também pediu imagens na interface (ícones dos programas, prévia do que muda) e uma revisão do painel do ícone e do design.
 
-## 1. Dispositivos sem fio
+## 1. Dispositivos sem fio: removido
 
-### O que é possível, sendo honesto
-
-Não existe um jeito único de ler a bateria de todo aparelho:
-- No **Bluetooth**, a bateria é padrão (Battery Service), e o Windows já guarda o valor. Funciona com qualquer marca.
-- No **receptor 2.4 GHz**, cada fabricante (ou cada fabricante de chip) inventa o próprio protocolo.
-
-"Funcionar com toda certeza" só dá para garantir assim:
-1. Ler primeiro o que é padrão.
-2. Cobrir os protocolos por **chip**, não por marca. Centenas de marcas chinesas usam os mesmos poucos chips: Sinowealth, Compx, Beken, Nordic, YiChip, Holtek, Pixart.
-3. Nunca chutar. Aparelho desconhecido aparece como "ainda não leio", com o nome e o VID/PID.
-4. Usar os relatórios para saber o que as pessoas têm e priorizar. A 4.5.0 já manda a lista de periféricos: VID, PID e nome, sem número de série.
-
-### Camadas (da mais universal para a mais específica)
-
-| Camada | Cobre | Como | Risco |
-|---|---|---|---|
-| A. Bluetooth padrão | qualquer fone, mouse, teclado e controle Bluetooth | `DEVPKEY_Bluetooth_Battery` ({104EA319-…} 2) no Windows, sem administrador | nenhum (**feito na 4.5.0**) |
-| B. HID genérico | receptores 2.4 GHz que seguem a especificação HID de bateria (Generic Device Controls 0x06/0x20 "Battery Strength", Battery System 0x85) | lê o descritor HID (HidP_GetValueCaps) e pede o relatório de entrada ou de feature | só leitura |
-| C. Controles | Xbox (XInputGetBatteryInformation), DualSense/DualShock (byte de bateria no relatório de entrada), 8BitDo no modo Xbox | APIs do Windows e relatório de entrada | só leitura |
-| D. Protocolos de fabricante (leitura) | Logitech HID++ 2.0 (features 0x1000, 0x1001, 0x1004 de bateria; 0x2201 de DPI), Razer (relatório de feature de 90 bytes), SteelSeries, Corsair, HyperX e fones com protocolo conhecido | pedido de feature report, só os comandos de leitura | baixo: só leitura, comandos documentados por projetos abertos |
-| E. Chips chineses | Sinowealth (Redragon, Aula, Attack Shark, Glorious antigo...), Compx (Attack Shark, VXE, ATK), Beken, Nordic | os mesmos relatórios de feature que os "drivers web" (WebHID) dessas marcas usam | médio: varia por firmware; liga um modelo só depois de testado num aparelho real |
-
-
-> **O que a regra de só leitura corta.** Quase todo protocolo de fabricante (Logitech HID++, Razer, SteelSeries, Corsair, chips chineses) pede a bateria **mandando um comando** ao aparelho (um relatório de saída ou de feature) e lendo a resposta. Mandar comando é escrever no aparelho, então **as camadas D e E ficam fora** até haver um caminho de leitura pura (o aparelho mandando a bateria sozinho num relatório de entrada, que o Katharos só escuta). Ficam valendo: A (o Windows já sabe), C (XInput, que é uma API de leitura do Windows) e B só quando o valor vem no relatório de entrada que o aparelho já envia, sem pedido.
-
-Regras:
-- **Só leitura, sempre (regra do dono, 15/11).** O Katharos nunca muda nada num aparelho: nem DPI, nem polling, nem LED, nem desligamento automático, nem firmware. Na dúvida se um pedido ao aparelho é só leitura, ele não é feito.
-- Nada de programa de terceiros. Os protocolos são reimplementados a partir da documentação dos projetos abertos (libratbag e Solaar são MIT/GPL, openrazer é GPL, HeadsetControl é GPL). O código é nosso, e cada protocolo cita a fonte.
-- Nada abre processo de jogo. Abrir o aparelho HID é outra coisa: é o mesmo que o software da marca faz.
-- Um aparelho só é marcado "suportado" depois de testado num aparelho real, pelo dono ou por alguém que mandou relatório.
-
-### Onde roda
-
-- **Leitura periódica (bateria)**: no segundo plano (ícone, C#). Ele já roda sempre, lê a cada poucos minutos, guarda o histórico e avisa quando a bateria fica baixa. Sem abrir janela.
-- **Tela Dispositivos (janela)**: cartões por aparelho com bateria, histórico de descarga, estimativa de horas restantes, DPI e polling.
-- **Painel do ícone**: uma faixa "dispositivos" com as baterias. O ícone ganha um ponto vermelho quando algum passa de 15 %.
-
-### Indo além da bateria e do DPI (o que faz sentido)
-
-- **Aviso antes da partida**: abriu um jogo com o mouse em 10 % → "conecte o cabo antes da partida". Fora do jogo, aviso a 20 % e 10 %. No jogo, só o grave, como os outros avisos.
-- **Estimativa de horas**: pela curva de descarga dos últimos dias. Mostra "quanto dura uma carga" e quando a bateria está envelhecendo (a carga durando cada vez menos).
-- **Receptor em porta ruim**: receptor 2.4 GHz numa porta USB 3 ou atrás do gabinete sofre interferência. Detectado pela porta e pelas quedas de conexão, a dica é usar o extensor ou uma porta da frente.
-- **Taxa de polling e teste de mouse** (medido pelo que o Windows entrega à janela, sem falar com o aparelho): uma área de teste na janela que mede a taxa de polling real (Raw Input), os cliques duplos fantasma (botão gasto) e o DPI real (arrastar uma distância conhecida).
-- **Teste de controle**: zona morta e drift dos analógicos, desenhados ao vivo.
-- **Teste de teclado**: ghosting e teclas presas.
-- **Monitor**: a taxa de atualização em uso comparada com a máxima ("seu monitor de 144 Hz está em 60 Hz"). Só **avisa** e abre a página do Windows: nada muda a imagem sozinho (regra do Katharos).
-- **Software da marca rodando à toa**: se o Katharos já lê a bateria daquele aparelho, a Memória e a Inicialização sugerem tirar o G HUB, o Synapse ou o iCUE da inicialização. Isso mostra a RAM economizada, sem desinstalar sozinho.
-- **Histórico**: as baterias entram no histórico (quanto tempo cada aparelho fica longe da tomada).
-- **Relatório**: aparelho que o Katharos ainda não lê vai com VID/PID e o descritor HID (sem número de série). É assim que entra o próximo protocolo.
-
-### Fases (pedido do dono, 15/11: depois da 4.5.0, uma publicação só, a 5.0.0, com tudo)
-
-1. **4.5.0 (feito)**: lista dos periféricos, bateria Bluetooth, tela Dispositivos, lista no relatório.
-2. **5.0.0**: camadas B e C. Leitura no segundo plano, faixa no painel do ícone, avisos de bateria baixa, histórico e estimativa.
-3. **5.0.0**: camada D (Logitech HID++, Razer, SteelSeries, HyperX, Corsair, fones conhecidos), leitura de DPI e de polling.
-4. **5.0.0**: camada E por chip, começando pelos que mais aparecem nos relatórios (o Rapoo e o Aula do dono primeiro), e a área de testes (mouse, controle, teclado).
-
-### O que falta para começar a fase 2 no PC do dono
-
-Abrir a tela Dispositivos na 4.5.0 e mandar um relatório. A lista traz o VID/PID do Rapoo e do Aula, e assim dá para saber qual chip cada um usa.
+O dono pediu (15/11, 20:03) para tirar a funcionalidade inteira, inclusive o que entrou na 4.5.0. Não volta.
 
 ## 2. Imagens na interface
 
@@ -96,7 +37,6 @@ O Otimizar e a Memória montam as linhas à mão em cada tela. Proposta:
 O que está bom: números grandes, minigráficos, uma linha por recurso, FPS no lugar da rede durante o jogo, e os botões raio-x, jogos e abrir o Katharos.
 
 O que melhorar:
-- **Dispositivos**: a faixa de baterias (fase 2 acima).
 - **Estado do próprio segundo plano**: hoje, se ele cai, ninguém vê. O painel deve mostrar "acompanhando desde 22:31" e a janela deve avisar quando ele não está rodando sem você ter saído (a 4.5.0 religa sozinho).
 - **Rodapé**: diz agora "este ícone usa N MB" (o total do Katharos fica no Ao vivo, que conta tudo). Antes parecia contradizer o Ao vivo e o Gerenciador.
 - **FPS sem permissão**: o painel manda para a janela, e o botão "Liberar" agora existe (4.5.0).
@@ -111,6 +51,5 @@ Revisado pelas fotos do Katharos.Fotos (980 px):
 - Raio-x rodando: agora tem layout próprio, com o que já foi lido em duas colunas e o que o raio-x olha.
 - A melhorar:
   - Telas que terminam cedo deixam metade da janela vazia. Um rodapé leve com "próximo passo" ajudaria.
-  - Os ícones da tela Dispositivos ainda são todos de mouse. Faltam ícones de teclado, fone e controle.
   - Na Memória, a ação "Desinstalar…" aparece em programas que só estão na RAM por pouco tempo. Mostrar só com o mouse em cima.
   - O cabeçalho do Raio-x mostra "Fazer de novo" durante a leitura. Esconder enquanto roda.

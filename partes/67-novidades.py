@@ -1,6 +1,17 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "5.0.0",
+  "data": "em preparo",
+  "resumo": "",
+  "itens": [
+   {
+    "titulo": "Dispositivos saiu",
+    "texto": "a tela, a leitura de bateria, a linha no painel do ícone e a lista de periféricos no relatório (entrou na 4.5.0) foram removidas, a pedido."
+   }
+  ]
+ },
+ {
   "versao": "4.5.0",
   "data": "15 de novembro de 2026",
   "resumo": "Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.",
@@ -288,33 +299,6 @@ NOVIDADES = [
    {
     "titulo": "Esc fecha as caixas",
     "texto": "as caixas de aviso e de resultado também fecham com a tecla Esc."
-   }
-  ]
- },
- {
-  "versao": "4.0.2",
-  "data": "11 de novembro de 2026",
-  "resumo": "Correção da interface, vista num notebook Acer: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.",
-  "itens": [
-   {
-    "titulo": "Ligar o acompanhamento",
-    "texto": "a tela Ao vivo se refazia a cada segundo, o que derrubava o clique no botão e trocava o \"Ligando\" pelo aviso de desligado. Agora ela só se refaz quando o estado muda, ignora o segundo clique e espera até 20 s pela primeira leitura (PC mais lento). Se não ligar, a mensagem de erro fica na tela, com \"tentar de novo\"."
-   },
-   {
-    "titulo": "Carregando para sempre",
-    "texto": "o motor agora avisa que está pronto antes de converter dados e conferir o segundo plano; antes, um desses passos lento ou travado deixava toda tela em \"carregando\" sem nenhum sinal. A janela também desiste de esperar um motor mudo (60 s para abrir, 2 min sem resposta; 10 min no raio-x), fecha ele e mostra \"tentar de novo\"."
-   },
-   {
-    "titulo": "\"Desligado\" com o acompanhamento rodando",
-    "texto": "num PC lento o segundo plano espaça as leituras (até 30 s, para não pesar) e a janela e o motor só aceitavam uma leitura de até 20 s, então diziam \"desligado\" e o botão de ligar parecia não fazer nada. Agora o segundo plano grava o ritmo real (espera_s) e quem lê espera três ritmos. Ligar também espera até 20 s o Katharos.exe abrir (antes 5 s), para o caso de o antivírus verificá-lo na primeira vez."
-   },
-   {
-    "titulo": "Telas travadas esperando a permissão do Windows",
-    "texto": "o motor comum e o de administrador usavam a mesma fila de abertura; enquanto o Windows esperava a resposta do pedido de permissão (até 90 s), toda tela ficava em \"carregando\". Agora cada motor tem a sua fila."
-   },
-   {
-    "titulo": "Versão na janela",
-    "texto": "a barra lateral mostra os três números (4.0.2), que é o que a pessoa precisa dizer ao pedir ajuda."
    }
   ]
  }
