@@ -106,7 +106,7 @@ public class AoVivo : Tela
             gProprioCpu!.Maximo = Math.Max(5, ConsumoProprio.HistCpu.DefaultIfEmpty(0).Max() * 1.3);
             gProprioRam!.Maximo = Math.Max(100, ConsumoProprio.HistRam.DefaultIfEmpty(0).Max() * 1.2);
             gProprioCpu.Valores = ConsumoProprio.HistCpu.ToArray(); gProprioRam.Valores = ConsumoProprio.HistRam.ToArray();
-            proprioTexto!.Text = $"Janela, motor e o ícone perto do relógio ({pn} {(pn == 1 ? "processo" : "processos")}). Os PowerShell de leitura, que abrem e fecham sozinhos, não entram.";
+            proprioTexto!.Text = $"{pn} {(pn == 1 ? "processo" : "processos")}: janela, motor, ícone perto do relógio e os PowerShell que o motor deixa abertos para ler o PC (fecham sozinhos depois de 30 s sem uso). Mesma conta da coluna Memória do Gerenciador de Tarefas, somando todos.";
         }
         foreach (var c in cels)
         {

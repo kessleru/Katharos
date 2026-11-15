@@ -160,7 +160,46 @@ def _env_sistema(ctx):
             'pc': pc or None, 'medido_em': (sec.get('pc') or {}).get('quando'),
             'config_mudada': {k: config(k) for k in PADROES if config(k) != PADROES[k]},
             'segundo_plano': e.get('segundo_plano'), 'janelas': bool(os.environ.get('KATHAROS_JANELA')) or None,
-            'python': sys.version.split()[0], 'windows': WINDOWS}
+            'python': sys.version.split()[0], 'windows': WINDOWS, **_auto_diagnostico(ctx, e)}
+
+
+def _auto_diagnostico(ctx, e):
+    """O que o próprio Katharos consegue ver de errado nele mesmo, para quem lê o relatório não precisar adivinhar: tarefas agendadas
+    quebradas, histórico parado, segundo plano ligado mas sem ler, FPS sem permissão. Nada disso abre processo de jogo."""
+    out, problemas = {}, []
+    try:
+        tk = confere_tarefas(ctx)
+        out['tarefas'] = [{'nome': x['nome'], 'estado': x['estado'], 'python': Path(x['exe']).name if x['exe'] else '',
+                           'python_da_loja': 'windowsapps' in x['exe'].lower(), 'ultima': x['ultima'], 'resultado': x['resultado'],
+                           'problema': x['problema']} for x in tk]
+        problemas += [f'tarefa "{x["nome"]}": {x["problema"]}' for x in tk if x['problema']]
+    except Exception as ex:
+        out['tarefas'] = f'não li: {type(ex).__name__}'
+    out['manut_ultima'] = e.get('manut_ultima')
+    try:
+        am = le_metricas()
+        ult = am[-1]['_dt'] if am else None
+        out['historico_ultima_medida'] = ult.isoformat(timespec='minutes') if ult else None
+        if not ult or (datetime.now() - ult).days >= 3:
+            problemas.append('histórico sem medida nova há 3 dias ou mais')
+    except Exception:
+        pass
+    try:
+        ag = CASA / 'agora.json'
+        idade = (time.time() - ag.stat().st_mtime) / 60 if ag.is_file() else None
+        out['segundo_plano_leu_ha_min'] = round(idade) if idade is not None else None
+        if e.get('segundo_plano') == 'sim' and (idade is None or idade > 15):
+            problemas.append('segundo plano ligado, mas sem leitura nos últimos 15 min (parado ou não abriu)')
+    except OSError:
+        pass
+    try:
+        log = (CASA / 'segundo-plano.log').read_text(encoding='utf-8', errors='replace')[-20000:] if (CASA / 'segundo-plano.log').is_file() else ''
+        if re.search(r'Usu[aá]rios de log de desempenho|Performance Log Users|access denied', log, re.I):
+            problemas.append('FPS sem permissão: a conta não está no grupo "Usuários de log de desempenho"')
+    except OSError:
+        pass
+    out['problemas_vistos'] = problemas
+    return out
 
 
 def _env_erros(ctx):
@@ -169,8 +208,10 @@ def _env_erros(ctx):
     eventos = [ev for ev in (r.get('eventos') or []) if ev.get('erros') or ev.get('avisos') or ev.get('tipo') == 'nao-ficou']
     logs = sorted(pasta('logs').glob('*.log'))[-30:]
     motor = []
+    # o log do motor também guarda dados e passos (@@dado, @@secao, @@feito, versão: ...) que só citam a palavra erro: não são erro
+    so_registro = re.compile(r'^\d\d:\d\d:\d\d\s+(?:@@(?:dado|secao|feito|info|plano|ok)\b|versão: )')
     for arq in logs:
-        motor.extend(_linhas_de_erro(arq, desde, 30))
+        motor.extend(l for l in _linhas_de_erro(arq, desde, 60) if not so_registro.match(l))
     return {'eventos': eventos[-60:], 'motor': motor[-60:],
             'janela': _linhas_de_erro(CASA / 'interface.log', desde, 40),
             'segundo_plano': _linhas_de_erro(CASA / 'segundo-plano.log', desde, 30),

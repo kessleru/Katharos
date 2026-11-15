@@ -1002,8 +1002,8 @@ class _PSAberto:
 
 
 class _PoolPS:
-    MAXIMO_PARADOS = 4
-    PARADO_S = 60
+    MAXIMO_PARADOS = 2   # cada PowerShell parado custa uns 100 MB de RAM
+    PARADO_S = 30
 
     def __init__(self):
         self.parados = []
@@ -1034,7 +1034,7 @@ class _PoolPS:
 
     def _vigia(self):
         while True:
-            time.sleep(15)
+            time.sleep(10)
             with self.trava:
                 velhos = [w for w in self.parados if time.time() - w.parado_desde > self.PARADO_S]
                 self.parados = [w for w in self.parados if w not in velhos]

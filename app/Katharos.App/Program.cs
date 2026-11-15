@@ -15,7 +15,7 @@ static class Program
         // primeiro de tudo: o Velopack trata a instalação, a desinstalação e a troca de versão (e sai, quando é com ele)
         Velopack.VelopackApp.Build()
             .OnBeforeUpdateFastCallback(_ => SegundoPlano.PedeParaSair(reabrir: true))
-            .OnBeforeUninstallFastCallback(_ => { SegundoPlano.PedeParaSair(reabrir: false); SegundoPlano.TiraDoInicio(); })
+            .OnBeforeUninstallFastCallback(_ => SegundoPlano.Desinstala())
             .Run();
         // ensaio do CI (5.2): atualiza esta instalação a partir de uma pasta de releases, do mesmo jeito que pelo GitHub
         // logo depois de uma troca de versão sem janela (automática ao fechar, ou o ensaio): só religa o segundo plano e sai
@@ -125,6 +125,45 @@ public static class SegundoPlano
             try { File.Delete(Arq("segundo-plano-sair.txt")); } catch { }   // ninguém atendeu: não fica pedido velho para o próximo
         }
         catch (Exception e) { Registro.Escreve("segundo plano: pedir para sair: " + e.Message); }
+    }
+
+    /// <summary>
+    /// Desinstalar a interface tira tudo o que roda sozinho (relatório ELQUQN: o segundo plano continuava rodando). O segundo plano roda
+    /// de uma cópia em ~/.katharos, não da instalação: ele recebe o pedido de sair pelo evento com nome e pelo arquivo; saem as entradas de
+    /// abrir com o Windows (a dele e a da janela) e as tarefas agendadas do Katharos. Os dados em ~/.katharos ficam.
+    /// </summary>
+    public static void Desinstala()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try
+        {
+            Directory.CreateDirectory(Casa);
+            File.WriteAllText(Arq("segundo-plano-fechado.txt"), DateTime.Now.ToString("s"));   // nada reabre ele depois
+            File.WriteAllText(Arq("segundo-plano-sair.txt"), DateTime.Now.ToString("s"));
+            if (EventWaitHandle.TryOpenExisting(@"Local\KatharosSegundoPlanoSair", out var ev)) using (ev) ev.Set();
+        }
+        catch (Exception e) { Registro.Escreve("desinstalar: segundo plano: " + e.Message); }
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+            foreach (var nome in new[] { "Katharos", "Katharos Janela" })
+                if (k?.GetValue(nome) is string v && v.Contains("Katharos", StringComparison.OrdinalIgnoreCase)) k.DeleteValue(nome, false);
+        }
+        catch (Exception e) { Registro.Escreve("desinstalar: abrir com o Windows: " + e.Message); }
+        // as tarefas: a do usuário sai sempre; a da manutenção (criada como administrador) sai se o Windows deixar, senão fica no registro
+        foreach (var t in new[] { "Katharos - amostra leve", "Katharos - segundo plano" })
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), $"/Delete /TN \"{t}\" /F")
+                    { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                using var p = System.Diagnostics.Process.Start(psi)!;
+                if (!p.WaitForExit(5000)) { try { p.Kill(); } catch { } }
+                else if (p.ExitCode != 0) Registro.Escreve($"desinstalar: tarefa {t}: {p.StandardError.ReadToEnd().Trim()}");
+            }
+            catch (Exception e) { Registro.Escreve($"desinstalar: tarefa {t}: {e.Message}"); }
+        PedeParaSair(reabrir: false);
+        TiraDoInicio();
+        Registro.Escreve("desinstalado: segundo plano, abrir com o Windows e tarefas retirados");
     }
 
     /// <summary>Na desinstalação: tira o "iniciar com o Windows" que aponta para dentro desta instalação (o resto em ~/.katharos fica).</summary>

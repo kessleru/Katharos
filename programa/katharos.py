@@ -2052,8 +2052,8 @@ class _PSAberto:
 
 
 class _PoolPS:
-    MAXIMO_PARADOS = 4
-    PARADO_S = 60
+    MAXIMO_PARADOS = 2   # cada PowerShell parado custa uns 100 MB de RAM
+    PARADO_S = 30
 
     def __init__(self):
         self.parados = []
@@ -2084,7 +2084,7 @@ class _PoolPS:
 
     def _vigia(self):
         while True:
-            time.sleep(15)
+            time.sleep(10)
             with self.trava:
                 velhos = [w for w in self.parados if time.time() - w.parado_desde > self.PARADO_S]
                 self.parados = [w for w in self.parados if w not in velhos]
@@ -10293,9 +10293,13 @@ def instala_manutencao(ctx, freq='semanal'):
         return 1
     script = pasta / 'katharos.py'
     shutil.copy2(Path(__file__).resolve(), script)
-    exe, sem_janela = executavel_sem_janela()
+    pw = python_da_tarefa_elevada()
+    if pw is None:
+        t.erro(f'Não consegui copiar o Python para {pasta} (pasta só de administrador). Nada foi criado.')
+        return 1
+    exe, sem_janela = str(pw), Path(pw).name.lower() == 'pythonw.exe'
     arg = subprocess.list2cmdline([str(script), 'manutencao', '--agendada', '--sem-cor'])
-    if WINDOWS and python_em_pasta_do_usuario():
+    if WINDOWS and str(Path(exe).resolve()).lower().startswith(str(Path.home().resolve()).lower()):
         t.aviso('O Python que a tarefa usa está dentro da sua pasta de usuário, que programas sem administrador conseguem alterar; a tarefa roda como administrador e herdaria esse risco. '
                 'Para fechar essa brecha, instale o Python "para todos os usuários" (python.org, marque "Install for all users": vai para Arquivos de Programas) e rode "agendar" de novo.')
     if not sem_janela:
@@ -12009,8 +12013,8 @@ def comando_da_amostra():
     """(executável, argumentos) da tarefa de 15 min. Preferência por pythonw.exe: não tem console, então nada pisca na tela (um jogo em tela cheia
     poderia ser minimizado por uma janela que abre e fecha). Sem pythonw, cai no PowerShell escondido e avisa."""
     script = CASA / 'katharos.py'
-    pw = Path(sys.executable).with_name('pythonw.exe')
-    if pw.exists():
+    pw = python_do_usuario()
+    if pw.name.lower() == 'pythonw.exe':
         return str(pw), subprocess.list2cmdline([str(script), 'amostrar', '--agendada', '--sem-cor']), True
     py = sys.executable
     return 'powershell.exe', ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& \'' + py + '\' \'' + str(script) + '\' amostrar --agendada --sem-cor"'), False
@@ -12222,8 +12226,7 @@ def inicia_com_windows_ligado():
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_CHAVE) as k:
-            winreg.QueryValueEx(k, 'Katharos')
-            return True
+            return '--segundo-plano' in str(winreg.QueryValueEx(k, 'Katharos')[0])   # a da janela (--inicio-windows) não conta
     except OSError:
         return False
 
@@ -12326,6 +12329,21 @@ def garante_segundo_plano(ctx):
         return False
 
 
+def confere_segundo_plano(ctx):
+    """Ligado, mas sem a entrada de abrir com o Windows (a janela da 4.4.0 apagava) ou fechado sem ninguém ter saído pelo ícone: arruma.
+    Devolve o que fez."""
+    feito = []
+    if not WINDOWS or estado().get('segundo_plano') != 'sim' or not exe_instalado().is_file():
+        return feito
+    if not inicia_com_windows_ligado() and inicia_com_windows(True):
+        feito.append('voltou a abrir com o Windows')
+        LOG.escreve('segundo plano: a entrada de abrir com o Windows tinha sumido; voltou')
+    if not sp_rodando() and not (CASA / 'segundo-plano-fechado.txt').exists() and abre_segundo_plano(ctx):
+        feito.append('estava fechado; abri')
+        LOG.escreve('segundo plano: estava fechado sem ninguém ter saído pelo ícone; abri')
+    return feito
+
+
 def migra_segundo_plano(ctx):
     """Quem já tinha o acompanhamento contínuo (ou o ícone antigo) passa para o executável na primeira vez que abre esta versão pelo zip."""
     if not WINDOWS:
@@ -12334,6 +12352,7 @@ def migra_segundo_plano(ctx):
     if e.get('segundo_plano') in ('sim', 'nao') or not exe_do_pacote():
         if e.get('segundo_plano') == 'sim':
             escreve_config_sp()   # caminho do programa e do Python podem ter mudado
+            confere_segundo_plano(ctx)
             if exe_do_pacote() and exe_instalado().is_file() and _sha(exe_do_pacote()) != _sha(exe_instalado()):
                 instala_segundo_plano(ctx, mostrar=False, quieto=True)   # versão nova do executável
         return False
@@ -12836,6 +12855,159 @@ def ferramenta_aovivo(ctx, args):
     except KeyboardInterrupt:
         t.escreve()
         return 0
+
+# =====================================================================================================================================
+#   TAREFAS AGENDADAS DO KATHAROS · conferir se ainda rodam e consertar sozinho
+# =====================================================================================================================================
+# As duas tarefas (manutenção, elevada, e leitura de 15 min, do usuário) guardam o caminho do Python e do katharos.py do dia em que
+# foram criadas. Até a 4.4.0, três coisas as quebravam sem ninguém ver: o Python da Microsoft Store atualizado ou removido (o caminho
+# some), a cópia protegida do motor apagando o katharos.py da manutenção em %ProgramData%\Katharos, e o Python da cópia protegida, que
+# muda de pasta a cada versão. Agora as tarefas usam caminhos que não mudam: %ProgramData%\Katharos\python (elevada) e o Python do
+# Katharos instalado (do usuário). O motor confere ao abrir e conserta o que der.
+
+def _pasta_do_python(py):
+    """O Python embutido do Katharos (instalador) tem o python3XX.dll e o python3XX._pth ao lado do executável."""
+    d = Path(py).parent
+    try:
+        return any(d.glob('python3*._pth')) and any(d.glob('python3*.dll'))
+    except OSError:
+        return False
+
+
+def python_do_usuario():
+    """pythonw.exe para a tarefa do usuário: o do Katharos instalado (o caminho "current" não muda entre versões); senão o que roda agora."""
+    base = os.environ.get('LOCALAPPDATA')
+    if WINDOWS and base:
+        pw = Path(base) / 'Katharos' / 'current' / 'python' / 'pythonw.exe'
+        if pw.is_file():
+            return pw
+    pw = Path(sys.executable).with_name('pythonw.exe')
+    return pw if pw.exists() else Path(sys.executable)
+
+
+def python_da_tarefa_elevada():
+    """pythonw.exe para a tarefa elevada. Com o Python embutido do Katharos, uma cópia em %ProgramData%\\Katharos\\python (só administrador
+    grava, e não muda de pasta a cada versão). Sem ele (código, Python de python.org), o que roda agora. None se não deu para copiar."""
+    atual = Path(sys.executable)
+    if not WINDOWS or not _pasta_do_python(atual):
+        pw = atual.with_name('pythonw.exe')
+        return pw if pw.exists() else atual
+    destino = pasta_protegida('python')
+    if destino is None:
+        return None
+    marca = destino / 'katharos-versao.txt'
+    assinatura = f'{sys.version}|{atual.parent / "python.exe"}'
+    try:
+        if not (marca.is_file() and marca.read_text(encoding='utf-8') == assinatura and (destino / 'pythonw.exe').is_file()):
+            for sub in list(destino.iterdir()):
+                if sub.is_dir() and not sub.is_symlink():
+                    shutil.rmtree(sub)
+                else:
+                    sub.unlink()
+            shutil.copytree(atual.parent, destino, dirs_exist_ok=True, symlinks=False,
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+            marca.write_text(assinatura, encoding='utf-8')
+            protege_pasta_da_tarefa(pasta_da_tarefa())
+    except OSError as e:
+        LOG.escreve(f'tarefas: o Python da tarefa elevada não copiou: {e!r}')
+        return None
+    return destino / 'pythonw.exe'
+
+
+TAREFAS_PS = r'''
+$__l = @()
+foreach ($__n in «nomes») {
+    $__t = Get-ScheduledTask -TaskName $__n -ErrorAction SilentlyContinue
+    if (-not $__t) { continue }
+    $__i = Tenta { $__t | Get-ScheduledTaskInfo -ErrorAction Stop } $null
+    $__a = @($__t.Actions)[0]
+    $__l += @{ nome = $__n; estado = [string]$__t.State; exe = [string]$__a.Execute; args = [string]$__a.Arguments
+               ultima = $(if ($__i -and $__i.LastRunTime -and $__i.LastRunTime.Year -gt 2000) { $__i.LastRunTime.ToString('s') } else { '' })
+               resultado = $(if ($__i) { [int64]$__i.LastTaskResult } else { $null }) }
+}
+Dado 'tarefas' @($__l)
+'''
+
+
+def _script_dos_args(args):
+    """O katharos.py que a tarefa executa: o primeiro argumento terminado em .py (a tarefa sem pythonw passa pelo PowerShell)."""
+    for m in re.finditer(r'"([^"]+?\.py)"|\'([^\']+?\.py)\'|(\S+?\.py)\b', args or ''):
+        return next(g for g in m.groups() if g)
+    return ''
+
+
+def confere_tarefas(ctx):
+    """[{nome, estado, exe, script, ultima, resultado, problema}] das tarefas do Katharos que existem. problema é '' quando está tudo certo."""
+    if not WINDOWS:
+        return []
+    nomes = '@(' + ', '.join(psq(n) for n in (TAREFA_MANUT, TAREFA_AMOSTRA)) + ')'
+    s = roda_ps(ctx.t, ps_monta(TAREFAS_PS, nomes=nomes), 'tarefas', minutos=1, mostra=False)
+    out = []
+    for tk in lista(s.dados.get('tarefas')):
+        if not isinstance(tk, dict):
+            continue
+        exe, script = str(tk.get('exe') or ''), _script_dos_args(tk.get('args'))
+        problema = ''
+        if tk.get('estado') == 'Disabled':
+            problema = 'está desligada no Agendador de Tarefas'
+        elif exe and exe.lower() != 'powershell.exe' and not Path(os.path.expandvars(exe)).is_file():
+            problema = 'o Python que ela usa não existe mais'
+        elif script and not Path(os.path.expandvars(script)).is_file():
+            problema = 'o katharos.py que ela roda não existe mais'
+        else:
+            try:
+                ver = Path(script).read_text(encoding='utf-8', errors='replace')[:200000] if script else ''
+                m = re.search(r"^VERSAO = '([^']+)'", ver, re.M)
+                if m and m.group(1) != VERSAO:
+                    problema = f'roda a versão {m.group(1)}, não a {VERSAO}'
+            except OSError:
+                pass
+        out.append({'nome': tk.get('nome'), 'estado': tk.get('estado'), 'exe': exe, 'script': script, 'ultima': tk.get('ultima') or '',
+                    'resultado': tk.get('resultado'), 'problema': problema})
+    return out
+
+
+def conserta_tarefas(ctx, elevado=None):
+    """Cria de novo as tarefas que existem e estão quebradas (mesma frequência). A elevada só como administrador; a do usuário em qualquer
+    motor. Devolve [(nome, 'ok' | 'falhou' | 'precisa_admin', problema)]."""
+    elevado = eh_admin() if elevado is None else elevado
+    out = []
+    for tk in confere_tarefas(ctx):
+        if not tk['problema']:
+            continue
+        if tk['nome'] == TAREFA_MANUT:
+            if not elevado:
+                out.append((tk['nome'], 'precisa_admin', tk['problema']))
+                continue
+            r = instala_manutencao(ctx, estado().get('manut_freq') or 'semanal')
+        else:
+            r = instala_amostra(ctx)
+        out.append((tk['nome'], 'ok' if r == 0 else 'falhou', tk['problema']))
+        LOG.escreve(f'tarefas: {tk["nome"]} ({tk["problema"]}): ' + ('consertada' if r == 0 else 'não consertou'))
+    return out
+
+
+def cura_ao_abrir(ctx):
+    """Dentro do preparo do motor: conserta o que der sem perguntar nada (a pessoa já tinha ligado essas tarefas)."""
+    try:
+        conserta_tarefas(ctx)
+    except Exception as e:
+        LOG.escreve(f'tarefas: conferência ao abrir falhou: {e!r}')
+
+
+def amostra_se_velha(ctx, horas=20):
+    """O histórico vem das medidas da manutenção. Se ela não roda (desligada, ou quebrada antes de ser consertada), a janela aberta
+    grava uma medida por dia no lugar dela: o histórico não para."""
+    try:
+        am = le_metricas()
+        if am and (datetime.now() - am[-1]['_dt']).total_seconds() < horas * 3600:
+            return False
+        if _jogo_aberto_agora():
+            return False
+        return bool(amostra_agora(ctx))
+    except Exception as e:
+        LOG.escreve(f'histórico: medida do dia falhou: {e!r}')
+        return False
 # ─────────────── painel: gráficos em HTML autocontido (SVG feito aqui, sem internet, sem biblioteca) ───────────────
 import html as _html
 import math
@@ -15278,7 +15450,7 @@ class CanalApi:
 
 
 # o motor de administrador só faz o que precisa de administrador (e o mínimo para conversar): o resto é com o motor comum
-METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos'}
+METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos', 'tarefas_consertar'}
 
 
 def responde_api(ctx, canal, pedido, permitidos=None):
@@ -15313,7 +15485,7 @@ def responde_api(ctx, canal, pedido, permitidos=None):
 # o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
 # comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
 _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
-             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades')
+             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades', 'tarefas', 'segundo_plano_conferir')
 _SOZINHOS = ('raiox',)
 
 
@@ -15357,6 +15529,12 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
             return 0
         canal.manda({'pronto': True, 'api': API_VERSAO, 'versao': VERSAO})
         threading.Thread(target=preparo, daemon=True).start()
+        if WINDOWS and not os.environ.get('KATHAROS_SEM_CURA'):   # tarefas agendadas quebradas e histórico parado: conserta por fora
+            def cura():
+                preparo_pronto.wait(30)
+                cura_ao_abrir(ctx)
+                amostra_se_velha(ctx)
+            threading.Thread(target=cura, daemon=True).start()
         if paralelo:   # dois PowerShell já abertos para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
             threading.Thread(target=lambda: POOL_PS.aquece(2), daemon=True).start()
         if not preparo_pronto.wait(20):
@@ -16301,6 +16479,28 @@ def anomalias_da_memoria(dias=60):
         out.append({'dia': dia, 'id': a.get('id'), 'titulo': a.get('titulo'), 'vi': a.get('vi'), 'tipo': a.get('tipo'), 'confianca': a.get('confianca'),
                     'dias': sum(1 for d2, x in ls if _id_achado(x) == a.get('id'))})
     return out[:20]
+
+
+@metodo_api('tarefas')
+def api_tarefas(ctx, p, ev):
+    """As tarefas agendadas do Katharos e se ainda rodam. A do usuário quebrada é consertada aqui mesmo; a elevada fica para
+    "tarefas_consertar" (motor de administrador)."""
+    if p.get('consertar'):
+        conserta_tarefas(ctx, elevado=False)
+    return {'tarefas': confere_tarefas(ctx), 'manut_ultima': estado().get('manut_ultima')}
+
+
+@metodo_api('tarefas_consertar', muda=True)
+def api_tarefas_consertar(ctx, p, ev):
+    """Cria de novo, como administrador, as tarefas do Katharos que estão quebradas."""
+    feitas = conserta_tarefas(ctx, elevado=True)
+    return {'feitas': [{'nome': n, 'resultado': r, 'problema': pr} for n, r, pr in feitas], 'tarefas': confere_tarefas(ctx)}
+
+
+@metodo_api('segundo_plano_conferir')
+def api_segundo_plano_conferir(ctx, p, ev):
+    """Ligado mas sem abrir com o Windows, ou fechado sem ninguém ter saído pelo ícone: arruma e diz o que fez."""
+    return {'feito': confere_segundo_plano(ctx), 'segundo_plano': _segundo_plano()}
 # ─────────────── envio de relatório e feedback ───────────────
 #
 #   A janela manda; o motor só monta. O relatório que sai daqui é feito para melhorar o Katharos: os erros dele, o que foi
@@ -16463,7 +16663,46 @@ def _env_sistema(ctx):
             'pc': pc or None, 'medido_em': (sec.get('pc') or {}).get('quando'),
             'config_mudada': {k: config(k) for k in PADROES if config(k) != PADROES[k]},
             'segundo_plano': e.get('segundo_plano'), 'janelas': bool(os.environ.get('KATHAROS_JANELA')) or None,
-            'python': sys.version.split()[0], 'windows': WINDOWS}
+            'python': sys.version.split()[0], 'windows': WINDOWS, **_auto_diagnostico(ctx, e)}
+
+
+def _auto_diagnostico(ctx, e):
+    """O que o próprio Katharos consegue ver de errado nele mesmo, para quem lê o relatório não precisar adivinhar: tarefas agendadas
+    quebradas, histórico parado, segundo plano ligado mas sem ler, FPS sem permissão. Nada disso abre processo de jogo."""
+    out, problemas = {}, []
+    try:
+        tk = confere_tarefas(ctx)
+        out['tarefas'] = [{'nome': x['nome'], 'estado': x['estado'], 'python': Path(x['exe']).name if x['exe'] else '',
+                           'python_da_loja': 'windowsapps' in x['exe'].lower(), 'ultima': x['ultima'], 'resultado': x['resultado'],
+                           'problema': x['problema']} for x in tk]
+        problemas += [f'tarefa "{x["nome"]}": {x["problema"]}' for x in tk if x['problema']]
+    except Exception as ex:
+        out['tarefas'] = f'não li: {type(ex).__name__}'
+    out['manut_ultima'] = e.get('manut_ultima')
+    try:
+        am = le_metricas()
+        ult = am[-1]['_dt'] if am else None
+        out['historico_ultima_medida'] = ult.isoformat(timespec='minutes') if ult else None
+        if not ult or (datetime.now() - ult).days >= 3:
+            problemas.append('histórico sem medida nova há 3 dias ou mais')
+    except Exception:
+        pass
+    try:
+        ag = CASA / 'agora.json'
+        idade = (time.time() - ag.stat().st_mtime) / 60 if ag.is_file() else None
+        out['segundo_plano_leu_ha_min'] = round(idade) if idade is not None else None
+        if e.get('segundo_plano') == 'sim' and (idade is None or idade > 15):
+            problemas.append('segundo plano ligado, mas sem leitura nos últimos 15 min (parado ou não abriu)')
+    except OSError:
+        pass
+    try:
+        log = (CASA / 'segundo-plano.log').read_text(encoding='utf-8', errors='replace')[-20000:] if (CASA / 'segundo-plano.log').is_file() else ''
+        if re.search(r'Usu[aá]rios de log de desempenho|Performance Log Users|access denied', log, re.I):
+            problemas.append('FPS sem permissão: a conta não está no grupo "Usuários de log de desempenho"')
+    except OSError:
+        pass
+    out['problemas_vistos'] = problemas
+    return out
 
 
 def _env_erros(ctx):
@@ -16472,8 +16711,10 @@ def _env_erros(ctx):
     eventos = [ev for ev in (r.get('eventos') or []) if ev.get('erros') or ev.get('avisos') or ev.get('tipo') == 'nao-ficou']
     logs = sorted(pasta('logs').glob('*.log'))[-30:]
     motor = []
+    # o log do motor também guarda dados e passos (@@dado, @@secao, @@feito, versão: ...) que só citam a palavra erro: não são erro
+    so_registro = re.compile(r'^\d\d:\d\d:\d\d\s+(?:@@(?:dado|secao|feito|info|plano|ok)\b|versão: )')
     for arq in logs:
-        motor.extend(_linhas_de_erro(arq, desde, 30))
+        motor.extend(l for l in _linhas_de_erro(arq, desde, 60) if not so_registro.match(l))
     return {'eventos': eventos[-60:], 'motor': motor[-60:],
             'janela': _linhas_de_erro(CASA / 'interface.log', desde, 40),
             'segundo_plano': _linhas_de_erro(CASA / 'segundo-plano.log', desde, 30),

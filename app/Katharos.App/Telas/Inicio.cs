@@ -26,8 +26,41 @@ public class Inicio : Tela
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo o que já está guardado").secao);
         var d = await Servico.Le("inicio");
         try { jogos = await Servico.Le("sessoes", new { dias = 30 }); } catch (Exception e) { Registro.Escreve("início: sessões: " + e.Message); }
+        try { tarefas = await Servico.Le("tarefas", new { consertar = true }); } catch (Exception e) { Registro.Escreve("início: tarefas: " + e.Message); }
         if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
-        else if (jogosDesenhados != jogos?.ToJsonString()) Desenha(cab, d);
+        else if (jogosDesenhados != jogos?.ToJsonString() || tarefasDesenhadas != tarefas?.ToJsonString()) Desenha(cab, d);
+    }
+
+    JsonNode? tarefas;
+    string? tarefasDesenhadas;
+
+    /// <summary>A manutenção agendada que parou (Python apagado, katharos.py sumido): diz desde quando e conserta com um clique.</summary>
+    Control? AvisoTarefas()
+    {
+        tarefasDesenhadas = tarefas?.ToJsonString();
+        var quebrada = tarefas.A("tarefas").FirstOrDefault(t => t.S("problema") != "");
+        if (quebrada == null) return null;
+        string ult = tarefas?.S("manut_ultima") is string u && u != "" ? $"A última foi {Quando(u)}." : "Ela ainda não rodou.";
+        return G(new StackPanel { Children = { Linha("A manutenção agendada parou",
+            $"{Maiuscula(quebrada.S("problema"))}. {ult} Sem ela, o histórico não anda e o que o Windows desfaz não volta sozinho.",
+            Etiqueta("parada", Tema.Vermelho), Botao("Consertar", true, async () => await ConsertaTarefas()), "desfazer") } });
+    }
+
+    async Task ConsertaTarefas()
+    {
+        var j = Janela.Atual!;
+        j.MostraCaixa(Janela.Caixa("Consertando", Andamento("Esperando a permissão de administrador do Windows").painel));
+        Trabalho.Comeca("Consertando a manutenção…");
+        try
+        {
+            var r = await Servico.Muda("tarefas_consertar");
+            bool ok = r.A("tarefas").All(t => t.S("problema") == "");
+            tarefas = r;
+            j.MostraCaixa(Janela.Caixa(ok ? "Consertada" : "Não deu", T(ok ? "A manutenção volta a rodar no horário de sempre." : "O detalhe está no relatório do Katharos.", "sub"),
+                Botao("Fechar", true, () => { j.FechaCaixa(); _ = Recarrega(); })), true);
+        }
+        catch (Exception e) { MostraErro(e, "Não deu para consertar"); }
+        finally { Trabalho.Termina(); }
     }
 
     JsonNode? jogos;
@@ -122,7 +155,7 @@ public class Inicio : Tela
         }) : null;
         // achou um erro ou tem uma ideia: o relatório e o feedback a um clique, sempre à vista
         atalhos.Children.Add(Linha("Achou um erro ou tem uma ideia?", "Você vê tudo antes de sair.", null, Botao("Enviar relatório", false, () => Abre("enviar")), "enviar"));
-        Monta(cab, versao, passo, numeros, lista, secJogos, G(atalhos));
+        Monta(cab, versao, AvisoTarefas(), passo, numeros, lista, secJogos, G(atalhos));
     }
 
     Control PrimeirosPassos(bool notebook)

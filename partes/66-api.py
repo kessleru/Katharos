@@ -50,7 +50,7 @@ class CanalApi:
 
 
 # o motor de administrador só faz o que precisa de administrador (e o mínimo para conversar): o resto é com o motor comum
-METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos'}
+METODOS_ELEVADOS = {'aplicar', 'desfazer', 'versao', 'aviso', 'metodos', 'tarefas_consertar'}
 
 
 def responde_api(ctx, canal, pedido, permitidos=None):
@@ -85,7 +85,7 @@ def responde_api(ctx, canal, pedido, permitidos=None):
 # o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
 # comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
 _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
-             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades')
+             'segundo_plano', 'envio_registrar', 'perguntar', 'novidades', 'tarefas', 'segundo_plano_conferir')
 _SOZINHOS = ('raiox',)
 
 
@@ -129,6 +129,12 @@ def roda_api(argv, entrada=None, saida=None, permitidos=None, paralelo=True):
             return 0
         canal.manda({'pronto': True, 'api': API_VERSAO, 'versao': VERSAO})
         threading.Thread(target=preparo, daemon=True).start()
+        if WINDOWS and not os.environ.get('KATHAROS_SEM_CURA'):   # tarefas agendadas quebradas e histórico parado: conserta por fora
+            def cura():
+                preparo_pronto.wait(30)
+                cura_ao_abrir(ctx)
+                amostra_se_velha(ctx)
+            threading.Thread(target=cura, daemon=True).start()
         if paralelo:   # dois PowerShell já abertos para as primeiras leituras (por fora: o primeiro pedido não espera por eles)
             threading.Thread(target=lambda: POOL_PS.aquece(2), daemon=True).start()
         if not preparo_pronto.wait(20):
@@ -1073,3 +1079,25 @@ def anomalias_da_memoria(dias=60):
         out.append({'dia': dia, 'id': a.get('id'), 'titulo': a.get('titulo'), 'vi': a.get('vi'), 'tipo': a.get('tipo'), 'confianca': a.get('confianca'),
                     'dias': sum(1 for d2, x in ls if _id_achado(x) == a.get('id'))})
     return out[:20]
+
+
+@metodo_api('tarefas')
+def api_tarefas(ctx, p, ev):
+    """As tarefas agendadas do Katharos e se ainda rodam. A do usuário quebrada é consertada aqui mesmo; a elevada fica para
+    "tarefas_consertar" (motor de administrador)."""
+    if p.get('consertar'):
+        conserta_tarefas(ctx, elevado=False)
+    return {'tarefas': confere_tarefas(ctx), 'manut_ultima': estado().get('manut_ultima')}
+
+
+@metodo_api('tarefas_consertar', muda=True)
+def api_tarefas_consertar(ctx, p, ev):
+    """Cria de novo, como administrador, as tarefas do Katharos que estão quebradas."""
+    feitas = conserta_tarefas(ctx, elevado=True)
+    return {'feitas': [{'nome': n, 'resultado': r, 'problema': pr} for n, r, pr in feitas], 'tarefas': confere_tarefas(ctx)}
+
+
+@metodo_api('segundo_plano_conferir')
+def api_segundo_plano_conferir(ctx, p, ev):
+    """Ligado mas sem abrir com o Windows, ou fechado sem ninguém ter saído pelo ícone: arruma e diz o que fez."""
+    return {'feito': confere_segundo_plano(ctx), 'segundo_plano': _segundo_plano()}

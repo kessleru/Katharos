@@ -691,9 +691,13 @@ def instala_manutencao(ctx, freq='semanal'):
         return 1
     script = pasta / 'katharos.py'
     shutil.copy2(Path(__file__).resolve(), script)
-    exe, sem_janela = executavel_sem_janela()
+    pw = python_da_tarefa_elevada()
+    if pw is None:
+        t.erro(f'Não consegui copiar o Python para {pasta} (pasta só de administrador). Nada foi criado.')
+        return 1
+    exe, sem_janela = str(pw), Path(pw).name.lower() == 'pythonw.exe'
     arg = subprocess.list2cmdline([str(script), 'manutencao', '--agendada', '--sem-cor'])
-    if WINDOWS and python_em_pasta_do_usuario():
+    if WINDOWS and str(Path(exe).resolve()).lower().startswith(str(Path.home().resolve()).lower()):
         t.aviso('O Python que a tarefa usa está dentro da sua pasta de usuário, que programas sem administrador conseguem alterar; a tarefa roda como administrador e herdaria esse risco. '
                 'Para fechar essa brecha, instale o Python "para todos os usuários" (python.org, marque "Install for all users": vai para Arquivos de Programas) e rode "agendar" de novo.')
     if not sem_janela:

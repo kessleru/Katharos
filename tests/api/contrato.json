@@ -81,11 +81,20 @@
   "segundo_plano": {
    "muda": false
   },
+  "segundo_plano_conferir": {
+   "muda": false
+  },
   "sessoes": {
    "muda": false
   },
   "sugestoes": {
    "muda": false
+  },
+  "tarefas": {
+   "muda": false
+  },
+  "tarefas_consertar": {
+   "muda": true
   },
   "versao": {
    "muda": false

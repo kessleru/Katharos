@@ -337,7 +337,9 @@ public static class CopiaProtegida
                 if (-not (Confere $tmp)) { Apaga $tmp; exit 12 }
                 if (Test-Path -LiteralPath $dst) { Apaga $dst }
                 Rename-Item -LiteralPath $tmp -NewName (Split-Path $dst -Leaf)
-                Get-ChildItem -LiteralPath $base -Force | Where-Object { $_.Name -ne $ver } | ForEach-Object { Apaga $_.FullName }
+                # só as cópias de versões anteriores (pastas com nome de versão). Na mesma pasta ficam o katharos.py da manutenção agendada,
+                # o backup do desfazer, o tmp e o turbo: até a 4.4.0 eles eram apagados aqui junto, e a manutenção parava de rodar
+                Get-ChildItem -LiteralPath $base -Force -Directory | Where-Object { $_.Name -ne $ver -and $_.Name -match '^\d+(\.\d+){1,3}(\.novo)?$' } | ForEach-Object { Apaga $_.FullName }
             }
             $py = Join-Path $dst 'python\python.exe'; $kpy = Join-Path $dst 'motor\programa\katharos.py'
             Start-Process -FilePath $py -WindowStyle Hidden -ArgumentList @('-X', 'utf8', ('"' + $kpy + '"'), 'api', '--pipe', {{Q(pipe)}}, '--dono', {{Q(sid)}}, '--senha', {{Q(senha)}})

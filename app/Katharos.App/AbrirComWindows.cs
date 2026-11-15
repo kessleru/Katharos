@@ -10,7 +10,10 @@ namespace Katharos.App;
 public static class AbrirComWindows
 {
     const string Chave = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    const string Nome = "Katharos";
+    // "Katharos" é do segundo plano (o ícone perto do relógio). Até a 4.4.0 a janela usava o mesmo nome e apagava a dele: o segundo
+    // plano parava de abrir com o Windows (relatório G65HKM, "não é sempre que o segundo plano inicia")
+    const string Nome = "Katharos Janela";
+    const string NomeDoSegundoPlano = "Katharos";
 
     static string? Lancador()
     {
@@ -30,6 +33,12 @@ public static class AbrirComWindows
             bool quer = c?["abrir-com-windows"].S("valor", "sim") != "nao";
             using var k = Registry.CurrentUser.CreateSubKey(Chave, true);
             var l = Lancador();
+            if (k.GetValue(NomeDoSegundoPlano) is string velho && velho.Contains("--inicio-windows"))
+            {
+                k.DeleteValue(NomeDoSegundoPlano, false);   // a entrada da janela que tinha tomado o lugar: o motor devolve a do segundo plano
+                Registro.Escreve("abrir com o Windows: a entrada da janela estava no lugar da do segundo plano; separadas");
+                try { await Servico.Le("segundo_plano_conferir"); } catch (Exception e) { Registro.Escreve("segundo plano: " + e.Message); }
+            }
             if (quer && l != null) k.SetValue(Nome, $"\"{l}\" --inicio-windows");
             else if (!quer && k.GetValue(Nome) != null) k.DeleteValue(Nome, false);
         }

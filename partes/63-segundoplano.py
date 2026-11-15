@@ -165,8 +165,7 @@ def inicia_com_windows_ligado():
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_CHAVE) as k:
-            winreg.QueryValueEx(k, 'Katharos')
-            return True
+            return '--segundo-plano' in str(winreg.QueryValueEx(k, 'Katharos')[0])   # a da janela (--inicio-windows) não conta
     except OSError:
         return False
 
@@ -269,6 +268,21 @@ def garante_segundo_plano(ctx):
         return False
 
 
+def confere_segundo_plano(ctx):
+    """Ligado, mas sem a entrada de abrir com o Windows (a janela da 4.4.0 apagava) ou fechado sem ninguém ter saído pelo ícone: arruma.
+    Devolve o que fez."""
+    feito = []
+    if not WINDOWS or estado().get('segundo_plano') != 'sim' or not exe_instalado().is_file():
+        return feito
+    if not inicia_com_windows_ligado() and inicia_com_windows(True):
+        feito.append('voltou a abrir com o Windows')
+        LOG.escreve('segundo plano: a entrada de abrir com o Windows tinha sumido; voltou')
+    if not sp_rodando() and not (CASA / 'segundo-plano-fechado.txt').exists() and abre_segundo_plano(ctx):
+        feito.append('estava fechado; abri')
+        LOG.escreve('segundo plano: estava fechado sem ninguém ter saído pelo ícone; abri')
+    return feito
+
+
 def migra_segundo_plano(ctx):
     """Quem já tinha o acompanhamento contínuo (ou o ícone antigo) passa para o executável na primeira vez que abre esta versão pelo zip."""
     if not WINDOWS:
@@ -277,6 +291,7 @@ def migra_segundo_plano(ctx):
     if e.get('segundo_plano') in ('sim', 'nao') or not exe_do_pacote():
         if e.get('segundo_plano') == 'sim':
             escreve_config_sp()   # caminho do programa e do Python podem ter mudado
+            confere_segundo_plano(ctx)
             if exe_do_pacote() and exe_instalado().is_file() and _sha(exe_do_pacote()) != _sha(exe_instalado()):
                 instala_segundo_plano(ctx, mostrar=False, quieto=True)   # versão nova do executável
         return False

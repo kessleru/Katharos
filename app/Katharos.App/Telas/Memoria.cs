@@ -17,7 +17,7 @@ namespace Katharos.App.Telas;
 /// </summary>
 public class Memoria : Tela
 {
-    bool todos;
+    bool todos, todosFechados;
 
     protected override async Task Carrega()
     {
@@ -49,19 +49,28 @@ public class Memoria : Tela
         // a frase inteira do "cheia de verdade" fica numa linha só, embaixo dos números (na célula ela cortava)
         var frase = S(new StackPanel { Margin = new Thickness(32, 14), Children = { Item(pr.S("texto"), cor) } });
         var lista = new StackPanel { Children = { Subtitulo("Quem usa", $"Desde {Quando(d.S("desde"))} · {Num(d.D("ram_total_gb"))} GB no total", "memoria") } };
-        foreach (var x in (todos ? ps : ps.Take(10))) lista.Children.Add(Programa(x));
-        if (!todos && ps.Count > 10)
+        // abertos agora em cima; quem já fechou vai para um grupo à parte, apagado (só a média e o pico das últimas horas)
+        var abertos = ps.Where(x => x.D("agora_mb") is not null).ToList();
+        var fechados = ps.Where(x => x.D("agora_mb") is null).ToList();
+        foreach (var x in (todos ? abertos : abertos.Take(10))) lista.Children.Add(Programa(x, true));
+        if (!todos && abertos.Count > 10)
             lista.Children.Add(new Border { Padding = new Thickness(32, 10, 32, 14), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
-                Child = Link($"Ver os outros {ps.Count - 10}", () => { todos = true; Desenha(cab, d); }) });
-        Monta(cab, estado, frase, G(lista));
+                Child = Link($"Ver os outros {abertos.Count - 10} abertos", () => { todos = true; Desenha(cab, d); }) });
+        if (fechados.Count == 0) { Monta(cab, estado, frase, G(lista)); return; }
+        var fora = new StackPanel { Children = { Subtitulo("Fechados agora", $"{fechados.Count} {(fechados.Count == 1 ? "programa usou" : "programas usaram")} RAM desde {Quando(d.S("desde"))} e não estão abertos", "memoria") } };
+        foreach (var x in (todosFechados ? fechados : fechados.Take(5))) fora.Children.Add(Programa(x, false));
+        if (!todosFechados && fechados.Count > 5)
+            fora.Children.Add(new Border { Padding = new Thickness(32, 10, 32, 14), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
+                Child = Link($"Ver os outros {fechados.Count - 5}", () => { todosFechados = true; Desenha(cab, d); }) });
+        Monta(cab, estado, frase, G(lista), G(fora));
     }
 
-    Control Programa(JsonNode x)
+    Control Programa(JsonNode x, bool aberto)
     {
         string proc = x.S("processo"), nome = x.S("nome", proc), classe = x.S("classe");
         static string Mb(double? v) => v is double m ? (m >= 1024 ? Num(m / 1024, 1) + " GB" : Num(m) + " MB") : "-";
         var meio = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        var l1 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { T(nome, null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold) } };
+        var l1 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { T(nome, null, aberto ? Tema.Osso : Tema.Apagado, 15).Com(t => t.FontWeight = FontWeight.SemiBold) } };
         if (classe == "protegido") l1.Children.Add(Etiqueta("do Windows", Tema.Apagado));
         if (classe == "desconhecido") l1.Children.Add(Etiqueta("não conheço", Tema.Apagado));
         meio.Children.Add(l1);
@@ -70,7 +79,7 @@ public class Memoria : Tela
         ToolTip.SetTip(l1, Maiuscula(oque == nome ? x.S("faz") : oque) + (proc.ToLowerInvariant() != nome.ToLowerInvariant() ? $" · {proc}" : ""));
         ToolTip.SetShowDelay(l1, 400);
         var acoes = new WrapPanel { Margin = new Thickness(-8, 2, 0, 0) };
-        foreach (var a in x.A("acoes").Select(a => a.ToString()))
+        foreach (var a in x.A("acoes").Select(a => a.ToString()).Where(a => aberto || a != "fechar"))
             acoes.Children.Add(a switch
             {
                 "inicializacao" => Link("Tirar da inicialização", () => Abre("inicializacao")),
@@ -81,7 +90,7 @@ public class Memoria : Tela
         if (acoes.Children.Count > 0) meio.Children.Add(acoes);
 
         var numeros = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = {
-            T(Mb(x.D("agora_mb")), null, Tema.Osso, 17).Com(t => { t.FontFamily = Tema.Mono; t.HorizontalAlignment = HorizontalAlignment.Right; }),
+            T(aberto ? Mb(x.D("agora_mb")) : "fechado", null, aberto ? Tema.Osso : Tema.Apagado, aberto ? 17 : 13).Com(t => { t.FontFamily = Tema.Mono; t.HorizontalAlignment = HorizontalAlignment.Right; }),
             T($"média {Mb(x.D("media_24h_mb"))} · pico {Mb(x.D("pico_24h_mb"))}", "rotulo", tamanho: 12.5).Com(t => { t.HorizontalAlignment = HorizontalAlignment.Right; ToolTip.SetTip(t, $"7 dias: média {Mb(x.D("media_7d_mb"))}, pico {Mb(x.D("pico_7d_mb"))}"); }) } };
         var mini = new Minigrafico { Valores = x.A("horas").Select(v => v is JsonValue jv && jv.TryGetValue(out double dv) ? dv : (double?)null).ToArray(), Width = 90, Height = 30,
                                      VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 0, 18, 0) };

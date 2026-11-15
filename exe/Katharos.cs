@@ -2272,7 +2272,8 @@ namespace KatharosApp
             if (pinta)
             {
                 string rodape = "Katharos " + K.VERSAO;
-                try { using (var eu = Process.GetCurrentProcess()) rodape += " · usa " + K.Num(eu.WorkingSet64 / 1048576.0, 0) + " MB de RAM"; } catch { }
+                // só este ícone (o anti-cheat pede que ele não abra outros processos); a conta do Katharos inteiro fica na tela Ao vivo da janela
+                try { using (var eu = Process.GetCurrentProcess()) rodape += " · este ícone usa " + K.Num(eu.WorkingSet64 / 1048576.0, 0) + " MB"; } catch { }
                 Texto(g, rodape, fPequeno, Cor.Apagado, pad, y);
             }
             y += 26 * s;
@@ -2494,7 +2495,7 @@ namespace KatharosApp
 
         static bool IniciaComWindows()
         {
-            try { using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) return k != null && k.GetValue("Katharos") != null; }
+            try { using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) return k != null && (k.GetValue("Katharos") as string ?? "").Contains("--segundo-plano"); }
             catch { return false; }
         }
 
@@ -2504,7 +2505,7 @@ namespace KatharosApp
             {
                 using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
                 {
-                    if (k.GetValue("Katharos") != null) k.DeleteValue("Katharos", false);
+                    if (IniciaComWindows()) k.DeleteValue("Katharos", false);
                     else k.SetValue("Katharos", K.Q(Application.ExecutablePath) + " --segundo-plano");
                 }
             }

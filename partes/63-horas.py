@@ -301,8 +301,8 @@ def comando_da_amostra():
     """(executável, argumentos) da tarefa de 15 min. Preferência por pythonw.exe: não tem console, então nada pisca na tela (um jogo em tela cheia
     poderia ser minimizado por uma janela que abre e fecha). Sem pythonw, cai no PowerShell escondido e avisa."""
     script = CASA / 'katharos.py'
-    pw = Path(sys.executable).with_name('pythonw.exe')
-    if pw.exists():
+    pw = python_do_usuario()
+    if pw.name.lower() == 'pythonw.exe':
         return str(pw), subprocess.list2cmdline([str(script), 'amostrar', '--agendada', '--sem-cor']), True
     py = sys.executable
     return 'powershell.exe', ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& \'' + py + '\' \'' + str(script) + '\' amostrar --agendada --sem-cor"'), False
