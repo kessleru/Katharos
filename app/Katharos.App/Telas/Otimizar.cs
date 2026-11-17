@@ -36,6 +36,7 @@ public class Otimizar : Tela
     List<AreaVm> areas = new();
     JsonNode? lista;   // a última lista inteira (para guardar com o que a conferência trouxer)
     readonly TextBlock resumo = T("", null, Tema.Osso, 15).Com(t => t.FontWeight = FontWeight.SemiBold);
+    bool personalizar, verParadas;
     // de onde vem o número do botão, área por área (relato do dono: "2, 1, 2 mudam" e o botão dizia 36, sem dar para ver a soma)
     readonly TextBlock deOnde = T("", "rotulo", tamanho: 13, quebra: true).Com(t => t.Margin = new Thickness(32, 0, 32, 12));
     readonly TextBlock conferindo = T("", "rotulo");
@@ -224,11 +225,30 @@ public class Otimizar : Tela
         atalhos.Children.Add(Botao("Desmarcar tudo", false, () => MarcaTudo(false)).Com(b => b.Margin = new Thickness(0, 0, 8, 8)));
         atalhos.Children.Add(Botao("Voltar ao modo", false, () => MarcaTudo(null)).Com(b => { b.Margin = new Thickness(0, 0, 8, 8); ToolTip.SetTip(b, "Marca de novo só o que o modo escolhido marca"); }));
         atalhos.Children.Add(Link(areas.All(x => x.Aberta) ? "Fechar todas" : "Abrir todas", () => AbreTodas(!areas.All(x => x.Aberta))).Com(l => l.Margin = new Thickness(0, 0, 0, 8)));
+        // a busca e os atalhos de marcar ficam atrás de "Personalizar": o caminho normal é escolher o modo e aplicar (relato do dono,
+        // 15/11: "muita opçãozinha")
+        atalhos.IsVisible = personalizar || busca.Text is { Length: > 0 };
+        var abreAtalhos = Link(atalhos.IsVisible ? "Esconder a busca e os atalhos" : "Personalizar (buscar, marcar e desmarcar)", () => { personalizar = !personalizar; Desenha(cab); })
+            .Com(l => l.Margin = new Thickness(32, 0, 32, 12));
+        lista.Children.Add(abreAtalhos);
         lista.Children.Add(atalhos);
         if (deOnde.Parent is Panel pd) pd.Children.Remove(deOnde);
         lista.Children.Add(deOnde);
         // ajustes primeiro; limpeza, reparo e atualização num bloco à parte, sem vir marcados (são manutenção, não ajuste que fica)
-        foreach (var a in areas.Where(a => !a.J.B("recorrente"))) lista.Children.Add(DesenhaArea(a));
+        // as áreas em que nada muda ficam numa linha só, recolhidas (o que muda aparece primeiro)
+        var ajustes = areas.Where(a => !a.J.B("recorrente")).ToList();
+        bool Muda(AreaVm a) => a.Itens.Any(i => i.Marcado && i.Ja != true) || a.Aberta || busca.Text is { Length: > 0 };
+        foreach (var a in ajustes.Where(Muda)) lista.Children.Add(DesenhaArea(a));
+        var paradas = ajustes.Where(a => !Muda(a)).ToList();
+        if (paradas.Count > 0)
+        {
+            var dentro = new StackPanel { IsVisible = verParadas };
+            foreach (var a in paradas) dentro.Children.Add(DesenhaArea(a));
+            lista.Children.Add(new Border { Padding = new Thickness(32, 12, 32, 12), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
+                Child = Link(verParadas ? $"Esconder as {paradas.Count} áreas em que nada muda" : $"{paradas.Count} {(paradas.Count == 1 ? "área já está" : "áreas já estão")} como o modo pede: ver",
+                             () => { verParadas = !verParadas; Desenha(cab); }) });
+            lista.Children.Add(dentro);
+        }
         var manut = areas.Where(a => a.J.B("recorrente")).ToList();
         if (manut.Count > 0)
         {
