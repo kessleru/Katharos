@@ -46,7 +46,7 @@ j.Show();
 // 2.12: cada tela, além da foto, é conferida: abriu sem a tela de erro e mostra o texto que a tarefa dela pede
 var espera = new Dictionary<string, string> {
     ["inicio"] = "Próximo passo", ["raiox"] = "O que o acompanhamento viu", ["otimizar:servicos"] = "recomendado", ["aovivo"] = "Placa de vídeo",
-    ["jogos"] = "Por jogo", ["sugestoes"] = "Diagnóstico", ["historico"] = "Fora do normal", ["desfazer"] = "Aplicado neste PC",
+    ["jogos"] = "Por jogo", ["historico"] = "Fora do normal", ["desfazer"] = "Aplicado neste PC",
     ["config"] = "Memória do PC", ["aviso"] = "Li o aviso", ["enviar"] = "1. O que mandar",
     ["inicializacao"] = "Abrem agora", ["memoria"] = "Quem usa", ["detalhe"] = "Como investigar" };
 // o detalhe abre com um achado só de leitura (o desligamento): nunca leva ao Otimizar

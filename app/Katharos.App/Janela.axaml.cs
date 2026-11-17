@@ -29,7 +29,7 @@ public partial class Janela : Window
         {
             b.Click += Navega;
             // ícone à esquerda de cada item do menu (acha sem ler); o texto continua o mesmo
-            string icone = (string?)b.Tag switch { "inicio" => "inicio", "raiox" => "raiox", "otimizar" => "otimizar", "aovivo" => "aovivo", "memoria" => "memoria", "sugestoes" => "central",
+            string icone = (string?)b.Tag switch { "inicio" => "inicio", "raiox" => "raiox", "otimizar" => "otimizar", "aovivo" => "aovivo", "memoria" => "memoria",
                                                    "historico" => "historico", "desfazer" => "desfazer", "enviar" => "enviar", "config" => "config", _ => "info" };
             if (b.Content is string texto)
                 b.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { Icones.De(icone, 16, Tema.Apagado), new TextBlock { Text = texto, VerticalAlignment = VerticalAlignment.Center } } };
@@ -99,7 +99,6 @@ public partial class Janela : Window
             "otimizar" => new Otimizar(arg),
             "aovivo" => new AoVivo(),
             "jogos" => new Jogos(),
-            "sugestoes" => new Sugestoes(),
             "historico" => new Historico(),
             "desfazer" => new Desfazer(),
             "config" => new Configuracoes(),

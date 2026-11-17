@@ -9,59 +9,47 @@ using static Katharos.App.Ui;
 namespace Katharos.App.Telas;
 
 /// <summary>
-/// Central de inteligência (I17, I18, I25): o diagnóstico (o que eu vi, por que acho que é isso, o que eu faria, o que mudaria a minha
-/// conclusão), as propostas com previsão, risco e como desfazer, a linha do tempo do que foi aplicado (previsto x aconteceu) e a caixa
-/// "pergunte ao Katharos". Tudo vem do motor deste PC; nada muda sem a pessoa.
+/// O que o motor concluiu neste PC: o diagnóstico, as propostas ("o que eu faria") e o que aconteceu depois de cada mudança. Até a 4.5
+/// era a tela Central; na 5.0.0 (pedido do dono) a tela saiu: as propostas e o diagnóstico ficam no Início, e "o que eu previ e o que
+/// aconteceu" no Histórico. Nada muda sem a pessoa.
 /// </summary>
-public class Sugestoes : Tela
+public static class Inteligencia
 {
-    protected override async Task Carrega()
+    /// <summary>Diagnóstico e propostas para o Início (no máximo 2 propostas à vista, o resto em "ver todas"). Null quando não há nada.</summary>
+    public static Control? ParaOInicio(JsonNode? d, Action<string> abre, Func<Task> recarrega)
     {
-        var cab = Cabecalho("Central", null);
-        Monta(cab, Carregando("Pensando com as medidas deste PC").secao);
-        var d = await Servico.Le("sugestoes");
         var diags = d.A("diagnosticos").ToList();
         var props = d.A("propostas").ToList();
+        if (diags.Count == 0 && props.Count == 0) return null;
+        var p = new StackPanel { Children = { Subtitulo("O que eu faria", props.Count > 0 ? "com as medidas deste PC; nada muda sem você" : null, "lampada") } };
+        foreach (var g in diags.Take(1)) p.Children.Add(Diagnostico(g));
+        foreach (var x in props.Take(2)) p.Children.Add(Proposta(x, abre, recarrega));
+        if (props.Count > 2)
+        {
+            var resto = new StackPanel();
+            foreach (var x in props.Skip(2)) resto.Children.Add(Proposta(x, abre, recarrega));
+            resto.IsVisible = false;
+            p.Children.Add(new Border { Padding = new Thickness(32, 10, 32, 14), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0),
+                Child = Link($"Ver as outras {props.Count - 2}", () => { resto.IsVisible = true; }) });
+            p.Children.Add(resto);
+        }
+        return G(p);
+    }
+
+    /// <summary>O que foi aplicado: previsto contra o que aconteceu (para o Histórico). Null quando não há nada.</summary>
+    public static Control? ParaOHistorico(JsonNode? d, Action<string> abre, Func<Task> recarrega)
+    {
         var tempo = d.A("linha_do_tempo").ToList();
         var res = d.A("resultados").ToList();
-
-        Control? diagnostico = null;
-        if (diags.Count > 0)
-        {
-            var p = new StackPanel { Children = { Subtitulo("Diagnóstico", null, "alvo") } };
-            foreach (var g in diags) p.Children.Add(Diagnostico(g));
-            diagnostico = G(p);
-        }
-
-        Control? propostas = null;
-        if (props.Count > 0)
-        {
-            var p = new StackPanel { Children = { Subtitulo("O que eu faria", null, "lampada") } };
-            foreach (var x in props) p.Children.Add(Proposta(x));
-            propostas = G(p);
-        }
-
-        // o que foi aplicado: previsto x aconteceu (verde, cinza ou vermelho), com o desfazer onde piorou e o "ajudou?"
-        Control? linha = null;
-        if (tempo.Count > 0 || res.Count > 0)
-        {
-            var p = new StackPanel { Children = { Subtitulo("O que eu previ e o que aconteceu", "7 dias antes contra 7 depois.", "grafico") } };
-            foreach (var r in tempo.Count > 0 ? tempo : res) p.Children.Add(Resultado(r));
-            linha = G(p);
-        }
-
-        if (diagnostico == null && propostas == null && linha == null)
-        {
-            Monta(cab, Vazio("Ainda não sei", "Para concluir algo com confiança, eu preciso de alguns dias de medida (o acompanhamento ligado) ou de algumas sessões de jogo. Sem número, eu não proponho nada.",
-                                         Botao("Ver o acompanhamento", false, () => Abre("aovivo"))));
-            return;
-        }
-        Monta(cab, diagnostico, propostas, linha);
+        if (tempo.Count == 0 && res.Count == 0) return null;
+        var p = new StackPanel { Children = { Subtitulo("O que eu previ e o que aconteceu", "7 dias antes contra 7 depois.", "grafico") } };
+        foreach (var r in tempo.Count > 0 ? tempo : res) p.Children.Add(Resultado(r, abre, recarrega));
+        return G(p);
     }
 
     static Control Bloco(string rotulo, string texto) => new StackPanel { Spacing = 2, Children = { T(rotulo, "rotulo"), T(texto, null, Tema.Osso, 14, true) } };
 
-    Control Diagnostico(JsonNode g)
+    static Control Diagnostico(JsonNode g)
     {
         string conf = g.S("confianca");
         var ev = string.Join("; ", g.A("evidencias").Select(x => x.ToString()));
@@ -79,7 +67,7 @@ public class Sugestoes : Tela
         return new Border { Padding = new Thickness(32, 18), BorderBrush = Tema.Linha, BorderThickness = new Thickness(0, 1, 0, 0), Child = new StackPanel { Children = { cab, corpo } } };
     }
 
-    Control Proposta(JsonNode x)
+    static Control Proposta(JsonNode x, Action<string> Abre, Func<Task> Recarrega)
     {
         string conf = x.S("confianca"), id = x.S("id"), cmd = x.S("comando");
         var exp = x["explicacao"];
@@ -87,7 +75,7 @@ public class Sugestoes : Tela
         var bt = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         bt.Children.Add(Botao("Agora não", false, async () => { await Servico.Le("dispensar", new { id }); await Recarrega(); }).Com(b => ToolTip.SetTip(b, "Esconde por 30 dias.")));
         bt.Children.Add(Botao("Não me importa", false, async () => { await Servico.Le("responder", new { id, resposta = "nao-importa" }); await Recarrega(); }).Com(b => ToolTip.SetTip(b, "Não proponho mais isto.")));
-        bt.Children.Add(Detalhe.Botoes(x, Abre, "Central"));
+        bt.Children.Add(Detalhe.Botoes(x, Abre, "Início"));
         // à vista só o que eu vi (uma frase); o plano, a previsão, o risco e como desfazer ficam em "detalhes"
         var texto = new List<string>();
         if (exp.S("faria") != "") texto.Add("O que eu faria: " + exp.S("faria"));
@@ -101,7 +89,7 @@ public class Sugestoes : Tela
         return Linha(x.S("titulo"), Primeira(exp.S("vi", x.S("porque"))), selo, bt, detalhes: texto.Count > 0 ? string.Join("\n", texto) : null);
     }
 
-    Control Resultado(JsonNode r)
+    static Control Resultado(JsonNode r, Action<string> Abre, Func<Task> Recarrega)
     {
         string id = r.S("id"), cor = r.S("cor"), ver = r.S("veredito");
         var c = cor == "verde" ? Tema.Verde : cor == "vermelho" ? Tema.Vermelho : Tema.Apagado;
@@ -123,6 +111,6 @@ public class Sugestoes : Tela
     }
 
     /// <summary>Mantido para quem ainda chama: o destino de um comando (sem tela própria, o Detalhe).</summary>
-    public static string TelaDo(string cmd) => Rotas.Tela(cmd) ?? "sugestoes";
+    public static string TelaDo(string cmd) => Rotas.Tela(cmd) ?? "inicio";
     static string Primeira(string s) => string.IsNullOrEmpty(s) ? s : Maiuscula(s);
 }

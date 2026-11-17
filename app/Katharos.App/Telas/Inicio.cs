@@ -27,8 +27,9 @@ public class Inicio : Tela
         var d = await Servico.Le("inicio");
         try { jogos = await Servico.Le("sessoes", new { dias = 30 }); } catch (Exception e) { Registro.Escreve("início: sessões: " + e.Message); }
         try { tarefas = await Servico.Le("tarefas", new { consertar = true }); } catch (Exception e) { Registro.Escreve("início: tarefas: " + e.Message); }
+        try { intel = await Servico.Le("sugestoes"); } catch (Exception e) { Registro.Escreve("início: propostas: " + e.Message); }
         if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
-        else if (jogosDesenhados != jogos?.ToJsonString() || tarefasDesenhadas != tarefas?.ToJsonString()) Desenha(cab, d);
+        else if (jogosDesenhados != jogos?.ToJsonString() || tarefasDesenhadas != tarefas?.ToJsonString() || intelDesenhada != intel?.ToJsonString()) Desenha(cab, d);
     }
 
     /// <summary>O número com um anel fino ao lado (a nota enche o anel: dá para ler de longe).</summary>
@@ -40,6 +41,9 @@ public class Inicio : Tela
     }
 
     JsonNode? tarefas;
+    // as propostas do motor ("o que eu faria"): até a 4.5 numa tela Central à parte; na 5.0.0, aqui (pedido do dono)
+    JsonNode? intel;
+    string? intelDesenhada;
     string? tarefasDesenhadas;
 
     /// <summary>A manutenção agendada que parou (Python apagado, katharos.py sumido): diz desde quando e conserta com um clique.</summary>
@@ -168,7 +172,9 @@ public class Inicio : Tela
         }) : null;
         // achou um erro ou tem uma ideia: o relatório e o feedback a um clique, sempre à vista
         atalhos.Children.Add(Linha("Achou um erro ou tem uma ideia?", "Você vê tudo antes de sair.", null, Botao("Enviar relatório", false, () => Abre("enviar")), "enviar"));
-        Monta(cab, versao, AvisoTarefas(), passo, numeros, lista, secJogos, G(atalhos));
+        intelDesenhada = intel?.ToJsonString();
+        var propostas = Inteligencia.ParaOInicio(intel ?? Servico.Guardado("sugestoes"), Abre, Recarrega);
+        Monta(cab, versao, AvisoTarefas(), passo, numeros, lista, propostas, secJogos, G(atalhos));
     }
 
     Control PrimeirosPassos(bool notebook)

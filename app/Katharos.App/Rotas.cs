@@ -34,7 +34,7 @@ public static class Rotas
         "turbo" => "otimizar",
         "segundo-plano" => "aovivo",
         "painel" or "tendencia" => "historico",
-        "conselheiro" => "sugestoes",
+        "conselheiro" => "inicio",
         "config" => "config",
         "raiox" or "saude" => "raiox",
         "memoria" => "memoria",

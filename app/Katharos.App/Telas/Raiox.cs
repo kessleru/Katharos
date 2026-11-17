@@ -152,7 +152,7 @@ public class Raiox : Tela
             {
                 string conf = x.S("confianca");
                 m.Children.Add(Linha(x.S("titulo"), Primeira(x.S("vi")) + ". Fonte: " + x.S("fonte") + ".", Etiqueta("confiança " + conf, conf == "alta" ? Tema.Verde : conf == "média" ? Tema.Ambar : Tema.Apagado),
-                                     Link("Por quê", () => Abre("sugestoes"))));
+                                     Link("Por quê", () => Abre("inicio"))));
             }
             p.Children.Add(S(m));
         }

@@ -24,6 +24,7 @@ public class Historico : Tela
         var g = Servico.Guardado("historico", new { dias = 60 });
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo as medidas").secao);
         var d = await Servico.Le("historico", new { dias = 60 });
+        try { await Servico.Le("sugestoes"); } catch (Exception e) { Registro.Escreve("histórico: previsto: " + e.Message); }
         if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
         // a medida do dia é gravada pelo motor logo depois de abrir a janela: sem o ponto de hoje, lê de novo daqui a pouco (uma vez)
         string hoje = DateTime.Today.ToString("yyyy-MM-dd");
@@ -172,7 +173,9 @@ public class Historico : Tela
             }
             jogos = G(p);
         }
-        Monta(cab, tend, S(new StackPanel { Children = { per, grade, legenda } }), anomalias, efeitos, jogos);
+        // "o que eu previ e o que aconteceu" (era da tela Central, que saiu na 5.0.0)
+        var previsto = Inteligencia.ParaOHistorico(Servico.Guardado("sugestoes"), Abre, Recarrega);
+        Monta(cab, tend, S(new StackPanel { Children = { per, grade, legenda } }), anomalias, efeitos, previsto, jogos);
     }
 
     /// <summary>A marca clicada: o que foi aplicado nesse dia e, se já deu para medir, o que mudou.</summary>
