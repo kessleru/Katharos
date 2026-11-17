@@ -312,6 +312,7 @@ public class Configuracoes : Tela
             alt.IsCheckedChanged += async (_, _) =>
             {
                 await Servico.Le("config_gravar", new { chave = k, valor = alt.IsChecked == true ? "sim" : "nao" });
+                Janela.Atual?.Aviso(alt.IsChecked == true ? "Ligado" : "Desligado");
                 await Recarrega();
             };
             ops.Children.Add(alt);
@@ -325,6 +326,7 @@ public class Configuracoes : Tela
             {
                 await Servico.Le("config_gravar", new { chave = k, valor = o });
                 if (k == "animacoes") Movimento.Ligado = o != "desligadas";   // vale na hora, sem reabrir
+                Janela.Atual?.Aviso("Salvo");
                 await Recarrega();
             }));
         }

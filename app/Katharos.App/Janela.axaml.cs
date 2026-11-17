@@ -177,6 +177,24 @@ public partial class Janela : Window
             catch (Exception e) { Registro.Escreve("novidades: marcar como vista: " + e.Message); }
     }
 
+    Border? aviso;
+    /// <summary>Aviso flutuante (UI 2): uma frase curta no canto de baixo, que some sozinha em 4 s. Para o que deu certo e não pede
+    /// resposta ("salvo", "pronto"); o que pede atenção continua na caixa do meio.</summary>
+    public void Aviso(string texto)
+    {
+        var raiz = this.FindControl<Grid>("RaizGrade")!;
+        if (aviso != null) raiz.Children.Remove(aviso);
+        aviso = new Border
+        {
+            Background = Tema.Painel, BorderBrush = Tema.LinhaForte, BorderThickness = new Thickness(1), Padding = new Thickness(16, 10),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 24, 24),
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { Icones.De("ok", 16, Tema.Verde), Ui.T(texto, null, Tema.Osso, 14) } },
+        };
+        raiz.Children.Add(aviso);
+        var este = aviso;
+        DispatcherTimer.RunOnce(() => { raiz.Children.Remove(este); if (aviso == este) aviso = null; }, TimeSpan.FromSeconds(4));
+    }
+
     /// <summary>Versão nova baixada com a janela aberta: reiniciar já ou deixar para quando fechar. Nunca no meio de uma mudança no PC nem
     /// por cima de outra caixa (aí fica o cartão do Início, e entra ao fechar).</summary>
     void PerguntaAtualizacao(string v)
