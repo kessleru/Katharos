@@ -47,7 +47,12 @@ public partial class Janela : Window
         };
         relogio.Start();
         AtualizaEstado();
-        KeyDown += (_, e) => { if (e.Key == Key.Escape && caixaFechavel) { if (resposta != null) Responde(false); else FechaCaixa(); } };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && caixaFechavel) { if (resposta != null) Responde(false); else FechaCaixa(); }
+            // Ctrl+K: ir para qualquer tela ou área digitando (UI 2); não abre por cima de outra caixa
+            else if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control) && !this.FindControl<Border>("Veu")!.IsVisible) { Paleta.Abre(this); e.Handled = true; }
+        };
         Closing += async (_, _) => { if (Atualizacao.AoFechar) SegundoPlano.PedeParaSair(reabrir: true); await Servico.Fecha(); };
         Mostra(Program.TelaInicial);
         Opened += async (_, _) =>

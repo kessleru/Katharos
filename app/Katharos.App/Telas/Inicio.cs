@@ -165,7 +165,7 @@ public class Inicio : Tela
 
         // "Última mudança" e "Enviar relatório" num grupo próprio, com título: sem ele pareciam parte da seção Jogos (pedido do dono)
         var um = d?["ultima_mudanca"];
-        var atalhos = new StackPanel { Children = { Subtitulo("Atalhos", null, "mais") } };
+        var atalhos = new StackPanel { Children = { Subtitulo("Atalhos", "Ctrl+K vai para qualquer tela ou área digitando", "mais") } };
         if (um != null)
             atalhos.Children.Add(Linha("Última mudança", $"{Primeira(um.S("titulo"))}, {Quando(um.S("quando"))}: {Num(um.D("itens"))} itens", null,
                                        Botao("Desfazer", false, () => Abre("desfazer")), "desfazer"));
