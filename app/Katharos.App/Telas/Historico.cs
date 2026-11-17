@@ -24,8 +24,8 @@ public class Historico : Tela
         var g = Servico.Guardado("historico", new { dias = 60 });
         if (g != null) Desenha(cab, g); else Monta(cab, Carregando("Lendo as medidas").secao);
         var d = await Servico.Le("historico", new { dias = 60 });
-        try { await Servico.Le("sugestoes"); } catch (Exception e) { Registro.Escreve("histórico: previsto: " + e.Message); }
-        if (g == null || g.ToJsonString() != d?.ToJsonString()) Desenha(cab, d);
+        try { sug = await Servico.Le("sugestoes"); ses = await Servico.Le("sessoes", new { dias = 84 }); } catch (Exception e) { Registro.Escreve("histórico: previsto: " + e.Message); }
+        Desenha(cab, d);   // sempre: as propostas e as sessões (calendário) podem ter chegado agora
         // a medida do dia é gravada pelo motor logo depois de abrir a janela: sem o ponto de hoje, lê de novo daqui a pouco (uma vez)
         string hoje = DateTime.Today.ToString("yyyy-MM-dd");
         bool temHoje = d.A("series").Any(s => s.A("pontos").Any(p => p.S("dia") == hoje));
@@ -33,6 +33,7 @@ public class Historico : Tela
     }
 
     bool releu;
+    JsonNode? sug, ses;
     bool IsAttachedToVisualTree() => Avalonia.VisualTree.VisualExtensions.GetVisualRoot(this) != null;
 
     /// <summary>Uma medida pronta para desenhar: um valor por dia do período (NaN no dia sem leitura) e as marcas agrupadas por dia.</summary>
@@ -173,9 +174,17 @@ public class Historico : Tela
             }
             jogos = G(p);
         }
+        // UI 2: as horas de jogo de cada dia das últimas 12 semanas, num calendário (as sessões que o segundo plano registrou)
+        Control? calendario = null;
+        var horas = new Dictionary<DateTime, double>();
+        foreach (var x in (ses ?? Servico.Guardado("sessoes", new { dias = 84 })).A("sessoes"))
+            if (DateTime.TryParse(x.S("inicio"), out var dt) && x.D("min") is double mi) horas[dt.Date] = horas.GetValueOrDefault(dt.Date) + mi / 60.0;
+        if (horas.Count > 0)
+            calendario = G(new StackPanel { Children = { Subtitulo("Horas de jogo por dia", $"{Num(horas.Values.Sum(), 1)} h nas últimas 12 semanas", "jogos"),
+                new Border { Padding = new Thickness(32, 8, 32, 22), Child = new Katharos.App.Controles.MapaDeCalor { Valores = horas, Formata = v => Num(v, 1) + " h" } } } });
         // "o que eu previ e o que aconteceu" (era da tela Central, que saiu na 5.0.0)
-        var previsto = Inteligencia.ParaOHistorico(Servico.Guardado("sugestoes"), Abre, Recarrega);
-        Monta(cab, tend, S(new StackPanel { Children = { per, grade, legenda } }), anomalias, efeitos, previsto, jogos);
+        var previsto = Inteligencia.ParaOHistorico(sug ?? Servico.Guardado("sugestoes"), Abre, Recarrega);
+        Monta(cab, tend, S(new StackPanel { Children = { per, grade, legenda } }), calendario, anomalias, efeitos, previsto, jogos);
     }
 
     /// <summary>A marca clicada: o que foi aplicado nesse dia e, se já deu para medir, o que mudou.</summary>
