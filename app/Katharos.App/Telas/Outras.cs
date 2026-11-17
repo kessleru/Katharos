@@ -282,6 +282,18 @@ public class Configuracoes : Tela
         string atual = c.S("valor");
         var ops = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         var opcoes = OpcoesCurtas.TryGetValue(k, out var curtas) ? curtas : c.A("opcoes").Select(x => x.ToString()).ToArray();
+        // sim/não vira um alternador (UI 2): uma peça só, no lugar de dois botões lado a lado
+        if (opcoes.Length == 2 && opcoes.Contains("sim") && opcoes.Contains("nao"))
+        {
+            var alt = new ToggleSwitch { IsChecked = atual == "sim", OnContent = "", OffContent = "", VerticalAlignment = VerticalAlignment.Center };
+            alt.IsCheckedChanged += async (_, _) =>
+            {
+                await Servico.Le("config_gravar", new { chave = k, valor = alt.IsChecked == true ? "sim" : "nao" });
+                await Recarrega();
+            };
+            ops.Children.Add(alt);
+            opcoes = Array.Empty<string>();
+        }
         foreach (var o in opcoes)
         {
             string rot = Rotulos.TryGetValue(o, out var r) ? r : o;

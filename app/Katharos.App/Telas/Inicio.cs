@@ -32,6 +32,15 @@ public class Inicio : Tela
         else if (jogosDesenhados != jogos?.ToJsonString() || tarefasDesenhadas != tarefas?.ToJsonString() || intelDesenhada != intel?.ToJsonString()) Desenha(cab, d);
     }
 
+    /// <summary>O número herói em matriz de pontos (UI 2, a assinatura visual): só a nota do PC usa.</summary>
+    static Control NumeroMatriz(string rotulo, string valor, string unidade, string contexto, Avalonia.Media.IBrush corContexto)
+    {
+        var num = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = {
+            new Katharos.App.Controles.Matriz { Texto = valor, Passo = 6.5, Cor = Tema.Osso, VerticalAlignment = VerticalAlignment.Bottom },
+            T(unidade, "unidade").Com(t => t.VerticalAlignment = VerticalAlignment.Bottom) } };
+        return new Border { Padding = new Avalonia.Thickness(32, 24), Child = new StackPanel { Spacing = 8, Children = { Rotulo(rotulo), num, T(contexto, null, corContexto, 13, true) } } };
+    }
+
     /// <summary>O número com um anel fino ao lado (a nota enche o anel: dá para ler de longe).</summary>
     static Control ComAnel(Control numero, double valor, Avalonia.Media.IBrush cor)
     {
@@ -120,7 +129,7 @@ public class Inicio : Tela
         var pc = d?["pc"];
         double? livre = pc.D("disco_livre_gb"), total = pc.D("disco_total_gb");
         var numeros = S(Celulas(
-            ComAnel(Numero("Nota do PC", nota.HasValue ? Num(nota) : "-", "de 100",
+            ComAnel(NumeroMatriz("Nota do PC", nota.HasValue ? Num(nota) : "-", "de 100",
                    nota == null ? "faça o raio-x para ter a nota" : (nota >= 80 ? "bem cuidado" : nota >= 55 ? "dá para melhorar" : "precisa de atenção")
                        + (notaRx is double nr && nr != nota ? $" · era {Num(nr)} no raio-x" : " · raio-x " + Quando(rx.S("quando"))),
                    nota == null ? Tema.Apagado : nota >= 80 ? Tema.Verde : nota >= 55 ? Tema.Ambar : Tema.Vermelho),

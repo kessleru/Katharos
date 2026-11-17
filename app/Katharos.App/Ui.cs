@@ -63,10 +63,14 @@ public static class Ui
         // valor em palavras ("placa de vídeo") vai menor e quebra: no tamanho do número invadia a célula do lado
         bool palavra = valor.Length > 6 && !char.IsDigit(valor[0]);
         var num = new WrapPanel { Children = { T(valor, palavra ? "forte" : "numero", tamanho: palavra ? 22 : 0, quebra: palavra), T(unidade, "unidade") } };
-        var p = new StackPanel { Spacing = 4, Children = { T(rotulo, "rotulo", quebra: true), num, T(contexto, null, corContexto, 13, true) } };
+        var p = new StackPanel { Spacing = 4, Children = { Rotulo(rotulo), num, T(contexto, null, corContexto, 13, true) } };
         if (extra != null) p.Children.Add(extra);
         return new Border { Padding = new Thickness(32, 24), Child = p };
     }
+
+    /// <summary>Rótulo técnico da UI 2 (referência: Teenage Engineering): maiúsculas em mono, pequeno e espaçado, em cima de um número.</summary>
+    public static TextBlock Rotulo(string texto) => T(texto.ToUpperInvariant(), "rotulo", tamanho: 11.5, quebra: true)
+        .Com(t => { t.FontFamily = Tema.Mono; t.LetterSpacing = 1.2; });
 
     /// <summary>Células lado a lado, separadas pela linha vertical fina (como os números do site).</summary>
     public static Grid Celulas(params Control[] cels)
@@ -347,9 +351,22 @@ public static class Ui
     public static (Secao secao, TextBlock passo, ProgressBar barra) Carregando(string texto)
     {
         var (p, passo, barra) = Andamento(texto);
-        p.Margin = new Thickness(32, 40);
+        p.Margin = new Thickness(32, 40, 32, 16);
         barra.MaxWidth = 480; barra.HorizontalAlignment = HorizontalAlignment.Left;
-        return (S(p), passo, barra);
+        var tudo = new StackPanel { Children = { p, Esqueleto() } };
+        return (S(tudo), passo, barra);
+    }
+
+    /// <summary>O lugar do conteúdo enquanto carrega (UI 2): linhas apagadas no formato de uma lista, sem animação.</summary>
+    public static Control Esqueleto(int linhas = 4)
+    {
+        var p = new StackPanel { Margin = new Thickness(32, 8, 32, 32), Spacing = 18 };
+        var cor = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+        for (int i = 0; i < linhas; i++)
+            p.Children.Add(new StackPanel { Spacing = 8, Children = {
+                new Border { Height = 12, Width = 180 + (i * 53 % 140), Background = cor, HorizontalAlignment = HorizontalAlignment.Left },
+                new Border { Height = 9, Width = 320 + (i * 97 % 180), Background = cor, HorizontalAlignment = HorizontalAlignment.Left } } });
+        return p;
     }
 
     /// <summary>O que está acontecendo agora: o passo, a barra que anda e, depois de 3 s, há quanto tempo (uma espera longa nunca parece
