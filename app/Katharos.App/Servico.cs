@@ -26,9 +26,31 @@ public static class Servico
         MotorComum m;
         try { if (comum == null) { var c = await MotorComum.Abre(); c.Caiu += _ => { if (comum == c) comum = null; }; comum = c; } m = comum; }
         finally { abrindoComum.Release(); }
-        var r = await m.Pede(metodo, p, evento);
-        Guarda(metodo, p, r);
-        return r;
+        Interlocked.Increment(ref pedindo);
+        try
+        {
+            var r = await m.Pede(metodo, p, evento);
+            Guarda(metodo, p, r);
+            return r;
+        }
+        finally { Interlocked.Decrement(ref pedindo); ultimoPedido = DateTime.UtcNow; }
+    }
+
+    // RAM (5.0.0): com a janela minimizada e 5 min sem pedido nenhum, o motor comum fecha (e os PowerShell abertos dele junto). O
+    // próximo pedido abre de novo, em ~1 s. O de administrador não entra aqui.
+    static int pedindo;
+    static DateTime ultimoPedido = DateTime.UtcNow;
+
+    public static async Task FechaSeParado(bool janelaEscondida)
+    {
+        if (!janelaEscondida || Volatile.Read(ref pedindo) > 0 || (DateTime.UtcNow - ultimoPedido).TotalMinutes < 5) return;
+        await abrindoComum.WaitAsync();
+        MotorComum? c;
+        try { c = comum; if (Volatile.Read(ref pedindo) > 0) return; comum = null; }
+        finally { abrindoComum.Release(); }
+        if (c == null) return;
+        Registro.Escreve("motor parado há 5 min com a janela escondida: fechado (reabre no próximo pedido)");
+        try { await c.DisposeAsync(); } catch (Exception e) { Registro.Escreve("fechar o motor parado: " + e.Message); }
     }
 
     // A última resposta de cada leitura: a tela abre na hora com ela e troca quando a resposta nova chega (sem "carregando" a cada

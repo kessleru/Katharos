@@ -61,6 +61,11 @@ public partial class Janela : Window
             if (!Servico.Exemplo) { _ = AbrirComWindows.Aplica(); _ = Task.Delay(TimeSpan.FromSeconds(20)).ContinueWith(_ => Dispatcher.UIThread.Post(async () => await RelatorioAutomatico.Confere(this))); }
         };
         Atualizacao.Pergunta += v => Dispatcher.UIThread.Post(() => PerguntaAtualizacao(v));
+        new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, async (_, _) =>
+        {
+            if (Atualizacao.Ocupado || Conferencia.Rodando) return;
+            await Servico.FechaSeParado(WindowState == WindowState.Minimized || !IsVisible);
+        }).Start();
         // a janela aberta o dia todo também confere (a cada 3 h; a conferência em si respeita "atualizações: nunca")
         new DispatcherTimer(TimeSpan.FromHours(3), DispatcherPriority.Background, async (_, _) =>
         {

@@ -55,6 +55,8 @@ public class AoVivo : Tela
         relogio.Tick += async (_, _) =>
         {
             if (lendo) return;
+            // janela minimizada: não lê nem desenha (5.0.0, RAM e CPU do próprio Katharos)
+            if (Janela.Atual is { WindowState: Avalonia.Controls.WindowState.Minimized } || Janela.Atual is { IsVisible: false }) return;
             lendo = true;
             try { var a = await Task.Run(Servico.Agora); Atualiza(a); }
             finally { lendo = false; }
