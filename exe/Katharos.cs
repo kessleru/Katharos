@@ -2174,7 +2174,8 @@ namespace KatharosApp
             if (pinta)
             {
                 Texto(g, "katharos", fTitulo, Cor.Osso, pad + 38 * s, y - 2 * s);
-                string ritmo = "ao vivo · a cada " + K.Num(motor.Cfg.IntervaloMs / 1000.0, motor.Cfg.IntervaloMs % 1000 == 0 ? 0 : 1) + " s";
+                // desde quando acompanha: se ele caiu e voltou, dá para ver aqui (5.0.0)
+                string ritmo = "ao vivo desde " + motor.Desde.ToString(motor.Desde.Date == DateTime.Today ? "HH:mm" : "dd/MM HH:mm") + " · a cada " + K.Num(motor.Cfg.IntervaloMs / 1000.0, motor.Cfg.IntervaloMs % 1000 == 0 ? 0 : 1) + " s";
                 Texto(g, motor.Pausado ? "acompanhamento pausado" : ritmo, fPequeno, Cor.Apagado, pad + 38 * s, y + 17 * s);
                 string st; Color cs;
                 if (motor.Pausado) { st = "pausado"; cs = Cor.Apagado; }
@@ -2216,7 +2217,7 @@ namespace KatharosApp
             y += 6 * s;
             if (a == null)
             {
-                if (pinta) Texto(g, motor.Pausado ? "Pausado. Retome pelo menu do ícone." : "Lendo o PC...", fTexto, Cor.Apagado, pad, y + 10 * s);
+                if (pinta) Texto(g, motor.Pausado ? "Pausado. Retome pelo botão retomar, aqui embaixo." : "Lendo o PC...", fTexto, Cor.Apagado, pad, y + 10 * s);
                 y += 40 * s;
             }
             else
@@ -2233,7 +2234,9 @@ namespace KatharosApp
                 y = Linha(g, pinta, y, pad, "cpu", K.Num(a.Cpu, 0) + " %", subCpu, hist, fCpu, 100, a.Cpu >= 90, Faixa("cpu", jg));
                 y = Linha(g, pinta, y, pad, "placa de vídeo", a.Gpu.HasValue ? K.Num(a.Gpu, 0) + " %" : "-", subGpu, hist, fGpu, 100, a.Gpu >= 95);
                 y = Linha(g, pinta, y, pad, "memória", K.Num(a.RamPct, 0) + " %", K.Num(a.RamGb, 1) + " de " + K.Num(a.RamTotalGb, 0) + " GB", hist, fRam, 100, a.RamPct >= 90, Faixa("ram", jg));
-                y = Linha(g, pinta, y, pad, "temperatura", valTemp, subTemp, hist, fTemp, 100, a.TempCpu >= motor.Cfg.AvisoCpu || a.TempGpu >= motor.Cfg.AvisoGpu, a.TempCpu.HasValue ? Faixa("temp_cpu", jg) : Faixa("temp_gpu", jg));
+                // sem nenhum sensor, a linha some (antes ficava "-" para sempre pedindo outro programa); a janela explica no Ao vivo
+                if (a.TempCpu.HasValue || a.TempGpu.HasValue)
+                    y = Linha(g, pinta, y, pad, "temperatura", valTemp, subTemp, hist, fTemp, 100, a.TempCpu >= motor.Cfg.AvisoCpu || a.TempGpu >= motor.Cfg.AvisoGpu, a.TempCpu.HasValue ? Faixa("temp_cpu", jg) : Faixa("temp_gpu", jg));
                 y = Linha(g, pinta, y, pad, "disco", K.Num(a.Disco, 0) + " %", "lê " + K.Num(a.DiscoLe, 1) + " · grava " + K.Num(a.DiscoGrava, 1) + " MB/s", hist, fDisco, 100, a.Disco >= 95, Faixa("disco", jg));
                 if (ses != null)
                 {   // em jogo, o FPS de verdade vale mais que a rede
@@ -2253,7 +2256,8 @@ namespace KatharosApp
             y += 4 * s;
             // botões
             y += 6 * s;
-            string[][] bs = { new[] { "raio-x", "raiox" }, new[] { "jogos", "jogos" }, new[] { "abrir o Katharos", "" } };
+            // pausar e retomar à vista (antes só no menu do botão direito)
+            string[][] bs = { new[] { motor.Pausado ? "retomar" : "pausar 1 h", "@pausa" }, new[] { "raio-x", "raiox" }, new[] { "abrir o Katharos", "" } };
             float gap = 8 * s, bw = (W - 2 * pad - gap * (bs.Length - 1)) / bs.Length, bh = 30 * s;
             for (int i = 0; i < bs.Length; i++)
             {
@@ -2538,6 +2542,7 @@ namespace KatharosApp
 
         void Abre(string[] args)
         {
+            if (args.Length == 1 && args[0] == "@pausa") { AlternaPausa(); return; }   // o botão do painel (5.0.0)
             if (args.Length == 3 && args[0] == "@resp")
             {   // a sua resposta vai para a central, que pensa de novo e reexporta
                 Log.Escreve("resposta: " + args[1] + " = " + args[2]);
