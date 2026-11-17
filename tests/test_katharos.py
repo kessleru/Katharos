@@ -4396,3 +4396,9 @@ class TestCatalogo500(unittest.TestCase):
                 if it.nivel >= 1 and not it.reverte and not it.id.startswith(('ping', 'dns-teste')):
                     ruins.append(f'{nome}:{it.id}')
         self.assertEqual(ruins, [])
+
+    def test_windows_7_para_com_frase_clara(self):
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k.sys, 'getwindowsversion', create=True, return_value=types.SimpleNamespace(build=7601)):
+            self.assertTrue(k.windows_antigo())
+        with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k.sys, 'getwindowsversion', create=True, return_value=types.SimpleNamespace(build=26200)):
+            self.assertFalse(k.windows_antigo())

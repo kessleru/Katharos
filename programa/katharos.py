@@ -19265,12 +19265,27 @@ def ferramenta_ajuda(ctx, args):
     return 0
 
 
+def windows_antigo():
+    """True no Windows 7, 8 e 8.1 (build abaixo de 10240)."""
+    if not WINDOWS:
+        return False
+    try:
+        return sys.getwindowsversion().build < 10240
+    except (AttributeError, OSError):
+        return False
+
+
 def main(argv=None):
     parser = monta_parser()
     for fluxo in ('stdout', 'stderr'):   # pythonw (tarefa sem janela) não tem saída padrão: sem isto o primeiro print derrubaria o programa
         if getattr(sys, fluxo) is None:
             setattr(sys, fluxo, open(os.devnull, 'w'))
     sem_janela_global()
+    if windows_antigo():
+        # Windows 7 e 8 (build abaixo de 10240): os comandos que o Katharos usa não existem e os ajustes são do 10 e do 11. Melhor
+        # parar com uma frase clara do que aplicar algo errado (pedido do dono, 17/11: compatibilidade com o 7 fica de fora)
+        print('Katharos precisa do Windows 10 ou 11. Este PC tem um Windows mais antigo: nada foi lido nem mudado.')
+        return 3
     cru = list(argv if argv is not None else sys.argv[1:])
     primeiro = cru[0] if cru and not cru[0].startswith('-') else None
     if primeiro == 'api':   # a interface com janelas: JSON por linha, sem tela e sem perguntas (66-api.py)
