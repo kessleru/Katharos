@@ -25,8 +25,8 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '4.5.0'
-DATA_VERSAO = '15 nov 2026'
+VERSAO = '5.0.0'
+DATA_VERSAO = '17 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #

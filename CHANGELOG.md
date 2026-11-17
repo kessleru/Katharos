@@ -18,6 +18,25 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 5.0.0 · 17 de novembro de 2026
+
+Uma versão grande, que junta tudo o que veio dos relatórios e do uso no PC do dono: mais simples, mais segura e com o começo da UI nova.
+
+- **Catálogo seguro**: nada que o Desfazer não volta vem marcado em modo nenhum (o "remover o app Copilot" saiu do equilibrado). A lista completa, com o modo de cada item e se ele volta, está em `planos/catalogo-5.0.0.md`.
+- **Manutenção à parte**: limpeza, reparo e atualização não vêm mais marcados no Otimizar. Ficam num bloco "Manutenção", para quando você quiser. O rodapé separa ajustes de tarefas, e uma linha mostra de onde vem o número do botão, área por área.
+- **Otimizar mais simples**: as áreas em que nada muda ficam numa linha recolhida, e a busca e os atalhos de marcar ficam atrás de "Personalizar".
+- **Achados honestos**: quando a correção não resolve de verdade (desligamento sem tela azul, monitor em Hz errado, memória em canal único, disco no fim da vida), o botão é "Como resolver", não "Aplicar". Desligamento sem tela azul, até 12 em 60 dias, não tira ponto da nota.
+- **A tela Central saiu**: "o que eu faria" e o diagnóstico estão no Início; "o que eu previ e o que aconteceu" está no Histórico. A caixa "Pergunte ao Katharos" saiu.
+- **Dispositivos saiu**: a tela, a leitura de bateria, a linha no painel do ícone e a lista de periféricos no relatório.
+- **Tarefas agendadas**: as que usam o Python da Microsoft Store, ou que deram erro, contam como quebradas e são consertadas.
+- **Leituras mais confiáveis**: o andamento do PowerShell não apaga mais o resultado de uma leitura.
+- **Segundo plano**: a versão nova é copiada antes de religar. O painel do ícone mostra desde quando acompanha, tem pausar e retomar à vista e esconde a temperatura quando não há sensor.
+- **Histórico**: com poucos dias de medida, o gráfico começa na primeira, e um dia solto aparece como ponto. Relê quando falta o dia de hoje. Ganhou um calendário das horas de jogo das últimas 12 semanas.
+- **Menos RAM**: no máximo um PowerShell parado. O Ao vivo para com a janela minimizada, e o motor fecha depois de 5 min parado com a janela escondida (reabre sozinho).
+- **Conferir o Katharos**: nas Configurações, confere o segundo plano, as tarefas, a medida do dia, a cópia protegida e o PowerShell, sem mudar nada. O resultado vai no relatório.
+- **UI nova (começo)**: a nota do PC em matriz de pontos, rótulos técnicos nos números, o lugar do conteúdo desenhado enquanto carrega, alternadores nas Configurações, aviso flutuante e Ctrl+K para ir a qualquer tela ou área digitando.
+- **Windows 7 e 8**: o Katharos precisa do Windows 10 ou 11 e agora diz isso com uma frase clara, sem ler nem mudar nada.
+
 ## 4.5.0 · 15 de novembro de 2026
 
 Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.

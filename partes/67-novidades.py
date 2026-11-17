@@ -1,6 +1,69 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "5.0.0",
+  "data": "17 de novembro de 2026",
+  "resumo": "Uma versão grande, que junta tudo o que veio dos relatórios e do uso no PC do dono: mais simples, mais segura e com o começo da UI nova.",
+  "itens": [
+   {
+    "titulo": "Catálogo seguro",
+    "texto": "nada que o Desfazer não volta vem marcado em modo nenhum (o \"remover o app Copilot\" saiu do equilibrado). A lista completa, com o modo de cada item e se ele volta, está em planos/catalogo-5.0.0.md."
+   },
+   {
+    "titulo": "Manutenção à parte",
+    "texto": "limpeza, reparo e atualização não vêm mais marcados no Otimizar. Ficam num bloco \"Manutenção\", para quando você quiser. O rodapé separa ajustes de tarefas, e uma linha mostra de onde vem o número do botão, área por área."
+   },
+   {
+    "titulo": "Otimizar mais simples",
+    "texto": "as áreas em que nada muda ficam numa linha recolhida, e a busca e os atalhos de marcar ficam atrás de \"Personalizar\"."
+   },
+   {
+    "titulo": "Achados honestos",
+    "texto": "quando a correção não resolve de verdade (desligamento sem tela azul, monitor em Hz errado, memória em canal único, disco no fim da vida), o botão é \"Como resolver\", não \"Aplicar\". Desligamento sem tela azul, até 12 em 60 dias, não tira ponto da nota."
+   },
+   {
+    "titulo": "A tela Central saiu",
+    "texto": "\"o que eu faria\" e o diagnóstico estão no Início; \"o que eu previ e o que aconteceu\" está no Histórico. A caixa \"Pergunte ao Katharos\" saiu."
+   },
+   {
+    "titulo": "Dispositivos saiu",
+    "texto": "a tela, a leitura de bateria, a linha no painel do ícone e a lista de periféricos no relatório."
+   },
+   {
+    "titulo": "Tarefas agendadas",
+    "texto": "as que usam o Python da Microsoft Store, ou que deram erro, contam como quebradas e são consertadas."
+   },
+   {
+    "titulo": "Leituras mais confiáveis",
+    "texto": "o andamento do PowerShell não apaga mais o resultado de uma leitura."
+   },
+   {
+    "titulo": "Segundo plano",
+    "texto": "a versão nova é copiada antes de religar. O painel do ícone mostra desde quando acompanha, tem pausar e retomar à vista e esconde a temperatura quando não há sensor."
+   },
+   {
+    "titulo": "Histórico",
+    "texto": "com poucos dias de medida, o gráfico começa na primeira, e um dia solto aparece como ponto. Relê quando falta o dia de hoje. Ganhou um calendário das horas de jogo das últimas 12 semanas."
+   },
+   {
+    "titulo": "Menos RAM",
+    "texto": "no máximo um PowerShell parado. O Ao vivo para com a janela minimizada, e o motor fecha depois de 5 min parado com a janela escondida (reabre sozinho)."
+   },
+   {
+    "titulo": "Conferir o Katharos",
+    "texto": "nas Configurações, confere o segundo plano, as tarefas, a medida do dia, a cópia protegida e o PowerShell, sem mudar nada. O resultado vai no relatório."
+   },
+   {
+    "titulo": "UI nova (começo)",
+    "texto": "a nota do PC em matriz de pontos, rótulos técnicos nos números, o lugar do conteúdo desenhado enquanto carrega, alternadores nas Configurações, aviso flutuante e Ctrl+K para ir a qualquer tela ou área digitando."
+   },
+   {
+    "titulo": "Windows 7 e 8",
+    "texto": "o Katharos precisa do Windows 10 ou 11 e agora diz isso com uma frase clara, sem ler nem mudar nada."
+   }
+  ]
+ },
+ {
   "versao": "4.5.0",
   "data": "15 de novembro de 2026",
   "resumo": "Corrige o que os relatórios de 13 e 14/11 e os achados do dono mostraram. Traz a tela Dispositivos e o começo da UI nova.",
@@ -288,33 +351,6 @@ NOVIDADES = [
    {
     "titulo": "Esc fecha as caixas",
     "texto": "as caixas de aviso e de resultado também fecham com a tecla Esc."
-   }
-  ]
- },
- {
-  "versao": "4.0.2",
-  "data": "11 de novembro de 2026",
-  "resumo": "Correção da interface, vista num notebook Acer: a janela carregava os dados para sempre e o botão de ligar o acompanhamento só fazia a tela piscar.",
-  "itens": [
-   {
-    "titulo": "Ligar o acompanhamento",
-    "texto": "a tela Ao vivo se refazia a cada segundo, o que derrubava o clique no botão e trocava o \"Ligando\" pelo aviso de desligado. Agora ela só se refaz quando o estado muda, ignora o segundo clique e espera até 20 s pela primeira leitura (PC mais lento). Se não ligar, a mensagem de erro fica na tela, com \"tentar de novo\"."
-   },
-   {
-    "titulo": "Carregando para sempre",
-    "texto": "o motor agora avisa que está pronto antes de converter dados e conferir o segundo plano; antes, um desses passos lento ou travado deixava toda tela em \"carregando\" sem nenhum sinal. A janela também desiste de esperar um motor mudo (60 s para abrir, 2 min sem resposta; 10 min no raio-x), fecha ele e mostra \"tentar de novo\"."
-   },
-   {
-    "titulo": "\"Desligado\" com o acompanhamento rodando",
-    "texto": "num PC lento o segundo plano espaça as leituras (até 30 s, para não pesar) e a janela e o motor só aceitavam uma leitura de até 20 s, então diziam \"desligado\" e o botão de ligar parecia não fazer nada. Agora o segundo plano grava o ritmo real (espera_s) e quem lê espera três ritmos. Ligar também espera até 20 s o Katharos.exe abrir (antes 5 s), para o caso de o antivírus verificá-lo na primeira vez."
-   },
-   {
-    "titulo": "Telas travadas esperando a permissão do Windows",
-    "texto": "o motor comum e o de administrador usavam a mesma fila de abertura; enquanto o Windows esperava a resposta do pedido de permissão (até 90 s), toda tela ficava em \"carregando\". Agora cada motor tem a sua fila."
-   },
-   {
-    "titulo": "Versão na janela",
-    "texto": "a barra lateral mostra os três números (4.0.2), que é o que a pessoa precisa dizer ao pedir ajuda."
    }
   ]
  }
