@@ -12,6 +12,9 @@
   "aplicar": {
    "muda": true
   },
+  "autoteste": {
+   "muda": false
+  },
   "aviso": {
    "muda": false
   },

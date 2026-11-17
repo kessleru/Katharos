@@ -158,3 +158,52 @@ def amostra_se_velha(ctx, horas=20):
     except Exception as e:
         LOG.escreve(f'histórico: medida do dia falhou: {e!r}')
         return False
+
+
+def autoteste(ctx):
+    """"Conferir o Katharos" (5.0.0): o que dá para conferir sozinho, sem mudar nada. [{nome, ok, detalhe}]; ok None = não se aplica."""
+    out = []
+
+    def item(nome, ok, detalhe):
+        out.append({'nome': nome, 'ok': ok, 'detalhe': detalhe})
+    e = estado()
+    try:
+        if e.get('segundo_plano') == 'sim':
+            roda = sp_rodando()
+            item('Segundo plano rodando', roda, 'rodando' if roda else 'fechado (abra a janela ou ligue no Ao vivo)')
+            ent = inicia_com_windows_ligado()
+            item('Segundo plano abre com o Windows', ent, 'entrada certa' if ent else 'a entrada sumiu ou foi trocada')
+        else:
+            item('Segundo plano', None, 'desligado por você')
+    except Exception as ex:
+        item('Segundo plano', False, f'não li: {type(ex).__name__}')
+    try:
+        tk = confere_tarefas(ctx)
+        if not tk:
+            item('Tarefas agendadas', None, 'nenhuma ligada')
+        for t in tk:
+            item(f'Tarefa "{t["nome"]}"', not t['problema'], t['problema'] or (f'última vez {t["ultima"][:16].replace("T", " ")}' if t['ultima'] else 'ainda não rodou'))
+    except Exception as ex:
+        item('Tarefas agendadas', False, f'não li: {type(ex).__name__}')
+    try:
+        am = le_metricas()
+        ult = am[-1]['_dt'] if am else None
+        ok = bool(ult and (datetime.now() - ult).total_seconds() < 36 * 3600)
+        item('Medida do dia (Histórico)', ok, f'última {ult:%d/%m %H:%M}' if ult else 'nenhuma ainda')
+    except Exception as ex:
+        item('Medida do dia (Histórico)', False, f'não li: {type(ex).__name__}')
+    if WINDOWS:
+        pasta = pasta_da_tarefa()
+        kpy = pasta / 'katharos.py'
+        if kpy.exists() or any(o['nome'] == f'Tarefa "{TAREFA_MANUT}"' for o in out):
+            try:
+                v = re.search(r"^VERSAO = '([^']+)'", kpy.read_text(encoding='utf-8', errors='replace')[:200000], re.M) if kpy.is_file() else None
+                item('Cópia protegida da manutenção', bool(v and v.group(1) == VERSAO), f'versão {v.group(1)}' if v else 'não existe')
+            except OSError as ex:
+                item('Cópia protegida da manutenção', False, f'não li: {ex.strerror or ex}')
+        t0 = time.time()
+        s = roda_ps(ctx.t, "Dado 'ok' 1", 'autoteste', minutos=1, mostra=False)
+        ms = round((time.time() - t0) * 1000)
+        item('PowerShell respondendo', bool(s.dados.get('ok')), f'{ms} ms')
+    marca_estado('autoteste', {'quando': agora_iso(), 'itens': out})
+    return out

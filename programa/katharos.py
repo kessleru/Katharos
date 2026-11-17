@@ -13028,6 +13028,55 @@ def amostra_se_velha(ctx, horas=20):
     except Exception as e:
         LOG.escreve(f'histórico: medida do dia falhou: {e!r}')
         return False
+
+
+def autoteste(ctx):
+    """"Conferir o Katharos" (5.0.0): o que dá para conferir sozinho, sem mudar nada. [{nome, ok, detalhe}]; ok None = não se aplica."""
+    out = []
+
+    def item(nome, ok, detalhe):
+        out.append({'nome': nome, 'ok': ok, 'detalhe': detalhe})
+    e = estado()
+    try:
+        if e.get('segundo_plano') == 'sim':
+            roda = sp_rodando()
+            item('Segundo plano rodando', roda, 'rodando' if roda else 'fechado (abra a janela ou ligue no Ao vivo)')
+            ent = inicia_com_windows_ligado()
+            item('Segundo plano abre com o Windows', ent, 'entrada certa' if ent else 'a entrada sumiu ou foi trocada')
+        else:
+            item('Segundo plano', None, 'desligado por você')
+    except Exception as ex:
+        item('Segundo plano', False, f'não li: {type(ex).__name__}')
+    try:
+        tk = confere_tarefas(ctx)
+        if not tk:
+            item('Tarefas agendadas', None, 'nenhuma ligada')
+        for t in tk:
+            item(f'Tarefa "{t["nome"]}"', not t['problema'], t['problema'] or (f'última vez {t["ultima"][:16].replace("T", " ")}' if t['ultima'] else 'ainda não rodou'))
+    except Exception as ex:
+        item('Tarefas agendadas', False, f'não li: {type(ex).__name__}')
+    try:
+        am = le_metricas()
+        ult = am[-1]['_dt'] if am else None
+        ok = bool(ult and (datetime.now() - ult).total_seconds() < 36 * 3600)
+        item('Medida do dia (Histórico)', ok, f'última {ult:%d/%m %H:%M}' if ult else 'nenhuma ainda')
+    except Exception as ex:
+        item('Medida do dia (Histórico)', False, f'não li: {type(ex).__name__}')
+    if WINDOWS:
+        pasta = pasta_da_tarefa()
+        kpy = pasta / 'katharos.py'
+        if kpy.exists() or any(o['nome'] == f'Tarefa "{TAREFA_MANUT}"' for o in out):
+            try:
+                v = re.search(r"^VERSAO = '([^']+)'", kpy.read_text(encoding='utf-8', errors='replace')[:200000], re.M) if kpy.is_file() else None
+                item('Cópia protegida da manutenção', bool(v and v.group(1) == VERSAO), f'versão {v.group(1)}' if v else 'não existe')
+            except OSError as ex:
+                item('Cópia protegida da manutenção', False, f'não li: {ex.strerror or ex}')
+        t0 = time.time()
+        s = roda_ps(ctx.t, "Dado 'ok' 1", 'autoteste', minutos=1, mostra=False)
+        ms = round((time.time() - t0) * 1000)
+        item('PowerShell respondendo', bool(s.dados.get('ok')), f'{ms} ms')
+    marca_estado('autoteste', {'quando': agora_iso(), 'itens': out})
+    return out
 # ─────────────── painel: gráficos em HTML autocontido (SVG feito aqui, sem internet, sem biblioteca) ───────────────
 import html as _html
 import math
@@ -15505,7 +15554,7 @@ def responde_api(ctx, canal, pedido, permitidos=None):
 # o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
 # comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
 _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
-             'segundo_plano', 'envio_registrar', 'novidades', 'tarefas', 'segundo_plano_conferir')
+             'segundo_plano', 'envio_registrar', 'novidades', 'tarefas', 'segundo_plano_conferir', 'autoteste')
 _SOZINHOS = ('raiox',)
 
 
@@ -16557,6 +16606,12 @@ def api_fps_liberar(ctx, p, ev):
     else:
         marca_estado('fps_grupo', 'nao')
     return {'liberado': ok}
+
+
+@metodo_api('autoteste')
+def api_autoteste(ctx, p, ev):
+    """"Conferir o Katharos": confere o segundo plano, as tarefas, a medida do dia, a cópia protegida e o PowerShell. Não muda nada."""
+    return {'itens': autoteste(ctx)}
 # ─────────────── envio de relatório e feedback ───────────────
 #
 #   A janela manda; o motor só monta. O relatório que sai daqui é feito para melhorar o Katharos: os erros dele, o que foi
@@ -16757,6 +16812,9 @@ def _auto_diagnostico(ctx, e):
             problemas.append('FPS sem permissão: a conta não está no grupo "Usuários de log de desempenho"')
     except OSError:
         pass
+    at = e.get('autoteste')
+    if isinstance(at, dict):   # o último "Conferir o Katharos" que a pessoa rodou
+        out['autoteste'] = at
     out['problemas_vistos'] = problemas
     return out
 

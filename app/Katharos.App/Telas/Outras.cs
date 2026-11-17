@@ -271,8 +271,31 @@ public class Configuracoes : Tela
         string nv = v == null ? "" : $"{v.Major}.{v.Minor}.{v.Build}";
         var versao = G(new StackPanel { Children = { Subtitulo("Esta versão", null, "info"),
             Linha($"Katharos {nv}", Atualizacao.VersaoPronta is string vp ? $"A versão {vp} já foi baixada e entra quando você reiniciar o Katharos." : "Procura versão nova sozinho ao abrir.",
-                  null, Botao("Ver novidades", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false)), "estrela") } });
+                  null, Botao("Ver novidades", false, async () => await Janela.Atual!.MostraNovidades(soSePrecisa: false)), "estrela"),
+            Linha("Conferir o Katharos", "Confere o segundo plano, as tarefas, a medida do dia, a cópia protegida e o PowerShell. Não muda nada; o resultado vai no próximo relatório.",
+                  null, Botao("Conferir", false, async () => await Autoteste()), "ok") } });
         Monta(cab, G(lista), G(motor), memoria, versao);
+    }
+
+    async Task Autoteste()
+    {
+        var j = Janela.Atual!;
+        j.MostraCaixa(Janela.Caixa("Conferindo o Katharos", Andamento("Lendo, sem mudar nada").painel));
+        try
+        {
+            var r = await Servico.Le("autoteste");
+            var p = new StackPanel { Spacing = 8 };
+            foreach (var x in r.A("itens"))
+            {
+                bool? ok = x?["ok"] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+                var cor = ok == true ? Tema.Verde : ok == false ? Tema.Vermelho : Tema.Apagado;
+                p.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Children = {
+                    Icones.De(ok == true ? "ok" : ok == false ? "alerta" : "info", 16, cor).Com(c => { c.Margin = new Thickness(0, 2, 10, 0); c.VerticalAlignment = VerticalAlignment.Top; }),
+                    new StackPanel { Children = { T(x.S("nome"), null, Tema.Osso, 14), T(x.S("detalhe"), "rotulo", tamanho: 12.5, quebra: true) } }.Com(c => Grid.SetColumn(c, 1)) } });
+            }
+            j.MostraCaixa(Janela.Caixa("Conferido", p, Botao("Fechar", true, () => j.FechaCaixa())), true);
+        }
+        catch (Exception e) { MostraErro(e, "Não deu para conferir"); }
     }
 
     void Preferencia(JsonNode? d, string k, StackPanel lista)

@@ -85,7 +85,7 @@ def responde_api(ctx, canal, pedido, permitidos=None):
 # o motor comum atende em paralelo o que só lê. O que grava os arquivos do Katharos vai um por vez, numa trava só (gravam arquivos em
 # comum); o raio-x tem a dele (dois juntos só mediriam um ao outro)
 _ESCREVEM = ('aceitar_aviso', 'config_gravar', 'memoria_apagar', 'memoria_exportar', 'dispensar', 'responder', 'linha_de_base',
-             'segundo_plano', 'envio_registrar', 'novidades', 'tarefas', 'segundo_plano_conferir')
+             'segundo_plano', 'envio_registrar', 'novidades', 'tarefas', 'segundo_plano_conferir', 'autoteste')
 _SOZINHOS = ('raiox',)
 
 
@@ -1137,3 +1137,9 @@ def api_fps_liberar(ctx, p, ev):
     else:
         marca_estado('fps_grupo', 'nao')
     return {'liberado': ok}
+
+
+@metodo_api('autoteste')
+def api_autoteste(ctx, p, ev):
+    """"Conferir o Katharos": confere o segundo plano, as tarefas, a medida do dia, a cópia protegida e o PowerShell. Não muda nada."""
+    return {'itens': autoteste(ctx)}

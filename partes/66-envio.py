@@ -198,6 +198,9 @@ def _auto_diagnostico(ctx, e):
             problemas.append('FPS sem permissão: a conta não está no grupo "Usuários de log de desempenho"')
     except OSError:
         pass
+    at = e.get('autoteste')
+    if isinstance(at, dict):   # o último "Conferir o Katharos" que a pessoa rodou
+        out['autoteste'] = at
     out['problemas_vistos'] = problemas
     return out
 

@@ -4402,3 +4402,9 @@ class TestCatalogo500(unittest.TestCase):
             self.assertTrue(k.windows_antigo())
         with mock.patch.object(k, 'WINDOWS', True), mock.patch.object(k.sys, 'getwindowsversion', create=True, return_value=types.SimpleNamespace(build=26200)):
             self.assertFalse(k.windows_antigo())
+
+    def test_autoteste_roda_sem_mudar_nada(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'WINDOWS', False):
+            itens = k.autoteste(types.SimpleNamespace(t=None))
+        self.assertTrue(itens)
+        self.assertTrue(all({'nome', 'ok', 'detalhe'} <= set(x) for x in itens))
