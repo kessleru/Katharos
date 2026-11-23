@@ -264,7 +264,7 @@ function _ExeDe([string]$Cmd) {
 function _Existe([string]$Exe) {
     if (-not $Exe) { return $false }
     if ($Exe -notmatch '[\\/]') { return $true }   # só o nome (ctfmon, rundll32...): o Windows acha no PATH
-    return [bool](Test-Path -LiteralPath $Exe -ErrorAction SilentlyContinue)
+    return -not (ArquivoSumiu $Exe)
 }
 function ListaInicio {
     $r = New-Object System.Collections.Generic.List[object]
@@ -604,6 +604,9 @@ def mede(ctx, rotulo='medindo', progresso=True):
         completa_temperaturas(m)
     except Exception as e:
         LOG.escreve(f'temperatura pelo executável: {e!r}')
+    if m:   # quando e como foi medido: o antes e depois só compara medidas da mesma época e do mesmo jeito de energia
+        m['quando'] = agora_iso()
+        m['na_tomada'] = energia_agora()[0]
     return m
 
 
@@ -744,7 +747,7 @@ Dado 'terceiros' (Lista $terc)
 Vivo 'restos de programas'
 $orfaos = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.PathName -and $_.PathName -notmatch 'svchost|\\Windows\\' } | ForEach-Object {
     $exe = $_.PathName; if ($exe -match '^"([^"]+)"') { $exe = $Matches[1] } elseif ($exe -match '^(\S+\.exe)') { $exe = $Matches[1] }
-    if ($exe -match '\.exe$' -and -not (Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($exe)))) { [pscustomobject]@{ nome = $_.Name; exibe = $_.DisplayName; exe = $exe } }
+    if ($exe -match '\.exe$' -and (ArquivoSumiu ([Environment]::ExpandEnvironmentVariables($exe)))) { [pscustomobject]@{ nome = $_.Name; exibe = $_.DisplayName; exe = $exe } }
 })
 Dado 'servicos_orfaos' (Lista $orfaos)
 
@@ -768,7 +771,7 @@ foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object
             if ($assinado -and $sig.SignerCertificate) { $empresa = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) }
             $suspeitas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe; args = [string]$ac.Arguments; repete = $rep; curta = $curta; sha = $sha; assinado = $assinado; empresa = $empresa }
         }
-        if ($exe -match '^[A-Za-z]:\\' -and $exe -match '\.exe$' -and $tk.TaskPath -notmatch '^\\Microsoft\\' -and -not (Test-Path -LiteralPath $exe)) {
+        if ($exe -match '^[A-Za-z]:\\' -and $exe -match '\.exe$' -and $tk.TaskPath -notmatch '^\\Microsoft\\' -and (ArquivoSumiu $exe)) {
             $orfas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe }
         }
     }

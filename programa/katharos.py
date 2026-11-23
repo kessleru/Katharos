@@ -25,8 +25,8 @@ import queue
 import subprocess
 from datetime import datetime, timedelta
 
-VERSAO = '5.0.0'
-DATA_VERSAO = '17 nov 2026'
+VERSAO = '5.0.1'
+DATA_VERSAO = '23 nov 2026'
 
 # ███████████████████████████████████████████████████████████████████████████
 #
@@ -1450,11 +1450,16 @@ class Log:
 
     def __init__(self):
         self.arq = pasta('logs') / f'{datetime.now():%Y-%m-%d}.log'
+        self._cabeca = False
 
     def escreve(self, txt):
         try:
             with open(self.arq, 'a', encoding='utf-8') as f:
-                f.write(f'{datetime.now():%H:%M:%S} {txt}\n')
+                agora = f'{datetime.now():%H:%M:%S}'
+                if not self._cabeca:   # quem escreve daqui para baixo: o relatório diz de qual versão é cada erro
+                    f.write(f'{agora} @@katharos|{VERSAO}|{os.getpid()}\n')
+                    self._cabeca = True
+                f.write(f'{agora} {txt}\n')
         except OSError:
             pass
 
@@ -1762,6 +1767,13 @@ function TamanhoPasta([string]$P) {
     if (-not (Test-Path -LiteralPath $P)) { return 0 }
     $s = (ListaSemLinks $P | Measure-Object Length -Sum).Sum
     if ($s) { return [double]$s } else { return 0 }
+}
+function ArquivoSumiu([string]$P) {
+    # $true só se o caminho é válido e o arquivo não está lá. Um caminho tirado de linha de comando pode ter caractere que o Windows não aceita
+    # ("<>|, parâmetros colados); no PowerShell 5.1 o Test-Path lança ArgumentException nesse caso mesmo com -ErrorAction (relatório
+    # KTH-67C68B, Proton VPN). Aí não dá para dizer que sumiu: o serviço, a tarefa ou a entrada ficam como estão.
+    if (-not $P) { return $false }
+    try { return -not (Test-Path -LiteralPath $P -ErrorAction Stop) } catch { return $false }
 }
 function CaminhoSeguro([string]$P) {
     # Recusa caminho vazio, relativo, raiz de disco ou pastas grandes do sistema e do usuario
@@ -2832,7 +2844,7 @@ function _ExeDe([string]$Cmd) {
 function _Existe([string]$Exe) {
     if (-not $Exe) { return $false }
     if ($Exe -notmatch '[\\/]') { return $true }   # só o nome (ctfmon, rundll32...): o Windows acha no PATH
-    return [bool](Test-Path -LiteralPath $Exe -ErrorAction SilentlyContinue)
+    return -not (ArquivoSumiu $Exe)
 }
 function ListaInicio {
     $r = New-Object System.Collections.Generic.List[object]
@@ -3172,6 +3184,9 @@ def mede(ctx, rotulo='medindo', progresso=True):
         completa_temperaturas(m)
     except Exception as e:
         LOG.escreve(f'temperatura pelo executável: {e!r}')
+    if m:   # quando e como foi medido: o antes e depois só compara medidas da mesma época e do mesmo jeito de energia
+        m['quando'] = agora_iso()
+        m['na_tomada'] = energia_agora()[0]
     return m
 
 
@@ -3312,7 +3327,7 @@ Dado 'terceiros' (Lista $terc)
 Vivo 'restos de programas'
 $orfaos = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.PathName -and $_.PathName -notmatch 'svchost|\\Windows\\' } | ForEach-Object {
     $exe = $_.PathName; if ($exe -match '^"([^"]+)"') { $exe = $Matches[1] } elseif ($exe -match '^(\S+\.exe)') { $exe = $Matches[1] }
-    if ($exe -match '\.exe$' -and -not (Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($exe)))) { [pscustomobject]@{ nome = $_.Name; exibe = $_.DisplayName; exe = $exe } }
+    if ($exe -match '\.exe$' -and (ArquivoSumiu ([Environment]::ExpandEnvironmentVariables($exe)))) { [pscustomobject]@{ nome = $_.Name; exibe = $_.DisplayName; exe = $exe } }
 })
 Dado 'servicos_orfaos' (Lista $orfaos)
 
@@ -3336,7 +3351,7 @@ foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object
             if ($assinado -and $sig.SignerCertificate) { $empresa = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) }
             $suspeitas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe; args = [string]$ac.Arguments; repete = $rep; curta = $curta; sha = $sha; assinado = $assinado; empresa = $empresa }
         }
-        if ($exe -match '^[A-Za-z]:\\' -and $exe -match '\.exe$' -and $tk.TaskPath -notmatch '^\\Microsoft\\' -and -not (Test-Path -LiteralPath $exe)) {
+        if ($exe -match '^[A-Za-z]:\\' -and $exe -match '\.exe$' -and $tk.TaskPath -notmatch '^\\Microsoft\\' -and (ArquivoSumiu $exe)) {
             $orfas += [pscustomobject]@{ tarefa = ($tk.TaskPath + $tk.TaskName); exe = $exe }
         }
     }
@@ -6033,7 +6048,7 @@ else {
   elseif ($exe) { $silencioso = "$normal /S" }
 }
 if (-not $exe) { Aviso ("'{0}': desinstalador nao reconhecido; remova em Configuracoes > Aplicativos" -f $__nome); return }
-if ($exe -ne 'msiexec.exe' -and -not (Test-Path -LiteralPath $exe)) { Aviso ("'{0}': o desinstalador nao existe mais (entrada orfa)" -f $__nome); return }
+if ($exe -ne 'msiexec.exe' -and (ArquivoSumiu $exe)) { Aviso ("'{0}': o desinstalador nao existe mais (entrada orfa)" -f $__nome); return }
 $c = Roda $exe $silencioso 6
 if (_Sumiu 45) { Feito ("removido: {0}" -f $__nome); return }
 Info ("'{0}' nao saiu em silencio (codigo {1}). Abri o desinstalador: clique nele e confirme (ate 10 min)." -f $__nome, $c)
@@ -6440,12 +6455,12 @@ ORFAOS_PS = r'''
 foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notmatch '^\\Microsoft\\' })) {
   foreach ($ac in @($tk.Actions)) {
     $exe = [Environment]::ExpandEnvironmentVariables([string]$ac.Execute).Trim('"')
-    if ($exe -match '^[A-Za-z]:\\.*\.exe$' -and -not (Test-Path -LiteralPath $exe)) { Set-Tarefa ($tk.TaskPath + $tk.TaskName) $false | Out-Null }
+    if ($exe -match '^[A-Za-z]:\\.*\.exe$' -and (ArquivoSumiu $exe)) { Set-Tarefa ($tk.TaskPath + $tk.TaskName) $false | Out-Null }
   }
 }
 foreach ($s in @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.StartMode -ne 'Disabled' -and $_.PathName -and $_.PathName -notmatch 'svchost|\\Windows\\' })) {
   $exe = $s.PathName; if ($exe -match '^"([^"]+)"') { $exe = $Matches[1] } elseif ($exe -match '^(\S+\.exe)') { $exe = $Matches[1] }
-  if ($exe -match '\.exe$' -and -not (Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($exe)))) { Set-Servico $s.Name 'disabled' | Out-Null }
+  if ($exe -match '\.exe$' -and (ArquivoSumiu ([Environment]::ExpandEnvironmentVariables($exe)))) { Set-Servico $s.Name 'disabled' | Out-Null }
 }'''
 
 FABRICANTE_SVC_PS = r'''
@@ -7726,6 +7741,8 @@ DICAS_ERRO = [
     (r'protegido pelo windows|protected', 'o Windows protege este item; não dá para mudar'),
     (r'no space|disco cheio|0x80070070', 'sem espaço no disco: libere espaço e tente de novo'),
     (r'0x800f0922|0x80073712|corrupt', 'arquivos do Windows com problema: rode "reparar"'),
+    (r'0x800f0(?:915|906|81f)', 'o Windows não achou de onde baixar o reparo (precisa de internet): conecte e rode "reparar" de novo'),
+    (r'instalador falhou com o c[oó]digo|installer failed with exit code', 'o instalador do próprio programa falhou: atualize esse programa pelo site dele'),
 ]
 
 
@@ -7782,7 +7799,10 @@ def rel_md(r):
 
     if 'antes_depois' in S:
         a = S['antes_depois']
-        L += ['## Antes e depois', ''] + _tab(['Medida', 'Antes', 'Depois', 'Mudou'], a.get('linhas', []))
+        if a.get('comparavel') is False:
+            L += ['## Antes e depois', '', f'Sem comparação: {_q(a.get("motivo", ""))}.', '']
+        else:
+            L += ['## Antes e depois', ''] + _tab(['Medida', 'Antes', 'Depois', 'Mudou'], a.get('linhas', []))
         if a.get('livre_gb') is not None:
             L += [f'Espaço liberado nas limpezas registradas: {br(a.get("livre_gb"), 1)} GB.', '']
     if ras:
@@ -8693,11 +8713,39 @@ def ferramenta_segredos(ctx, args):
 
 # ─────────────── cartão de resultado ───────────────
 
+ANTES_DEPOIS_MAX_DIAS = 14
+# o que muda com a tomada: na bateria o Windows segura o clock e a CPU parece outra
+MEDIDAS_DE_ENERGIA = ('cpu', 'kernel', 'desempenho', 'temperatura', 'gpu_uso')
+
+
+def _quando_medida(m):
+    try:
+        return datetime.fromisoformat(str(m.get('quando') or m.get('_arquivo_em') or ''))
+    except ValueError:
+        return None
+
+
+def comparaveis(antes, depois):
+    """(dá para comparar, motivo). Medidas com mais de 14 dias entre elas, ou uma das duas sem data, não viram "antes e depois":
+    o relatório de 21/11 comparava uma medida da 1.4.1 (livre 21 GB) com uma de hoje (livre 126 GB)."""
+    a, d = _quando_medida(antes), _quando_medida(depois)
+    if not a or not d:
+        return False, 'uma das medidas não tem data'
+    dias = abs((d - a).total_seconds()) / 86400
+    if dias > ANTES_DEPOIS_MAX_DIAS:
+        return False, f'as medidas têm {int(dias)} dias entre elas'
+    return True, ''
+
+
 def linhas_antes_depois(antes, depois):
+    """[medida, antes, depois, mudou]. CPU, clock, temperatura e GPU só entram se as duas medidas foram na tomada ou as duas na bateria."""
     out = []
+    energia_igual = antes.get('na_tomada') is None or depois.get('na_tomada') is None or antes.get('na_tomada') == depois.get('na_tomada')
     for chave, rot, un, melhor in LINHAS_MEDIDA:
         a, b = antes.get(chave), depois.get(chave)
         if a is None and b is None:
+            continue
+        if chave in MEDIDAS_DE_ENERGIA and not energia_igual:
             continue
         dif = ''
         if isinstance(a, (int, float)) and isinstance(b, (int, float)) and a != b:
@@ -8708,8 +8756,15 @@ def linhas_antes_depois(antes, depois):
 
 
 def medida_ref(nome_parte):
+    """A medida MAIS NOVA com esse nome (antes pegava a mais velha), com a data do arquivo quando ela não guarda a própria."""
     arqs = [a for a in medidas_salvas() if nome_parte in a.name]
-    return le_json(arqs[0], {}) if arqs else {}
+    if not arqs:
+        return {}
+    m = le_json(arqs[-1], {}) or {}
+    mm = re.match(r'^(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)(\d\d)', arqs[-1].name)
+    if isinstance(m, dict) and mm and not m.get('quando'):
+        m['_arquivo_em'] = '{}-{}-{}T{}:{}:{}'.format(*mm.groups())
+    return m if isinstance(m, dict) else {}
 
 
 def livre_total_gb():
@@ -8726,7 +8781,9 @@ def ferramenta_cartao(ctx, args):
     t = ctx.t
     t.aba('o antes e depois deste PC, num cartão para mostrar')
     plano = le_json(ARQ_TURBO, None) or {}
-    antes = plano.get('antes') or medida_ref('-antes') or medida_ref('-raiox') or (le_json(medidas_salvas()[0], {}) if medidas_salvas() else {})
+    if not plano.get('concluido'):   # um turbo que nunca terminou não é o "antes" de nada
+        plano = {}
+    antes = plano.get('antes') or medida_ref('-antes') or medida_ref('-raiox')
     depois = plano.get('depois') or medida_ref('-depois')
     if not depois:
         if not WINDOWS:
@@ -8737,6 +8794,11 @@ def ferramenta_cartao(ctx, args):
     if not antes:
         t.aviso('Ainda não há uma medida de antes. Rode o raio-x ou o turbo antes de mexer em algo, e depois volte aqui.')
         return 0
+    ok, motivo = comparaveis(antes, depois)
+    if not ok:
+        t.aviso(f'Não dá para comparar: {motivo}. Rode o raio-x agora e de novo depois de aplicar algo.')
+        rel_secao('antes_depois', {'linhas': [], 'comparavel': False, 'motivo': motivo})
+        return 0
     linhas = linhas_antes_depois(antes, depois)
     livre = livre_total_gb()
     t.titulo('antes e depois', caixa=True)
@@ -8745,7 +8807,8 @@ def ferramenta_cartao(ctx, args):
     t.chaves([('espaço liberado nas limpezas', f'{br(livre, 1)} GB'), ('pacotes ativos', ', '.join(ativos) or 'nenhum'),
               ('desfazer', 'katharos desfazer tudo')])
     t.fecha_caixa()
-    rel_secao('antes_depois', {'linhas': linhas, 'livre_gb': livre, 'pacotes': ativos})
+    rel_secao('antes_depois', {'linhas': linhas, 'livre_gb': livre, 'pacotes': ativos, 'comparavel': True,
+                               'antes_em': str(antes.get('quando') or antes.get('_arquivo_em') or ''), 'depois_em': str(depois.get('quando') or '')})
     if getattr(args, 'copiar', False):
         return 0
     if t.interativo and not args.sim:
@@ -12269,6 +12332,26 @@ Unregister-ScheduledTask -TaskName «nome» -Confirm:$false -ErrorAction Silentl
         return False
 
 
+def copia_se_mudou(origem, destino, tentativas=6, espera=time.sleep):
+    """Copia só se o conteúdo mudou (True se copiou). O Windows ainda segura o .exe por um instante depois de o segundo plano soltar o
+    mutex, e o PresentMon fica preso enquanto mede um jogo: "arquivo em uso" (erro 32) tenta de novo por uns segundos antes de desistir."""
+    origem, destino = Path(origem), Path(destino)
+    try:
+        if destino.is_file() and destino.stat().st_size == origem.stat().st_size and sha256_de(origem) == sha256_de(destino):
+            return False
+    except OSError:
+        pass
+    for i in range(tentativas):
+        try:
+            shutil.copy2(origem, destino)
+            return True
+        except PermissionError:
+            if i == tentativas - 1:
+                raise
+            espera(0.5 * (i + 1))
+    return False
+
+
 def instala_segundo_plano(ctx, mostrar=True, quieto=False):
     """Copia o executável e o programa para ~/.katharos (sobrevivem a apagar a pasta do zip), grava a config, liga ao entrar no Windows,
     tira o ícone antigo (PowerShell) e abre. Devolve False se não há executável (rodando só o katharos.py)."""
@@ -12280,14 +12363,23 @@ def instala_segundo_plano(ctx, mostrar=True, quieto=False):
     try:
         CASA.mkdir(parents=True, exist_ok=True)
         if Path(__file__).resolve() != (CASA / 'katharos.py').resolve():
-            shutil.copy2(Path(__file__).resolve(), CASA / 'katharos.py')
+            copia_se_mudou(Path(__file__).resolve(), CASA / 'katharos.py')
         if origem.resolve() != destino.resolve():
-            if destino.is_file() and sp_rodando():
-                sp_para()
-            shutil.copy2(origem, destino)
+            igual = False
+            try:
+                igual = destino.is_file() and sha256_de(origem) == sha256_de(destino)
+            except OSError:
+                pass
+            if not igual:   # só fecha o segundo plano se o executável mudou de verdade
+                if destino.is_file() and sp_rodando():
+                    sp_para()
+                copia_se_mudou(origem, destino)
         pm = origem.with_name('PresentMon.exe')
         if pm.is_file() and pm.resolve() != (CASA / 'PresentMon.exe').resolve():
-            shutil.copy2(pm, CASA / 'PresentMon.exe')   # FPS nas sessões de jogo (Intel, licença MIT); roda só durante o jogo
+            try:   # FPS nas sessões de jogo (Intel, licença MIT); roda só durante o jogo
+                copia_se_mudou(pm, CASA / 'PresentMon.exe', tentativas=2)
+            except PermissionError:   # medindo um jogo agora: a cópia fica para a próxima vez, e o resto segue
+                LOG.escreve('segundo plano: PresentMon em uso (medindo um jogo); copio na próxima vez')
     except OSError as e:
         if not quieto:
             t.erro(f'Não consegui copiar o Katharos.exe para {CASA} ({e}). Feche o ícone do Katharos e tente de novo.')
@@ -12494,8 +12586,14 @@ def le_minutos(horas=24, agora=None):
     return _le_jsonl(CASA / 'minutos.jsonl', 't', desde, agora)
 
 
+# programas que usam a placa de vídeo sem ser jogo, além dos que o Katharos.exe já ignorava (navegador, player, chamada...). No relatório de
+# 21/11 o app do Claude virou "jogo" (2 sessões). O Katharos.exe tem a mesma lista (NAO_JOGO); aqui ela tira das sessões já gravadas.
+NAO_SAO_JOGO = frozenset(('amdrsserv', 'anydesk', 'audacity', 'canva', 'capcut', 'chatgpt', 'claude', 'clipchamp', 'copilot', 'cursor', 'davinci resolve', 'figma', 'gamebar', 'gimp-2.10', 'githubdesktop', 'inkscape', 'krita', 'm365copilot', 'messenger', 'msiafterburner', 'mstsc', 'notion', 'nvidia app', 'nvidia overlay', 'obsidian', 'parsecd', 'postman', 'radeonsoftware', 'rtss', 'rustdesk', 'signal', 'skype', 'steam', 'streamlabs obs', 'teamviewer', 'virtualboxvm', 'vmware', 'vmware-vmx', 'windsurf', 'xboxgamebar', 'xboxpcapp'))
+
+
 def le_sessoes(dias=60, agora=None):
-    return _le_jsonl(CASA / 'sessoes.jsonl', 'inicio', (agora or datetime.now()) - timedelta(days=dias))
+    ss = _le_jsonl(CASA / 'sessoes.jsonl', 'inicio', (agora or datetime.now()) - timedelta(days=dias))
+    return [s for s in ss if str(s.get('jogo') or '').lower() not in NAO_SAO_JOGO]
 
 
 def resumo_sessoes(sessoes, minimo_min=5):
@@ -15507,12 +15605,22 @@ class CanalApi:
     def __init__(self, saida):
         self.saida = saida
         self.trava = threading.Lock()
+        self.fechado = False
 
     def manda(self, msg):
+        """A janela pode fechar (ou o motor ficar sem ela) no meio de um pedido longo: o cano some e escrever dá OSError ou ValueError.
+        Isso não é erro do pedido. Registra uma linha só, uma vez, e o resto das respostas é descartado (antes virava um traceback por
+        pedido no relatório, e o `except` de responde_api falhava de novo ao tentar mandar o erro; KTH-67C68B)."""
         linha = json.dumps(msg, ensure_ascii=False, default=str)
         with self.trava:
-            self.saida.write(linha + '\n')
-            self.saida.flush()
+            if self.fechado:
+                return
+            try:
+                self.saida.write(linha + '\n')
+                self.saida.flush()
+            except (OSError, ValueError) as e:
+                self.fechado = True
+                LOG.escreve(f'api: a interface saiu antes da resposta ({type(e).__name__}); as respostas seguintes ficam sem destino')
 
     def evento(self, id_, tipo, dados):
         self.manda({'id': id_, 'evento': tipo, 'dados': dados})
@@ -16737,28 +16845,70 @@ def _texto_livre(s, trocas, n=4000):
 
 # ── o que cada seção leva ──
 
-def _linhas_de_erro(arq, desde, maximo=40):
-    """As linhas de erro de um registro (com as linhas de pilha logo abaixo), das mais novas para trás, desde uma data."""
+_CABECA_LOG = re.compile(r'^\d\d:\d\d:\d\d @@katharos\|([^|]+)\|')
+_TROCA_VERSAO = re.compile(r'^\d\d:\d\d:\d\d versão: \S+ -[>›] ([^\s,]+)')
+_FIM_DA_PILHA = re.compile(r'^[A-Za-z_][\w.]*(?:Error|Exception|Exit|Interrupt|Warning)\b')
+_HORA = re.compile(r'^(\d\d:\d\d:\d\d) (.*)$')
+_NAO_CONTINUA = ('+', '@@', 'At ', 'Em ', 'No ', 'Na ', 'Traceback', 'File ', '~', '-', '#')
+
+
+def _junta_partidas(linhas):
+    """O PowerShell quebra a mensagem de erro na largura da tela, no meio da palavra ("...Unautho" e "rizedAccessException"). Cada pedaço
+    entra no log como uma linha com a mesma hora: junta de volta o pedaço que continua uma linha longa do mesmo segundo."""
+    out = []
+    for l in linhas:
+        m, a = _HORA.match(l), (_HORA.match(out[-1]) if out else None)
+        if m and a and m.group(1) == a.group(1) and m.group(2).startswith('  ') and a.group(2).startswith('  '):
+            ant, cont = a.group(2).strip(), m.group(2).strip()
+            if len(ant) >= 60 and cont and not cont.startswith(_NAO_CONTINUA) and not ant.startswith('@@'):
+                out[-1] = out[-1] + cont
+                continue
+        out.append(l)
+    return out
+
+
+def _linhas_de_erro(arq, desde, maximo=40, dia=None):
+    """As linhas de erro de um registro, das mais novas para trás, desde uma data. Cada uma leva a data (a do arquivo, quando o
+    registro só guarda a hora) e a versão do Katharos que a escreveu; um traceback leva a última linha (o tipo do erro) logo depois
+    da primeira, para o corte de tamanho do envio não apagar justamente o que diz o que deu errado."""
     try:
         if not arq.is_file() or datetime.fromtimestamp(arq.stat().st_mtime) < desde:
             return []
         with open(arq, encoding='utf-8', errors='replace') as f:
-            linhas = f.read().splitlines()[-4000:]
+            linhas = _junta_partidas(f.read().splitlines()[-4000:])
     except OSError:
         return []
     chave = re.compile(r'\berr(?:o|or)\b|traceback|exception|falh(?:a|ou)|n[aã]o (?:deu|abriu|ligou|conseguiu)|interno|fechou por', re.I)
-    out, i = [], 0
+    out, i, versao = [], 0, None
     while i < len(linhas):
-        if chave.search(linhas[i]):
-            bloco = [linhas[i]]
-            j = i + 1
-            while j < len(linhas) and j - i <= 8 and (linhas[j].startswith((' ', '\t')) or linhas[j].startswith(('Traceback', 'File'))):
-                bloco.append(linhas[j].strip())
-                j += 1
-            out.append(' ⏎ '.join(bloco))
-            i = j
-        else:
+        l = linhas[i]
+        m = _CABECA_LOG.match(l) or _TROCA_VERSAO.match(l)
+        if m:
+            versao = m.group(1)
             i += 1
+            continue
+        if not chave.search(l):
+            i += 1
+            continue
+        pilha, fim, j = [], None, i + 1
+        while j < len(linhas) and j - i <= 60:
+            c = linhas[j]
+            if c.startswith((' ', '\t', 'Traceback', 'File')):
+                if c.strip(' ~^'):   # a linha de ~~~^^^ só sublinha a de cima
+                    pilha.append(c.strip())
+                j += 1
+                continue
+            if pilha and _FIM_DA_PILHA.match(c):
+                fim = c.strip()
+                j += 1
+            break
+        cab = l if not fim else (l if len(l) <= 160 else l[:159] + '…')
+        if dia and _HORA.match(cab):
+            cab = f'{dia} {cab}'
+        if versao:
+            cab = re.sub(r'^((?:\d{4}-\d\d-\d\d )?\d\d:\d\d:\d\d)', rf'\1 v{versao}', cab, count=1)
+        out.append(' ⏎ '.join([cab] + ([fim] if fim else []) + pilha[-6:]))
+        i = j
     return out[-maximo:]
 
 
@@ -16826,13 +16976,39 @@ def _env_erros(ctx):
     logs = sorted(pasta('logs').glob('*.log'))[-30:]
     motor = []
     # o log do motor também guarda dados e passos (@@dado, @@secao, @@feito, versão: ...) que só citam a palavra erro: não são erro
-    so_registro = re.compile(r'^\d\d:\d\d:\d\d\s+(?:@@(?:dado|secao|feito|info|plano|ok)\b|versão: )')
+    so_registro = re.compile(r'^(?:\d{4}-\d\d-\d\d )?\d\d:\d\d:\d\d(?: v\S+)?\s+(?:@@(?:dado|secao|feito|info|plano|ok|katharos)\b|versão: )')
+    # o que vem de fora (o DISM sem fonte de reparo, o instalador de um programa pelo winget) vai separado: não é defeito do Katharos
+    de_fora = re.compile(r'0x800f0(?:915|906|81f)|instalador falhou com o c[oó]digo|installer failed with exit code', re.I)
     for arq in logs:
-        motor.extend(l for l in _linhas_de_erro(arq, desde, 60) if not so_registro.match(l))
-    return {'eventos': eventos[-60:], 'motor': motor[-60:],
+        dia = arq.stem if re.match(r'^\d{4}-\d\d-\d\d$', arq.stem) else None
+        motor.extend(l for l in _linhas_de_erro(arq, desde, 60, dia) if not so_registro.match(l))
+    fora = [l for l in motor if de_fora.search(l)]
+    motor = [l for l in motor if not de_fora.search(l)]
+    return {'eventos': eventos[-60:], 'motor': motor[-60:], 'de_fora': fora[-20:],
             'janela': _linhas_de_erro(CASA / 'interface.log', desde, 40),
             'segundo_plano': _linhas_de_erro(CASA / 'segundo-plano.log', desde, 30),
             'texto_suspeito_removido': int(r.get('suspeitos_total') or 0)}
+
+
+def _turbo_no_envio(t):
+    """O turbo do relatório diz se está parado: a seção guarda o plano de quando ele começou, e um turbo largado no meio aparecia como
+    "concluido: false, feitas: []" para sempre (KTH-67C68B, de uma versão antiga), sem dar para saber se ainda ia continuar."""
+    if not isinstance(t, dict):
+        return t
+    t = dict(t)
+    plano = le_json(ARQ_TURBO, None)
+    if isinstance(plano, dict):
+        t['feitas'] = list(plano.get('feitas') or t.get('feitas') or [])
+        t['concluido'] = bool(plano.get('concluido'))
+        t['criado'] = plano.get('criado')
+    if not t.get('concluido'):
+        try:
+            idade = (datetime.now() - datetime.fromisoformat(str(t.get('criado')))).days
+        except (TypeError, ValueError):
+            idade = None
+        t['situacao'] = 'parado' if idade is None or idade > 2 else 'andando'
+        t['parado_ha_dias'] = idade
+    return t
 
 
 def _env_historico(ctx):
@@ -16847,7 +17023,7 @@ def _env_historico(ctx):
     ver = (sec.get('verificacao') or {}).get('dados') or {}
     aplicacoes = [ev for ev in (rel_carrega().get('eventos') or []) if ev.get('tipo') == 'itens'][-80:]
     return {'pacotes': pacotes, 'aplicacoes': aplicacoes, 'voltaram_sozinhos': ver.get('desvios') or [],
-            'manutencao': (sec.get('manutencao') or {}).get('dados'), 'turbo': (sec.get('turbo') or {}).get('dados'),
+            'manutencao': (sec.get('manutencao') or {}).get('dados'), 'turbo': _turbo_no_envio((sec.get('turbo') or {}).get('dados')),
             'ultimo_ponto': e.get('ultimo_ponto')}
 
 
@@ -17623,6 +17799,41 @@ def abre_por_clique(cru):
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "5.0.1",
+  "data": "23 de novembro de 2026",
+  "resumo": "Corrige o que o relatório de 21/11 (5.0.0) mostrou.",
+  "itens": [
+   {
+    "titulo": "O que só serve para jogo não confunde mais",
+    "texto": "o app do Claude, assistentes, chamadas, acesso remoto e editores que usam a placa de vídeo não viram mais \"sessão de jogo\", e as sessões já gravadas com esses nomes saem do Histórico e das contas de jogo."
+   },
+   {
+    "titulo": "Antes e depois honesto",
+    "texto": "só compara medidas com até 14 dias entre elas, usa a medida mais nova (antes pegava a mais velha) e ignora um turbo que nunca terminou. CPU, clock e temperatura só são comparados se as duas medidas foram na tomada ou as duas na bateria. Quando não dá para comparar, diz por quê."
+   },
+   {
+    "titulo": "Programa com caminho estranho não é tratado como resto",
+    "texto": "um caminho com caractere que o Windows não aceita (como o do Proton VPN) não conta mais como \"o arquivo sumiu\", e o serviço, a tarefa ou a entrada ficam como estão."
+   },
+   {
+    "titulo": "Segundo plano",
+    "texto": "a troca de versão só fecha o ícone se o executável mudou, e tenta de novo quando o Windows ainda segura o arquivo. O PresentMon em uso, medindo um jogo, fica para a próxima vez sem derrubar o resto."
+   },
+   {
+    "titulo": "Atualização sem internet",
+    "texto": "na abertura com o Windows, antes de o Wi-Fi conectar, a falta de rede não conta mais como erro; a próxima conferência tenta de novo."
+   },
+   {
+    "titulo": "Relatório mais útil",
+    "texto": "cada linha de erro leva a data e a versão do Katharos que a escreveu, o tipo do erro vem logo no começo (antes o corte de tamanho o apagava), a mensagem do PowerShell partida em pedaços volta inteira, e o que vem de fora do Katharos (reparo do Windows sem internet, instalador de um programa) vai separado, com dica. Um turbo largado no meio aparece como parado."
+   },
+   {
+    "titulo": "A janela que fecha no meio de um pedido",
+    "texto": "não gera mais um erro por resposta perdida."
+   }
+  ]
+ },
+ {
   "versao": "5.0.0",
   "data": "17 de novembro de 2026",
   "resumo": "Uma versão grande, que junta tudo o que veio dos relatórios e do uso no PC do dono: mais simples, mais segura e com o começo da UI nova.",
@@ -17922,57 +18133,6 @@ NOVIDADES = [
    {
     "titulo": "Visual",
     "texto": "ícones no menu e nas seções, listas com marcador, menos texto, Jogos dentro do Início e animações curtas que respeitam o \"reduzir animações\" do Windows (dá para desligar nas Configurações)."
-   }
-  ]
- },
- {
-  "versao": "4.2.0",
-  "data": "11 de novembro de 2026",
-  "resumo": "Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.",
-  "itens": [
-   {
-    "titulo": "Tela Enviar relatório",
-    "texto": "no menu, no Início e em toda caixa de erro. Você escolhe mandar o relatório, o feedback (problema, ideia, elogio ou outro, com nota de 1 a 5 e um contato opcional para resposta) ou os dois."
-   },
-   {
-    "titulo": "Relatório completo",
-    "texto": "erros do Katharos (motor, janela e acompanhamento), o que foi aplicado e desfeito, o que voltou sozinho, o que cada otimização rendeu medido antes e depois, as suas respostas de \"ajudou\", a saúde do PC, o peso do próprio Katharos e as sessões de jogo. Cada parte pode ser desmarcada."
-   },
-   {
-    "titulo": "Nada pessoal sai",
-    "texto": "nome de usuário, nome do PC, pastas pessoais, e-mail, IP, MAC, chave de produto e identificadores do Windows viram marcadores antes de sair, e partes como portas abertas e arquivos nunca entram. Antes de mandar, você vê o resumo e o texto exato."
-   },
-   {
-    "titulo": "Só sai quando você clica",
-    "texto": "nada é enviado sozinho. Sem internet, o envio fica guardado no PC e você manda depois pela mesma tela. Cada envio recebe um código (KTH-...) que fica na tela e serve para pedir para apagar."
-   },
-   {
-    "titulo": "Sempre dá para ver que está fazendo",
-    "texto": "todo botão que conversa com o motor mostra \"…\" e fica desligado enquanto trabalha (um segundo clique não roda de novo), e a barra lateral acende em âmbar com o que está acontecendo. Ligar o acompanhamento mostra cada passo (\"abrindo\", \"esperando a primeira leitura\") e, num PC lento, diz que já está rodando em vez de parecer travado. Aplicar e desfazer mostram onde aparece o pedido de permissão do Windows, e toda espera longa mostra há quantos segundos está trabalhando."
-   },
-   {
-    "titulo": "Ao vivo mais leve",
-    "texto": "a tela não se refaz mais a cada leitura, só os números mudam, e a leitura do arquivo saiu da linha da janela (um disco lento não trava a tela)."
-   },
-   {
-    "titulo": "Início abre na hora",
-    "texto": "mostra a última leitura e troca quando a nova chega, sem \"carregando\" a cada visita."
-   },
-   {
-    "titulo": "Otimizar não pula",
-    "texto": "a conferência do que já está feito atualiza os itens no lugar, sem refazer a tela (antes a rolagem pulava)."
-   },
-   {
-    "titulo": "Erros que dizem o que fazer",
-    "texto": "cada erro aparece com um título claro (\"O motor do Katharos fechou\", \"Sem permissão para um arquivo\", \"Arquivo em uso\"), o que fazer em seguida, o que aconteceu com o PC, um número de referência e os botões \"Copiar detalhes\" e \"Abrir os registros\". O número também fica no registro, ao lado do erro inteiro. Trocar de modo no Otimizar com erro volta ao modo de antes, e um erro que fecharia o aplicativo fica registrado."
-   },
-   {
-    "titulo": "Novidades ao abrir",
-    "texto": "na primeira abertura depois de atualizar, uma caixa mostra o que mudou desde a última versão que você viu, com o mesmo texto deste histórico. Aparece uma vez só por versão e nunca na primeira instalação. Para rever depois, vá em Configurações > Novidades."
-   },
-   {
-    "titulo": "Esc fecha as caixas",
-    "texto": "as caixas de aviso e de resultado também fecham com a tecla Esc."
    }
   ]
  }

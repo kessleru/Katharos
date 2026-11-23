@@ -23,6 +23,25 @@ public static class Atualizacao
 
     static string canal = "estavel";
 
+    /// <summary>
+    /// Sem rede agora (abertura com o Windows antes de o Wi-Fi conectar, internet caída, conexão segura que não fechou): não é defeito do
+    /// Katharos. Vai para o registro sem as palavras que o relatório conta como erro, e a próxima conferência tenta de novo.
+    /// Relatório KTH-67C68B: "The SSL connection could not be established" três vezes, todas na abertura com o Windows.
+    /// </summary>
+    public static bool SemRede(Exception? e)
+    {
+        for (var x = e; x != null; x = x.InnerException)
+        {
+            if (x is System.Net.Http.HttpRequestException || x is System.Security.Authentication.AuthenticationException ||
+                x is System.Net.Sockets.SocketException || x is TaskCanceledException || x is TimeoutException || x is System.IO.IOException) return true;
+            if (x is AggregateException a)
+                foreach (var i in a.InnerExceptions) if (SemRede(i)) return true;
+        }
+        return false;
+    }
+
+    static string Motivo(Exception e) => SemRede(e) ? "sem internet agora; confere de novo mais tarde" : e.Message;
+
     static UpdateManager? Gerente()
     {
         if (Servico.Exemplo) return null;
@@ -61,7 +80,7 @@ public static class Atualizacao
             if (modo == "automatico") NaProximaVez();
             else Pergunta?.Invoke(VersaoPronta!);
         }
-        catch (Exception e) { Registro.Escreve("atualização: " + e.Message); }
+        catch (Exception e) { Registro.Escreve("atualização: " + Motivo(e)); }
     }
 
     /// <summary>
@@ -88,7 +107,7 @@ public static class Atualizacao
             SegundoPlano.PedeParaSair(reabrir: true);
             g.ApplyUpdatesAndRestart(t.Result.TargetFullRelease, new[] { "--tela", "inicio" });
         }
-        catch (Exception e) { Registro.Escreve("abertura com o Windows: " + e.Message); }
+        catch (Exception e) { Registro.Escreve("abertura com o Windows: " + Motivo(e)); }
     }
 
     /// <summary>A versão nova entra quando a janela fechar (sem perguntar de novo); a versão nova abre só para religar o segundo plano.</summary>
@@ -98,7 +117,7 @@ public static class Atualizacao
         if (g == null || pronta == null || AoFechar) return;
         AoFechar = true;
         try { g.WaitExitThenApplyUpdates(pronta.TargetFullRelease, silent: true, restart: true, new[] { "--depois-da-troca" }); }
-        catch (Exception e) { AoFechar = false; Registro.Escreve("atualização: na próxima vez: " + e.Message); }
+        catch (Exception e) { AoFechar = false; Registro.Escreve("atualização: na próxima vez: " + Motivo(e)); }
     }
 
     /// <summary>Reinicia já na versão nova (o botão "Reiniciar agora").</summary>

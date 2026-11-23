@@ -210,6 +210,8 @@ DICAS_ERRO = [
     (r'protegido pelo windows|protected', 'o Windows protege este item; não dá para mudar'),
     (r'no space|disco cheio|0x80070070', 'sem espaço no disco: libere espaço e tente de novo'),
     (r'0x800f0922|0x80073712|corrupt', 'arquivos do Windows com problema: rode "reparar"'),
+    (r'0x800f0(?:915|906|81f)', 'o Windows não achou de onde baixar o reparo (precisa de internet): conecte e rode "reparar" de novo'),
+    (r'instalador falhou com o c[oó]digo|installer failed with exit code', 'o instalador do próprio programa falhou: atualize esse programa pelo site dele'),
 ]
 
 
@@ -266,7 +268,10 @@ def rel_md(r):
 
     if 'antes_depois' in S:
         a = S['antes_depois']
-        L += ['## Antes e depois', ''] + _tab(['Medida', 'Antes', 'Depois', 'Mudou'], a.get('linhas', []))
+        if a.get('comparavel') is False:
+            L += ['## Antes e depois', '', f'Sem comparação: {_q(a.get("motivo", ""))}.', '']
+        else:
+            L += ['## Antes e depois', ''] + _tab(['Medida', 'Antes', 'Depois', 'Mudou'], a.get('linhas', []))
         if a.get('livre_gb') is not None:
             L += [f'Espaço liberado nas limpezas registradas: {br(a.get("livre_gb"), 1)} GB.', '']
     if ras:

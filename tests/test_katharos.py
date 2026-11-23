@@ -4408,3 +4408,142 @@ class TestCatalogo500(unittest.TestCase):
             itens = k.autoteste(types.SimpleNamespace(t=None))
         self.assertTrue(itens)
         self.assertTrue(all({'nome', 'ok', 'detalhe'} <= set(x) for x in itens))
+
+
+class TestRelatorio501(unittest.TestCase):
+    """O que a leitura do relatório KTH-67C68B (21/11, 5.0.0) pediu."""
+
+    def test_linha_de_erro_tem_data_versao_e_o_tipo_do_erro(self):
+        with tempfile.TemporaryDirectory() as d:
+            arq = Path(d) / '2026-11-21.log'
+            arq.write_text(
+                '14:00:00 @@katharos|5.0.0|123\n'
+                "14:05:30 api {'id': 7, 'metodo': 'segundo_plano', 'params': {'ligar': True}}: Traceback (most recent call last):\n"
+                '  File "x\\katharos.py", line 14501, in responde_api\n'
+                "    canal.manda({'id': id_, 'ok': True, 'dados': dados})\n"
+                '    ~~~~~~~~~~~^^^^^^^^^^^^^^^\n'
+                'OSError: [Errno 22] Invalid argument\n', encoding='utf-8')
+            l = k._linhas_de_erro(arq, datetime(2000, 1, 1), 60, '2026-11-21')
+        self.assertEqual(len(l), 1)
+        self.assertTrue(l[0].startswith('2026-11-21 14:05:30 v5.0.0 api'), l[0])
+        self.assertIn('OSError: [Errno 22]', l[0][:320], 'o tipo do erro vem antes do corte de 300 letras do envio')
+        self.assertNotIn('~~~', l[0])
+
+    def test_erro_do_powershell_partido_volta_inteiro(self):
+        with tempfile.TemporaryDirectory() as d:
+            arq = Path(d) / '2026-11-21.log'
+            arq.write_text('00:11:31   New-ItemProperty : Tentativa de executar uma operação não autorizada. CategoryInfo : PermissionDenied: (x), Unautho\n'
+                           '00:11:31   rizedAccessException\n'
+                           '00:11:31   + FullyQualifiedErrorId : System.UnauthorizedAccessException\n', encoding='utf-8')
+            l = k._linhas_de_erro(arq, datetime(2000, 1, 1), 60, '2026-11-21')
+        self.assertEqual(len(l), 2, l)
+        self.assertIn('UnauthorizedAccessException', l[0])
+        self.assertFalse(any(x.rstrip().endswith(' rizedAccessException') for x in l))
+
+    def test_log_marca_a_versao_uma_vez_por_processo(self):
+        with tempfile.TemporaryDirectory() as d:
+            lg = k.Log()
+            lg.arq = Path(d) / 'x.log'
+            lg.escreve('a')
+            lg.escreve('b')
+            linhas = lg.arq.read_text(encoding='utf-8').splitlines()
+        self.assertEqual(sum('@@katharos|' + k.VERSAO in x for x in linhas), 1)
+        self.assertEqual(len(linhas), 3)
+
+    def test_erro_de_fora_vai_separado(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)), mock.patch.object(k, 'rel_carrega', return_value={}):
+            (Path(d) / 'logs').mkdir()
+            (Path(d) / 'logs' / '2026-11-21.log').write_text('10:00:00 Erro: 0x800f0915\n10:00:01 O instalador falhou com o código de saída: 6\n'
+                                                             '10:00:02 algo deu erro de verdade\n', encoding='utf-8')
+            e = k._env_erros(None)
+        self.assertEqual(len(e['de_fora']), 2)
+        self.assertEqual(len(e['motor']), 1)
+        self.assertIn('reparo', k.dica_erro('Erro: 0x800f0915'))
+
+    def test_antes_e_depois_so_com_medidas_da_mesma_epoca(self):
+        velho = {'quando': '2026-10-30T10:00:00', 'livre_c': 21.2, 'cpu': 12}
+        novo = {'quando': '2026-11-21T10:00:00', 'livre_c': 126.7, 'cpu': 42}
+        self.assertFalse(k.comparaveis(velho, novo)[0])
+        self.assertFalse(k.comparaveis({'cpu': 1}, novo)[0], 'sem data não compara')
+        self.assertTrue(k.comparaveis(dict(velho, quando='2026-11-20T10:00:00'), novo)[0])
+        tomada = dict(novo, na_tomada=True)
+        bateria = dict(novo, quando='2026-11-21T11:00:00', na_tomada=False, cpu=30)
+        rots = [l[0] for l in k.linhas_antes_depois(tomada, bateria)]
+        self.assertNotIn('CPU em repouso', rots, 'tomada contra bateria não compara CPU')
+        self.assertIn('livre em C:', rots)
+
+    def test_medida_de_referencia_e_a_mais_nova(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)):
+            m = Path(d) / 'medidas'
+            m.mkdir()
+            (m / '2026-11-09-100000-antes.json').write_text('{"cpu": 1}', encoding='utf-8')
+            (m / '2026-11-20-100000-antes.json').write_text('{"cpu": 2}', encoding='utf-8')
+            r = k.medida_ref('-antes')
+        self.assertEqual(r['cpu'], 2)
+        self.assertEqual(r['_arquivo_em'], '2026-11-20T10:00:00')
+
+    def test_app_que_usa_gpu_nao_vira_jogo(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'CASA', Path(d)):
+            agora = datetime.now()
+            with open(Path(d) / 'sessoes.jsonl', 'w', encoding='utf-8') as f:
+                for jogo in ('claude', 'javaw', 'Claude'):
+                    f.write(json.dumps({'jogo': jogo, 'inicio': agora.isoformat(timespec='seconds'), 'min': 10}) + '\n')
+            ss = k.le_sessoes(30)
+        self.assertEqual([s['jogo'] for s in ss], ['javaw'])
+        cs = (RAIZ / 'exe' / 'Katharos.cs').read_text(encoding='utf-8')
+        bloco = cs[cs.index('NAO_JOGO = new HashSet'):cs.index('};', cs.index('NAO_JOGO = new HashSet'))]
+        for nome in k.NAO_SAO_JOGO:
+            self.assertIn(f'"{nome}"', bloco, f'{nome} precisa estar também no NAO_JOGO do Katharos.exe')
+
+    def test_copia_pula_arquivo_igual_e_tenta_de_novo_em_uso(self):
+        with tempfile.TemporaryDirectory() as d:
+            a, b = Path(d) / 'a.exe', Path(d) / 'b.exe'
+            a.write_bytes(b'x' * 10)
+            b.write_bytes(b'x' * 10)
+            self.assertFalse(k.copia_se_mudou(a, b), 'igual: não copia nem fecha o segundo plano')
+            a.write_bytes(b'y' * 10)
+            tentativas = []
+            real = k.shutil.copy2
+            def copia(o, dd):
+                tentativas.append(1)
+                if len(tentativas) < 3:
+                    raise PermissionError(13, 'em uso')
+                return real(o, dd)
+            with mock.patch.object(k.shutil, 'copy2', side_effect=copia):
+                self.assertTrue(k.copia_se_mudou(a, b, espera=lambda s: None))
+            self.assertEqual(len(tentativas), 3)
+            self.assertEqual(b.read_bytes(), b'y' * 10)
+
+    def test_canal_fechado_nao_vira_traceback(self):
+        class Cano:
+            def write(self, s):
+                raise OSError(22, 'Invalid argument')
+            def flush(self):
+                pass
+        c = k.CanalApi(Cano())
+        with mock.patch.object(k.LOG, 'escreve') as lg:
+            c.manda({'id': 1, 'ok': True})
+            c.manda({'id': 2, 'ok': True})
+        self.assertTrue(c.fechado)
+        self.assertEqual(lg.call_count, 1)
+
+    def test_caminho_invalido_nao_conta_como_sumido(self):
+        self.assertIn('function ArquivoSumiu', k.PRELUDIO_PS)
+        self.assertIn('catch { return $false }', k.PRELUDIO_PS)
+        fonte = (RAIZ / 'partes' / '30-conhecer.py').read_text(encoding='utf-8') + (RAIZ / 'partes' / '50-pacotes.py').read_text(encoding='utf-8')
+        self.assertNotIn('-not (Test-Path -LiteralPath $exe)', fonte, 'serviço, tarefa e desinstalador órfão usam ArquivoSumiu')
+        self.assertNotIn("-not (Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($exe)))", fonte)
+
+    def test_turbo_largado_aparece_parado(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(k, 'ARQ_TURBO', Path(d) / 'turbo.json'):
+            t = k._turbo_no_envio({'modo': 'equilibrado', 'feitas': [], 'concluido': False})
+        self.assertEqual(t['situacao'], 'parado')
+
+    def test_atualizacao_sem_rede_nao_conta_como_erro(self):
+        cs = (RAIZ / 'app' / 'Katharos.App' / 'Atualizacao.cs').read_text(encoding='utf-8')
+        self.assertIn('static bool SemRede', cs)
+        self.assertEqual(cs.count('+ e.Message)'), 1, 'só o erro de criar o gerente fica com a mensagem crua')
+        frase = 'sem internet agora; confere de novo mais tarde'
+        self.assertIn(frase, cs)
+        chave = re.compile(r'\berr(?:o|or)\b|traceback|exception|falh(?:a|ou)|n[aã]o (?:deu|abriu|ligou|conseguiu)|interno|fechou por', re.I)
+        self.assertFalse(chave.search(frase), 'a frase não pode cair no filtro de erros do relatório')

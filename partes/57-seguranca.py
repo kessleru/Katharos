@@ -639,11 +639,39 @@ def ferramenta_segredos(ctx, args):
 
 # ─────────────── cartão de resultado ───────────────
 
+ANTES_DEPOIS_MAX_DIAS = 14
+# o que muda com a tomada: na bateria o Windows segura o clock e a CPU parece outra
+MEDIDAS_DE_ENERGIA = ('cpu', 'kernel', 'desempenho', 'temperatura', 'gpu_uso')
+
+
+def _quando_medida(m):
+    try:
+        return datetime.fromisoformat(str(m.get('quando') or m.get('_arquivo_em') or ''))
+    except ValueError:
+        return None
+
+
+def comparaveis(antes, depois):
+    """(dá para comparar, motivo). Medidas com mais de 14 dias entre elas, ou uma das duas sem data, não viram "antes e depois":
+    o relatório de 21/11 comparava uma medida da 1.4.1 (livre 21 GB) com uma de hoje (livre 126 GB)."""
+    a, d = _quando_medida(antes), _quando_medida(depois)
+    if not a or not d:
+        return False, 'uma das medidas não tem data'
+    dias = abs((d - a).total_seconds()) / 86400
+    if dias > ANTES_DEPOIS_MAX_DIAS:
+        return False, f'as medidas têm {int(dias)} dias entre elas'
+    return True, ''
+
+
 def linhas_antes_depois(antes, depois):
+    """[medida, antes, depois, mudou]. CPU, clock, temperatura e GPU só entram se as duas medidas foram na tomada ou as duas na bateria."""
     out = []
+    energia_igual = antes.get('na_tomada') is None or depois.get('na_tomada') is None or antes.get('na_tomada') == depois.get('na_tomada')
     for chave, rot, un, melhor in LINHAS_MEDIDA:
         a, b = antes.get(chave), depois.get(chave)
         if a is None and b is None:
+            continue
+        if chave in MEDIDAS_DE_ENERGIA and not energia_igual:
             continue
         dif = ''
         if isinstance(a, (int, float)) and isinstance(b, (int, float)) and a != b:
@@ -654,8 +682,15 @@ def linhas_antes_depois(antes, depois):
 
 
 def medida_ref(nome_parte):
+    """A medida MAIS NOVA com esse nome (antes pegava a mais velha), com a data do arquivo quando ela não guarda a própria."""
     arqs = [a for a in medidas_salvas() if nome_parte in a.name]
-    return le_json(arqs[0], {}) if arqs else {}
+    if not arqs:
+        return {}
+    m = le_json(arqs[-1], {}) or {}
+    mm = re.match(r'^(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)(\d\d)', arqs[-1].name)
+    if isinstance(m, dict) and mm and not m.get('quando'):
+        m['_arquivo_em'] = '{}-{}-{}T{}:{}:{}'.format(*mm.groups())
+    return m if isinstance(m, dict) else {}
 
 
 def livre_total_gb():
@@ -672,7 +707,9 @@ def ferramenta_cartao(ctx, args):
     t = ctx.t
     t.aba('o antes e depois deste PC, num cartão para mostrar')
     plano = le_json(ARQ_TURBO, None) or {}
-    antes = plano.get('antes') or medida_ref('-antes') or medida_ref('-raiox') or (le_json(medidas_salvas()[0], {}) if medidas_salvas() else {})
+    if not plano.get('concluido'):   # um turbo que nunca terminou não é o "antes" de nada
+        plano = {}
+    antes = plano.get('antes') or medida_ref('-antes') or medida_ref('-raiox')
     depois = plano.get('depois') or medida_ref('-depois')
     if not depois:
         if not WINDOWS:
@@ -683,6 +720,11 @@ def ferramenta_cartao(ctx, args):
     if not antes:
         t.aviso('Ainda não há uma medida de antes. Rode o raio-x ou o turbo antes de mexer em algo, e depois volte aqui.')
         return 0
+    ok, motivo = comparaveis(antes, depois)
+    if not ok:
+        t.aviso(f'Não dá para comparar: {motivo}. Rode o raio-x agora e de novo depois de aplicar algo.')
+        rel_secao('antes_depois', {'linhas': [], 'comparavel': False, 'motivo': motivo})
+        return 0
     linhas = linhas_antes_depois(antes, depois)
     livre = livre_total_gb()
     t.titulo('antes e depois', caixa=True)
@@ -691,7 +733,8 @@ def ferramenta_cartao(ctx, args):
     t.chaves([('espaço liberado nas limpezas', f'{br(livre, 1)} GB'), ('pacotes ativos', ', '.join(ativos) or 'nenhum'),
               ('desfazer', 'katharos desfazer tudo')])
     t.fecha_caixa()
-    rel_secao('antes_depois', {'linhas': linhas, 'livre_gb': livre, 'pacotes': ativos})
+    rel_secao('antes_depois', {'linhas': linhas, 'livre_gb': livre, 'pacotes': ativos, 'comparavel': True,
+                               'antes_em': str(antes.get('quando') or antes.get('_arquivo_em') or ''), 'depois_em': str(depois.get('quando') or '')})
     if getattr(args, 'copiar', False):
         return 0
     if t.interativo and not args.sim:

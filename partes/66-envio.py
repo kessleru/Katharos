@@ -123,28 +123,70 @@ def _texto_livre(s, trocas, n=4000):
 
 # ── o que cada seção leva ──
 
-def _linhas_de_erro(arq, desde, maximo=40):
-    """As linhas de erro de um registro (com as linhas de pilha logo abaixo), das mais novas para trás, desde uma data."""
+_CABECA_LOG = re.compile(r'^\d\d:\d\d:\d\d @@katharos\|([^|]+)\|')
+_TROCA_VERSAO = re.compile(r'^\d\d:\d\d:\d\d versão: \S+ -[>›] ([^\s,]+)')
+_FIM_DA_PILHA = re.compile(r'^[A-Za-z_][\w.]*(?:Error|Exception|Exit|Interrupt|Warning)\b')
+_HORA = re.compile(r'^(\d\d:\d\d:\d\d) (.*)$')
+_NAO_CONTINUA = ('+', '@@', 'At ', 'Em ', 'No ', 'Na ', 'Traceback', 'File ', '~', '-', '#')
+
+
+def _junta_partidas(linhas):
+    """O PowerShell quebra a mensagem de erro na largura da tela, no meio da palavra ("...Unautho" e "rizedAccessException"). Cada pedaço
+    entra no log como uma linha com a mesma hora: junta de volta o pedaço que continua uma linha longa do mesmo segundo."""
+    out = []
+    for l in linhas:
+        m, a = _HORA.match(l), (_HORA.match(out[-1]) if out else None)
+        if m and a and m.group(1) == a.group(1) and m.group(2).startswith('  ') and a.group(2).startswith('  '):
+            ant, cont = a.group(2).strip(), m.group(2).strip()
+            if len(ant) >= 60 and cont and not cont.startswith(_NAO_CONTINUA) and not ant.startswith('@@'):
+                out[-1] = out[-1] + cont
+                continue
+        out.append(l)
+    return out
+
+
+def _linhas_de_erro(arq, desde, maximo=40, dia=None):
+    """As linhas de erro de um registro, das mais novas para trás, desde uma data. Cada uma leva a data (a do arquivo, quando o
+    registro só guarda a hora) e a versão do Katharos que a escreveu; um traceback leva a última linha (o tipo do erro) logo depois
+    da primeira, para o corte de tamanho do envio não apagar justamente o que diz o que deu errado."""
     try:
         if not arq.is_file() or datetime.fromtimestamp(arq.stat().st_mtime) < desde:
             return []
         with open(arq, encoding='utf-8', errors='replace') as f:
-            linhas = f.read().splitlines()[-4000:]
+            linhas = _junta_partidas(f.read().splitlines()[-4000:])
     except OSError:
         return []
     chave = re.compile(r'\berr(?:o|or)\b|traceback|exception|falh(?:a|ou)|n[aã]o (?:deu|abriu|ligou|conseguiu)|interno|fechou por', re.I)
-    out, i = [], 0
+    out, i, versao = [], 0, None
     while i < len(linhas):
-        if chave.search(linhas[i]):
-            bloco = [linhas[i]]
-            j = i + 1
-            while j < len(linhas) and j - i <= 8 and (linhas[j].startswith((' ', '\t')) or linhas[j].startswith(('Traceback', 'File'))):
-                bloco.append(linhas[j].strip())
-                j += 1
-            out.append(' ⏎ '.join(bloco))
-            i = j
-        else:
+        l = linhas[i]
+        m = _CABECA_LOG.match(l) or _TROCA_VERSAO.match(l)
+        if m:
+            versao = m.group(1)
             i += 1
+            continue
+        if not chave.search(l):
+            i += 1
+            continue
+        pilha, fim, j = [], None, i + 1
+        while j < len(linhas) and j - i <= 60:
+            c = linhas[j]
+            if c.startswith((' ', '\t', 'Traceback', 'File')):
+                if c.strip(' ~^'):   # a linha de ~~~^^^ só sublinha a de cima
+                    pilha.append(c.strip())
+                j += 1
+                continue
+            if pilha and _FIM_DA_PILHA.match(c):
+                fim = c.strip()
+                j += 1
+            break
+        cab = l if not fim else (l if len(l) <= 160 else l[:159] + '…')
+        if dia and _HORA.match(cab):
+            cab = f'{dia} {cab}'
+        if versao:
+            cab = re.sub(r'^((?:\d{4}-\d\d-\d\d )?\d\d:\d\d:\d\d)', rf'\1 v{versao}', cab, count=1)
+        out.append(' ⏎ '.join([cab] + ([fim] if fim else []) + pilha[-6:]))
+        i = j
     return out[-maximo:]
 
 
@@ -212,13 +254,39 @@ def _env_erros(ctx):
     logs = sorted(pasta('logs').glob('*.log'))[-30:]
     motor = []
     # o log do motor também guarda dados e passos (@@dado, @@secao, @@feito, versão: ...) que só citam a palavra erro: não são erro
-    so_registro = re.compile(r'^\d\d:\d\d:\d\d\s+(?:@@(?:dado|secao|feito|info|plano|ok)\b|versão: )')
+    so_registro = re.compile(r'^(?:\d{4}-\d\d-\d\d )?\d\d:\d\d:\d\d(?: v\S+)?\s+(?:@@(?:dado|secao|feito|info|plano|ok|katharos)\b|versão: )')
+    # o que vem de fora (o DISM sem fonte de reparo, o instalador de um programa pelo winget) vai separado: não é defeito do Katharos
+    de_fora = re.compile(r'0x800f0(?:915|906|81f)|instalador falhou com o c[oó]digo|installer failed with exit code', re.I)
     for arq in logs:
-        motor.extend(l for l in _linhas_de_erro(arq, desde, 60) if not so_registro.match(l))
-    return {'eventos': eventos[-60:], 'motor': motor[-60:],
+        dia = arq.stem if re.match(r'^\d{4}-\d\d-\d\d$', arq.stem) else None
+        motor.extend(l for l in _linhas_de_erro(arq, desde, 60, dia) if not so_registro.match(l))
+    fora = [l for l in motor if de_fora.search(l)]
+    motor = [l for l in motor if not de_fora.search(l)]
+    return {'eventos': eventos[-60:], 'motor': motor[-60:], 'de_fora': fora[-20:],
             'janela': _linhas_de_erro(CASA / 'interface.log', desde, 40),
             'segundo_plano': _linhas_de_erro(CASA / 'segundo-plano.log', desde, 30),
             'texto_suspeito_removido': int(r.get('suspeitos_total') or 0)}
+
+
+def _turbo_no_envio(t):
+    """O turbo do relatório diz se está parado: a seção guarda o plano de quando ele começou, e um turbo largado no meio aparecia como
+    "concluido: false, feitas: []" para sempre (KTH-67C68B, de uma versão antiga), sem dar para saber se ainda ia continuar."""
+    if not isinstance(t, dict):
+        return t
+    t = dict(t)
+    plano = le_json(ARQ_TURBO, None)
+    if isinstance(plano, dict):
+        t['feitas'] = list(plano.get('feitas') or t.get('feitas') or [])
+        t['concluido'] = bool(plano.get('concluido'))
+        t['criado'] = plano.get('criado')
+    if not t.get('concluido'):
+        try:
+            idade = (datetime.now() - datetime.fromisoformat(str(t.get('criado')))).days
+        except (TypeError, ValueError):
+            idade = None
+        t['situacao'] = 'parado' if idade is None or idade > 2 else 'andando'
+        t['parado_ha_dias'] = idade
+    return t
 
 
 def _env_historico(ctx):
@@ -233,7 +301,7 @@ def _env_historico(ctx):
     ver = (sec.get('verificacao') or {}).get('dados') or {}
     aplicacoes = [ev for ev in (rel_carrega().get('eventos') or []) if ev.get('tipo') == 'itens'][-80:]
     return {'pacotes': pacotes, 'aplicacoes': aplicacoes, 'voltaram_sozinhos': ver.get('desvios') or [],
-            'manutencao': (sec.get('manutencao') or {}).get('dados'), 'turbo': (sec.get('turbo') or {}).get('dados'),
+            'manutencao': (sec.get('manutencao') or {}).get('dados'), 'turbo': _turbo_no_envio((sec.get('turbo') or {}).get('dados')),
             'ultimo_ponto': e.get('ultimo_ponto')}
 
 

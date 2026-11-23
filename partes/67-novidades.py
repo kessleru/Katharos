@@ -1,6 +1,41 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "5.0.1",
+  "data": "23 de novembro de 2026",
+  "resumo": "Corrige o que o relatório de 21/11 (5.0.0) mostrou.",
+  "itens": [
+   {
+    "titulo": "O que só serve para jogo não confunde mais",
+    "texto": "o app do Claude, assistentes, chamadas, acesso remoto e editores que usam a placa de vídeo não viram mais \"sessão de jogo\", e as sessões já gravadas com esses nomes saem do Histórico e das contas de jogo."
+   },
+   {
+    "titulo": "Antes e depois honesto",
+    "texto": "só compara medidas com até 14 dias entre elas, usa a medida mais nova (antes pegava a mais velha) e ignora um turbo que nunca terminou. CPU, clock e temperatura só são comparados se as duas medidas foram na tomada ou as duas na bateria. Quando não dá para comparar, diz por quê."
+   },
+   {
+    "titulo": "Programa com caminho estranho não é tratado como resto",
+    "texto": "um caminho com caractere que o Windows não aceita (como o do Proton VPN) não conta mais como \"o arquivo sumiu\", e o serviço, a tarefa ou a entrada ficam como estão."
+   },
+   {
+    "titulo": "Segundo plano",
+    "texto": "a troca de versão só fecha o ícone se o executável mudou, e tenta de novo quando o Windows ainda segura o arquivo. O PresentMon em uso, medindo um jogo, fica para a próxima vez sem derrubar o resto."
+   },
+   {
+    "titulo": "Atualização sem internet",
+    "texto": "na abertura com o Windows, antes de o Wi-Fi conectar, a falta de rede não conta mais como erro; a próxima conferência tenta de novo."
+   },
+   {
+    "titulo": "Relatório mais útil",
+    "texto": "cada linha de erro leva a data e a versão do Katharos que a escreveu, o tipo do erro vem logo no começo (antes o corte de tamanho o apagava), a mensagem do PowerShell partida em pedaços volta inteira, e o que vem de fora do Katharos (reparo do Windows sem internet, instalador de um programa) vai separado, com dica. Um turbo largado no meio aparece como parado."
+   },
+   {
+    "titulo": "A janela que fecha no meio de um pedido",
+    "texto": "não gera mais um erro por resposta perdida."
+   }
+  ]
+ },
+ {
   "versao": "5.0.0",
   "data": "17 de novembro de 2026",
   "resumo": "Uma versão grande, que junta tudo o que veio dos relatórios e do uso no PC do dono: mais simples, mais segura e com o começo da UI nova.",
@@ -300,57 +335,6 @@ NOVIDADES = [
    {
     "titulo": "Visual",
     "texto": "ícones no menu e nas seções, listas com marcador, menos texto, Jogos dentro do Início e animações curtas que respeitam o \"reduzir animações\" do Windows (dá para desligar nas Configurações)."
-   }
-  ]
- },
- {
-  "versao": "4.2.0",
-  "data": "11 de novembro de 2026",
-  "resumo": "Agora dá para mandar um relatório, a sua opinião, ou os dois, direto da janela. É com isso que o Katharos vai melhorar: os erros que aparecem nos PCs de verdade e o que cada otimização rende em cada um.",
-  "itens": [
-   {
-    "titulo": "Tela Enviar relatório",
-    "texto": "no menu, no Início e em toda caixa de erro. Você escolhe mandar o relatório, o feedback (problema, ideia, elogio ou outro, com nota de 1 a 5 e um contato opcional para resposta) ou os dois."
-   },
-   {
-    "titulo": "Relatório completo",
-    "texto": "erros do Katharos (motor, janela e acompanhamento), o que foi aplicado e desfeito, o que voltou sozinho, o que cada otimização rendeu medido antes e depois, as suas respostas de \"ajudou\", a saúde do PC, o peso do próprio Katharos e as sessões de jogo. Cada parte pode ser desmarcada."
-   },
-   {
-    "titulo": "Nada pessoal sai",
-    "texto": "nome de usuário, nome do PC, pastas pessoais, e-mail, IP, MAC, chave de produto e identificadores do Windows viram marcadores antes de sair, e partes como portas abertas e arquivos nunca entram. Antes de mandar, você vê o resumo e o texto exato."
-   },
-   {
-    "titulo": "Só sai quando você clica",
-    "texto": "nada é enviado sozinho. Sem internet, o envio fica guardado no PC e você manda depois pela mesma tela. Cada envio recebe um código (KTH-...) que fica na tela e serve para pedir para apagar."
-   },
-   {
-    "titulo": "Sempre dá para ver que está fazendo",
-    "texto": "todo botão que conversa com o motor mostra \"…\" e fica desligado enquanto trabalha (um segundo clique não roda de novo), e a barra lateral acende em âmbar com o que está acontecendo. Ligar o acompanhamento mostra cada passo (\"abrindo\", \"esperando a primeira leitura\") e, num PC lento, diz que já está rodando em vez de parecer travado. Aplicar e desfazer mostram onde aparece o pedido de permissão do Windows, e toda espera longa mostra há quantos segundos está trabalhando."
-   },
-   {
-    "titulo": "Ao vivo mais leve",
-    "texto": "a tela não se refaz mais a cada leitura, só os números mudam, e a leitura do arquivo saiu da linha da janela (um disco lento não trava a tela)."
-   },
-   {
-    "titulo": "Início abre na hora",
-    "texto": "mostra a última leitura e troca quando a nova chega, sem \"carregando\" a cada visita."
-   },
-   {
-    "titulo": "Otimizar não pula",
-    "texto": "a conferência do que já está feito atualiza os itens no lugar, sem refazer a tela (antes a rolagem pulava)."
-   },
-   {
-    "titulo": "Erros que dizem o que fazer",
-    "texto": "cada erro aparece com um título claro (\"O motor do Katharos fechou\", \"Sem permissão para um arquivo\", \"Arquivo em uso\"), o que fazer em seguida, o que aconteceu com o PC, um número de referência e os botões \"Copiar detalhes\" e \"Abrir os registros\". O número também fica no registro, ao lado do erro inteiro. Trocar de modo no Otimizar com erro volta ao modo de antes, e um erro que fecharia o aplicativo fica registrado."
-   },
-   {
-    "titulo": "Novidades ao abrir",
-    "texto": "na primeira abertura depois de atualizar, uma caixa mostra o que mudou desde a última versão que você viu, com o mesmo texto deste histórico. Aparece uma vez só por versão e nunca na primeira instalação. Para rever depois, vá em Configurações > Novidades."
-   },
-   {
-    "titulo": "Esc fecha as caixas",
-    "texto": "as caixas de aviso e de resultado também fecham com a tecla Esc."
    }
   ]
  }

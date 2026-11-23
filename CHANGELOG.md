@@ -18,6 +18,18 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 5.0.1 · 23 de novembro de 2026
+
+Corrige o que o relatório de 21/11 (5.0.0) mostrou.
+
+- **O que só serve para jogo não confunde mais**: o app do Claude, assistentes, chamadas, acesso remoto e editores que usam a placa de vídeo não viram mais "sessão de jogo", e as sessões já gravadas com esses nomes saem do Histórico e das contas de jogo.
+- **Antes e depois honesto**: só compara medidas com até 14 dias entre elas, usa a medida mais nova (antes pegava a mais velha) e ignora um turbo que nunca terminou. CPU, clock e temperatura só são comparados se as duas medidas foram na tomada ou as duas na bateria. Quando não dá para comparar, diz por quê.
+- **Programa com caminho estranho não é tratado como resto**: um caminho com caractere que o Windows não aceita (como o do Proton VPN) não conta mais como "o arquivo sumiu", e o serviço, a tarefa ou a entrada ficam como estão.
+- **Segundo plano**: a troca de versão só fecha o ícone se o executável mudou, e tenta de novo quando o Windows ainda segura o arquivo. O PresentMon em uso, medindo um jogo, fica para a próxima vez sem derrubar o resto.
+- **Atualização sem internet**: na abertura com o Windows, antes de o Wi-Fi conectar, a falta de rede não conta mais como erro; a próxima conferência tenta de novo.
+- **Relatório mais útil**: cada linha de erro leva a data e a versão do Katharos que a escreveu, o tipo do erro vem logo no começo (antes o corte de tamanho o apagava), a mensagem do PowerShell partida em pedaços volta inteira, e o que vem de fora do Katharos (reparo do Windows sem internet, instalador de um programa) vai separado, com dica. Um turbo largado no meio aparece como parado.
+- **A janela que fecha no meio de um pedido** não gera mais um erro por resposta perdida.
+
 ## 5.0.0 · 17 de novembro de 2026
 
 Uma versão grande, que junta tudo o que veio dos relatórios e do uso no PC do dono: mais simples, mais segura e com o começo da UI nova.

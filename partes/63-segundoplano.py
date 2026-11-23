@@ -197,6 +197,26 @@ Unregister-ScheduledTask -TaskName «nome» -Confirm:$false -ErrorAction Silentl
         return False
 
 
+def copia_se_mudou(origem, destino, tentativas=6, espera=time.sleep):
+    """Copia só se o conteúdo mudou (True se copiou). O Windows ainda segura o .exe por um instante depois de o segundo plano soltar o
+    mutex, e o PresentMon fica preso enquanto mede um jogo: "arquivo em uso" (erro 32) tenta de novo por uns segundos antes de desistir."""
+    origem, destino = Path(origem), Path(destino)
+    try:
+        if destino.is_file() and destino.stat().st_size == origem.stat().st_size and sha256_de(origem) == sha256_de(destino):
+            return False
+    except OSError:
+        pass
+    for i in range(tentativas):
+        try:
+            shutil.copy2(origem, destino)
+            return True
+        except PermissionError:
+            if i == tentativas - 1:
+                raise
+            espera(0.5 * (i + 1))
+    return False
+
+
 def instala_segundo_plano(ctx, mostrar=True, quieto=False):
     """Copia o executável e o programa para ~/.katharos (sobrevivem a apagar a pasta do zip), grava a config, liga ao entrar no Windows,
     tira o ícone antigo (PowerShell) e abre. Devolve False se não há executável (rodando só o katharos.py)."""
@@ -208,14 +228,23 @@ def instala_segundo_plano(ctx, mostrar=True, quieto=False):
     try:
         CASA.mkdir(parents=True, exist_ok=True)
         if Path(__file__).resolve() != (CASA / 'katharos.py').resolve():
-            shutil.copy2(Path(__file__).resolve(), CASA / 'katharos.py')
+            copia_se_mudou(Path(__file__).resolve(), CASA / 'katharos.py')
         if origem.resolve() != destino.resolve():
-            if destino.is_file() and sp_rodando():
-                sp_para()
-            shutil.copy2(origem, destino)
+            igual = False
+            try:
+                igual = destino.is_file() and sha256_de(origem) == sha256_de(destino)
+            except OSError:
+                pass
+            if not igual:   # só fecha o segundo plano se o executável mudou de verdade
+                if destino.is_file() and sp_rodando():
+                    sp_para()
+                copia_se_mudou(origem, destino)
         pm = origem.with_name('PresentMon.exe')
         if pm.is_file() and pm.resolve() != (CASA / 'PresentMon.exe').resolve():
-            shutil.copy2(pm, CASA / 'PresentMon.exe')   # FPS nas sessões de jogo (Intel, licença MIT); roda só durante o jogo
+            try:   # FPS nas sessões de jogo (Intel, licença MIT); roda só durante o jogo
+                copia_se_mudou(pm, CASA / 'PresentMon.exe', tentativas=2)
+            except PermissionError:   # medindo um jogo agora: a cópia fica para a próxima vez, e o resto segue
+                LOG.escreve('segundo plano: PresentMon em uso (medindo um jogo); copio na próxima vez')
     except OSError as e:
         if not quieto:
             t.erro(f'Não consegui copiar o Katharos.exe para {CASA} ({e}). Feche o ícone do Katharos e tente de novo.')
@@ -422,8 +451,14 @@ def le_minutos(horas=24, agora=None):
     return _le_jsonl(CASA / 'minutos.jsonl', 't', desde, agora)
 
 
+# programas que usam a placa de vídeo sem ser jogo, além dos que o Katharos.exe já ignorava (navegador, player, chamada...). No relatório de
+# 21/11 o app do Claude virou "jogo" (2 sessões). O Katharos.exe tem a mesma lista (NAO_JOGO); aqui ela tira das sessões já gravadas.
+NAO_SAO_JOGO = frozenset(('amdrsserv', 'anydesk', 'audacity', 'canva', 'capcut', 'chatgpt', 'claude', 'clipchamp', 'copilot', 'cursor', 'davinci resolve', 'figma', 'gamebar', 'gimp-2.10', 'githubdesktop', 'inkscape', 'krita', 'm365copilot', 'messenger', 'msiafterburner', 'mstsc', 'notion', 'nvidia app', 'nvidia overlay', 'obsidian', 'parsecd', 'postman', 'radeonsoftware', 'rtss', 'rustdesk', 'signal', 'skype', 'steam', 'streamlabs obs', 'teamviewer', 'virtualboxvm', 'vmware', 'vmware-vmx', 'windsurf', 'xboxgamebar', 'xboxpcapp'))
+
+
 def le_sessoes(dias=60, agora=None):
-    return _le_jsonl(CASA / 'sessoes.jsonl', 'inicio', (agora or datetime.now()) - timedelta(days=dias))
+    ss = _le_jsonl(CASA / 'sessoes.jsonl', 'inicio', (agora or datetime.now()) - timedelta(days=dias))
+    return [s for s in ss if str(s.get('jogo') or '').lower() not in NAO_SAO_JOGO]
 
 
 def resumo_sessoes(sessoes, minimo_min=5):

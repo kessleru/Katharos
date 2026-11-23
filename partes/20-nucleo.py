@@ -400,11 +400,16 @@ class Log:
 
     def __init__(self):
         self.arq = pasta('logs') / f'{datetime.now():%Y-%m-%d}.log'
+        self._cabeca = False
 
     def escreve(self, txt):
         try:
             with open(self.arq, 'a', encoding='utf-8') as f:
-                f.write(f'{datetime.now():%H:%M:%S} {txt}\n')
+                agora = f'{datetime.now():%H:%M:%S}'
+                if not self._cabeca:   # quem escreve daqui para baixo: o relatório diz de qual versão é cada erro
+                    f.write(f'{agora} @@katharos|{VERSAO}|{os.getpid()}\n')
+                    self._cabeca = True
+                f.write(f'{agora} {txt}\n')
         except OSError:
             pass
 
@@ -712,6 +717,13 @@ function TamanhoPasta([string]$P) {
     if (-not (Test-Path -LiteralPath $P)) { return 0 }
     $s = (ListaSemLinks $P | Measure-Object Length -Sum).Sum
     if ($s) { return [double]$s } else { return 0 }
+}
+function ArquivoSumiu([string]$P) {
+    # $true só se o caminho é válido e o arquivo não está lá. Um caminho tirado de linha de comando pode ter caractere que o Windows não aceita
+    # ("<>|, parâmetros colados); no PowerShell 5.1 o Test-Path lança ArgumentException nesse caso mesmo com -ErrorAction (relatório
+    # KTH-67C68B, Proton VPN). Aí não dá para dizer que sumiu: o serviço, a tarefa ou a entrada ficam como estão.
+    if (-not $P) { return $false }
+    try { return -not (Test-Path -LiteralPath $P -ErrorAction Stop) } catch { return $false }
 }
 function CaminhoSeguro([string]$P) {
     # Recusa caminho vazio, relativo, raiz de disco ou pastas grandes do sistema e do usuario

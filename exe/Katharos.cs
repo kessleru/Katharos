@@ -45,14 +45,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Katharos: abre o otimizador e acompanha o PC em segundo plano")]
 [assembly: AssemblyCompany("Katharos, código aberto (github.com/kessleru/Katharos)")]
 [assembly: AssemblyCopyright("Licença MIT")]
-[assembly: AssemblyVersion("5.0.0.0")]
-[assembly: AssemblyFileVersion("5.0.0.0")]
+[assembly: AssemblyVersion("5.0.1.0")]
+[assembly: AssemblyFileVersion("5.0.1.0")]
 
 namespace KatharosApp
 {
     static class K
     {
-        public const string VERSAO = "5.0.0";
+        public const string VERSAO = "5.0.1";
         public const string MUTEX = "Local\\KatharosSegundoPlano";
         public const string EV_SAIR = "Local\\KatharosSegundoPlanoSair";
         public const string EV_MOSTRAR = "Local\\KatharosSegundoPlanoMostrar";
@@ -1507,7 +1507,14 @@ namespace KatharosApp
             "nvcontainer", "nvidia share", "nvsphelper64", "steamwebhelper", "epicgameslauncher", "eadesktop", "ea desktop", "galaxyclient", "battle.net",
             "upc", "ubisoftconnect", "riotclientux", "riotclientservices", "wallpaper32", "wallpaper64", "lively", "rainmeter",
             "photoshop", "afterfx", "adobe premiere pro", "resolve", "blender", "unity", "unrealeditor", "olk", "outlook", "winword", "excel", "powerpnt",
-            "acrobat", "acrord32", "photos", "microsoft.photos", "systemsettings", "taskmgr", "windowsterminal", "conhost", "powershell", "cmd", "mspaint"
+            "acrobat", "acrord32", "photos", "microsoft.photos", "systemsettings", "taskmgr", "windowsterminal", "conhost", "powershell", "cmd", "mspaint",
+            // apps de janela que usam a placa de vídeo (Electron, assistentes, chamadas, acesso remoto, editores): a mesma lista que o motor usa
+            // para não contar como jogo uma sessão antiga (NAO_SAO_JOGO em partes/63-segundoplano.py; um teste confere que as duas batem)
+            "claude", "chatgpt", "copilot", "m365copilot", "notion", "obsidian", "figma", "cursor", "windsurf", "postman",
+            "githubdesktop", "signal", "messenger", "skype", "steam", "xboxpcapp", "gamebar", "xboxgamebar", "nvidia app", "nvidia overlay",
+            "radeonsoftware", "amdrsserv", "msiafterburner", "rtss", "streamlabs obs", "parsecd", "anydesk", "teamviewer", "rustdesk", "mstsc",
+            "virtualboxvm", "vmware", "vmware-vmx", "davinci resolve", "capcut", "clipchamp", "canva", "krita", "gimp-2.10", "inkscape",
+            "audacity"
         };
 
         public Config Cfg = Config.Le();

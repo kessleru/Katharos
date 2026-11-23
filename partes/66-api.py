@@ -38,12 +38,22 @@ class CanalApi:
     def __init__(self, saida):
         self.saida = saida
         self.trava = threading.Lock()
+        self.fechado = False
 
     def manda(self, msg):
+        """A janela pode fechar (ou o motor ficar sem ela) no meio de um pedido longo: o cano some e escrever dá OSError ou ValueError.
+        Isso não é erro do pedido. Registra uma linha só, uma vez, e o resto das respostas é descartado (antes virava um traceback por
+        pedido no relatório, e o `except` de responde_api falhava de novo ao tentar mandar o erro; KTH-67C68B)."""
         linha = json.dumps(msg, ensure_ascii=False, default=str)
         with self.trava:
-            self.saida.write(linha + '\n')
-            self.saida.flush()
+            if self.fechado:
+                return
+            try:
+                self.saida.write(linha + '\n')
+                self.saida.flush()
+            except (OSError, ValueError) as e:
+                self.fechado = True
+                LOG.escreve(f'api: a interface saiu antes da resposta ({type(e).__name__}); as respostas seguintes ficam sem destino')
 
     def evento(self, id_, tipo, dados):
         self.manda({'id': id_, 'evento': tipo, 'dados': dados})

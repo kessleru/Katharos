@@ -226,7 +226,7 @@ else {
   elseif ($exe) { $silencioso = "$normal /S" }
 }
 if (-not $exe) { Aviso ("'{0}': desinstalador nao reconhecido; remova em Configuracoes > Aplicativos" -f $__nome); return }
-if ($exe -ne 'msiexec.exe' -and -not (Test-Path -LiteralPath $exe)) { Aviso ("'{0}': o desinstalador nao existe mais (entrada orfa)" -f $__nome); return }
+if ($exe -ne 'msiexec.exe' -and (ArquivoSumiu $exe)) { Aviso ("'{0}': o desinstalador nao existe mais (entrada orfa)" -f $__nome); return }
 $c = Roda $exe $silencioso 6
 if (_Sumiu 45) { Feito ("removido: {0}" -f $__nome); return }
 Info ("'{0}' nao saiu em silencio (codigo {1}). Abri o desinstalador: clique nele e confirme (ate 10 min)." -f $__nome, $c)
@@ -633,12 +633,12 @@ ORFAOS_PS = r'''
 foreach ($tk in @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notmatch '^\\Microsoft\\' })) {
   foreach ($ac in @($tk.Actions)) {
     $exe = [Environment]::ExpandEnvironmentVariables([string]$ac.Execute).Trim('"')
-    if ($exe -match '^[A-Za-z]:\\.*\.exe$' -and -not (Test-Path -LiteralPath $exe)) { Set-Tarefa ($tk.TaskPath + $tk.TaskName) $false | Out-Null }
+    if ($exe -match '^[A-Za-z]:\\.*\.exe$' -and (ArquivoSumiu $exe)) { Set-Tarefa ($tk.TaskPath + $tk.TaskName) $false | Out-Null }
   }
 }
 foreach ($s in @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.StartMode -ne 'Disabled' -and $_.PathName -and $_.PathName -notmatch 'svchost|\\Windows\\' })) {
   $exe = $s.PathName; if ($exe -match '^"([^"]+)"') { $exe = $Matches[1] } elseif ($exe -match '^(\S+\.exe)') { $exe = $Matches[1] }
-  if ($exe -match '\.exe$' -and -not (Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($exe)))) { Set-Servico $s.Name 'disabled' | Out-Null }
+  if ($exe -match '\.exe$' -and (ArquivoSumiu ([Environment]::ExpandEnvironmentVariables($exe)))) { Set-Servico $s.Name 'disabled' | Out-Null }
 }'''
 
 FABRICANTE_SVC_PS = r'''
