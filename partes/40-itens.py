@@ -682,13 +682,15 @@ def executa_itens(ctx, pac, itens, teste=False):
 
 
 def garante_ponto(ctx, teste=False):
-    """Ponto de restauração antes de mexer (no máximo um por dia; liga a Proteção do Sistema se estiver desligada)."""
+    """Ponto de restauração antes de mexer (no máximo um por dia; liga a Proteção do Sistema se estiver desligada).
+    Devolve None quando há ponto (novo ou de menos de 24 h) ou não se aplica, e o motivo (texto) quando o Windows não deixou criar:
+    a janela usa isso para perguntar antes de seguir sem ele."""
     if teste or not WINDOWS:
-        return
+        return None
     ult = estado().get('ultimo_ponto')
     try:
         if ult and (datetime.now() - datetime.fromisoformat(ult)).total_seconds() < 86400:
-            return
+            return None
     except ValueError:
         pass
     ok, gb, precisa = espaco_ok('ponto')
@@ -715,6 +717,8 @@ if ($null -eq $antes) { Remove-ItemProperty $k -Name SystemRestorePointCreationF
         s = roda_ps(ctx.t, corpo, 'ponto', minutos=15, pr=pr, mult=ctx.mult)
     if not s.avisos and s.ok:
         marca_estado('ultimo_ponto', agora_iso())
+        return None
+    return '; '.join(str(a) for a in s.avisos[:2]) or (f'Só há {gb:.1f} GB livres em C:.' if not ok else 'o Windows não criou o ponto')
 
 
 def precisa_admin(ctx, args):

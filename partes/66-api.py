@@ -823,8 +823,13 @@ def api_aplicar(ctx, p, ev):
     def faz():
         if ctx.perfil is None:
             ctx.perfil = perfil_pc(ctx)
-        ev('etapa', {'texto': 'criando o ponto de restauração'})
-        garante_ponto(ctx)
+        motivo = None
+        if not p.get('sem_ponto'):   # a pessoa já respondeu "aplicar mesmo assim": não tenta (e espera) de novo
+            ev('etapa', {'texto': 'criando o ponto de restauração'})
+            motivo = garante_ponto(ctx)
+        # sem ponto de restauração, nada muda calado: a janela pergunta e só segue com {"sem_ponto": true} (plano 5.0.0, 3.4)
+        if motivo and not p.get('sem_ponto'):
+            raise ErroApi('sem_ponto', f'O Windows não deixou criar o ponto de restauração ({motivo}). Nada foi alterado.')
         ordem = [n for n in ORDEM_TURBO if n in sel] + [n for n in sel if n not in ORDEM_TURBO]
 
         def ouvinte(rotulo, n, total, atual):

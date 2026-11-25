@@ -5267,13 +5267,15 @@ def executa_itens(ctx, pac, itens, teste=False):
 
 
 def garante_ponto(ctx, teste=False):
-    """Ponto de restauração antes de mexer (no máximo um por dia; liga a Proteção do Sistema se estiver desligada)."""
+    """Ponto de restauração antes de mexer (no máximo um por dia; liga a Proteção do Sistema se estiver desligada).
+    Devolve None quando há ponto (novo ou de menos de 24 h) ou não se aplica, e o motivo (texto) quando o Windows não deixou criar:
+    a janela usa isso para perguntar antes de seguir sem ele."""
     if teste or not WINDOWS:
-        return
+        return None
     ult = estado().get('ultimo_ponto')
     try:
         if ult and (datetime.now() - datetime.fromisoformat(ult)).total_seconds() < 86400:
-            return
+            return None
     except ValueError:
         pass
     ok, gb, precisa = espaco_ok('ponto')
@@ -5300,6 +5302,8 @@ if ($null -eq $antes) { Remove-ItemProperty $k -Name SystemRestorePointCreationF
         s = roda_ps(ctx.t, corpo, 'ponto', minutos=15, pr=pr, mult=ctx.mult)
     if not s.avisos and s.ok:
         marca_estado('ultimo_ponto', agora_iso())
+        return None
+    return '; '.join(str(a) for a in s.avisos[:2]) or (f'Só há {gb:.1f} GB livres em C:.' if not ok else 'o Windows não criou o ponto')
 
 
 def precisa_admin(ctx, args):
@@ -10309,9 +10313,14 @@ def ferramenta_manutencao(ctx, args):
                 pass
         else:
             e.pop('manut_pendente_desde', None)
-        # reaplica o que pertence a cada pacote ainda ativo (grandes atualizações religam serviços e sugestões)
+        # reaplica o que pertence a cada pacote ainda ativo, mas SÓ depois que o Windows mudou de versão (é a atualização que religa serviços
+        # e sugestões). Com o Windows na mesma versão, quem mudou foi a pessoa (ou um programa dela) e a manutenção respeita: antes ela
+        # desligava de novo, toda semana e calada, o que a pessoa tinha religado nas Configurações. O "verificar" continua perguntando.
+        build, build_ant = build_atual(), e.get('manut_build')
+        e['manut_build'] = build
+        windows_mudou = bool(build and build_ant and build != build_ant)
         for nome, reg in (e.get('pacotes') or {}).items():
-            if nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
+            if not windows_mudou or nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
                 continue
             ids = set(reg.get('itens', []))
             its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo and getattr(i, 'reaplica', True)]
@@ -10322,6 +10331,9 @@ def ferramenta_manutencao(ctx, args):
             corpo = '\n'.join(_envolve(i) for i in its)
             r = roda_ps(t, corpo, f'reaplica-{nome}', minutos=8, pacote=nome, pr=pr, mostra=False)
             reapl += len(r.feitos)
+        if reapl:
+            alertas.append(f'O Windows atualizou ({build_ant} → {build}) e desfez {pl(reapl, "ajuste", "ajustes")} do Katharos: '
+                           'reapliquei. Para manter como o Windows deixou, use o Desfazer.')
         ult = e.get('manut_mensal')
         mensal = True
         try:
@@ -16490,8 +16502,13 @@ def api_aplicar(ctx, p, ev):
     def faz():
         if ctx.perfil is None:
             ctx.perfil = perfil_pc(ctx)
-        ev('etapa', {'texto': 'criando o ponto de restauração'})
-        garante_ponto(ctx)
+        motivo = None
+        if not p.get('sem_ponto'):   # a pessoa já respondeu "aplicar mesmo assim": não tenta (e espera) de novo
+            ev('etapa', {'texto': 'criando o ponto de restauração'})
+            motivo = garante_ponto(ctx)
+        # sem ponto de restauração, nada muda calado: a janela pergunta e só segue com {"sem_ponto": true} (plano 5.0.0, 3.4)
+        if motivo and not p.get('sem_ponto'):
+            raise ErroApi('sem_ponto', f'O Windows não deixou criar o ponto de restauração ({motivo}). Nada foi alterado.')
         ordem = [n for n in ORDEM_TURBO if n in sel] + [n for n in sel if n not in ORDEM_TURBO]
 
         def ouvinte(rotulo, n, total, atual):

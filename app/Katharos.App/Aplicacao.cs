@@ -46,12 +46,25 @@ public static class Aplicacao
         {
             var sel = new JsonObject();
             foreach (var g in itens.GroupBy(i => i.Area)) sel[g.Key] = new JsonArray(g.Select(i => (JsonNode)JsonValue.Create(i.Id)!).ToArray());
-            var r = await Servico.Muda("aplicar", new { itens = sel }, (t, d) => Dispatcher.UIThread.Post(() =>
+            void Evento(string t, JsonNode? d) => Dispatcher.UIThread.Post(() =>
             {
                 if (t == "etapa") { passo.Text = Maiuscula(d.S("texto")); if (painel.Children.Count > 4) painel.Children.RemoveAt(4); }   // permissão dada: a dica sai
                 else if (t == "pacote") passo.Text = $"{Maiuscula(d.S("titulo"))} ({Num(d.D("n"))} de {Num(d.D("de"))})";
                 else if (t == "progresso" && d.D("de") is double de && de > 0) { barra.IsIndeterminate = false; barra.Maximum = de; barra.Value = d.D("n") ?? 0; item.Text = d.S("item"); }
-            }));
+            });
+            JsonNode? r;
+            try { r = await Servico.Muda("aplicar", new { itens = sel }, Evento); }
+            catch (ErroDoMotor e) when (e.Codigo == "sem_ponto")
+            {
+                // o Windows não deixou criar o ponto de restauração: nada mudou ainda. A pessoa decide se segue sem ele
+                var expl = new StackPanel { Spacing = 8, Children = {
+                    T(e.Message, "sub", quebra: true),
+                    T("O Desfazer do Katharos continua valendo item por item. O que falta é a volta do Windows inteiro a antes de hoje, "
+                      + "que só o ponto de restauração dá. Em PC de escola ou de empresa, é comum a Proteção do Sistema estar desligada.", "sub", quebra: true) } };
+                if (!await j.Confirma("Aplicar sem ponto de restauração?", expl, "Aplicar mesmo assim")) { j.FechaCaixa(); return false; }
+                j.MostraCaixa(Janela.Caixa("Aplicando", painel));
+                r = await Servico.Muda("aplicar", new { itens = sel, sem_ponto = true }, Evento);
+            }
             Conferencia.Pede(areas, frente: true, forcar: true);
             await MostraResultado(r, depois, abre);
             return true;

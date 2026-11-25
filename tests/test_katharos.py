@@ -4641,3 +4641,18 @@ class TestNotaComCritico(unittest.TestCase):
     def test_sem_critico_a_conta_continua_a_mesma(self):
         self.assertEqual(k.nota_pc([k.Achado(3, ['tudo'], 'Pouca memória RAM', 'x')]), 85)
         self.assertEqual(k.nota_pc([]), 100)
+
+
+class TestAplicarSemPonto(unittest.TestCase):
+    def test_sem_ponto_para_antes_de_mudar_e_pergunta(self):
+        """Ponto de restauração que falha não segue calado: a janela recebe "sem_ponto" e nada é aplicado."""
+        ctx = k.Ctx(k._defaults(k.monta_parser().parse_args([])), k.Terminal(True, True, consulta_fundo=False))
+        ctx.perfil = json.loads(json.dumps(k.PC_MODELO))
+        aplicou = []
+        with mock.patch.object(k, 'garante_ponto', lambda c: 'Proteção do Sistema desligada'), \
+             mock.patch.object(k, 'executa_itens', lambda *a, **kw: aplicou.append(a) or (0, [], [])), \
+             mock.patch.object(k, 'Trava', lambda: types.SimpleNamespace(pega=lambda: True, solta=lambda: None, dona=0)):
+            with self.assertRaises(k.ErroApi) as e:
+                k.api_aplicar(ctx, {'itens': {'privacidade': ['telemetria']}}, lambda *a: None)
+        self.assertEqual(e.exception.codigo, 'sem_ponto')
+        self.assertEqual(aplicou, [])

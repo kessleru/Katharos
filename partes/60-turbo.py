@@ -538,9 +538,14 @@ def ferramenta_manutencao(ctx, args):
                 pass
         else:
             e.pop('manut_pendente_desde', None)
-        # reaplica o que pertence a cada pacote ainda ativo (grandes atualizações religam serviços e sugestões)
+        # reaplica o que pertence a cada pacote ainda ativo, mas SÓ depois que o Windows mudou de versão (é a atualização que religa serviços
+        # e sugestões). Com o Windows na mesma versão, quem mudou foi a pessoa (ou um programa dela) e a manutenção respeita: antes ela
+        # desligava de novo, toda semana e calada, o que a pessoa tinha religado nas Configurações. O "verificar" continua perguntando.
+        build, build_ant = build_atual(), e.get('manut_build')
+        e['manut_build'] = build
+        windows_mudou = bool(build and build_ant and build != build_ant)
         for nome, reg in (e.get('pacotes') or {}).items():
-            if nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
+            if not windows_mudou or nome not in REAPLICA or reg.get('revertido') or time.time() - inicio > 40 * 60:
                 continue
             ids = set(reg.get('itens', []))
             its = [i for i in (PACOTES[nome].itens(ctx) or []) if i and i.id in ids and i.definitivo and getattr(i, 'reaplica', True)]
@@ -551,6 +556,9 @@ def ferramenta_manutencao(ctx, args):
             corpo = '\n'.join(_envolve(i) for i in its)
             r = roda_ps(t, corpo, f'reaplica-{nome}', minutos=8, pacote=nome, pr=pr, mostra=False)
             reapl += len(r.feitos)
+        if reapl:
+            alertas.append(f'O Windows atualizou ({build_ant} → {build}) e desfez {pl(reapl, "ajuste", "ajustes")} do Katharos: '
+                           'reapliquei. Para manter como o Windows deixou, use o Desfazer.')
         ult = e.get('manut_mensal')
         mensal = True
         try:
