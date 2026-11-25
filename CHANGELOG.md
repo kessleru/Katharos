@@ -18,6 +18,20 @@ Quando uma versão existe:
 - O botão de download do site baixa exatamente a última tag.
 - Cada versão lista só o que mudou para o usuário, em ordem de importância.
 
+## 5.0.2 · 25 de novembro de 2026
+
+Revisão de estabilidade e do que cada modo marca: o modo recomendado não pode piorar o PC.
+
+- **Nada muda sem ponto de restauração calado**: se o Windows não deixa criar o ponto (Proteção do Sistema desligada, disco cheio), nada é aplicado e a janela pergunta se você quer seguir sem ele. Antes seguia sem avisar.
+- **A manutenção respeita o que você religou**: ela só reaplica os ajustes quando o Windows mudou de versão (é a atualização que desfaz). Antes desligava de novo, toda semana, o que você tinha religado nas Configurações. Quando reaplica, avisa.
+- **Driver de vídeo fora do Windows Update**: a Microsoft confirmou que o Windows Update troca o driver de vídeo do fabricante por um mais antigo. O Katharos não instala mais driver de vídeo por ele (só em placa sem driver nenhum).
+- **Modo equilibrado mais seguro**: saíram do equilibrado e foram para o extremo ou "só se marcar" o que tinha custo escondido: Windows.old (sem ele não se volta de versão), atualizar todos os programas pelo winget, desligar a impressão (impressora ligada depois não funcionava), apps da Loja em segundo plano e sem acesso a contatos e chamadas (WhatsApp e Vincular ao Celular), relatório de erros do Windows e fechar programas no desligamento (perdia trabalho não salvo). Chrome, Edge e Brave enxutos saíram do modo seguro.
+- **Nota que não engana**: disco avisando falha, disco com erros ou PC sem antivírus deixam a nota no vermelho (antes ficava 85, em verde). Desligamentos contados por vez, não por evento (cada um contava duas ou três vezes), e a tela azul é reconhecida mesmo com o relatório de erros do Windows desligado. Windows.old e monitor abaixo da taxa máxima em notebook não tiram mais ponto à toa.
+- **OneDrive**: só aparece para bloquear se nenhuma conta (pessoal, de trabalho ou escola) e nenhuma pasta sua estiver nele.
+- **Configurações que não somem**: gravar uma opção no mesmo instante em que outro processo lia o arquivo podia apagar as outras. E os arquivos do Katharos não falham mais por estarem em uso ou sendo examinados pelo antivírus.
+- **Desfazer**: um backup de versão antiga com o tipo errado volta mesmo assim (era o erro "SwapEffectUpgradeEnable" dos relatórios). Dumps de tela azul ficam 30 dias.
+- **Janela**: abre mesmo se o Python escrever um aviso antes de ficar pronto, fecha junto os PowerShell de um motor que não respondeu e, se "Reiniciar agora" falhar, a versão nova entra ao fechar.
+
 ## 5.0.1 · 23 de novembro de 2026
 
 Corrige o que o relatório de 21/11 (5.0.0) mostrou.

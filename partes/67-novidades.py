@@ -1,6 +1,49 @@
 # ─────────────── novidades de cada versão (gerado do CHANGELOG.md por scripts/novidades.py: não edite) ───────────────
 NOVIDADES = [
  {
+  "versao": "5.0.2",
+  "data": "25 de novembro de 2026",
+  "resumo": "Revisão de estabilidade e do que cada modo marca: o modo recomendado não pode piorar o PC.",
+  "itens": [
+   {
+    "titulo": "Nada muda sem ponto de restauração calado",
+    "texto": "se o Windows não deixa criar o ponto (Proteção do Sistema desligada, disco cheio), nada é aplicado e a janela pergunta se você quer seguir sem ele. Antes seguia sem avisar."
+   },
+   {
+    "titulo": "A manutenção respeita o que você religou",
+    "texto": "ela só reaplica os ajustes quando o Windows mudou de versão (é a atualização que desfaz). Antes desligava de novo, toda semana, o que você tinha religado nas Configurações. Quando reaplica, avisa."
+   },
+   {
+    "titulo": "Driver de vídeo fora do Windows Update",
+    "texto": "a Microsoft confirmou que o Windows Update troca o driver de vídeo do fabricante por um mais antigo. O Katharos não instala mais driver de vídeo por ele (só em placa sem driver nenhum)."
+   },
+   {
+    "titulo": "Modo equilibrado mais seguro",
+    "texto": "saíram do equilibrado e foram para o extremo ou \"só se marcar\" o que tinha custo escondido: Windows.old (sem ele não se volta de versão), atualizar todos os programas pelo winget, desligar a impressão (impressora ligada depois não funcionava), apps da Loja em segundo plano e sem acesso a contatos e chamadas (WhatsApp e Vincular ao Celular), relatório de erros do Windows e fechar programas no desligamento (perdia trabalho não salvo). Chrome, Edge e Brave enxutos saíram do modo seguro."
+   },
+   {
+    "titulo": "Nota que não engana",
+    "texto": "disco avisando falha, disco com erros ou PC sem antivírus deixam a nota no vermelho (antes ficava 85, em verde). Desligamentos contados por vez, não por evento (cada um contava duas ou três vezes), e a tela azul é reconhecida mesmo com o relatório de erros do Windows desligado. Windows.old e monitor abaixo da taxa máxima em notebook não tiram mais ponto à toa."
+   },
+   {
+    "titulo": "OneDrive",
+    "texto": "só aparece para bloquear se nenhuma conta (pessoal, de trabalho ou escola) e nenhuma pasta sua estiver nele."
+   },
+   {
+    "titulo": "Configurações que não somem",
+    "texto": "gravar uma opção no mesmo instante em que outro processo lia o arquivo podia apagar as outras. E os arquivos do Katharos não falham mais por estarem em uso ou sendo examinados pelo antivírus."
+   },
+   {
+    "titulo": "Desfazer",
+    "texto": "um backup de versão antiga com o tipo errado volta mesmo assim (era o erro \"SwapEffectUpgradeEnable\" dos relatórios). Dumps de tela azul ficam 30 dias."
+   },
+   {
+    "titulo": "Janela",
+    "texto": "abre mesmo se o Python escrever um aviso antes de ficar pronto, fecha junto os PowerShell de um motor que não respondeu e, se \"Reiniciar agora\" falhar, a versão nova entra ao fechar."
+   }
+  ]
+ },
+ {
   "versao": "5.0.1",
   "data": "23 de novembro de 2026",
   "resumo": "Corrige o que o relatório de 21/11 (5.0.0) mostrou.",
@@ -284,57 +327,6 @@ NOVIDADES = [
    {
     "titulo": "",
     "texto": "Corrigidos: \"Aplicar esta correção\" dava erro ao abrir em alguns casos; esvaziar a Lixeira com mais de 2 GB dava erro."
-   }
-  ]
- },
- {
-  "versao": "4.3.0",
-  "data": "11 de novembro de 2026",
-  "resumo": "Corrige o que apareceu no primeiro teste da 4.2.0 num PC de verdade e deixa a janela mais fácil de entender: abre na hora, cada botão leva ao lugar certo e o Início nunca sugere o que já está feito.",
-  "itens": [
-   {
-    "titulo": "Abre na hora",
-    "texto": "o que o Katharos conferiu no PC fica guardado e vale até você aplicar ou desfazer, o Windows atualizar ou passar um dia. Quando precisa ler de novo, lê uma área por vez, por trás, sem travar a janela: só a linha muda quando chega."
-   },
-   {
-    "titulo": "Tela de abertura",
-    "texto": "com o cavaleiro do site. Ela prepara tudo antes da janela abrir, inclusive conferir o que o Início vai mostrar."
-   },
-   {
-    "titulo": "O Início não se contradiz",
-    "texto": "o que já foi resolvido depois do raio-x sai da lista e a nota sobe junto. A inicialização mostra quantos programas abrem agora, os mesmos que a tela seguinte mostra."
-   },
-   {
-    "titulo": "Cada botão leva ao lugar certo",
-    "texto": "\"Aplicar esta correção\" mostra só os itens daquela sugestão. Achado que só se investiga (desligamento, tela azul, driver) mostra o passo a passo e nunca abre o Otimizar."
-   },
-   {
-    "titulo": "Tela de detalhe",
-    "texto": "o que é, o que o Katharos viu neste PC, por que importa, como resolver e como desfazer, para qualquer achado."
-   },
-   {
-    "titulo": "O que abre com o Windows",
-    "texto": "uma tela própria, com o ícone de cada programa, o atraso medido no boot e um interruptor. Os que o Katharos desligou ficam embaixo, com Religar."
-   },
-   {
-    "titulo": "Desfazer por item",
-    "texto": "escolha quais itens voltam e o resto continua aplicado. O que foi aplicado antes desta versão só volta com a área inteira, e a tela diz isso."
-   },
-   {
-    "titulo": "Memória",
-    "texto": "quem usa a RAM, com a média e o pico do dia e da semana, e se ela está cheia de verdade ou só alta. Windows, drivers e proteção aparecem sem nenhuma ação; o que o Katharos não conhece diz \"não conheço\"."
-   },
-   {
-    "titulo": "Gráficos",
-    "texto": "passe o mouse para ver o valor e a data, clique numa marca para ver o que foi aplicado, amplie com dois cliques (zoom com a roda, comparar duas medidas). Dia sem leitura fica em branco, e não mais como zero."
-   },
-   {
-    "titulo": "Sem falso alarme",
-    "texto": "as tarefas do próprio Katharos não aparecem mais como suspeitas, e programa com assinatura digital vira \"para conferir\". O driver do Ryzen Master fechado é explicado como comum. No desligamento, o que é certo (aconteceu) fica separado do que é provável (a causa)."
-   },
-   {
-    "titulo": "Visual",
-    "texto": "ícones no menu e nas seções, listas com marcador, menos texto, Jogos dentro do Início e animações curtas que respeitam o \"reduzir animações\" do Windows (dá para desligar nas Configurações)."
    }
   ]
  }
