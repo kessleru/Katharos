@@ -1150,8 +1150,19 @@ def le_json(arq, padrao):
     (nome.corrompido-DATA) e a pessoa é avisada: antes isso zerava o estado sem ninguém ver."""
     arq = Path(arq)
     try:
-        with open(arq, encoding='utf-8-sig') as f:
-            dado = json.load(f)
+        # no Windows, abrir no instante em que outro processo troca o arquivo dá "acesso negado". Devolver o padrão aí era perigoso: quem
+        # lê para gravar (salva_config) gravava só a chave nova e apagava as outras. Tenta de novo por até ~1,5 s antes de desistir.
+        espera = 0.02
+        for n in range(12):
+            try:
+                with open(arq, encoding='utf-8-sig') as f:
+                    dado = json.load(f)
+                break
+            except PermissionError:
+                if n == 11:
+                    raise
+                time.sleep(espera)
+                espera = min(espera * 1.6, 0.25)
         if isinstance(padrao, (dict, list)) and not isinstance(dado, type(padrao)):
             raise ValueError('JSON de outro tipo')   # '[]', 'null' ou um número onde devia haver um objeto: tratado como ilegível (guarda a cópia)
         return dado
@@ -1192,7 +1203,13 @@ def config(chave, padrao=None):
 
 
 def salva_config(chave, valor):
-    c = le_json(CASA / 'config.json', {})
+    arq = CASA / 'config.json'
+    c = le_json(arq, None)
+    if c is None and arq.exists():
+        # existe mas não deu para ler agora (outro processo segurando): gravar daqui apagaria as outras escolhas da pessoa
+        raise OSError('as configurações estão em uso por outro processo agora; nada foi gravado, tente de novo')
+    if not isinstance(c, dict):
+        c = {}
     if valor in (None, ''):
         c.pop(chave, None)
     else:

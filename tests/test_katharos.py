@@ -4599,3 +4599,33 @@ class TestParametrosDaApi(unittest.TestCase):
         self.assertEqual(k._inteiro(-5, 60, 1, 3650), 1)
         self.assertEqual(k._inteiro(10 ** 9, 60, 1, 3650), 3650)
         self.assertEqual(k._inteiro([], 60, 1, 3650), 60)
+
+
+class TestLeituraComArquivoEmTroca(unittest.TestCase):
+    def test_le_json_tenta_de_novo_e_nao_devolve_o_padrao(self):
+        """Ler no instante da troca (acesso negado no Windows) devolvia {}; quem lê para gravar apagava as outras chaves."""
+        d = Path(tempfile.mkdtemp())
+        arq = d / 'config.json'
+        arq.write_text('{"a": 1, "b": 2}', encoding='utf-8')
+        real, falhas = open, [PermissionError(13, 'em troca'), PermissionError(13, 'em troca')]
+
+        def abre(*a, **kw):
+            if falhas and str(a[0]) == str(arq):
+                raise falhas.pop()
+            return real(*a, **kw)
+        with mock.patch('builtins.open', abre), mock.patch.object(k.time, 'sleep', lambda s: None):
+            self.assertEqual(k.le_json(arq, {}), {'a': 1, 'b': 2})
+
+    def test_salva_config_nao_apaga_as_outras_chaves_se_nao_conseguiu_ler(self):
+        casa = Path(tempfile.mkdtemp())
+        (casa / 'config.json').write_text('{"a": 1, "b": 2}', encoding='utf-8')
+        with mock.patch.object(k, 'CASA', casa), mock.patch.object(k, 'le_json', lambda arq, padrao: padrao):
+            with self.assertRaises(OSError):
+                k.salva_config('c', 3)
+        self.assertEqual(json.loads((casa / 'config.json').read_text(encoding='utf-8')), {'a': 1, 'b': 2})
+        with mock.patch.object(k, 'CASA', casa):
+            k.salva_config('c', 3)
+            self.assertEqual(json.loads((casa / 'config.json').read_text(encoding='utf-8')), {'a': 1, 'b': 2, 'c': 3})
+            (casa / 'config.json').unlink()
+            k.salva_config('d', 4)
+            self.assertEqual(json.loads((casa / 'config.json').read_text(encoding='utf-8')), {'d': 4})
