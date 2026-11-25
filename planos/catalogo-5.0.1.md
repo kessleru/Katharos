@@ -112,7 +112,7 @@ Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). 
 | Explorador abre em "Este Computador" | equilibrado | sim | privacidade e menos leitura | nenhum |
 | menu do botão direito completo | equilibrado | sim | menos cliques | visual do Windows 10 no menu |
 | programas da inicialização sem espera | equilibrado | sim | área de trabalho pronta mais cedo | em HD, o começo fica mais disputado |
-| desligar e fechar travados mais rápido | equilibrado | sim | desliga e reinicia mais rápido | programa que demora para salvar ao fechar pode perder o que não foi salvo |
+| desligar sem esperar programa travado | só se marcar | sim | o PC desliga mesmo com um programa travado | um programa com trabalho não salvo é fechado sem perguntar, e o que não foi salvo se perde |
 | atalhos quebrados sem busca demorada | extremo | sim | sem travadas de vários segundos | atalho de arquivo movido não se conserta sozinho |
 | cópia de memória pequena em tela azul | equilibrado | sim | GBs de disco e reinício mais rápido depois de travar | investigação profunda de telas azuis fica mais difícil |
 | sem minimizar tudo ao sacudir a janela | equilibrado | sim | sem minimizar sem querer | nenhum |

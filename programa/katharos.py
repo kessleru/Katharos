@@ -6843,13 +6843,16 @@ def itens_visual(ctx):
              '"Mostrar mais opções".', 'menos cliques', 'visual do Windows 10 no menu', 2,
              R('HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32', '(default)', '', 'String')) if win11 else None,
         Item('sem-espera-inicio', 'programas da inicialização sem espera', 'O Windows segura os programas da inicialização por alguns '
-             'segundos depois do logon; aqui eles abrem na hora.', 'área de trabalho pronta mais cedo', 'em HD, o começo fica mais disputado', 2,
+             'segundos depois do logon; aqui eles abrem na hora.', 'área de trabalho pronta mais cedo', 'em HD, o começo fica mais disputado',
+             3 if eh_hd(ctx.perfil) else 2,   # em HD a espera é o que deixa o Windows terminar de carregar antes: só no extremo
              R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize', 'StartupDelayInMSec', 0)),
-        Item('desligar-rapido', 'desligar e fechar travados mais rápido', 'Programas travados são fechados em 1 a 2 s (não 5 a 20 s) '
-             'ao desligar, e o Windows espera menos pelos serviços.', 'desliga e reinicia mais rápido',
-             'programa que demora para salvar ao fechar pode perder o que não foi salvo', 2,
-             RR(R(d, 'AutoEndTasks', '1', 'String'), R(d, 'HungAppTimeout', '1000', 'String'), R(d, 'WaitToKillAppTimeout', '2000', 'String'),
-                R(d, 'LowLevelHooksTimeout', '1000', 'String'), R('HKLM:\\SYSTEM\\CurrentControlSet\\Control', 'WaitToKillServiceTimeout', '2000', 'String'))),
+        # só se marcar: fechar sozinho é perder o que não foi salvo. Fora daqui: a espera dos serviços (o padrão já é 5 s desde o Windows 8;
+        # cortar arrisca arquivo corrompido por 3 s de ganho), WaitToKillAppTimeout (não é lido desde o Vista) e LowLevelHooksTimeout
+        # (é de teclado e mouse, não de desligar)
+        Item('desligar-rapido', 'desligar sem esperar programa travado', 'O desligamento não para na tela "este app está impedindo o '
+             'desligamento": o programa sem resposta por 2 s é fechado sozinho.', 'o PC desliga mesmo com um programa travado',
+             'um programa com trabalho não salvo é fechado sem perguntar, e o que não foi salvo se perde', 0,
+             RR(R(d, 'AutoEndTasks', '1', 'String'), R(d, 'HungAppTimeout', '2000', 'String'))),
         Item('atalhos-rapidos', 'atalhos quebrados sem busca demorada', 'Quando um atalho aponta para algo que sumiu, o Windows não '
              'vasculha o disco e a rede atrás dele, e não pergunta na internet com qual programa abrir um arquivo.', 'sem travadas de vários segundos',
              'atalho de arquivo movido não se conserta sozinho', 3,
