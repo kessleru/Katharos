@@ -3615,8 +3615,10 @@ def analisa(p, m, d):
                         f'{gb(soma)} que se recriam sozinhos. Maiores: {maiores}.', 'Limpar com segurança.', 'limpar'))
     if any(c.get('nome') == 'Windows.old' for c in caches):
         w = next(c['gb'] for c in caches if c.get('nome') == 'Windows.old')
-        A.append(Achado(2, ['disco', 'tudo'], 'Windows.old ocupando espaço', f'{gb(w)} da versão anterior do Windows.',
-                        'Pode sair se você não pretende voltar à versão anterior.', 'limpar'))
+        # é o normal nos ~10 dias depois de uma atualização grande (o Windows apaga sozinho): só pesa quando o disco está apertado
+        A.append(Achado(1 if pct < 15 else 0, ['disco', 'tudo'], 'Windows.old ocupando espaço', f'{gb(w)} da versão anterior do Windows.',
+                        'O Windows apaga sozinho uns 10 dias depois da atualização. Se o disco estiver apertado e você não pretende voltar à '
+                        'versão anterior, dá para apagar antes na limpeza (marque "Windows.old").', 'limpar'))
     n_ini = len(ini)
     # conta só o que o Otimizar oferece para desligar (a mesma régua da lista de itens): antivírus, drivers e o que é do Windows
     # abrem sempre e não fazem o achado prometer algo que a tela seguinte não mostra
@@ -3726,7 +3728,9 @@ def analisa(p, m, d):
                         'Funciona, mas só a parte igual trabalha em canal duplo. Numa troca futura, prefira dois pentes iguais.'))
     tela = pf(p, 'tela') or {}
     if isinstance(tela, dict) and (tela.get('hz_max') or 0) >= (tela.get('hz') or 0) + 15 and (tela.get('hz') or 0) > 0:
-        A.append(Achado(2, ['jogos', 'tudo'], f'Monitor de {tela["hz_max"]} Hz rodando a {tela["hz"]} Hz',
+        # em notebook a taxa menor costuma ser de propósito (bateria, taxa dinâmica do Windows 11, perfil do fabricante) e a leitura com a
+        # taxa dinâmica ligada pode mostrar 60 com a tela indo a 120 quando precisa: lá é só dica, sem ponto (falso alarme é pior que nenhum)
+        A.append(Achado(0 if pf(p, 'pc.notebook') else 2, ['jogos', 'tudo'], f'Monitor de {tela["hz_max"]} Hz rodando a {tela["hz"]} Hz',
                         f'Na resolução atual ({tela.get("largura")}×{tela.get("altura")}) a tela aceita {tela["hz_max"]} Hz.',
                         'Você pagou por uma tela mais fluida e não está usando: Configurações > Sistema > Tela > Tela avançada > '
                         'Taxa de atualização. Em notebook na bateria, a taxa menor economiza energia.'))
@@ -3952,15 +3956,25 @@ def pontos_por_categoria(achados):
     return {c: min(v, TETO_CATEGORIA.get(c, 15)) for c, v in soma.items() if v}
 
 
+# O que pode custar os seus arquivos ou deixar o PC aberto a invasão: com qualquer um deles a nota fica no vermelho (abaixo de 55), mesmo
+# com o resto perfeito. Antes um disco avisando falha deixava 85, em verde, e ninguém fazia backup olhando uma nota verde.
+CRITICOS = ('DISCO PODE FALHAR', 'O disco do sistema tem erros de leitura ou gravação', 'PC sem proteção em tempo real')
+NOTA_COM_CRITICO = 49
+
+
 def nota_pc(achados):
-    """100 menos o que cada categoria tira (com teto). Um achado grave sozinho deixa 85; dois graves de categorias diferentes, 70."""
-    return max(5, min(100, 100 - sum(pontos_por_categoria(achados).values())))
+    """100 menos o que cada categoria tira (com teto). Um achado grave sozinho deixa 85; dois graves de categorias diferentes, 70.
+    Com um achado crítico (CRITICOS), no máximo 49."""
+    n = max(5, min(100, 100 - sum(pontos_por_categoria(achados).values())))
+    titulos = {(a.get('titulo') if isinstance(a, dict) else getattr(a, 'titulo', '')) for a in achados or []}
+    return min(n, NOTA_COM_CRITICO) if titulos & set(CRITICOS) else n
 
 
 def pesa_na_nota(achados, limite=3):
     """Os achados que mais tiram ponto, para a nota se explicar: [(título, pontos)]."""
-    com_peso = sorted((a for a in achados if PESO_NOTA.get(a.impacto, 0)), key=lambda a: -PESO_NOTA[a.impacto])
-    return [(a.titulo, PESO_NOTA[a.impacto]) for a in com_peso[:limite]]
+    com_peso = sorted((a for a in achados if PESO_NOTA.get(a.impacto, 0)), key=lambda a: (a.titulo not in CRITICOS, -PESO_NOTA[a.impacto]))
+    # o crítico é o que põe a nota no vermelho: aparece primeiro e com o quanto ele de fato tira, para a conta fazer sentido
+    return [(a.titulo, (100 - NOTA_COM_CRITICO) if a.titulo in CRITICOS else PESO_NOTA[a.impacto]) for a in com_peso[:limite]]
 
 
 def ja_aplicados():
@@ -7268,10 +7282,12 @@ Vivo 'procurando atualizacoes'
 $__r = $__s.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='$__tipo'").Updates
 if ($__r.Count -eq 0) { Diz 'nada' 'nada para atualizar'; return }
 $__l = New-Object -ComObject Microsoft.Update.UpdateColl
+# o driver de vídeo vem do fabricante (app da NVIDIA, AMD ou Intel): o Windows Update às vezes oferece um MAIS ANTIGO que o instalado
+# (a Microsoft confirmou em maio de 2026; a correção só chega entre o fim de 2026 e 2027, e só para drivers novos). Exceção: placa sem driver
+# nenhum (Adaptador de Vídeo Básico), em que o Windows Update é justamente o caminho
+$__semVideo = [bool](@(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { [string]$_.Name -match 'Basic Display|B.sico da Microsoft' }).Count)
 foreach ($u in $__r) {
-    # o driver de vídeo vem do fabricante (app da NVIDIA, AMD ou Intel): o Windows Update às vezes oferece um MAIS ANTIGO que o instalado
-    # (a Microsoft confirmou em maio de 2026; a correção só chega entre o fim de 2026 e 2027, e só para drivers novos)
-    if ($__tipo -eq 'Driver' -and [string]$u.DriverClass -match 'Display') { Info ('driver de video fica de fora (vem do fabricante): ' + $u.Title); continue }
+    if ($__tipo -eq 'Driver' -and -not $__semVideo -and [string]$u.DriverClass -match 'Display') { Info ('driver de video fica de fora (vem do fabricante): ' + $u.Title); continue }
     if ($TESTE) { Plano $u.Title; continue }; if (-not $u.EulaAccepted) { $u.AcceptEula() }; [void]$__l.Add($u)
 }
 if ($TESTE) { return }

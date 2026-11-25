@@ -1385,10 +1385,12 @@ Vivo 'procurando atualizacoes'
 $__r = $__s.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='$__tipo'").Updates
 if ($__r.Count -eq 0) { Diz 'nada' 'nada para atualizar'; return }
 $__l = New-Object -ComObject Microsoft.Update.UpdateColl
+# o driver de vídeo vem do fabricante (app da NVIDIA, AMD ou Intel): o Windows Update às vezes oferece um MAIS ANTIGO que o instalado
+# (a Microsoft confirmou em maio de 2026; a correção só chega entre o fim de 2026 e 2027, e só para drivers novos). Exceção: placa sem driver
+# nenhum (Adaptador de Vídeo Básico), em que o Windows Update é justamente o caminho
+$__semVideo = [bool](@(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { [string]$_.Name -match 'Basic Display|B.sico da Microsoft' }).Count)
 foreach ($u in $__r) {
-    # o driver de vídeo vem do fabricante (app da NVIDIA, AMD ou Intel): o Windows Update às vezes oferece um MAIS ANTIGO que o instalado
-    # (a Microsoft confirmou em maio de 2026; a correção só chega entre o fim de 2026 e 2027, e só para drivers novos)
-    if ($__tipo -eq 'Driver' -and [string]$u.DriverClass -match 'Display') { Info ('driver de video fica de fora (vem do fabricante): ' + $u.Title); continue }
+    if ($__tipo -eq 'Driver' -and -not $__semVideo -and [string]$u.DriverClass -match 'Display') { Info ('driver de video fica de fora (vem do fabricante): ' + $u.Title); continue }
     if ($TESTE) { Plano $u.Title; continue }; if (-not $u.EulaAccepted) { $u.AcceptEula() }; [void]$__l.Add($u)
 }
 if ($TESTE) { return }

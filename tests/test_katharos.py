@@ -4629,3 +4629,15 @@ class TestLeituraComArquivoEmTroca(unittest.TestCase):
             (casa / 'config.json').unlink()
             k.salva_config('d', 4)
             self.assertEqual(json.loads((casa / 'config.json').read_text(encoding='utf-8')), {'d': 4})
+
+
+class TestNotaComCritico(unittest.TestCase):
+    def test_disco_falhando_deixa_a_nota_no_vermelho(self):
+        """Disco avisando falha deixava 85 (verde). Com perda de dados possível, a nota fica abaixo de 55 (vermelho)."""
+        for t in k.CRITICOS:
+            self.assertLess(k.nota_pc([k.Achado(3, ['tudo'], t, 'x')]), 55, t)
+            self.assertLess(k.nota_pc([{'titulo': t, 'impacto': 3}]), 55, t)
+
+    def test_sem_critico_a_conta_continua_a_mesma(self):
+        self.assertEqual(k.nota_pc([k.Achado(3, ['tudo'], 'Pouca memória RAM', 'x')]), 85)
+        self.assertEqual(k.nota_pc([]), 100)
