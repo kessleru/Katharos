@@ -256,6 +256,15 @@ def _segundo_plano():
             'cpu_pct': sp.get('cpu_pct'), 'ram_mb': sp.get('ram_mb'), 'intervalo_s': (a or {}).get('intervalo_s')}
 
 
+def _inteiro(v, padrao, minimo, maximo):
+    """Número vindo de um pedido: o que não for número vira o padrão (antes virava "erro interno"), e fica dentro dos limites."""
+    try:
+        n = int(v) if v not in (None, '', False) else padrao
+    except (TypeError, ValueError):
+        n = padrao
+    return max(minimo, min(maximo, n))
+
+
 def _iso_ts(iso):
     try:
         return datetime.fromisoformat(str(iso)).timestamp()
@@ -724,7 +733,7 @@ def api_agora(ctx, p, ev):
 @metodo_api('sessoes')
 def api_sessoes(ctx, p, ev):
     """As sessões de jogo gravadas, o resumo e o antes e depois de cada jogo."""
-    dias = int(p.get('dias') or 60)
+    dias = _inteiro(p.get('dias'), 60, 1, 3650)
     ss = le_sessoes(dias)
     try:
         comp = comparacoes_por_jogo(ss, pacotes_aplicados_dt())
@@ -1038,7 +1047,7 @@ def api_historico(ctx, p, ev):
     o efeito de cada mudança (com veredito honesto: melhorou, piorou, sem diferença, já vinha mudando, poucas medidas) e o que está
     mudando agora."""
     am = le_metricas()
-    dias = int(p.get('dias') or 60)
+    dias = _inteiro(p.get('dias'), 60, 1, 3650)
     corte = datetime.now() - timedelta(days=dias)
     pacotes = pacotes_aplicados_dt()
     series = []

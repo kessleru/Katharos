@@ -508,7 +508,7 @@ def exporta_propostas(ctx=None):
              'achados': [{k: x.get(k) for k in ('id', 'tipo', 'titulo', 'vi', 'confianca', 'gravidade', 'contexto', 'fonte')} for x in p['achados']][:20]}
         tmp = CASA / f'propostas.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, CASA / 'propostas.json')
+        troca(tmp, CASA / 'propostas.json')
         return 0
     except Exception as ex:
         LOG.escreve(f'exportar propostas: {ex!r}')

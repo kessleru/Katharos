@@ -1303,7 +1303,10 @@ def _pos_sfc(ctx, cod, txt):
 
 def _pos_chkdsk(ctx, cod, txt):
     if cod not in (0,):
-        subprocess.run('echo Y| chkdsk C: /f', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:   # só agenda o reparo para o próximo reinício: é rápido, mas com prazo
+            subprocess.run('echo Y| chkdsk C: /f', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        except (OSError, subprocess.SubprocessError):
+            return 'chkdsk: encontrou problemas, mas não consegui agendar o reparo; rode "chkdsk C: /f" como administrador'
         return 'chkdsk: encontrou problemas; o reparo completo vai rodar no próximo reinício'
     return 'chkdsk: nenhum problema no disco'
 

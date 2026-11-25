@@ -191,7 +191,7 @@ def grava_ultima_amostra(a):
         d['quando'] = agora_iso()
         tmp = CASA / (ULTIMA_AMOSTRA + '.tmp')
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, CASA / ULTIMA_AMOSTRA)
+        troca(tmp, CASA / ULTIMA_AMOSTRA)
     except (OSError, TypeError, ValueError) as e:
         LOG.escreve(f'ícone: não gravei a última amostra ({e!r})')
 

@@ -351,16 +351,16 @@ def remove_atalhos(t):
                 if f.name == 'desktop.ini':
                     os.chmod(f, 0o666)
                     if WINDOWS:
-                        subprocess.run(['attrib.exe', '-s', '-h', str(f)], capture_output=True)
+                        subprocess.run(['attrib.exe', '-s', '-h', str(f)], capture_output=True, timeout=15)
                 f.unlink()
-            except OSError:
+            except (OSError, subprocess.SubprocessError):
                 pass
     try:
         if WINDOWS:
-            subprocess.run(['attrib.exe', '-s', str(alvo)], capture_output=True)
+            subprocess.run(['attrib.exe', '-s', str(alvo)], capture_output=True, timeout=15)
         alvo.rmdir()
         t.ok('Pasta Katharos removida da área de trabalho.')
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         t.aviso('A pasta tem outros arquivos além dos atalhos do Katharos; deixei ela e só tirei os atalhos.')
 
 

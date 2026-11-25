@@ -32,7 +32,7 @@ def escreve_regras(destino=None):
         arq.parent.mkdir(parents=True, exist_ok=True)
         tmp = arq.with_name(arq.name + '.tmp')
         tmp.write_text(json.dumps(REGRAS_MOTOR, ensure_ascii=False, indent=1, sort_keys=True) + '\n', encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
         return True
     except OSError as e:
         LOG.escreve(f'regras: {e!r}')
@@ -131,7 +131,7 @@ def escreve_config_sp():
         CASA.mkdir(parents=True, exist_ok=True)
         tmp = CASA / (SP_CONFIG + '.tmp')
         tmp.write_text(json.dumps(config_segundo_plano(), ensure_ascii=False, indent=1), encoding='utf-8')
-        os.replace(tmp, CASA / SP_CONFIG)
+        troca(tmp, CASA / SP_CONFIG)
         escreve_regras()
         return True
     except OSError as e:

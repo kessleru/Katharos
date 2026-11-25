@@ -29,7 +29,7 @@ def registra_metrica(m, quando=None, arq=None):
         if len(linhas) > METRICAS_MAX:
             tmp = arq.with_suffix('.tmp')
             tmp.write_text('\n'.join(linhas[-METRICAS_MAX:]) + '\n', encoding='utf-8')
-            os.replace(tmp, arq)
+            troca(tmp, arq)
     except OSError as e:
         LOG.escreve(f'não consegui aparar as métricas: {e!r}')
     return amostra

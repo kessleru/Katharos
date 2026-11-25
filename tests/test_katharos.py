@@ -4547,3 +4547,55 @@ class TestRelatorio501(unittest.TestCase):
         self.assertIn(frase, cs)
         chave = re.compile(r'\berr(?:o|or)\b|traceback|exception|falh(?:a|ou)|n[aã]o (?:deu|abriu|ligou|conseguiu)|interno|fechou por', re.I)
         self.assertFalse(chave.search(frase), 'a frase não pode cair no filtro de erros do relatório')
+
+
+class TestTrocaDeArquivo(unittest.TestCase):
+    """No Windows, trocar o arquivo de estado falha por um instante se outro processo o lê ou o antivírus examina a cópia nova.
+    A troca tenta de novo em vez de perder a gravação, e não deixa o .tmp para trás quando desiste."""
+
+    def test_tenta_de_novo_e_grava(self):
+        d = Path(tempfile.mkdtemp())
+        arq, tmp = d / 'x.json', d / 'x.json.tmp'
+        arq.write_text('{"v": 1}', encoding='utf-8')
+        tmp.write_text('{"v": 2}', encoding='utf-8')
+        real, falhas = os.replace, [PermissionError(13, 'em uso'), PermissionError(13, 'em uso')]
+
+        def replace(a, b):
+            if falhas:
+                raise falhas.pop()
+            return real(a, b)
+        with mock.patch.object(k.os, 'replace', replace), mock.patch.object(k.time, 'sleep', lambda s: None):
+            k.troca(tmp, arq)
+        self.assertEqual(json.loads(arq.read_text(encoding='utf-8')), {'v': 2})
+        self.assertFalse(tmp.exists())
+
+    def test_desiste_sem_deixar_tmp(self):
+        d = Path(tempfile.mkdtemp())
+        arq, tmp = d / 'x.json', d / 'x.json.tmp'
+        arq.write_text('{"v": 1}', encoding='utf-8')
+        tmp.write_text('{"v": 2}', encoding='utf-8')
+
+        def replace(a, b):
+            raise PermissionError(13, 'em uso')
+        with mock.patch.object(k.os, 'replace', replace), mock.patch.object(k.time, 'sleep', lambda s: None):
+            with self.assertRaises(PermissionError):
+                k.troca(tmp, arq)
+        self.assertFalse(tmp.exists())
+        self.assertEqual(json.loads(arq.read_text(encoding='utf-8')), {'v': 1})
+
+    def test_grava_json_usa_a_troca(self):
+        d = Path(tempfile.mkdtemp())
+        chamadas = []
+        with mock.patch.object(k, 'troca', lambda t, a: (chamadas.append(a), os.replace(t, a))):
+            k.grava_json(d / 'c.json', {'a': 1})
+        self.assertEqual(chamadas, [d / 'c.json'])
+
+
+class TestParametrosDaApi(unittest.TestCase):
+    def test_dias_invalido_vira_padrao(self):
+        self.assertEqual(k._inteiro('abc', 60, 1, 3650), 60)
+        self.assertEqual(k._inteiro(None, 60, 1, 3650), 60)
+        self.assertEqual(k._inteiro('30', 60, 1, 3650), 30)
+        self.assertEqual(k._inteiro(-5, 60, 1, 3650), 1)
+        self.assertEqual(k._inteiro(10 ** 9, 60, 1, 3650), 3650)
+        self.assertEqual(k._inteiro([], 60, 1, 3650), 60)

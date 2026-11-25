@@ -42,15 +42,28 @@ public abstract class Conversa : IAsyncDisposable
     protected async Task Liga(TextReader entrada, TextWriter saida, CancellationToken ct)
     {
         this.saida = saida;
-        string? primeira;
-        try { primeira = await entrada.ReadLineAsync(ct).AsTask().WaitAsync(Abertura, ct); }
-        catch (TimeoutException)
+        // a primeira linha JSON é o "pronto". Uma linha solta antes dela (aviso do Python ou de um programa que se injeta no processo)
+        // não derruba a abertura: vai para o registro e a leitura continua, dentro do mesmo prazo
+        JsonNode? p = null;
+        var prazo = Stopwatch.StartNew();
+        while (p == null)
         {
-            Derruba();
-            throw new ErroDoMotor("demorou", "O motor do Katharos não ficou pronto em " + (int)Abertura.TotalSeconds + " segundos. Pode ser o antivírus verificando o programa na primeira vez: espere um pouco e tente de novo.");
+            string? primeira;
+            var resta = Abertura - prazo.Elapsed;
+            try
+            {
+                if (resta <= TimeSpan.Zero) throw new TimeoutException();
+                primeira = await entrada.ReadLineAsync(ct).AsTask().WaitAsync(resta, ct);
+            }
+            catch (TimeoutException)
+            {
+                Derruba();
+                throw new ErroDoMotor("demorou", "O motor do Katharos não ficou pronto em " + (int)Abertura.TotalSeconds + " segundos. Pode ser o antivírus verificando o programa na primeira vez: espere um pouco e tente de novo.");
+            }
+            if (primeira == null) throw new ErroDoMotor("sem_resposta", "o motor fechou antes de responder");
+            try { p = JsonNode.Parse(primeira); }
+            catch (JsonException) { Registro.Escreve("motor: linha antes do pronto: " + (primeira.Length > 200 ? primeira[..200] : primeira)); }
         }
-        if (primeira == null) throw new ErroDoMotor("sem_resposta", "o motor fechou antes de responder");
-        var p = JsonNode.Parse(primeira);
         if (p?["pronto"]?.GetValue<bool>() != true)
             throw new ErroDoMotor(p?["erro"]?["codigo"]?.ToString() ?? "sem_resposta", p?["erro"]?["texto"]?.ToString() ?? "o motor não ficou pronto");
         Versao = p["versao"]?.ToString() ?? "";
@@ -186,7 +199,8 @@ public sealed class MotorComum : Conversa
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
-        try { if (proc is { HasExited: false }) { if (!proc.WaitForExit(2000)) proc.Kill(); } } catch { }
+        // sem resposta ao "sair": fecha o Python e os PowerShell que ele abriu (a árvore toda), para não sobrar processo de ~110 MB
+        try { if (proc is { HasExited: false }) { if (!proc.WaitForExit(2000)) proc.Kill(true); } } catch { }
         proc?.Dispose();
     }
 }

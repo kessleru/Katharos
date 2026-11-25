@@ -227,7 +227,7 @@ def _muda_cache_ja(novos, apaga):
         tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO,
                                    'itens': {f'{p}/{i}': {'ja': ja, 't': round(t)} for (p, i), (ja, t) in atual.items()}},
                                   ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
     except OSError as e:
         LOG.escreve(f'cache do já feito: não gravou: {e!r}')
 

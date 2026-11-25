@@ -95,7 +95,7 @@ def escreve_linha_de_base(minutos=None, agora=None):
         d = {'quando': agora_iso(), 'metricas': linha_de_base_toda(minutos if minutos is not None else le_minutos(24 * BASE_DIAS), agora)}
         tmp = CASA / f'linha-de-base.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, CASA / 'linha-de-base.json')
+        troca(tmp, CASA / 'linha-de-base.json')
         return d
     except OSError as e:
         LOG.escreve(f'linha de base: {e!r}')

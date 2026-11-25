@@ -402,7 +402,7 @@ def guarda_perfil(p):
         arq.parent.mkdir(parents=True, exist_ok=True)
         tmp = arq.with_name(f'perfil.{os.getpid()}.tmp')
         tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO, 't': round(time.time()), 'perfil': p}, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
     except OSError as e:
         LOG.escreve(f'perfil: não gravou: {e!r}')
 

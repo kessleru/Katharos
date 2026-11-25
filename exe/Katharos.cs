@@ -107,7 +107,19 @@ namespace KatharosApp
             Directory.CreateDirectory(Path.GetDirectoryName(arq));
             string tmp = arq + ".tmp";
             File.WriteAllText(tmp, texto, new UTF8Encoding(false));
-            if (File.Exists(arq)) File.Replace(tmp, arq, null); else File.Move(tmp, arq);
+            // no Windows a troca falha por um instante se outro processo está lendo o arquivo (o motor, a janela) ou o antivírus examina
+            // o .tmp recém-gravado: tenta de novo por até ~1 s em vez de perder a gravação
+            for (int n = 0; ; n++)
+            {
+                try
+                {
+                    if (File.Exists(arq)) File.Replace(tmp, arq, null); else File.Move(tmp, arq);
+                    return;
+                }
+                catch (IOException) { if (n >= 7) throw; }
+                catch (UnauthorizedAccessException) { if (n >= 7) throw; }
+                Thread.Sleep(20 + 20 * n);
+            }
         }
     }
 

@@ -1125,6 +1125,26 @@ AVISOS_INICIO = []   # avisos de coisas que deram errado antes de haver terminal
 AVISO_VIVO = None    # depois que o terminal existe, os avisos aparecem na hora
 
 
+def troca(tmp, arq, tentativas=12):
+    """Põe o arquivo novo (tmp) no lugar de arq de uma vez. No Windows a troca falha com "acesso negado" se, naquele instante, outro
+    processo estiver lendo arq (a janela, o segundo plano, a manutenção) ou o antivírus estiver examinando o tmp recém-gravado. Isso
+    passa em milissegundos: tenta de novo por até ~1,5 s antes de desistir, e não deixa o tmp para trás."""
+    espera = 0.02
+    for n in range(tentativas):
+        try:
+            os.replace(tmp, arq)
+            return
+        except PermissionError:
+            if n == tentativas - 1:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
+            time.sleep(espera)
+            espera = min(espera * 1.6, 0.25)
+
+
 def le_json(arq, padrao):
     """Lê um JSON. Arquivo que não existe devolve o padrão. Arquivo que existe mas está ilegível é guardado ao lado
     (nome.corrompido-DATA) e a pessoa é avisada: antes isso zerava o estado sem ninguém ver."""
@@ -1163,7 +1183,7 @@ def grava_json(arq, dados):
     tmp = arq.with_name(f'{arq.name}.{os.getpid()}.{threading.get_ident()}.tmp')
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, arq)
+    troca(tmp, arq)
 
 
 def config(chave, padrao=None):
@@ -1437,7 +1457,10 @@ def env_ps():
 
 def mata_arvore(pid):
     if WINDOWS:
-        subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:   # com prazo: um taskkill preso não pode segurar quem só queria fechar um processo
+            subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            pass
     else:
         try:
             os.kill(pid, 9)
@@ -2982,7 +3005,7 @@ def guarda_perfil(p):
         arq.parent.mkdir(parents=True, exist_ok=True)
         tmp = arq.with_name(f'perfil.{os.getpid()}.tmp')
         tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO, 't': round(time.time()), 'perfil': p}, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
     except OSError as e:
         LOG.escreve(f'perfil: não gravou: {e!r}')
 
@@ -4737,7 +4760,7 @@ def _muda_cache_ja(novos, apaga):
         tmp.write_text(json.dumps({'build': build_atual(), 'versao': VERSAO,
                                    'itens': {f'{p}/{i}': {'ja': ja, 't': round(t)} for (p, i), (ja, t) in atual.items()}},
                                   ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
     except OSError as e:
         LOG.escreve(f'cache do já feito: não gravou: {e!r}')
 
@@ -7125,7 +7148,10 @@ def _pos_sfc(ctx, cod, txt):
 
 def _pos_chkdsk(ctx, cod, txt):
     if cod not in (0,):
-        subprocess.run('echo Y| chkdsk C: /f', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:   # só agenda o reparo para o próximo reinício: é rápido, mas com prazo
+            subprocess.run('echo Y| chkdsk C: /f', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        except (OSError, subprocess.SubprocessError):
+            return 'chkdsk: encontrou problemas, mas não consegui agendar o reparo; rode "chkdsk C: /f" como administrador'
         return 'chkdsk: encontrou problemas; o reparo completo vai rodar no próximo reinício'
     return 'chkdsk: nenhum problema no disco'
 
@@ -9170,16 +9196,16 @@ def remove_atalhos(t):
                 if f.name == 'desktop.ini':
                     os.chmod(f, 0o666)
                     if WINDOWS:
-                        subprocess.run(['attrib.exe', '-s', '-h', str(f)], capture_output=True)
+                        subprocess.run(['attrib.exe', '-s', '-h', str(f)], capture_output=True, timeout=15)
                 f.unlink()
-            except OSError:
+            except (OSError, subprocess.SubprocessError):
                 pass
     try:
         if WINDOWS:
-            subprocess.run(['attrib.exe', '-s', str(alvo)], capture_output=True)
+            subprocess.run(['attrib.exe', '-s', str(alvo)], capture_output=True, timeout=15)
         alvo.rmdir()
         t.ok('Pasta Katharos removida da área de trabalho.')
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         t.aviso('A pasta tem outros arquivos além dos atalhos do Katharos; deixei ela e só tirei os atalhos.')
 
 
@@ -9995,10 +10021,10 @@ def executa_turbo(ctx, args, plano):
     if pid_arq.exists():
         try:
             outro = int(pid_arq.read_text())
-            if outro != os.getpid() and WINDOWS and str(outro) in subprocess.run(['tasklist', '/FI', f'PID eq {outro}'], capture_output=True, text=True).stdout:
+            if outro != os.getpid() and WINDOWS and str(outro) in subprocess.run(['tasklist', '/FI', f'PID eq {outro}'], capture_output=True, text=True, timeout=20).stdout:
                 t.aviso('O turbo já está rodando em outra janela. Espere ele terminar.')
                 return 0
-        except (ValueError, OSError):
+        except (ValueError, OSError, subprocess.SubprocessError):
             pass
     pid_arq.write_text(str(os.getpid()))
     if t.guia:
@@ -10045,7 +10071,10 @@ def executa_turbo(ctx, args, plano):
                 tarefa_continuar(ctx, criar=True)
                 t.aviso('Reiniciando em 60 s. Salve o que estiver aberto. Para cancelar: shutdown /a')
                 t.fim('reiniciando', 'aviso')
-                subprocess.run(['shutdown', '/r', '/t', '60', '/c', 'Katharos: o turbo continua sozinho depois que você entrar.'])
+                try:
+                    subprocess.run(['shutdown', '/r', '/t', '60', '/c', 'Katharos: o turbo continua sozinho depois que você entrar.'], timeout=30)
+                except (OSError, subprocess.SubprocessError):
+                    t.aviso('O Windows não aceitou o pedido de reinício. Reinicie você mesmo: o turbo continua depois que você entrar.')
                 return 0
             else:
                 its = _itens_da_etapa(ctx, plano, etapa)
@@ -11247,7 +11276,7 @@ def mede_travadas(segundos=60, pr=None):
     if not isinstance(d, dict):
         return {'erro': f'a medida não terminou (código {cod})'}
     if not d.get('erro'):
-        os.replace(tmp, destino)
+        troca(tmp, destino)
         estado_marca_travadas()
     return d
 
@@ -11513,7 +11542,7 @@ def grava_ultima_amostra(a):
         d['quando'] = agora_iso()
         tmp = CASA / (ULTIMA_AMOSTRA + '.tmp')
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, CASA / ULTIMA_AMOSTRA)
+        troca(tmp, CASA / ULTIMA_AMOSTRA)
     except (OSError, TypeError, ValueError) as e:
         LOG.escreve(f'ícone: não gravei a última amostra ({e!r})')
 
@@ -11580,7 +11609,7 @@ def registra_metrica(m, quando=None, arq=None):
         if len(linhas) > METRICAS_MAX:
             tmp = arq.with_suffix('.tmp')
             tmp.write_text('\n'.join(linhas[-METRICAS_MAX:]) + '\n', encoding='utf-8')
-            os.replace(tmp, arq)
+            troca(tmp, arq)
     except OSError as e:
         LOG.escreve(f'não consegui aparar as métricas: {e!r}')
     return amostra
@@ -11941,7 +11970,7 @@ def registra_hora(a, quando=None, arq=None):
         linhas = linhas[-HORAS_MAX:]
     tmp = arq.with_suffix('.tmp')
     tmp.write_text('\n'.join(linhas) + '\n', encoding='utf-8')
-    os.replace(tmp, arq)
+    troca(tmp, arq)
     return bucket
 
 
@@ -12167,7 +12196,7 @@ def escreve_regras(destino=None):
         arq.parent.mkdir(parents=True, exist_ok=True)
         tmp = arq.with_name(arq.name + '.tmp')
         tmp.write_text(json.dumps(REGRAS_MOTOR, ensure_ascii=False, indent=1, sort_keys=True) + '\n', encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
         return True
     except OSError as e:
         LOG.escreve(f'regras: {e!r}')
@@ -12266,7 +12295,7 @@ def escreve_config_sp():
         CASA.mkdir(parents=True, exist_ok=True)
         tmp = CASA / (SP_CONFIG + '.tmp')
         tmp.write_text(json.dumps(config_segundo_plano(), ensure_ascii=False, indent=1), encoding='utf-8')
-        os.replace(tmp, CASA / SP_CONFIG)
+        troca(tmp, CASA / SP_CONFIG)
         escreve_regras()
         return True
     except OSError as e:
@@ -14488,7 +14517,7 @@ def exporta_propostas(ctx=None):
              'achados': [{k: x.get(k) for k in ('id', 'tipo', 'titulo', 'vi', 'confianca', 'gravidade', 'contexto', 'fonte')} for x in p['achados']][:20]}
         tmp = CASA / f'propostas.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, CASA / 'propostas.json')
+        troca(tmp, CASA / 'propostas.json')
         return 0
     except Exception as ex:
         LOG.escreve(f'exportar propostas: {ex!r}')
@@ -15224,7 +15253,7 @@ def memoria_exporta(arq):
         out['estado'] = {k: e.get(k) for k in ('conselheiro_respostas', 'conselheiro_feitos', 'conselheiro_dispensadas', 'conselheiro_vistas')}
         tmp = Path(str(arq) + '.tmp')
         tmp.write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
         return Path(arq)
     finally:
         con.close()
@@ -15355,7 +15384,7 @@ def escreve_linha_de_base(minutos=None, agora=None):
         d = {'quando': agora_iso(), 'metricas': linha_de_base_toda(minutos if minutos is not None else le_minutos(24 * BASE_DIAS), agora)}
         tmp = CASA / f'linha-de-base.json.{os.getpid()}.tmp'
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, CASA / 'linha-de-base.json')
+        troca(tmp, CASA / 'linha-de-base.json')
         return d
     except OSError as e:
         LOG.escreve(f'linha de base: {e!r}')
@@ -15821,6 +15850,15 @@ def _segundo_plano():
     sp = (a or {}).get('segundo_plano') or {}
     return {'rodando': bool(a) and (sp_rodando() if WINDOWS else True), 'ligado': estado().get('segundo_plano') == 'sim',
             'cpu_pct': sp.get('cpu_pct'), 'ram_mb': sp.get('ram_mb'), 'intervalo_s': (a or {}).get('intervalo_s')}
+
+
+def _inteiro(v, padrao, minimo, maximo):
+    """Número vindo de um pedido: o que não for número vira o padrão (antes virava "erro interno"), e fica dentro dos limites."""
+    try:
+        n = int(v) if v not in (None, '', False) else padrao
+    except (TypeError, ValueError):
+        n = padrao
+    return max(minimo, min(maximo, n))
 
 
 def _iso_ts(iso):
@@ -16291,7 +16329,7 @@ def api_agora(ctx, p, ev):
 @metodo_api('sessoes')
 def api_sessoes(ctx, p, ev):
     """As sessões de jogo gravadas, o resumo e o antes e depois de cada jogo."""
-    dias = int(p.get('dias') or 60)
+    dias = _inteiro(p.get('dias'), 60, 1, 3650)
     ss = le_sessoes(dias)
     try:
         comp = comparacoes_por_jogo(ss, pacotes_aplicados_dt())
@@ -16605,7 +16643,7 @@ def api_historico(ctx, p, ev):
     o efeito de cada mudança (com veredito honesto: melhorou, piorou, sem diferença, já vinha mudando, poucas medidas) e o que está
     mudando agora."""
     am = le_metricas()
-    dias = int(p.get('dias') or 60)
+    dias = _inteiro(p.get('dias'), 60, 1, 3650)
     corte = datetime.now() - timedelta(days=dias)
     pacotes = pacotes_aplicados_dt()
     series = []

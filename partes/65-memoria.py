@@ -324,7 +324,7 @@ def memoria_exporta(arq):
         out['estado'] = {k: e.get(k) for k in ('conselheiro_respostas', 'conselheiro_feitos', 'conselheiro_dispensadas', 'conselheiro_vistas')}
         tmp = Path(str(arq) + '.tmp')
         tmp.write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, arq)
+        troca(tmp, arq)
         return Path(arq)
     finally:
         con.close()

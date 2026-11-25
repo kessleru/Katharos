@@ -75,6 +75,26 @@ AVISOS_INICIO = []   # avisos de coisas que deram errado antes de haver terminal
 AVISO_VIVO = None    # depois que o terminal existe, os avisos aparecem na hora
 
 
+def troca(tmp, arq, tentativas=12):
+    """Põe o arquivo novo (tmp) no lugar de arq de uma vez. No Windows a troca falha com "acesso negado" se, naquele instante, outro
+    processo estiver lendo arq (a janela, o segundo plano, a manutenção) ou o antivírus estiver examinando o tmp recém-gravado. Isso
+    passa em milissegundos: tenta de novo por até ~1,5 s antes de desistir, e não deixa o tmp para trás."""
+    espera = 0.02
+    for n in range(tentativas):
+        try:
+            os.replace(tmp, arq)
+            return
+        except PermissionError:
+            if n == tentativas - 1:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
+            time.sleep(espera)
+            espera = min(espera * 1.6, 0.25)
+
+
 def le_json(arq, padrao):
     """Lê um JSON. Arquivo que não existe devolve o padrão. Arquivo que existe mas está ilegível é guardado ao lado
     (nome.corrompido-DATA) e a pessoa é avisada: antes isso zerava o estado sem ninguém ver."""
@@ -113,7 +133,7 @@ def grava_json(arq, dados):
     tmp = arq.with_name(f'{arq.name}.{os.getpid()}.{threading.get_ident()}.tmp')
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, arq)
+    troca(tmp, arq)
 
 
 def config(chave, padrao=None):
@@ -387,7 +407,10 @@ def env_ps():
 
 def mata_arvore(pid):
     if WINDOWS:
-        subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:   # com prazo: um taskkill preso não pode segurar quem só queria fechar um processo
+            subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            pass
     else:
         try:
             os.kill(pid, 9)

@@ -77,7 +77,7 @@ def mede_travadas(segundos=60, pr=None):
     if not isinstance(d, dict):
         return {'erro': f'a medida não terminou (código {cod})'}
     if not d.get('erro'):
-        os.replace(tmp, destino)
+        troca(tmp, destino)
         estado_marca_travadas()
     return d
 

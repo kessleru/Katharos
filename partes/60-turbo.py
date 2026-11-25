@@ -319,10 +319,10 @@ def executa_turbo(ctx, args, plano):
     if pid_arq.exists():
         try:
             outro = int(pid_arq.read_text())
-            if outro != os.getpid() and WINDOWS and str(outro) in subprocess.run(['tasklist', '/FI', f'PID eq {outro}'], capture_output=True, text=True).stdout:
+            if outro != os.getpid() and WINDOWS and str(outro) in subprocess.run(['tasklist', '/FI', f'PID eq {outro}'], capture_output=True, text=True, timeout=20).stdout:
                 t.aviso('O turbo já está rodando em outra janela. Espere ele terminar.')
                 return 0
-        except (ValueError, OSError):
+        except (ValueError, OSError, subprocess.SubprocessError):
             pass
     pid_arq.write_text(str(os.getpid()))
     if t.guia:
@@ -369,7 +369,10 @@ def executa_turbo(ctx, args, plano):
                 tarefa_continuar(ctx, criar=True)
                 t.aviso('Reiniciando em 60 s. Salve o que estiver aberto. Para cancelar: shutdown /a')
                 t.fim('reiniciando', 'aviso')
-                subprocess.run(['shutdown', '/r', '/t', '60', '/c', 'Katharos: o turbo continua sozinho depois que você entrar.'])
+                try:
+                    subprocess.run(['shutdown', '/r', '/t', '60', '/c', 'Katharos: o turbo continua sozinho depois que você entrar.'], timeout=30)
+                except (OSError, subprocess.SubprocessError):
+                    t.aviso('O Windows não aceitou o pedido de reinício. Reinicie você mesmo: o turbo continua depois que você entrar.')
                 return 0
             else:
                 its = _itens_da_etapa(ctx, plano, etapa)

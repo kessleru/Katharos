@@ -155,7 +155,7 @@ def registra_hora(a, quando=None, arq=None):
         linhas = linhas[-HORAS_MAX:]
     tmp = arq.with_suffix('.tmp')
     tmp.write_text('\n'.join(linhas) + '\n', encoding='utf-8')
-    os.replace(tmp, arq)
+    troca(tmp, arq)
     return bucket
 
 
