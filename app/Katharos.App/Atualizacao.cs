@@ -126,7 +126,10 @@ public static class Atualizacao
         var g = Gerente();
         if (g == null || pronta == null || Ocupado) return false;
         SegundoPlano.PedeParaSair(reabrir: true);
-        g.ApplyUpdatesAndRestart(pronta.TargetFullRelease);
+        // a troca pode falhar (arquivo preso pelo antivírus, pacote baixado que sumiu): quem chamou cai no "na próxima vez" em vez de
+        // mostrar um erro e deixar a versão nova sem data para entrar
+        try { g.ApplyUpdatesAndRestart(pronta.TargetFullRelease); }
+        catch (Exception e) { Registro.Escreve("atualização: reiniciar agora: " + Motivo(e)); return false; }
         return true;
     }
 }
