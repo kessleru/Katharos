@@ -8,22 +8,22 @@ Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). 
 
 | Item | Vem marcado a partir de | Volta | Ganha | Perde |
 |---|---|---|---|---|
-| temporários | - | sim | espaço; às vezes centenas de MB | nenhum |
-| downloads do Windows Update | - | sim | espaço (pode passar de 1 GB) | nenhum |
-| cache da Otimização de Entrega | - | sim | espaço | nenhum |
-| relatórios de erro e dumps | - | sim | espaço (dumps podem ter GBs) | quem investiga uma tela azul antiga perde o arquivo |
-| cache de miniaturas | - | sim | espaço; conserta miniaturas erradas | pastas de fotos demoram um pouco na primeira abertura |
-| logs antigos do Windows | - | sim | espaço | nenhum no uso normal |
-| cache dos navegadores | - | sim | espaço (às vezes vários GB) | os sites carregam um pouco mais devagar na primeira visita |
-| cache de shaders da placa de vídeo | - | sim | espaço de jogos que você não abre mais | um jogo antigo recompila na primeira vez que abrir |
-| instaladores guardados por programas | - | sim | espaço | reparar esses programas pode pedir o instalador de novo |
-| caches de desenvolvimento | - | sim | espaço | a próxima instalação de pacotes baixa de novo |
-| Limpeza de Disco do Windows | - | sim | espaço (costuma liberar GBs depois de grandes atualizações) | demora (até 30 min em HD) |
-| Windows.old (versão anterior do Windows) | - | sim | espaço (10 a 30 GB) | não dá mais para voltar à versão anterior |
-| componentes antigos do Windows (DISM) | - | sim | espaço (centenas de MB a alguns GB) | demora |
-| componentes, de forma definitiva | - | **não** | mais espaço | não dá mais para desinstalar atualizações já instaladas |
-| armazenamento reservado do Windows | - | sim | cerca de 7 GB | com o disco cheio, atualizações grandes podem falhar |
-| esvaziar a Lixeira | - | **não** | espaço | é definitivo: não dá para recuperar |
+| temporários | janela: não; terminal: seguro | **não** | espaço; às vezes centenas de MB | nenhum |
+| downloads do Windows Update | janela: não; terminal: seguro | **não** | espaço (pode passar de 1 GB) | nenhum |
+| cache da Otimização de Entrega | janela: não; terminal: seguro | **não** | espaço | nenhum |
+| relatórios de erro e dumps | janela: não; terminal: seguro | **não** | espaço (dumps podem ter GBs) | quem investiga uma tela azul antiga perde o arquivo |
+| cache de miniaturas | janela: não; terminal: seguro | **não** | espaço; conserta miniaturas erradas | pastas de fotos demoram um pouco na primeira abertura |
+| logs antigos do Windows | janela: não; terminal: equilibrado | **não** | espaço | nenhum no uso normal |
+| cache dos navegadores | janela: não; terminal: equilibrado | **não** | espaço (às vezes vários GB) | os sites carregam um pouco mais devagar na primeira visita |
+| cache de shaders da placa de vídeo | janela: não; terminal: equilibrado | **não** | espaço de jogos que você não abre mais | um jogo antigo recompila na primeira vez que abrir |
+| instaladores guardados por programas | janela: não; terminal: equilibrado | **não** | espaço | reparar esses programas pode pedir o instalador de novo |
+| caches de desenvolvimento | janela: não; terminal: equilibrado | **não** | espaço | a próxima instalação de pacotes baixa de novo |
+| Limpeza de Disco do Windows | janela: não; terminal: equilibrado | **não** | espaço (costuma liberar GBs depois de grandes atualizações) | demora (até 30 min em HD) |
+| Windows.old (versão anterior do Windows) | janela: não; terminal: só se marcar | **não** | espaço (10 a 30 GB) | não dá mais para voltar à versão anterior do Windows |
+| componentes antigos do Windows (DISM) | janela: não; terminal: equilibrado | **não** | espaço (centenas de MB a alguns GB) | demora |
+| componentes, de forma definitiva | janela: não; terminal: extremo | **não** | mais espaço | não dá mais para desinstalar atualizações já instaladas |
+| armazenamento reservado do Windows | janela: não; terminal: extremo | **não** | cerca de 7 GB | com o disco cheio, atualizações grandes podem falhar |
+| esvaziar a Lixeira | janela: não; terminal: só se marcar | **não** | espaço | é definitivo: não dá para recuperar |
 
 ## ia
 
@@ -46,7 +46,7 @@ Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). 
 |---|---|---|---|---|
 | mapas, demonstração, mídia e Insider | seguro | sim | menos serviços rodando | nenhum |
 | fax | seguro | sim | um serviço a menos | não envia fax pelo PC |
-| impressão | equilibrado | sim | menos dois serviços | não imprime, nem "Imprimir em PDF" |
+| impressão | extremo | sim | menos dois serviços (quase nada de RAM) | não imprime, nem "Imprimir em PDF"; uma impressora ligada depois não funciona até você desfazer isto |
 | Xbox | só se marcar | sim | menos quatro serviços | perde Game Pass, login Xbox em jogos e controle Xbox sem fio pelo adaptador |
 | indexação da busca (Windows Search) | extremo | sim | menos leitura de disco em segundo plano | a busca por arquivos no menu e no Explorador fica bem mais lenta |
 | recursos de empresa | equilibrado | sim | menos serviços | nenhum em PC doméstico |
@@ -86,12 +86,12 @@ Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). 
 | portas de entrada antigas fechadas | seguro | sim | mais segurança | aparelhos de rede muito antigos (antes de 2010) podem não abrir pastas |
 | programa do fabricante gravado no firmware | equilibrado | sim | nenhum programa entra pelo firmware sem você saber | o app da marca não se reinstala sozinho (instale pelo site dela se quiser) |
 | apps de fabricante instalados sozinhos | seguro | sim | nada instala sem você pedir | o programa da marca, se você quiser, se instala pelo site dela |
-| apps da Loja sem acesso a contatos, agenda, e-mail e chamadas | equilibrado | sim | apps da Loja não leem seus dados pessoais | um app da Loja que precise disso (Outlook novo, Teams) pede de novo ou para de ver |
+| apps da Loja sem acesso a contatos, agenda, e-mail e chamadas | extremo | sim | apps da Loja não leem seus dados pessoais | o Vincular ao Celular para de mostrar chamadas, mensagens e contatos do telefone; nenhum app pode pedir de novo até você desfazer |
 | busca do menu sem resultados da web | equilibrado | sim | busca mais rápida e privada | pesquisas na web vão para o navegador |
 | widgets e notícias | equilibrado | sim | menos um processo do Edge em segundo plano | perde o painel de widgets |
-| apps da Loja em segundo plano | equilibrado | sim | pouco de RAM e CPU | apps da Loja fechados (WhatsApp, Teams novo) podem não notificar |
+| apps da Loja em segundo plano | extremo | sim | pouco de RAM e CPU (no Windows 11 quase nada: ele ignora esta chave) | apps da Loja fechados (WhatsApp, Teams novo, Vincular ao Celular) podem não notificar |
 | bloquear segundo plano para todos | extremo | sim | mais RAM e CPU livres | nenhum app da Loja notifica fechado |
-| relatório de erros | equilibrado | sim | menos disco depois de travamentos | a Microsoft não recebe seus relatórios; soluções automáticas não aparecem |
+| relatório de erros | extremo | sim | menos disco depois de travamentos | a Microsoft não recebe seus relatórios, soluções automáticas não aparecem e investigar uma tela azul fica mais difícil |
 | localização | extremo | sim | privacidade | fuso automático, mapas, clima local e "Encontrar meu dispositivo" param |
 | Edge sem rodar escondido | seguro | sim | menos RAM no boot | o Edge demora um pouco mais para abrir |
 
@@ -170,26 +170,26 @@ Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). 
 
 | Item | Vem marcado a partir de | Volta | Ganha | Perde |
 |---|---|---|---|---|
-| reparar a imagem do Windows (DISM) | - | sim | conserta erros de atualização e travamentos | demora (até 1 h em HD) |
-| conferir arquivos do sistema (SFC) | - | sim | conserta erros estranhos e telas azuis por arquivo corrompido | demora (até 45 min) |
-| verificar o disco (chkdsk) | - | sim | evita perda de arquivos | nenhum |
-| conferir o WMI | - | sim | conserta CPU alta do WmiPrvSE por repositório corrompido | nenhum |
-| limpar o cache de DNS | - | **não** | conserta site que mudou de endereço e não abre | nenhum |
-| restaurar a pilha de rede | - | **não** | conserta internet que não funciona por configuração quebrada | precisa reiniciar; VPNs e alguns antivírus podem precisar ser reinstalados |
-| restaurar o Windows Update | - | **não** | conserta Windows Update preso em erro | o histórico de atualizações aparece vazio |
-| consertar a Loja | - | **não** | conserta Loja que não abre ou não baixa | nenhum |
-| reconstruir o cache de ícones | - | **não** | conserta ícones brancos ou trocados | o Explorador reinicia |
-| registrar de novo o menu Iniciar e a busca | - | **não** | conserta menu Iniciar que não abre | nenhum |
+| reparar a imagem do Windows (DISM) | janela: não; terminal: seguro | sim | conserta erros de atualização e travamentos | demora (até 1 h em HD) |
+| conferir arquivos do sistema (SFC) | janela: não; terminal: seguro | sim | conserta erros estranhos e telas azuis por arquivo corrompido | demora (até 45 min) |
+| verificar o disco (chkdsk) | janela: não; terminal: seguro | sim | evita perda de arquivos | nenhum |
+| conferir o WMI | janela: não; terminal: equilibrado | sim | conserta CPU alta do WmiPrvSE por repositório corrompido | nenhum |
+| limpar o cache de DNS | janela: não; terminal: seguro | **não** | conserta site que mudou de endereço e não abre | nenhum |
+| restaurar a pilha de rede | janela: não; terminal: só se marcar | **não** | conserta internet que não funciona por configuração quebrada | precisa reiniciar; VPNs e alguns antivírus podem precisar ser reinstalados |
+| restaurar o Windows Update | janela: não; terminal: só se marcar | **não** | conserta Windows Update preso em erro | o histórico de atualizações aparece vazio |
+| consertar a Loja | janela: não; terminal: só se marcar | **não** | conserta Loja que não abre ou não baixa | nenhum |
+| reconstruir o cache de ícones | janela: não; terminal: só se marcar | **não** | conserta ícones brancos ou trocados | o Explorador reinicia |
+| registrar de novo o menu Iniciar e a busca | janela: não; terminal: só se marcar | **não** | conserta menu Iniciar que não abre | nenhum |
 
 ## atualizar (manutenção: não vem marcada na janela)
 
 | Item | Vem marcado a partir de | Volta | Ganha | Perde |
 |---|---|---|---|---|
-| definições do Defender | - | **não** | proteção em dia | nenhum |
-| atualizações do Windows | - | **não** | segurança e correções | demora; pode pedir reinício |
-| drivers pelo Windows Update | - | **não** | drivers mais novos e certificados | raramente um driver novo traz problema (dá para voltar no Gerenciador de Dispositivos) |
-| programas pelo winget | - | **não** | programas em dia e mais seguros | alguns programas mudam de versão principal |
-| apps da Loja | - | **não** | apps em dia | nenhum |
+| definições do Defender | janela: não; terminal: seguro | **não** | proteção em dia | nenhum |
+| atualizações do Windows | janela: não; terminal: seguro | **não** | segurança e correções | demora; pode pedir reinício |
+| drivers pelo Windows Update | janela: não; terminal: equilibrado | **não** | drivers mais novos e certificados | raramente um driver novo traz problema (dá para voltar no Gerenciador de Dispositivos) |
+| programas pelo winget | janela: não; terminal: extremo | **não** | programas em dia e mais seguros | atualiza todos de uma vez, sem você escolher: alguns mudam de versão principal (e de jeito de usar) |
+| apps da Loja | janela: não; terminal: equilibrado | **não** | apps em dia | nenhum |
 
 ## interface
 
@@ -205,9 +205,9 @@ Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). 
 | Item | Vem marcado a partir de | Volta | Ganha | Perde |
 |---|---|---|---|---|
 | instalar o Brave | só se marcar | **não** | menos RAM que Chrome e Edge | mais um programa |
-| Brave enxuto | seguro | sim | Brave mais leve | perde esses recursos do Brave |
-| Chrome enxuto | seguro | sim | menos RAM | aparece "Gerenciado pela organização" |
-| Edge enxuto | seguro | sim | menos RAM e propaganda | aparece "Gerenciado pela organização" |
+| Brave enxuto | equilibrado | sim | Brave mais leve | perde esses recursos do Brave (inclusive a carteira); aparece "Gerenciado pela organização" |
+| Chrome enxuto | equilibrado | sim | menos RAM | aparece "Gerenciado pela organização" (é só a política do Katharos; some com o Desfazer) |
+| Edge enxuto | equilibrado | sim | menos RAM e propaganda | aparece "Gerenciado pela organização" (é só a política do Katharos; some com o Desfazer) |
 
 ## rede
 

@@ -828,13 +828,18 @@ foreach ($l in $linhas) {
         switch ($o.t) {
             'reg' {
                 if ($o.existe) {
-                    $v = $o.v
-                    if ($o.tipo -eq 'Binary') { $v = [Convert]::FromBase64String([string]$o.v) }
-                    elseif ($o.tipo -eq 'MultiString') { $v = [string[]]@($o.v) }
-                    elseif ($o.tipo -eq 'DWord') { $v = [int64]$o.v; if ($v -gt 2147483647) { $v = [int32]($v - 4294967296) } }
+                    $v = $o.v; $tp = [string]$o.tipo
+                    # backup de versão antiga com o tipo errado (número com texto dentro, como "SwapEffectUpgradeEnable=0;"): volta como
+                    # texto, que é o que o valor era, em vez de falhar e deixar a mudança sem desfazer
+                    if (@('DWord', 'QWord') -contains $tp -and -not ([string]$o.v -match '^\s*-?\d+\s*$')) { $tp = 'String' }
+                    if (-not $tp) { $tp = 'String' }
+                    if ($tp -eq 'Binary') { $v = [Convert]::FromBase64String([string]$o.v) }
+                    elseif ($tp -eq 'MultiString') { $v = [string[]]@($o.v) }
+                    elseif ($tp -eq 'DWord') { $v = [int64]$o.v; if ($v -gt 2147483647) { $v = [int32]($v - 4294967296) } }
+                    elseif ($tp -eq 'QWord') { $v = [int64]$o.v }
                     if (-not (Test-Path -LiteralPath $o.p)) { New-Item -Path $o.p -Force | Out-Null }
                     if ($o.n -eq '(default)') { Set-ItemProperty -LiteralPath $o.p -Name '(default)' -Value $v }
-                    else { New-ItemProperty -LiteralPath $o.p -Name $o.n -Value $v -PropertyType $o.tipo -Force | Out-Null }
+                    else { New-ItemProperty -LiteralPath $o.p -Name $o.n -Value $v -PropertyType $tp -Force | Out-Null }
                 } else {
                     $nn = $o.n; if ($nn -eq '(default)') { $nn = '' }
                     # a chave só é apagada se foi o Katharos que a criou; senão some só o valor

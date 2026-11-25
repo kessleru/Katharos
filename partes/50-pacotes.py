@@ -102,8 +102,11 @@ else {
              'espaço', 'nenhum', 1, r'''if ($TESTE) { Plano 'limpar cache da Otimizacao de Entrega' } else { try { Delete-DeliveryOptimizationCache -Force -ErrorAction Stop; Feito 'cache da Otimizacao de Entrega limpo' } catch { Diz 'nada' 'sem cache' } }'''),
         Item('erros', 'relatórios de erro e dumps', 'Relatórios de travamento já enviados ou antigos e cópias de memória de telas azuis.',
              'espaço (dumps podem ter GBs)', 'quem investiga uma tela azul antiga perde o arquivo', 1,
-             _limpa_ps('relatorios de erro', r'''foreach ($__p in "$env:ProgramData\Microsoft\Windows\WER\ReportArchive","$env:ProgramData\Microsoft\Windows\WER\ReportQueue","$env:LOCALAPPDATA\Microsoft\Windows\WER","$env:LOCALAPPDATA\CrashDumps","$env:WINDIR\Minidump") { $__livre += LimpaAntigos $__p 7 }
-if (Test-Path "$env:WINDIR\MEMORY.DMP") { $__l = (Get-Item "$env:WINDIR\MEMORY.DMP").Length; if (-not $TESTE) { Remove-Item "$env:WINDIR\MEMORY.DMP" -Force -ErrorAction SilentlyContinue }; $__livre += $__l }''')),
+             _limpa_ps('relatorios de erro', r'''foreach ($__p in "$env:ProgramData\Microsoft\Windows\WER\ReportArchive","$env:ProgramData\Microsoft\Windows\WER\ReportQueue","$env:LOCALAPPDATA\Microsoft\Windows\WER","$env:LOCALAPPDATA\CrashDumps") { $__livre += LimpaAntigos $__p 7 }
+# os dumps de tela azul ficam 30 dias (como na manutenção do turbo): é o prazo em que um técnico ainda investiga uma tela azul recente
+$__livre += LimpaAntigos "$env:WINDIR\Minidump" 30
+$__md = Get-Item "$env:WINDIR\MEMORY.DMP" -ErrorAction SilentlyContinue
+if ($__md -and $__md.LastWriteTime -lt (Get-Date).AddDays(-30)) { $__l = $__md.Length; if (-not $TESTE) { Remove-Item $__md.FullName -Force -ErrorAction SilentlyContinue }; $__livre += $__l }''')),
         Item('miniaturas', 'cache de miniaturas', 'O Windows recria as miniaturas das fotos e vídeos quando você abre as pastas.',
              'espaço; conserta miniaturas erradas', 'pastas de fotos demoram um pouco na primeira abertura', 1,
              _limpa_ps('miniaturas', r'''foreach ($__f in @(Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Windows\Explorer" -Filter 'thumbcache_*.db' -Force -ErrorAction SilentlyContinue)) { $__l = $__f.Length; if (-not $TESTE) { Remove-Item -LiteralPath $__f.FullName -Force -ErrorAction SilentlyContinue; if (-not (Test-Path -LiteralPath $__f.FullName)) { $__livre += $__l } } else { $__livre += $__l } }''')),
@@ -128,8 +131,9 @@ if (Test-Path "$env:WINDIR\MEMORY.DMP") { $__l = (Get-Item "$env:WINDIR\MEMORY.D
              'espaço (costuma liberar GBs depois de grandes atualizações)', 'demora (até 30 min em HD)', 2,
              sagerun.replace('__SO__', "'.'").replace('__MIN__', '30').replace("-match '.'", "-notmatch $__fora"), minutos=32, sozinho=True),
         Item('windowsold', 'Windows.old (versão anterior do Windows)', 'A cópia do Windows de antes da última grande atualização. '
-             'Sai pela Limpeza de Disco, do jeito oficial.', 'espaço (10 a 30 GB)', 'não dá mais para voltar à versão anterior', 2,
-             sagerun.replace('__SO__', "'^Previous Installations$'").replace('__MIN__', '30'), minutos=32, sozinho=True)
+             'Sai pela Limpeza de Disco, do jeito oficial. O próprio Windows apaga sozinho uns 10 dias depois da atualização.', 'espaço (10 a 30 GB)',
+             'não dá mais para voltar à versão anterior do Windows', 0,
+             sagerun.replace('__SO__', "'^Previous Installations$'").replace('__MIN__', '30'), minutos=32, sozinho=True, reverte=False)
         if (not WINDOWS or Path(os.environ.get('SystemDrive', 'C:') + '\\Windows.old').exists()) else None,
         Item('componentes', 'componentes antigos do Windows (DISM)', 'Remove versões substituídas de componentes do sistema, '
              'do jeito oficial (DISM /StartComponentCleanup).', 'espaço (centenas de MB a alguns GB)', 'demora', 2,
@@ -663,8 +667,8 @@ def itens_servicos(ctx):
              '(editar o registro pela rede: desligar também é mais seguro).', 'menos serviços rodando', 'nenhum', 1,
              SVC(['MapsBroker', 'RetailDemo', 'WMPNetworkSvc', 'wisvc', 'RemoteRegistry'])),
         Item('fax', 'fax', 'Serviço de fax (Fax).', 'um serviço a menos', 'não envia fax pelo PC', 1, SVC(['Fax'])),
-        Item('impressao', 'impressão', 'Spooler e notificações de impressora.', 'menos dois serviços',
-             'não imprime, nem "Imprimir em PDF"', 2, SVC(['Spooler', 'PrintNotify']),
+        Item('impressao', 'impressão', 'Spooler e notificações de impressora.', 'menos dois serviços (quase nada de RAM)',
+             'não imprime, nem "Imprimir em PDF"; uma impressora ligada depois não funciona até você desfazer isto', 3, SVC(['Spooler', 'PrintNotify']),
              nota='') if not tem.get('impressora') else None,
         Item('xbox', 'Xbox', 'Login, salvamentos na nuvem, rede e acessórios do Xbox (XblAuthManager, XblGameSave, XboxNetApiSvc, XboxGipSvc).',
              'menos quatro serviços', 'perde Game Pass, login Xbox em jogos e controle Xbox sem fio pelo adaptador',
@@ -839,7 +843,8 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
                 R(f'{HKLM_POL}\\Device Metadata', 'PreventDeviceMetadataFromNetwork', 1))),
         Item('permissoes-apps', 'apps da Loja sem acesso a contatos, agenda, e-mail e chamadas', 'Nega, para os apps da Loja, o acesso '
              'a contatos, calendário, e-mail, mensagens, chamadas, tarefas e às informações da conta (Configurações > Privacidade).',
-             'apps da Loja não leem seus dados pessoais', 'um app da Loja que precise disso (Outlook novo, Teams) pede de novo ou para de ver', 2,
+             'apps da Loja não leem seus dados pessoais',
+             'o Vincular ao Celular para de mostrar chamadas, mensagens e contatos do telefone; nenhum app pode pedir de novo até você desfazer', 3,
              RR(*[R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\' + c, 'Value', 'Deny', 'String') for c in
                   ('contacts', 'appointments', 'email', 'chat', 'phoneCall', 'phoneCallHistory', 'userDataTasks', 'userAccountInformation')])),
         Item('busca-web', 'busca do menu sem resultados da web', 'A busca do menu Iniciar procura só no PC: sem Bing, sem sugestões '
@@ -858,14 +863,16 @@ if ($__f -and [string]$__f.State -eq 'Enabled') { if ($TESTE) { Plano 'desligar 
                   R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Feeds', 'ShellFeedsTaskbarViewMode', 2))
              + ('\n}' if pf(p, 'so.win11') else '')),
         Item('segundo-plano', 'apps da Loja em segundo plano', 'Apps da Loja deixam de rodar escondidos quando você não está usando.',
-             'pouco de RAM e CPU', 'apps da Loja fechados (WhatsApp, Teams novo) podem não notificar', 2,
+             'pouco de RAM e CPU (no Windows 11 quase nada: ele ignora esta chave)',
+             'apps da Loja fechados (WhatsApp, Teams novo, Vincular ao Celular) podem não notificar', 3,
              RR(R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications', 'GlobalUserDisabled', 1),
                 R('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', 'BackgroundAppGlobalToggle', 0))),
         Item('segundo-plano-forte', 'bloquear segundo plano para todos', 'Política da máquina que nega segundo plano a todos os apps da '
              'Loja (o Windows 11 ignora o item anterior).', 'mais RAM e CPU livres', 'nenhum app da Loja notifica fechado', 3,
              R(f'{HKLM_POL}\\AppPrivacy', 'LetAppsRunInBackground', 2)),
         Item('erros', 'relatório de erros', 'O Windows para de montar e enviar relatórios de travamento (WerSvc e política).',
-             'menos disco depois de travamentos', 'a Microsoft não recebe seus relatórios; soluções automáticas não aparecem', 2,
+             'menos disco depois de travamentos',
+             'a Microsoft não recebe seus relatórios, soluções automáticas não aparecem e investigar uma tela azul fica mais difícil', 3,
              RR(R(f'{HKLM_POL}\\Windows Error Reporting', 'Disabled', 1), SVC(['WerSvc']))),
         Item('localizacao', 'localização', 'Política que desliga a localização para todo o Windows.', 'privacidade',
              'fuso automático, mapas, clima local e "Encontrar meu dispositivo" param', 3,
@@ -1378,8 +1385,14 @@ Vivo 'procurando atualizacoes'
 $__r = $__s.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='$__tipo'").Updates
 if ($__r.Count -eq 0) { Diz 'nada' 'nada para atualizar'; return }
 $__l = New-Object -ComObject Microsoft.Update.UpdateColl
-foreach ($u in $__r) { if ($TESTE) { Plano $u.Title; continue }; if (-not $u.EulaAccepted) { $u.AcceptEula() }; [void]$__l.Add($u) }
+foreach ($u in $__r) {
+    # o driver de vídeo vem do fabricante (app da NVIDIA, AMD ou Intel): o Windows Update às vezes oferece um MAIS ANTIGO que o instalado
+    # (a Microsoft confirmou em maio de 2026; a correção só chega entre o fim de 2026 e 2027, e só para drivers novos)
+    if ($__tipo -eq 'Driver' -and [string]$u.DriverClass -match 'Display') { Info ('driver de video fica de fora (vem do fabricante): ' + $u.Title); continue }
+    if ($TESTE) { Plano $u.Title; continue }; if (-not $u.EulaAccepted) { $u.AcceptEula() }; [void]$__l.Add($u)
+}
 if ($TESTE) { return }
+if ($__l.Count -eq 0) { Diz 'nada' 'nada para atualizar'; return }
 Vivo ("baixando {0} atualizacoes" -f $__l.Count)
 $__d = $__s.CreateUpdateDownloader(); $__d.Updates = $__l; [void]$__d.Download()
 Vivo 'instalando'
@@ -1396,7 +1409,7 @@ def _py_winget(ctx, it, pr, teste):
         ctx.t.item('○', 'azul', f'winget: {n} programas com versão nova', recuo=4, cor_nome='sub')
         return 1, 0
     cod, txt = roda_exe(['winget', 'upgrade', '--all', '--silent', '--accept-source-agreements', '--accept-package-agreements',
-                         '--disable-interactivity', '--include-unknown'], 60, pr, ctx.mult)
+                         '--disable-interactivity'], 60, pr, ctx.mult)
     ok = len(re.findall(r'Successfully installed|Instalado com êxito|instalado com sucesso', txt, re.I))
     ctx.t.item('✓' if cod in (0, -1978335189) else '!', 'verde' if cod == 0 else 'amarelo',
                f'winget: {ok} programas atualizados' + ('' if cod == 0 else f' (código {cod}; alguns podem ter falhado)'), recuo=4, cor_nome='sub')
@@ -1412,11 +1425,12 @@ def itens_atualizar(ctx):
              minutos=10, reverte=False),
         Item('windows', 'atualizações do Windows', 'Procura, baixa e instala as atualizações pendentes do Windows Update.',
              'segurança e correções', 'demora; pode pedir reinício', 1, ps_monta(WU_PS, tipo="'Software'"), minutos=120, sozinho=True, reverte=False),
-        Item('drivers', 'drivers pelo Windows Update', 'Drivers que o Windows Update oferece para este PC.',
+        Item('drivers', 'drivers pelo Windows Update', 'Drivers que o Windows Update oferece para este PC, menos o da placa de vídeo: '
+             'esse vem do fabricante, porque o Windows Update às vezes oferece um mais antigo que o instalado.',
              'drivers mais novos e certificados', 'raramente um driver novo traz problema (dá para voltar no Gerenciador de Dispositivos)', 2,
              ps_monta(WU_PS, tipo="'Driver'"), minutos=60, sozinho=True, reverte=False),
         Item('winget', 'programas pelo winget', 'Atualiza os programas instalados que o winget conhece.', 'programas em dia e mais seguros',
-             'alguns programas mudam de versão principal', 2, py=_py_winget, reverte=False) if pf(ctx.perfil, 'tem.winget', True) else None,
+             'atualiza todos de uma vez, sem você escolher: alguns mudam de versão principal (e de jeito de usar)', 3, py=_py_winget, reverte=False) if pf(ctx.perfil, 'tem.winget', True) else None,
         Item('loja', 'apps da Loja', 'Pede à Microsoft Store para atualizar os apps.', 'apps em dia', 'nenhum', 2, r'''
 if ($TESTE) { Plano 'atualizar apps da Loja' } else { try { Get-CimInstance -Namespace 'root\cimv2\mdm\dmmap' -ClassName 'MDM_EnterpriseModernAppManagement_AppManagement01' -ErrorAction Stop | Invoke-CimMethod -MethodName UpdateScanMethod -ErrorAction Stop | Out-Null; Feito 'Loja verificando atualizacoes' } catch { Aviso 'a Loja nao aceitou o pedido; abra a Loja > Biblioteca' } }''',
              reverte=False),
@@ -1476,14 +1490,15 @@ def itens_navegador(ctx):
              'menos RAM que Chrome e Edge', 'mais um programa', 2 if config('navegador') == 'brave' else 0, py=instala_brave, reverte=False)
         if not tem.get('brave') else None,
         Item('brave-pol', 'Brave enxuto', 'Sem Rewards, Wallet, VPN, IA, notícias, Tor e segundo plano; economia de memória ligada. '
-             'As atualizações de segurança continuam.', 'Brave mais leve', 'perde esses recursos do Brave', 1, _brave_pol()),
+             'As atualizações de segurança continuam.', 'Brave mais leve',
+             'perde esses recursos do Brave (inclusive a carteira); aparece "Gerenciado pela organização"', 2, _brave_pol()),
         Item('chrome', 'Chrome enxuto', 'Sem continuar aberto depois de fechado, economia de memória ligada, sem métricas e sem modelo de IA local.',
-             'menos RAM', 'aparece "Gerenciado pela organização"', 1,
+             'menos RAM', 'aparece "Gerenciado pela organização" (é só a política do Katharos; some com o Desfazer)', 2,
              RR(R(ch, 'BackgroundModeEnabled', 0), R(ch, 'HighEfficiencyModeEnabled', 1), R(ch, 'MetricsReportingEnabled', 0),
                 R(ch, 'GenAILocalFoundationalModelSettings', 1), R(ch, 'ChromeCleanupReportingEnabled', 0), R(ch, 'UserFeedbackAllowed', 0),
                 R(ch, 'DeviceMetricsReportingEnabled', 0))) if tem.get('chrome') else None,
         Item('edge', 'Edge enxuto', 'Sem pré-carregar, sem segundo plano, sem barra lateral, sem assistente de compras, sem recomendações '
-             'e sem primeira execução.', 'menos RAM e propaganda', 'aparece "Gerenciado pela organização"', 1,
+             'e sem primeira execução.', 'menos RAM e propaganda', 'aparece "Gerenciado pela organização" (é só a política do Katharos; some com o Desfazer)', 2,
              RR(R(EDGE_POL, 'StartupBoostEnabled', 0), R(EDGE_POL, 'BackgroundModeEnabled', 0), R(EDGE_POL, 'HubsSidebarEnabled', 0),
                 R(EDGE_POL, 'EdgeShoppingAssistantEnabled', 0), R(EDGE_POL, 'ShowRecommendationsEnabled', 0),
                 R(EDGE_POL, 'PersonalizationReportingEnabled', 0), R(EDGE_POL, 'HideFirstRunExperience', 1),

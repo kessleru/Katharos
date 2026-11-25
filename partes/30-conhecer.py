@@ -61,7 +61,15 @@ $av = @(Tenta { Get-CimInstance -Namespace root\SecurityCenter2 -ClassName AntiV
 $mp = Tenta { Get-MpComputerStatus -ErrorAction Stop }
 $od = Join-Path $env:USERPROFILE 'OneDrive'
 $odUsado = $false
-if ($env:OneDrive -and (Test-Path -LiteralPath $env:OneDrive)) { $odUsado = [bool](Get-ChildItem -LiteralPath $env:OneDrive -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^desktop\.ini$|^\.' } | Select-Object -First 1) }
+# usado = alguma pasta do OneDrive (pessoal, de trabalho ou escola) com arquivo, ou Área de Trabalho/Documentos/Imagens redirecionadas para
+# ele (o Windows 11 liga esse backup por padrão). A política de bloqueio vale para todas as contas: olhar só a pessoal deixava passar a de trabalho
+foreach ($__od in @($env:OneDrive, $env:OneDriveCommercial, $env:OneDriveConsumer) | Where-Object { $_ } | Select-Object -Unique) {
+    if (-not $odUsado -and (Test-Path -LiteralPath $__od)) { $odUsado = [bool](Get-ChildItem -LiteralPath $__od -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^desktop\.ini$|^\.' } | Select-Object -First 1) }
+}
+if (-not $odUsado) {
+    $__usf = Tenta { Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction Stop } $null
+    if ($__usf) { foreach ($__n in 'Desktop', 'Personal', 'My Pictures', '{F42EE2D3-909F-4907-8871-4C22FC0BF756}') { if ([string]$__usf.$__n -match 'OneDrive') { $odUsado = $true } } }
+}
 $plano = Tenta { (powercfg /getactivescheme | Out-String).Trim() } ''
 $gpus = @(Tenta { Get-CimInstance Win32_VideoController | ForEach-Object { [string]$_.Name } } @())
 $dono = Tenta { (Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" | Select-Object -First 1 | Invoke-CimMethod -MethodName GetOwner).User } ''
@@ -785,8 +793,16 @@ Vivo 'saude'
 $smart = @(Tenta { Get-PhysicalDisk | ForEach-Object { $r = $_ | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue; [pscustomobject]@{ disco = $_.FriendlyName; tipo = [string]$_.MediaType; saude = [string]$_.HealthStatus; temp = $r.Temperature; horas = $r.PowerOnHours; desgaste = $r.Wear; erros = $r.ReadErrorsTotal } } } @())
 Dado 'smart' (Lista $smart)
 $falha = [bool](Tenta { Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop | Where-Object PredictFailure } $null)
-$crash = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41,1001,6008; StartTime = $dias60 } -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Kernel-Power|BugCheck|EventLog' }).Count
-$telaAzul = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting','BugCheck'; StartTime = $dias60 } -ErrorAction SilentlyContinue).Count
+# um desligamento inesperado deixa DOIS eventos no mesmo boot (Kernel-Power 41 e EventLog 6008): contar eventos dobrava o número.
+# Conta incidentes: eventos a menos de 10 min um do outro são o mesmo
+function _Incidentes($datas) { $n = 0; $u = [datetime]::MinValue; foreach ($t in @($datas | Sort-Object)) { if (($t - $u).TotalMinutes -gt 10) { $n++ }; $u = $t }; return $n }
+$__k41 = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41,6008; StartTime = $dias60 } -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Kernel-Power|EventLog' })
+$crash = _Incidentes ($__k41 | ForEach-Object { $_.TimeCreated })
+# tela azul: o evento do relatório de erros do Windows (some se ele estiver desligado) OU o código de tela azul que o Kernel-Power 41 guarda
+# (BugcheckCode, sempre gravado); sem isso, com o relatório de erros desligado, a tela azul virava "queda de energia" no diagnóstico
+$__az = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting','BugCheck'; StartTime = $dias60 } -ErrorAction SilentlyContinue | ForEach-Object { $_.TimeCreated })
+$__az += @($__k41 | Where-Object { $_.Id -eq 41 -and $_.Properties.Count -gt 0 -and [int64]$_.Properties[0].Value -ne 0 } | ForEach-Object { $_.TimeCreated })
+$telaAzul = _Incidentes $__az
 # só erros (nível 1 e 2): avisos de pendrive tirado sem ejetar e de nova tentativa de leitura são ruído e davam alarme falso
 $discoErr = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'disk','Ntfs','storahci','stornvme','iaStorA'; Level = 1,2; StartTime = $dias60 } -ErrorAction SilentlyContinue).Count
 $devs = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.ConfigManagerErrorCode -ne 0 } | ForEach-Object { [pscustomobject]@{ nome = [string]$_.Name; classe = [string]$_.PNPClass; codigo = [int]$_.ConfigManagerErrorCode } })
@@ -1156,9 +1172,9 @@ def analisa(p, m, d):
                             f'Erros de leitura: {s.get("erros")}, desgaste: {s.get("desgaste")}%.', 'Backup em dia e acompanhar.'))
     if (saude.get('desligamentos') or 0) >= 3:
         azuis = saude.get('telas_azuis') or 0
-        # sem tela azul e até uns 1,5 por semana (12 em 60 dias) é quase sempre energia ou o botão segurado, não defeito: vira dica sem
-        # peso na nota (5.0.0; no PC do dono, 10 em 60 dias tiravam pontos de saúde)
-        peso = 2 if azuis else (1 if saude['desligamentos'] > 12 else 0)
+        # sem tela azul e até uns 6 em 60 dias é quase sempre energia ou o botão segurado, não defeito: vira dica sem peso na nota. O 12 da
+        # 5.0.0 contava eventos, e cada desligamento deixa dois (Kernel-Power 41 e 6008): 12 eventos eram ~6 desligamentos de verdade
+        peso = 2 if azuis else (1 if saude['desligamentos'] > 6 else 0)
         A.append(Achado(peso, ['tudo', 'lento'], 'Telas azuis ou desligamentos inesperados',
                         f'{saude["desligamentos"]} desligamentos sem aviso nos últimos 60 dias'
                         + (f', {azuis} com tela azul.' if azuis else ' (nenhuma tela azul: pode ser queda de energia ou botão de desligar segurado).'),

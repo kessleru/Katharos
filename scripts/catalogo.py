@@ -20,7 +20,10 @@ for nome, pac in k.PACOTES.items():
     for it in its:
         tot += 1
         c = lambda t: str(t or '').replace('|', '/').replace('\n', ' ')
-        L.append(f'| {c(it.titulo)} | {"-" if manut else nomes.get(it.nivel, it.nivel)} | {"sim" if it.reverte else "**não**"} | {c(it.ganho)} | {c(it.custo)} |')
+        # manutenção: na janela não vem marcada, mas no terminal (turbo, modos) entra pelo nível; e o que a área apaga não volta
+        modo = f'janela: não; terminal: {nomes.get(it.nivel, it.nivel)}' if manut else nomes.get(it.nivel, it.nivel)
+        volta = 'sim' if it.reverte and pac.reversivel else '**não**'
+        L.append(f'| {c(it.titulo)} | {modo} | {volta} | {c(it.ganho)} | {c(it.custo)} |')
     L.append('')
 cab = [f'# Catálogo do Katharos {k.VERSAO}', '',
        'Gerado do código por `scripts/catalogo.py` (PC modelo: Windows 11, com jogos). "Vem marcado a partir de" é o primeiro modo que marca o item; '

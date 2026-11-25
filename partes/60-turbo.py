@@ -448,7 +448,9 @@ Dado 'erros_leitura' (($__erros | Measure-Object -Sum).Sum)
 $__sem = (Get-Date).AddDays(-7)
 $__d = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'disk','Ntfs','storahci','stornvme','iaStorA'; Level = 1,2; StartTime = $__sem } -ErrorAction SilentlyContinue).Count
 if ($__d) { Alerta ("{0} erro(s) de disco nesta semana" -f $__d) }
-$__c = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41,1001,6008; StartTime = $__sem } -ErrorAction SilentlyContinue).Count
+# uma tela azul deixa até três eventos (41, 1001 e 6008) no mesmo boot: conta incidentes (eventos a menos de 10 min são o mesmo)
+$__c = 0; $__u = [datetime]::MinValue
+foreach ($__t in @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41,1001,6008; StartTime = $__sem } -ErrorAction SilentlyContinue | ForEach-Object { $_.TimeCreated } | Sort-Object)) { if (($__t - $__u).TotalMinutes -gt 10) { $__c++ }; $__u = $__t }
 if ($__c) { Alerta ("{0} desligamento(s) inesperado(s) ou tela azul nesta semana" -f $__c) }
 $__ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $__pct = [math]::Round($__ld.FreeSpace / $__ld.Size * 100)
